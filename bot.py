@@ -5,23 +5,24 @@ from collections import defaultdict, deque
 from aiogram import Bot, Dispatcher
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message
-from openai import AsyncOpenAI
+from google import genai
 
 
 TOKEN = os.getenv("BOT_TOKEN")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not TOKEN:
     raise RuntimeError("BOT_TOKEN is not set")
 
-if not OPENAI_API_KEY:
-    raise RuntimeError("OPENAI_API_KEY is not set")
+if not GEMINI_API_KEY:
+    raise RuntimeError("GEMINI_API_KEY is not set")
 
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+
 
 # Последние сообщения по каждому чату
 chat_history = defaultdict(lambda: deque(maxlen=12))
@@ -31,10 +32,16 @@ SYSTEM_PROMPT = """
 Ты — Маруська, дружелюбная и живая участница Telegram-группы.
 
 Общайся естественно, как обычный человек в чате.
+
 Отвечай на русском языке, если пользователь не использует другой язык.
-Не говори, что ты "языковая модель", если это не требуется вопросом.
+
+Не говори, что ты языковая модель или искусственный интеллект,
+если это не требуется вопросом.
+
 Не выдумывай факты.
+
 Не отвечай слишком длинно без необходимости.
+
 Можешь использовать юмор, иронию и эмодзи, но не перебарщивай.
 
 Твоя задача — поддерживать разговор и быть полезной участницей группы.
@@ -45,8 +52,7 @@ SYSTEM_PROMPT = """
 async def start(message: Message):
     await message.answer(
         "Привет! Я Маруська 💜\n"
-        "Теперь я умею не только отвечать на команды, "
-        "но и разговаривать с вами 😏"
+        "Теперь я умею разговаривать с вами 😏"
     )
 
 
@@ -57,7 +63,7 @@ async def help_command(message: Message):
         "/start — запустить бота\n"
         "/help — помощь\n"
         "/ping — проверить связь\n\n"
-        "А чтобы поговорить со мной — просто напиши "
+        "Чтобы поговорить со мной — просто напиши "
         "«Маруська» или упомяни @BotMaruska_bot."
     )
 
@@ -69,23 +75,29 @@ async def ping(message: Message):
 
 @dp.message()
 async def ai_message(message: Message):
+
     # Игнорируем сообщения без текста
     if not message.text:
         return
 
-    # Не обрабатываем сообщения самого бота
+    # Игнорируем сообщения от ботов
     if message.from_user and message.from_user.is_bot:
         return
 
     chat_id = message.chat.id
-    username = message.from_user.first_name if message.from_user else "Пользователь"
+
+    username = (
+        message.from_user.first_name
+        if message.from_user
+        else "Пользователь"
+    )
 
     # Сохраняем сообщение в историю
     chat_history[chat_id].append(
         f"{username}: {message.text}"
     )
 
-    # Проверяем, обращаются ли к Маруське
+    # Проверяем обращение к Маруське
     text_lower = message.text.lower()
 
     mentioned = (
@@ -102,7 +114,7 @@ async def ai_message(message: Message):
     if not mentioned and not replied_to_bot:
         return
 
-    # Формируем контекст последних сообщений
+    # Контекст последних сообщений
     context = "\n".join(chat_history[chat_id])
 
     prompt = f"""
@@ -116,28 +128,36 @@ async def ai_message(message: Message):
 Ответь на текущее сообщение.
 """
 
-
     try:
-        response = await openai_client.responses.create(
-            model="gpt-5.6-luna",
-            instructions=SYSTEM_PROMPT,
-            input=prompt,
+
+        response = await gemini_client.aio.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config={
+                "system_instruction": SYSTEM_PROMPT,
+                "temperature": 0.8,
+                "max_output_tokens": 500,
+            },
         )
 
-        answer = response.output_text.strip()
+        answer = response.text.strip()
 
         if answer:
             await message.answer(answer)
 
     except Exception as e:
-        print(f"OpenAI error: {e}")
+
+        print(f"Gemini error: {e}")
+
         await message.answer(
             "Что-то я сейчас задумалась 🤔 Попробуй ещё раз."
         )
 
 
 async def main():
+
     print("Маруська запущена!")
+
     await dp.start_polling(bot)
 
 
