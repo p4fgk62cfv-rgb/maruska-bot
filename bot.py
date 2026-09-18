@@ -24,7 +24,7 @@ dp = Dispatcher()
 gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
 
-# Последние сообщения по каждому чату
+# Последние сообщения каждого чата
 chat_history = defaultdict(lambda: deque(maxlen=12))
 
 
@@ -36,13 +36,15 @@ SYSTEM_PROMPT = """
 Отвечай на русском языке, если пользователь не использует другой язык.
 
 Не говори, что ты языковая модель или искусственный интеллект,
-если это не требуется вопросом.
+если пользователь специально не спрашивает об этом.
 
 Не выдумывай факты.
 
 Не отвечай слишком длинно без необходимости.
 
 Можешь использовать юмор, иронию и эмодзи, но не перебарщивай.
+
+Будь живой, естественной и немного дерзкой, когда это уместно.
 
 Твоя задача — поддерживать разговор и быть полезной участницей группы.
 """
@@ -63,7 +65,7 @@ async def help_command(message: Message):
         "/start — запустить бота\n"
         "/help — помощь\n"
         "/ping — проверить связь\n\n"
-        "Чтобы поговорить со мной — просто напиши "
+        "Чтобы поговорить со мной — напиши "
         "«Маруська» или упомяни @BotMaruska_bot."
     )
 
@@ -76,11 +78,9 @@ async def ping(message: Message):
 @dp.message()
 async def ai_message(message: Message):
 
-    # Игнорируем сообщения без текста
     if not message.text:
         return
 
-    # Игнорируем сообщения от ботов
     if message.from_user and message.from_user.is_bot:
         return
 
@@ -97,14 +97,15 @@ async def ai_message(message: Message):
         f"{username}: {message.text}"
     )
 
-    # Проверяем обращение к Маруське
     text_lower = message.text.lower()
 
+    # Обращение к Маруське
     mentioned = (
         "маруська" in text_lower
         or "@botmaruska_bot" in text_lower
     )
 
+    # Ответ на сообщение Маруськи
     replied_to_bot = (
         message.reply_to_message is not None
         and message.reply_to_message.from_user is not None
@@ -122,25 +123,23 @@ async def ai_message(message: Message):
 
 {context}
 
-Текущее сообщение пользователя:
+Текущее сообщение:
 {username}: {message.text}
 
-Ответь на текущее сообщение.
+Ответь именно на текущее сообщение.
 """
+
 
     try:
 
-        response = await gemini_client.aio.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config={
-                "system_instruction": SYSTEM_PROMPT,
-                "temperature": 0.8,
-                "max_output_tokens": 500,
-            },
+        interaction = await gemini_client.aio.interactions.create(
+            model="gemini-3.6-flash",
+            input=prompt,
+            system_instruction=SYSTEM_PROMPT,
+            store=False,
         )
 
-        answer = response.text.strip()
+        answer = interaction.output_text.strip()
 
         if answer:
             await message.answer(answer)
