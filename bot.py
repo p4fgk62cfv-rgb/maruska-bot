@@ -24,49 +24,36 @@ dp = Dispatcher()
 gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
 
-# Последние сообщения каждого чата
-chat_history = defaultdict(lambda: deque(maxlen=12))
+# Небольшой контекст чата
+chat_history = defaultdict(lambda: deque(maxlen=6))
 
 
 SYSTEM_PROMPT = """
-Ты — Маруська, дружелюбная и живая участница Telegram-группы.
+Ты — Маруська, живая участница Telegram-группы.
 
-Общайся естественно, как обычный человек в чате.
-
-Отвечай на русском языке, если пользователь не использует другой язык.
-
-Не говори, что ты языковая модель или искусственный интеллект,
-если пользователь специально не спрашивает об этом.
-
+Отвечай естественно, коротко и по делу.
+Русский язык используй по умолчанию.
 Не выдумывай факты.
-
-Не отвечай слишком длинно без необходимости.
-
-Можешь использовать юмор, иронию и эмодзи, но не перебарщивай.
-
-Будь живой, естественной и немного дерзкой, когда это уместно.
-
-Твоя задача — поддерживать разговор и быть полезной участницей группы.
+Можно использовать юмор, иронию и эмодзи.
+Не упоминай, что ты ИИ, если тебя прямо об этом не спрашивают.
 """
 
 
 @dp.message(CommandStart())
 async def start(message: Message):
     await message.answer(
-        "Привет! Я Маруська 💜\n"
-        "Теперь я умею разговаривать с вами 😏"
+        "Привет! Я Маруська 💜"
     )
 
 
 @dp.message(Command("help"))
 async def help_command(message: Message):
     await message.answer(
-        "Команды Маруськи:\n"
-        "/start — запустить бота\n"
+        "Команды:\n"
+        "/start — запуск\n"
         "/help — помощь\n"
-        "/ping — проверить связь\n\n"
-        "Чтобы поговорить со мной — напиши "
-        "«Маруська» или упомяни @BotMaruska_bot."
+        "/ping — проверка связи\n\n"
+        "Напиши «Маруська» или ответь на моё сообщение."
     )
 
 
@@ -92,20 +79,18 @@ async def ai_message(message: Message):
         else "Пользователь"
     )
 
-    # Сохраняем сообщение в историю
+    # Сохраняем сообщение
     chat_history[chat_id].append(
         f"{username}: {message.text}"
     )
 
     text_lower = message.text.lower()
 
-    # Обращение к Маруське
     mentioned = (
         "маруська" in text_lower
         or "@botmaruska_bot" in text_lower
     )
 
-    # Ответ на сообщение Маруськи
     replied_to_bot = (
         message.reply_to_message is not None
         and message.reply_to_message.from_user is not None
@@ -115,31 +100,31 @@ async def ai_message(message: Message):
     if not mentioned and not replied_to_bot:
         return
 
-    # Контекст последних сообщений
     context = "\n".join(chat_history[chat_id])
 
     prompt = f"""
-Последние сообщения в группе:
-
+Контекст:
 {context}
 
-Текущее сообщение:
+Сообщение:
 {username}: {message.text}
 
-Ответь именно на текущее сообщение.
+Ответь пользователю.
 """
-
 
     try:
 
-        interaction = await gemini_client.aio.interactions.create(
+        response = await gemini_client.aio.models.generate_content(
             model="gemini-3.6-flash",
-            input=prompt,
-            system_instruction=SYSTEM_PROMPT,
-            store=False,
+            contents=prompt,
+            config={
+                "system_instruction": SYSTEM_PROMPT,
+                "temperature": 0.7,
+                "max_output_tokens": 250,
+            },
         )
 
-        answer = interaction.output_text.strip()
+        answer = response.text.strip()
 
         if answer:
             await message.answer(answer)
@@ -149,7 +134,7 @@ async def ai_message(message: Message):
         print(f"Gemini error: {e}")
 
         await message.answer(
-            "Что-то я сейчас задумалась 🤔 Попробуй ещё раз."
+            "Что-то я задумалась 🤔"
         )
 
 
