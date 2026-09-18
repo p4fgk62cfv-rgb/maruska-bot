@@ -115,16 +115,19 @@ async def ai_message(message: Message):
     try:
 
         response = await gemini_client.aio.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=prompt,
-            config={
-                "system_instruction": SYSTEM_PROMPT,
-                "temperature": 0.7,
-                "max_output_tokens": 250,
-            },
-        )
+    model="gemini-3.6-flash",
+    contents=prompt,
+    config={
+        "system_instruction": SYSTEM_PROMPT,
+        "temperature": 0.7,
+        "max_output_tokens": 500,
+    },
+)
 
-        answer = response.text.strip()
+print("GEMINI RESPONSE:", response)
+print("GEMINI TEXT:", repr(response.text))
+
+answer = (response.text or "").strip()
 
         if answer:
             await message.answer(answer)
