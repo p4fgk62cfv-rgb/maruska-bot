@@ -158,7 +158,7 @@ async def ai_message(message: Message):
             config={
                 "system_instruction": SYSTEM_PROMPT,
                 "temperature": 0.7,
-                "max_output_tokens": 500,
+                "max_output_tokens": 1000,
             },
         )
 
