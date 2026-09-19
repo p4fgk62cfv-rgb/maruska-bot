@@ -11,6 +11,8 @@ from database.repository import (
     save_user,
     save_message,
     get_recent_messages,
+    get_profile,
+    create_profile_if_needed,
 )
 
 
@@ -40,7 +42,8 @@ async def help_command(message: Message):
         "Команды:\n"
         "/start — запуск\n"
         "/help — помощь\n"
-        "/ping — проверка связи\n\n"
+        "/ping — проверка связи\n"
+        "/profile — твой профиль\n\n"
         "Чтобы поговорить со мной, напиши "
         "«Маруська» или ответь на моё сообщение."
     )
@@ -52,6 +55,62 @@ async def ping(message: Message):
     await message.answer(
         "Маруська на связи 🟢"
     )
+
+
+@dp.message(Command("profile"))
+async def profile_command(message: Message):
+
+    if not message.from_user:
+        return
+
+    telegram_id = message.from_user.id
+
+    display_name = (
+        message.from_user.first_name
+        or message.from_user.username
+        or "Пользователь"
+    )
+
+    try:
+
+        await create_profile_if_needed(
+            telegram_id=telegram_id,
+            display_name=display_name,
+        )
+
+        profile = await get_profile(
+            telegram_id=telegram_id,
+        )
+
+        if profile is None:
+
+            await message.answer(
+                "Не смогла загрузить профиль 🤔"
+            )
+
+            return
+
+        await message.answer(
+            f"👤 <b>{profile.display_name or display_name}</b>\n\n"
+            f"💬 Сообщений: <b>{profile.messages_count}</b>\n"
+            f"⭐ Карма: <b>{profile.karma}</b>\n"
+            f"🪙 Монеты: <b>{profile.coins}</b>\n\n"
+            f"🎮 Игр сыграно: <b>{profile.games_played}</b>\n"
+            f"🏆 Побед: <b>{profile.games_won}</b>",
+            parse_mode="HTML",
+        )
+
+    except Exception as e:
+
+        print(
+            "PROFILE ERROR:",
+            type(e).__name__,
+            str(e),
+        )
+
+        await message.answer(
+            "Не смогла загрузить профиль 🤔"
+        )
 
 
 @dp.message()
@@ -75,7 +134,6 @@ async def ai_message(message: Message):
         or "Пользователь"
     )
 
-    # Сохраняем пользователя
     try:
 
         await save_user(
@@ -92,7 +150,6 @@ async def ai_message(message: Message):
             str(e),
         )
 
-    # Сохраняем сообщение в PostgreSQL
     try:
 
         await save_message(
@@ -126,7 +183,6 @@ async def ai_message(message: Message):
     if not mentioned and not replied_to_bot:
         return
 
-    # Получаем последние сообщения уже из PostgreSQL
     try:
 
         recent_messages = await get_recent_messages(
@@ -148,7 +204,6 @@ async def ai_message(message: Message):
         recent_messages
     )
 
-    # Пока Google Search отключён
     use_search = False
 
     prompt = f"""
@@ -266,6 +321,10 @@ async def main():
 
     print(
         "Постоянная память PostgreSQL включена"
+    )
+
+    print(
+        "Профили пользователей включены"
     )
 
     print(
