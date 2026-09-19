@@ -1,4 +1,5 @@
 import asyncio
+import os
 from collections import defaultdict, deque
 
 from aiogram import Bot, Dispatcher
@@ -6,31 +7,52 @@ from aiogram.filters import CommandStart, Command
 from aiogram.types import Message
 
 from ai.gemini import ask_gemini
+from database.database import init_db
 
 
-TOKEN = __import__("os").getenv("BOT_TOKEN")
+# =========================
+# НАСТРОЙКИ
+# =========================
+
+TOKEN = os.getenv("BOT_TOKEN")
 
 if not TOKEN:
     raise RuntimeError("BOT_TOKEN is not set")
 
 
+# =========================
+# TELEGRAM
+# =========================
+
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
 
-# Последние сообщения каждого чата
+# =========================
+# ВРЕМЕННАЯ ПАМЯТЬ ЧАТА
+# =========================
+
 chat_history = defaultdict(
     lambda: deque(maxlen=8)
 )
 
 
+# =========================
+# /START
+# =========================
+
 @dp.message(CommandStart())
 async def start(message: Message):
 
     await message.answer(
-        "Привет! Я Маруська 💜"
+        "Привет! Я Маруська 💜\n"
+        "Я уже подключила свой мозг, поиск и память 😉"
     )
 
+
+# =========================
+# /HELP
+# =========================
 
 @dp.message(Command("help"))
 async def help_command(message: Message):
@@ -45,6 +67,10 @@ async def help_command(message: Message):
     )
 
 
+# =========================
+# /PING
+# =========================
+
 @dp.message(Command("ping"))
 async def ping(message: Message):
 
@@ -53,14 +79,18 @@ async def ping(message: Message):
     )
 
 
+# =========================
+# AI
+# =========================
+
 @dp.message()
 async def ai_message(message: Message):
 
-    # Только текстовые сообщения
+    # Только текст
     if not message.text:
         return
 
-    # Не отвечаем ботам
+    # Игнорируем других ботов
     if message.from_user and message.from_user.is_bot:
         return
 
@@ -72,20 +102,29 @@ async def ai_message(message: Message):
         else "Пользователь"
     )
 
-    # Сохраняем сообщение
+    # =========================
+    # СОХРАНЯЕМ ВРЕМЕННЫЙ КОНТЕКСТ
+    # =========================
+
     chat_history[chat_id].append(
         f"{username}: {message.text}"
     )
 
     text_lower = message.text.lower()
 
-    # Обращение к Маруське
+    # =========================
+    # ОБРАЩЕНИЕ К МАРУСЬКЕ
+    # =========================
+
     mentioned = (
         "маруська" in text_lower
         or "@botmaruska_bot" in text_lower
     )
 
-    # Ответ на сообщение Маруськи
+    # =========================
+    # ОТВЕТ НА СООБЩЕНИЕ БОТА
+    # =========================
+
     replied_to_bot = (
         message.reply_to_message is not None
         and message.reply_to_message.from_user is not None
@@ -96,7 +135,10 @@ async def ai_message(message: Message):
     if not mentioned and not replied_to_bot:
         return
 
-    # Контекст
+    # =========================
+    # КОНТЕКСТ
+    # =========================
+
     context = "\n".join(
         chat_history[chat_id]
     )
@@ -114,11 +156,25 @@ async def ai_message(message: Message):
 Учитывай контекст разговора.
 
 Если вопрос требует актуальной информации,
-можешь использовать Google Search.
+используй Google Search.
+
+Если актуальная информация не требуется,
+не используй поиск.
+
+Не выдумывай факты.
+
+Не говори о себе как о безличном ассистенте.
+Ты — Маруська, участница этой компании.
+
+Отвечай естественно.
 
 Не обрывай ответ.
 Закончи предложение и мысль полностью.
 """
+
+    # =========================
+    # GEMINI
+    # =========================
 
     try:
 
@@ -127,13 +183,26 @@ async def ai_message(message: Message):
             use_search=True,
         )
 
+        answer = (
+            answer or ""
+        ).strip()
+
+        # =========================
+        # ПУСТОЙ ОТВЕТ
+        # =========================
+
         if not answer:
+
             await message.answer(
                 "Я почему-то не смогла сформулировать ответ 🤔"
             )
+
             return
 
-        # Добавляем источники, если Google Search действительно использовался
+        # =========================
+        # ИСТОЧНИКИ GOOGLE SEARCH
+        # =========================
+
         if sources:
 
             unique_sources = []
@@ -141,29 +210,48 @@ async def ai_message(message: Message):
 
             for source in sources:
 
-                url = source["url"]
+                url = source.get("url")
+
+                if not url:
+                    continue
 
                 if url in seen_urls:
                     continue
 
                 seen_urls.add(url)
-                unique_sources.append(source)
+
+                unique_sources.append(
+                    source
+                )
 
                 if len(unique_sources) >= 3:
                     break
 
             if unique_sources:
 
-                source_text = "\n\n🔎 Источники:\n"
+                source_text = (
+                    "\n\n🔎 <b>Источники:</b>\n"
+                )
 
                 for source in unique_sources:
 
+                    title = (
+                        source.get("title")
+                        or "Источник"
+                    )
+
+                    url = source["url"]
+
                     source_text += (
-                        f'• <a href="{source["url"]}">'
-                        f'{source["title"]}</a>\n'
+                        f'• <a href="{url}">'
+                        f'{title}</a>\n'
                     )
 
                 answer += source_text
+
+        # =========================
+        # ОТВЕТ
+        # =========================
 
         await message.answer(
             answer,
@@ -171,21 +259,28 @@ async def ai_message(message: Message):
             disable_web_page_preview=True,
         )
 
+    # =========================
+    # ОШИБКИ
+    # =========================
+
     except Exception as e:
 
         print(
             "========== GEMINI ERROR =========="
         )
+
         print(
             type(e).__name__,
             str(e)
         )
+
         print(
             "=================================="
         )
 
         error_text = str(e).lower()
 
+        # Лимит Gemini
         if (
             "quota" in error_text
             or "429" in error_text
@@ -205,20 +300,39 @@ async def ai_message(message: Message):
             )
 
 
+# =========================
+# ЗАПУСК
+# =========================
+
 async def main():
 
     print(
         "==================================="
     )
+
+    print(
+        "Подключение к PostgreSQL..."
+    )
+
+    # Создаём таблицы при запуске
+    await init_db()
+
+    print(
+        "PostgreSQL подключён"
+    )
+
     print(
         "МАРУСЬКА ЗАПУЩЕНА!"
     )
+
     print(
         "Gemini подключён"
     )
+
     print(
         "Google Search подключён"
     )
+
     print(
         "==================================="
     )
@@ -226,5 +340,10 @@ async def main():
     await dp.start_polling(bot)
 
 
+# =========================
+# ENTRY POINT
+# =========================
+
 if __name__ == "__main__":
+
     asyncio.run(main())
