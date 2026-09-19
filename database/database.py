@@ -37,19 +37,21 @@ elif DATABASE_URL.startswith("postgresql://"):
         1,
     )
 
-elif not DATABASE_URL.startswith(
-    "postgresql+asyncpg://"
-):
+elif DATABASE_URL.startswith("postgresql+asyncpg://"):
+    pass
+
+else:
+    # Показываем только схему, без пароля
+    scheme = DATABASE_URL.split(":", 1)[0]
+
     raise RuntimeError(
-        "Invalid DATABASE_URL format"
+        f"Invalid DATABASE_URL scheme: {scheme}"
     )
 
 
 # ==========================================
-# QUERY PARAMETERS
+# УДАЛЯЕМ ПАРАМЕТРЫ, КОТОРЫЕ НЕ ПОНИМАЕТ ASYNCPG
 # ==========================================
-# Railway может передавать параметры,
-# которые asyncpg не понимает.
 
 parts = urlsplit(DATABASE_URL)
 
@@ -70,7 +72,7 @@ DATABASE_URL = urlunsplit(
 
 
 # ==========================================
-# DATABASE ENGINE
+# ENGINE
 # ==========================================
 
 engine = create_async_engine(
@@ -105,24 +107,16 @@ class Base(DeclarativeBase):
 # ==========================================
 
 async def init_db():
-    """
-    Создаёт таблицы базы данных,
-    если их ещё нет.
-    """
 
-    # Импортируем модели здесь,
-    # чтобы они зарегистрировались
-    # в Base.metadata.
     from database import models  # noqa: F401
 
     async with engine.begin() as connection:
+
         await connection.run_sync(
             Base.metadata.create_all
         )
 
-    print(
-        "DATABASE: tables checked/created"
-    )
+    print("DATABASE: tables checked/created")
 
 
 # ==========================================
@@ -130,14 +124,6 @@ async def init_db():
 # ==========================================
 
 async def get_session():
-    """
-    Асинхронный генератор сессии.
-
-    Использование:
-
-        async with SessionLocal() as session:
-            ...
-    """
 
     async with SessionLocal() as session:
         yield session
