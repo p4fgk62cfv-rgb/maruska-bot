@@ -142,3 +142,56 @@ class UserFact(Base):
         DateTime,
         default=datetime.utcnow,
     )
+class GroupMember(Base):
+
+    __tablename__ = "group_members"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "chat_id",
+            "telegram_id",
+            name="uq_group_member",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    chat_id: Mapped[int] = mapped_column(
+        BigInteger,
+        index=True,
+    )
+
+    telegram_id: Mapped[int] = mapped_column(
+        BigInteger,
+        index=True,
+    )
+
+    display_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    messages_count: Mapped[int] = mapped_column(
+        default=0,
+    )
+
+    games_played: Mapped[int] = mapped_column(
+        default=0,
+    )
+
+    games_won: Mapped[int] = mapped_column(
+        default=0,
+    )
+
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+    )
