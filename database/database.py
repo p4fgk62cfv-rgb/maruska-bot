@@ -13,57 +13,64 @@ from sqlalchemy.orm import DeclarativeBase
 # DATABASE URL
 # ==========================================
 
-DATABASE_URL = (
-    os.getenv("DATABASE_URL")
-    or os.getenv("DATABASE_PRIVATE_URL")
-    or ""
-).strip()
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
 if not DATABASE_URL:
-    raise RuntimeError(
-        "DATABASE_URL or DATABASE_PRIVATE_URL is not set"
-    )
+    raise RuntimeError("DATABASE_URL is not set")
 
 
 # ==========================================
 # POSTGRESQL + ASYNCPG
 # ==========================================
 
-if DATABASE_URL.startswith("postgresql://"):
-    DATABASE_URL = DATABASE_URL.replace(
-        "postgresql://",
-        "postgresql+asyncpg://",
-        1,
-    )
-
-elif DATABASE_URL.startswith("postgres://"):
+if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace(
         "postgres://",
         "postgresql+asyncpg://",
         1,
     )
 
+elif DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace(
+        "postgresql://",
+        "postgresql+asyncpg://",
+        1,
+    )
+
+elif not DATABASE_URL.startswith(
+    "postgresql+asyncpg://"
+):
+    raise RuntimeError(
+        "Invalid DATABASE_URL format"
+    )
+
 
 # ==========================================
-# ОЧИСТКА QUERY-ПАРАМЕТРОВ
-# asyncpg не понимает sslmode и channel_binding
+# QUERY PARAMETERS
 # ==========================================
+# Railway может передавать параметры,
+# которые asyncpg не понимает.
 
-_parts = urlsplit(DATABASE_URL)
+parts = urlsplit(DATABASE_URL)
 
-_query = [
+query = [
     (key, value)
-    for key, value in parse_qsl(_parts.query)
-    if key not in ("sslmode", "channel_binding")
+    for key, value in parse_qsl(parts.query)
+    if key not in (
+        "sslmode",
+        "channel_binding",
+    )
 ]
 
 DATABASE_URL = urlunsplit(
-    _parts._replace(query=urlencode(_query))
+    parts._replace(
+        query=urlencode(query)
+    )
 )
 
 
 # ==========================================
-# ENGINE
+# DATABASE ENGINE
 # ==========================================
 
 engine = create_async_engine(
@@ -99,20 +106,23 @@ class Base(DeclarativeBase):
 
 async def init_db():
     """
-    Создаёт все таблицы базы данных.
+    Создаёт таблицы базы данных,
+    если их ещё нет.
     """
 
-    # Импортируем модели здесь, чтобы они
-    # успели зарегистрироваться в metadata.
+    # Импортируем модели здесь,
+    # чтобы они зарегистрировались
+    # в Base.metadata.
     from database import models  # noqa: F401
 
     async with engine.begin() as connection:
-
         await connection.run_sync(
             Base.metadata.create_all
         )
 
-    print("DATABASE: таблицы проверены/созданы")
+    print(
+        "DATABASE: tables checked/created"
+    )
 
 
 # ==========================================
@@ -122,9 +132,9 @@ async def init_db():
 async def get_session():
     """
     Асинхронный генератор сессии.
-    Для FastAPI Depends.
 
-    В aiogram используй напрямую:
+    Использование:
+
         async with SessionLocal() as session:
             ...
     """
