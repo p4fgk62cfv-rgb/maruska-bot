@@ -80,6 +80,79 @@ async def ping(message: Message):
 
 
 # =========================
+# ОПРЕДЕЛЕНИЕ, НУЖЕН ЛИ ПОИСК
+# =========================
+
+def needs_search(text: str) -> bool:
+
+    text_lower = text.lower()
+
+    search_triggers = [
+        # актуальность
+        "сегодня",
+        "сейчас",
+        "последние новости",
+        "последние события",
+        "что нового",
+        "актуально",
+
+        # поиск
+        "найди",
+        "поищи",
+        "поиск",
+        "гугл",
+        "google",
+
+        # цены
+        "цена",
+        "цены",
+        "сколько стоит",
+        "стоимость",
+
+        # курсы
+        "курс",
+        "курс евро",
+        "курс доллара",
+        "доллар",
+        "евро",
+
+        # погода
+        "погода",
+        "температура",
+        "будет дождь",
+        "будет снег",
+
+        # сайты / сервисы
+        "сайт",
+        "официальный сайт",
+        "ссылка",
+        "где купить",
+        "где найти",
+
+        # расписания
+        "расписание",
+        "рейс",
+        "вылет",
+        "прилет",
+
+        # обновления
+        "новая версия",
+        "последняя версия",
+        "обновление",
+
+        # новости
+        "новости",
+        "что произошло",
+        "что случилось",
+    ]
+
+    return any(
+        trigger in text_lower
+        for trigger in search_triggers
+    )
+
+
+# =========================
 # AI
 # =========================
 
@@ -103,7 +176,7 @@ async def ai_message(message: Message):
     )
 
     # =========================
-    # СОХРАНЯЕМ ВРЕМЕННЫЙ КОНТЕКСТ
+    # СОХРАНЯЕМ КОНТЕКСТ
     # =========================
 
     chat_history[chat_id].append(
@@ -143,6 +216,14 @@ async def ai_message(message: Message):
         chat_history[chat_id]
     )
 
+    # =========================
+    # НУЖЕН ЛИ GOOGLE SEARCH
+    # =========================
+
+    use_search = needs_search(
+        message.text
+    )
+
     prompt = f"""
 Последние сообщения в группе:
 
@@ -155,11 +236,14 @@ async def ai_message(message: Message):
 
 Учитывай контекст разговора.
 
-Если вопрос требует актуальной информации,
-используй Google Search.
+Google Search уже выбран программой:
+{use_search}
 
-Если актуальная информация не требуется,
-не используй поиск.
+Если Google Search включён — используй его
+для проверки актуальной информации.
+
+Если Google Search выключен — отвечай
+без поиска.
 
 Не выдумывай факты.
 
@@ -172,24 +256,16 @@ async def ai_message(message: Message):
 Закончи предложение и мысль полностью.
 """
 
-    # =========================
-    # GEMINI
-    # =========================
-
     try:
 
         answer, sources = await ask_gemini(
             prompt,
-            use_search=True,
+            use_search=use_search,
         )
 
         answer = (
             answer or ""
         ).strip()
-
-        # =========================
-        # ПУСТОЙ ОТВЕТ
-        # =========================
 
         if not answer:
 
@@ -200,7 +276,7 @@ async def ai_message(message: Message):
             return
 
         # =========================
-        # ИСТОЧНИКИ GOOGLE SEARCH
+        # ИСТОЧНИКИ
         # =========================
 
         if sources:
@@ -249,19 +325,11 @@ async def ai_message(message: Message):
 
                 answer += source_text
 
-        # =========================
-        # ОТВЕТ
-        # =========================
-
         await message.answer(
             answer,
             parse_mode="HTML",
             disable_web_page_preview=True,
         )
-
-    # =========================
-    # ОШИБКИ
-    # =========================
 
     except Exception as e:
 
@@ -280,7 +348,6 @@ async def ai_message(message: Message):
 
         error_text = str(e).lower()
 
-        # Лимит Gemini
         if (
             "quota" in error_text
             or "429" in error_text
@@ -288,9 +355,8 @@ async def ai_message(message: Message):
         ):
 
             await message.answer(
-                "Я сегодня уже устала 😴\n"
-                "Бесплатный лимит Gemini закончился. "
-                "Попробуйте завтра."
+                "Сейчас Gemini не принимает запросы 😴\n"
+                "Попробуй немного позже."
             )
 
         else:
@@ -301,7 +367,7 @@ async def ai_message(message: Message):
 
 
 # =========================
-# ЗАПУСК
+# MAIN
 # =========================
 
 async def main():
@@ -314,7 +380,6 @@ async def main():
         "Подключение к PostgreSQL..."
     )
 
-    # Создаём таблицы при запуске
     await init_db()
 
     print(
@@ -339,10 +404,6 @@ async def main():
 
     await dp.start_polling(bot)
 
-
-# =========================
-# ENTRY POINT
-# =========================
 
 if __name__ == "__main__":
 
