@@ -1,6 +1,5 @@
 import asyncio
 import os
-from collections import defaultdict, deque
 
 from aiogram import Bot, Dispatcher
 from aiogram.filters import CommandStart, Command
@@ -8,11 +7,12 @@ from aiogram.types import Message
 
 from ai.gemini import ask_gemini
 from database.database import init_db
+from database.repository import (
+    save_user,
+    save_message,
+    get_recent_messages,
+)
 
-
-# =========================
-# НАСТРОЙКИ
-# =========================
 
 TOKEN = os.getenv("BOT_TOKEN")
 
@@ -20,39 +20,18 @@ if not TOKEN:
     raise RuntimeError("BOT_TOKEN is not set")
 
 
-# =========================
-# TELEGRAM
-# =========================
-
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-
-# =========================
-# ВРЕМЕННАЯ ПАМЯТЬ ЧАТА
-# =========================
-
-chat_history = defaultdict(
-    lambda: deque(maxlen=8)
-)
-
-
-# =========================
-# /START
-# =========================
 
 @dp.message(CommandStart())
 async def start(message: Message):
 
     await message.answer(
         "Привет! Я Маруська 💜\n"
-        "Я уже подключила свой мозг, поиск и память 😉"
+        "Я уже подключила свой мозг и память 😉"
     )
 
-
-# =========================
-# /HELP
-# =========================
 
 @dp.message(Command("help"))
 async def help_command(message: Message):
@@ -67,10 +46,6 @@ async def help_command(message: Message):
     )
 
 
-# =========================
-# /PING
-# =========================
-
 @dp.message(Command("ping"))
 async def ping(message: Message):
 
@@ -79,124 +54,68 @@ async def ping(message: Message):
     )
 
 
-# =========================
-# ОПРЕДЕЛЕНИЕ, НУЖЕН ЛИ ПОИСК
-# =========================
-
-def needs_search(text: str) -> bool:
-
-    text_lower = text.lower()
-
-    search_triggers = [
-        # актуальность
-        "сегодня",
-        "сейчас",
-        "последние новости",
-        "последние события",
-        "что нового",
-        "актуально",
-
-        # поиск
-        "найди",
-        "поищи",
-        "поиск",
-        "гугл",
-        "google",
-
-        # цены
-        "цена",
-        "цены",
-        "сколько стоит",
-        "стоимость",
-
-        # курсы
-        "курс",
-        "курс евро",
-        "курс доллара",
-        "доллар",
-        "евро",
-
-        # погода
-        "погода",
-        "температура",
-        "будет дождь",
-        "будет снег",
-
-        # сайты / сервисы
-        "сайт",
-        "официальный сайт",
-        "ссылка",
-        "где купить",
-        "где найти",
-
-        # расписания
-        "расписание",
-        "рейс",
-        "вылет",
-        "прилет",
-
-        # обновления
-        "новая версия",
-        "последняя версия",
-        "обновление",
-
-        # новости
-        "новости",
-        "что произошло",
-        "что случилось",
-    ]
-
-    return any(
-        trigger in text_lower
-        for trigger in search_triggers
-    )
-
-
-# =========================
-# AI
-# =========================
-
 @dp.message()
 async def ai_message(message: Message):
 
-    # Только текст
     if not message.text:
         return
 
-    # Игнорируем других ботов
     if message.from_user and message.from_user.is_bot:
         return
 
+    if not message.from_user:
+        return
+
     chat_id = message.chat.id
+    telegram_user_id = message.from_user.id
 
     username = (
         message.from_user.first_name
-        if message.from_user
-        else "Пользователь"
+        or message.from_user.username
+        or "Пользователь"
     )
 
-    # =========================
-    # СОХРАНЯЕМ КОНТЕКСТ
-    # =========================
+    # Сохраняем пользователя
+    try:
 
-    chat_history[chat_id].append(
-        f"{username}: {message.text}"
-    )
+        await save_user(
+            telegram_id=telegram_user_id,
+            username=message.from_user.username,
+            first_name=message.from_user.first_name,
+        )
+
+    except Exception as e:
+
+        print(
+            "USER SAVE ERROR:",
+            type(e).__name__,
+            str(e),
+        )
+
+    # Сохраняем сообщение в PostgreSQL
+    try:
+
+        await save_message(
+            chat_id=chat_id,
+            telegram_user_id=telegram_user_id,
+            username=username,
+            message=message.text,
+        )
+
+    except Exception as e:
+
+        print(
+            "MESSAGE SAVE ERROR:",
+            type(e).__name__,
+            str(e),
+        )
 
     text_lower = message.text.lower()
-
-    # =========================
-    # ОБРАЩЕНИЕ К МАРУСЬКЕ
-    # =========================
 
     mentioned = (
         "маруська" in text_lower
         or "@botmaruska_bot" in text_lower
     )
-
-    # =========================
-    # ОТВЕТ НА СООБЩЕНИЕ БОТА
-    # =========================
 
     replied_to_bot = (
         message.reply_to_message is not None
@@ -204,25 +123,33 @@ async def ai_message(message: Message):
         and message.reply_to_message.from_user.id == bot.id
     )
 
-    # Если к Маруське не обращались — молчим
     if not mentioned and not replied_to_bot:
         return
 
-    # =========================
-    # КОНТЕКСТ
-    # =========================
+    # Получаем последние сообщения уже из PostgreSQL
+    try:
+
+        recent_messages = await get_recent_messages(
+            chat_id=chat_id,
+            limit=8,
+        )
+
+    except Exception as e:
+
+        print(
+            "MEMORY READ ERROR:",
+            type(e).__name__,
+            str(e),
+        )
+
+        recent_messages = []
 
     context = "\n".join(
-        chat_history[chat_id]
+        recent_messages
     )
 
-    # =========================
-    # НУЖЕН ЛИ GOOGLE SEARCH
-    # =========================
-
-    use_search = needs_search(
-        message.text
-    )
+    # Пока Google Search отключён
+    use_search = False
 
     prompt = f"""
 Последние сообщения в группе:
@@ -236,14 +163,7 @@ async def ai_message(message: Message):
 
 Учитывай контекст разговора.
 
-Google Search уже выбран программой:
-{use_search}
-
-Если Google Search включён — используй его
-для проверки актуальной информации.
-
-Если Google Search выключен — отвечай
-без поиска.
+Google Search сейчас отключён.
 
 Не выдумывай факты.
 
@@ -274,56 +194,6 @@ Google Search уже выбран программой:
             )
 
             return
-
-        # =========================
-        # ИСТОЧНИКИ
-        # =========================
-
-        if sources:
-
-            unique_sources = []
-            seen_urls = set()
-
-            for source in sources:
-
-                url = source.get("url")
-
-                if not url:
-                    continue
-
-                if url in seen_urls:
-                    continue
-
-                seen_urls.add(url)
-
-                unique_sources.append(
-                    source
-                )
-
-                if len(unique_sources) >= 3:
-                    break
-
-            if unique_sources:
-
-                source_text = (
-                    "\n\n🔎 <b>Источники:</b>\n"
-                )
-
-                for source in unique_sources:
-
-                    title = (
-                        source.get("title")
-                        or "Источник"
-                    )
-
-                    url = source["url"]
-
-                    source_text += (
-                        f'• <a href="{url}">'
-                        f'{title}</a>\n'
-                    )
-
-                answer += source_text
 
         await message.answer(
             answer,
@@ -366,10 +236,6 @@ Google Search уже выбран программой:
             )
 
 
-# =========================
-# MAIN
-# =========================
-
 async def main():
 
     print(
@@ -395,7 +261,11 @@ async def main():
     )
 
     print(
-        "Google Search подключён"
+        "Google Search отключён"
+    )
+
+    print(
+        "Постоянная память PostgreSQL включена"
     )
 
     print(
