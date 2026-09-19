@@ -1,21 +1,36 @@
 import os
 
 from sqlalchemy.ext.asyncio import (
-    create_async_engine,
-    async_sessionmaker,
     AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
 
 
+# ==========================================
+# DATABASE URL
+# ==========================================
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# Дополнительная страховка:
+# если Railway передаст DATABASE_PRIVATE_URL напрямую,
+# тоже сможем подключиться.
 if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is not set")
+    DATABASE_URL = os.getenv("DATABASE_PRIVATE_URL")
 
 
-# Railway PostgreSQL URL обычно начинается с postgresql://
-# asyncpg использует postgresql+asyncpg://
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL or DATABASE_PRIVATE_URL is not set"
+    )
+
+
+# ==========================================
+# POSTGRESQL + ASYNCPG
+# ==========================================
+
 if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace(
         "postgresql://",
@@ -23,6 +38,17 @@ if DATABASE_URL.startswith("postgresql://"):
         1,
     )
 
+elif DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace(
+        "postgres://",
+        "postgresql+asyncpg://",
+        1,
+    )
+
+
+# ==========================================
+# ENGINE
+# ==========================================
 
 engine = create_async_engine(
     DATABASE_URL,
@@ -31,26 +57,55 @@ engine = create_async_engine(
 )
 
 
+# ==========================================
+# SESSION
+# ==========================================
+
 SessionLocal = async_sessionmaker(
-    engine,
+    bind=engine,
     class_=AsyncSession,
     expire_on_commit=False,
 )
 
 
+# ==========================================
+# BASE
+# ==========================================
+
 class Base(DeclarativeBase):
     pass
 
 
-async def get_session():
-    async with SessionLocal() as session:
-        yield session
-
+# ==========================================
+# DATABASE INITIALIZATION
+# ==========================================
 
 async def init_db():
-    from database.models import Base as ModelsBase
+    """
+    Создаёт все таблицы базы данных.
+    """
 
-    async with engine.begin() as conn:
-        await conn.run_sync(
-            ModelsBase.metadata.create_all
+    # Импортируем модели здесь, чтобы они
+    # успели зарегистрироваться в metadata.
+    from database import models
+
+    async with engine.begin() as connection:
+
+        await connection.run_sync(
+            Base.metadata.create_all
         )
+
+    print("DATABASE: таблицы проверены/созданы")
+
+
+# ==========================================
+# SESSION HELPER
+# ==========================================
+
+async def get_session():
+    """
+    Возвращает асинхронную сессию PostgreSQL.
+    """
+
+    async with SessionLocal() as session:
+        yield session
