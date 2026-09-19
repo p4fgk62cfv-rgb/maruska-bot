@@ -1,4 +1,5 @@
 import os
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -12,10 +13,11 @@ from sqlalchemy.orm import DeclarativeBase
 # DATABASE URL
 # ==========================================
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-if not DATABASE_URL:
-    DATABASE_URL = os.getenv("DATABASE_PRIVATE_URL")
+DATABASE_URL = (
+    os.getenv("DATABASE_URL")
+    or os.getenv("DATABASE_PRIVATE_URL")
+    or ""
+).strip()
 
 if not DATABASE_URL:
     raise RuntimeError(
@@ -23,33 +25,41 @@ if not DATABASE_URL:
     )
 
 
-# Убираем случайные пробелы/переносы
-DATABASE_URL = DATABASE_URL.strip()
+# ==========================================
+# POSTGRESQL + ASYNCPG
+# ==========================================
 
-
-# Railway / PostgreSQL URL
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace(
-        "postgres://",
-        "postgresql+asyncpg://",
-        1,
-    )
-
-elif DATABASE_URL.startswith("postgresql://"):
+if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace(
         "postgresql://",
         "postgresql+asyncpg://",
         1,
     )
 
-elif DATABASE_URL.startswith("postgresql+asyncpg://"):
-    pass
-
-else:
-    raise RuntimeError(
-        f"Invalid PostgreSQL DATABASE_URL format: "
-        f"{DATABASE_URL[:30]}"
+elif DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace(
+        "postgres://",
+        "postgresql+asyncpg://",
+        1,
     )
+
+
+# ==========================================
+# ОЧИСТКА QUERY-ПАРАМЕТРОВ
+# asyncpg не понимает sslmode и channel_binding
+# ==========================================
+
+_parts = urlsplit(DATABASE_URL)
+
+_query = [
+    (key, value)
+    for key, value in parse_qsl(_parts.query)
+    if key not in ("sslmode", "channel_binding")
+]
+
+DATABASE_URL = urlunsplit(
+    _parts._replace(query=urlencode(_query))
+)
 
 
 # ==========================================
@@ -60,6 +70,7 @@ engine = create_async_engine(
     DATABASE_URL,
     echo=False,
     pool_pre_ping=True,
+    pool_recycle=1800,
 )
 
 
@@ -87,8 +98,13 @@ class Base(DeclarativeBase):
 # ==========================================
 
 async def init_db():
+    """
+    Создаёт все таблицы базы данных.
+    """
 
-    from database import models
+    # Импортируем модели здесь, чтобы они
+    # успели зарегистрироваться в metadata.
+    from database import models  # noqa: F401
 
     async with engine.begin() as connection:
 
@@ -104,6 +120,15 @@ async def init_db():
 # ==========================================
 
 async def get_session():
+    """
+    Асинхронный генератор сессии.
+    Для FastAPI Depends.
+
+    В aiogram используй напрямую:
+        async with SessionLocal() as session:
+            ...
+    """
 
     async with SessionLocal() as session:
         yield session
+
