@@ -69,3 +69,76 @@ class MessageMemory(Base):
         DateTime,
         default=datetime.utcnow,
     )
+class UserProfile(Base):
+
+    __tablename__ = "user_profiles"
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    telegram_id: Mapped[int] = mapped_column(
+        BigInteger,
+        unique=True,
+        index=True,
+    )
+
+    display_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    coins: Mapped[int] = mapped_column(
+        default=0,
+    )
+
+    karma: Mapped[int] = mapped_column(
+        default=0,
+    )
+
+    messages_count: Mapped[int] = mapped_column(
+        default=0,
+    )
+
+    games_played: Mapped[int] = mapped_column(
+        default=0,
+    )
+
+    games_won: Mapped[int] = mapped_column(
+        default=0,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+
+
+class UserFact(Base):
+
+    __tablename__ = "user_facts"
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    telegram_id: Mapped[int] = mapped_column(
+        BigInteger,
+        index=True,
+    )
+
+    fact: Mapped[str] = mapped_column(
+        Text,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+    )
