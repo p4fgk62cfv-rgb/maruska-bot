@@ -14,12 +14,8 @@ from sqlalchemy.orm import DeclarativeBase
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Дополнительная страховка:
-# если Railway передаст DATABASE_PRIVATE_URL напрямую,
-# тоже сможем подключиться.
 if not DATABASE_URL:
     DATABASE_URL = os.getenv("DATABASE_PRIVATE_URL")
-
 
 if not DATABASE_URL:
     raise RuntimeError(
@@ -27,22 +23,32 @@ if not DATABASE_URL:
     )
 
 
-# ==========================================
-# POSTGRESQL + ASYNCPG
-# ==========================================
+# Убираем случайные пробелы/переносы
+DATABASE_URL = DATABASE_URL.strip()
 
-if DATABASE_URL.startswith("postgresql://"):
+
+# Railway / PostgreSQL URL
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace(
+        "postgres://",
+        "postgresql+asyncpg://",
+        1,
+    )
+
+elif DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace(
         "postgresql://",
         "postgresql+asyncpg://",
         1,
     )
 
-elif DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace(
-        "postgres://",
-        "postgresql+asyncpg://",
-        1,
+elif DATABASE_URL.startswith("postgresql+asyncpg://"):
+    pass
+
+else:
+    raise RuntimeError(
+        f"Invalid PostgreSQL DATABASE_URL format: "
+        f"{DATABASE_URL[:30]}"
     )
 
 
@@ -81,12 +87,7 @@ class Base(DeclarativeBase):
 # ==========================================
 
 async def init_db():
-    """
-    Создаёт все таблицы базы данных.
-    """
 
-    # Импортируем модели здесь, чтобы они
-    # успели зарегистрироваться в metadata.
     from database import models
 
     async with engine.begin() as connection:
@@ -103,9 +104,6 @@ async def init_db():
 # ==========================================
 
 async def get_session():
-    """
-    Возвращает асинхронную сессию PostgreSQL.
-    """
 
     async with SessionLocal() as session:
         yield session
