@@ -30,7 +30,13 @@ from database.repository import (
 from actions.handler import router as actions_router
 from actions.providers import available_providers, download_photo
 from actions.service import get_image_for_action
-from actions.show_me import is_show_me, pick_caption, pick_mood
+from actions.show_me import (
+    is_meow,
+    is_show_me,
+    pick_caption,
+    pick_meow_caption,
+    pick_mood,
+)
 
 from database.repository import (
     set_action_image_file_id,
@@ -68,14 +74,12 @@ if not TOKEN:
 CONTEXT_MESSAGES = int(os.getenv("CONTEXT_MESSAGES", "8"))
 
 # Имена, на которые бот откликается в группе.
-# Сравнение идёт по целому слову, поэтому "мара" не ловится
-# внутри других слов.
-TRIGGER_WORDS = ("мара", "маруся", "маруська", "маня")
+# Принимаются любые падежные формы: Мара, Мару, Маре, Марой,
+# а также Маруся и Маруська. Сравнение идёт по целому слову,
+# поэтому "Тамара", "Самара" и "кошмара" бота не будят.
+TRIGGER_PATTERN = r"мар(?:а|у|ы|е|ой|ою|ке|ку)|марус(?:я|ю|е|и|ька|ьку|ьке)|маня"
 
-TRIGGER_RE = re.compile(
-    r"\b(?:" + "|".join(TRIGGER_WORDS) + r")\b",
-    re.IGNORECASE,
-)
+TRIGGER_RE = re.compile(r"\b(?:" + TRIGGER_PATTERN + r")\b", re.IGNORECASE)
 
 
 bot = Bot(
@@ -154,8 +158,9 @@ async def help_handler(message: Message):
         "🤖 <b>Маруська</b>\n\n"
         "💬 Позови по имени: <b>Мара, ...</b>\n"
         "Или ответь на моё сообщение.\n\n"
-        "🐱 <b>Покажи меня</b>\n"
-        "Мара, покажи меня — портрет по мотивам котиков\n\n"
+        "🐱 <b>Котики</b>\n"
+        "Мара, покажи меня — портрет по мотивам котиков\n"
+        "Мара, мяу — просто котик\n\n"
         "🌤 <b>Погода</b>\n"
         "Мара, погода в Праге?\n"
         "или /weather Прага\n\n"
@@ -188,7 +193,7 @@ async def help_handler(message: Message):
 
 @root_router.message(Command("ping"))
 async def ping_handler(message: Message):
-    await message.answer("🏓 Маруська работает.")
+    await message.answer("🏓 Мара на связи.")
 
 
 # =========================================================
@@ -392,18 +397,7 @@ async def weather_handler(message: Message):
 #
 # =========================================================
 
-def is_show_me_request(message: Message) -> bool:
-    if not message.text or message.text.startswith("/"):
-        return False
-
-    if not is_show_me(message.text):
-        return False
-
-    return should_answer(message)
-
-
-@root_router.message(is_show_me_request)
-async def show_me_handler(message: Message):
+async def send_cat(message: Message, caption: str):
     try:
         await bot.send_chat_action(message.chat.id, "upload_photo")
     except Exception:
@@ -414,14 +408,12 @@ async def show_me_handler(message: Message):
     try:
         image = await get_image_for_action(mood)
     except Exception as error:
-        logger.error("SHOW ME: %s %s", type(error).__name__, error)
+        logger.error("CAT: %s %s", type(error).__name__, error)
         image = None
 
     if image is None:
         await message.reply("Котики закончились, попробуй попозже 🐾")
         return
-
-    caption = pick_caption(escape(display_name_of(message.from_user)))
 
     if image.telegram_file_id:
         try:
@@ -431,7 +423,7 @@ async def show_me_handler(message: Message):
             )
             return
         except Exception as error:
-            logger.warning("SHOW ME file_id: %s", error)
+            logger.warning("CAT file_id: %s", error)
 
     content = await download_photo(image.image_url, image.fallback_url)
 
@@ -446,7 +438,7 @@ async def show_me_handler(message: Message):
             caption=caption,
         )
     except Exception as error:
-        logger.warning("SHOW ME send: %s", error)
+        logger.warning("CAT send: %s", error)
         await release_action_image(image.id)
         await message.reply("Котик не отправился 🐾")
         return
@@ -456,6 +448,39 @@ async def show_me_handler(message: Message):
             await set_action_image_file_id(image.id, sent.photo[-1].file_id)
         except Exception:
             pass
+
+
+def is_show_me_request(message: Message) -> bool:
+    if not message.text or message.text.startswith("/"):
+        return False
+
+    if not is_show_me(message.text):
+        return False
+
+    return should_answer(message)
+
+
+@root_router.message(is_show_me_request)
+async def show_me_handler(message: Message):
+    await send_cat(
+        message,
+        pick_caption(escape(display_name_of(message.from_user))),
+    )
+
+
+def is_meow_request(message: Message) -> bool:
+    if not message.text or message.text.startswith("/"):
+        return False
+
+    if not is_meow(message.text):
+        return False
+
+    return should_answer(message)
+
+
+@root_router.message(is_meow_request)
+async def meow_handler(message: Message):
+    await send_cat(message, pick_meow_caption())
 
 
 # =========================================================
