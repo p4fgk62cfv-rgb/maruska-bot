@@ -1,14 +1,17 @@
 import asyncio
+import logging
 import os
 from html import escape
 
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, Router
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 
 from ai.gemini import ask_gemini
 
-from database.database import init_db
+from database.database import init_db, close_db
 
 from database.repository import (
     save_user,
@@ -23,8 +26,15 @@ from database.repository import (
     get_rating_stats,
 )
 
-from actions.catalog import find_action
 from actions.handler import router as actions_router
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+)
+
+logger = logging.getLogger("maruska")
 
 
 # =========================================================
@@ -34,96 +44,59 @@ from actions.handler import router as actions_router
 TOKEN = os.getenv("BOT_TOKEN")
 
 if not TOKEN:
-    raise RuntimeError(
-        "BOT_TOKEN is not set"
-    )
+    raise RuntimeError("BOT_TOKEN is not set")
+
+CONTEXT_MESSAGES = int(os.getenv("CONTEXT_MESSAGES", "8"))
+
+# Имена, на которые бот откликается в группе.
+TRIGGER_WORDS = ("маруська", "маруся", "маруська,")
 
 
 bot = Bot(
-    token=TOKEN
+    token=TOKEN,
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML),
 )
 
 dp = Dispatcher()
 
-
-# =========================================================
-# ACTION DETECTION
-# =========================================================
-
-def is_action_message(
-    message: Message,
-) -> bool:
-
-    if not message.text:
-        return False
-
-    action = find_action(
-        message.text
-    )
-
-    return action is not None
+root_router = Router(name="root")
 
 
-# =========================================================
-# ACTIONS ROUTER
-# =========================================================
-#
-# Сам обработчик действий находится в:
-#
-# actions/handler.py
-#
-# Здесь подключаем его.
-#
-# ВАЖНО:
-# root-handlers ниже имеют фильтры и НЕ будут
-# перехватывать сообщения, являющиеся действиями.
-#
-# =========================================================
-
-dp.include_router(
-    actions_router
-)
+# Идентичность бота кэшируется один раз при старте,
+# вместо get_me() на каждое входящее сообщение.
+BOT_ID: int = 0
+BOT_USERNAME: str = ""
 
 
 # =========================================================
 # RANKS
 # =========================================================
 
-def get_rank_info(
-    karma: int,
-):
-
+def get_rank_info(karma: int) -> str:
     if karma >= 500:
         return "Легенда"
-
     if karma >= 250:
         return "Звезда"
-
     if karma >= 100:
         return "Авторитет"
-
     if karma >= 50:
         return "Уважаемый"
-
     if karma >= 10:
         return "Активист"
-
     return "Участник"
+
+
+def display_name_of(user) -> str:
+    return user.first_name or user.username or "Пользователь"
 
 
 # =========================================================
 # START
 # =========================================================
 
-@dp.message(
-    CommandStart()
-)
-async def start_handler(
-    message: Message,
-):
-
+@root_router.message(CommandStart())
+async def start_handler(message: Message):
     if message.from_user:
-
         await save_user(
             telegram_id=message.from_user.id,
             username=message.from_user.username,
@@ -132,22 +105,16 @@ async def start_handler(
 
         await create_profile_if_needed(
             telegram_id=message.from_user.id,
-            display_name=(
-                message.from_user.first_name
-                or message.from_user.username
-                or "Пользователь"
-            ),
+            display_name=display_name_of(message.from_user),
         )
 
     await message.answer(
         "👋 Привет! Я Маруська.\n\n"
-        "Я могу общаться с вашей компанией, "
-        "запоминать контекст, вести рейтинг "
-        "и устраивать разные действия с картинками. 😏\n\n"
+        "Я могу общаться с вашей компанией, запоминать контекст, "
+        "вести рейтинг и устраивать разные действия с картинками. 😏\n\n"
         "Например, ответь человеку на сообщение:\n"
         "<b>Пиво</b>\n\n"
-        "И я отправлю случайную фотографию пива. 🍺",
-        parse_mode="HTML",
+        "И я отправлю случайную фотографию пива. 🍺"
     )
 
 
@@ -155,35 +122,23 @@ async def start_handler(
 # HELP
 # =========================================================
 
-@dp.message(
-    Command("help")
-)
-async def help_handler(
-    message: Message,
-):
-
+@root_router.message(Command("help"))
+async def help_handler(message: Message):
     await message.answer(
         "🤖 <b>Маруська</b>\n\n"
         "💬 Позови меня по имени — пообщаемся.\n\n"
         "⭐ <b>Рейтинг</b>\n"
         "+ или - в ответ на сообщение.\n\n"
-        "👤 <b>Профиль</b>\n"
-        "/profile\n\n"
-        "🏆 <b>Топ</b>\n"
-        "/top\n\n"
+        "👤 <b>Профиль</b>\n/profile\n\n"
+        "🏆 <b>Топ</b>\n/top\n\n"
         "🎲 <b>Действия</b>\n"
-        "Ответь человеку и напиши, например:\n"
-        "🍺 Пиво\n"
-        "☕ Кофе\n"
-        "🍕 Пицца\n"
-        "🌹 Цветы\n"
-        "🎁 Подарок\n"
-        "🤗 Обнять\n"
-        "😘 Поцеловать\n\n"
-        "Картинки будут меняться и не будут "
-        "повторяться, пока не закончится "
-        "текущая коллекция.",
-        parse_mode="HTML",
+        "Ответь человеку и напиши одним-двумя словами:\n"
+        "🍺 Пиво · ☕ Кофе · 🍕 Пицца\n"
+        "🌹 Розы · 🎁 Подарок\n"
+        "🤗 Обнять · 😘 Поцеловать\n\n"
+        "Действие срабатывает только на короткой фразе, "
+        "так что обычная переписка меня не разбудит.\n\n"
+        "Картинки не повторяются, пока не закончится коллекция."
     )
 
 
@@ -191,143 +146,76 @@ async def help_handler(
 # PING
 # =========================================================
 
-@dp.message(
-    Command("ping")
-)
-async def ping_handler(
-    message: Message,
-):
-
-    await message.answer(
-        "🏓 Маруська работает."
-    )
+@root_router.message(Command("ping"))
+async def ping_handler(message: Message):
+    await message.answer("🏓 Маруська работает.")
 
 
 # =========================================================
 # PROFILE
 # =========================================================
 
-@dp.message(
-    Command("profile")
-)
-async def profile_handler(
-    message: Message,
-):
-
+@root_router.message(Command("profile"))
+async def profile_handler(message: Message):
     if not message.from_user:
         return
 
-    profile = await get_profile(
-        message.from_user.id
-    )
+    profile = await get_profile(message.from_user.id)
 
     if profile is None:
-
         await create_profile_if_needed(
             telegram_id=message.from_user.id,
-            display_name=(
-                message.from_user.first_name
-                or message.from_user.username
-                or "Пользователь"
-            ),
+            display_name=display_name_of(message.from_user),
         )
-
-        profile = await get_profile(
-            message.from_user.id
-        )
+        profile = await get_profile(message.from_user.id)
 
     if profile is None:
         return
 
-    position = await get_rating_position(
-        message.from_user.id
-    )
+    position = await get_rating_position(message.from_user.id)
+    stats = await get_rating_stats(message.from_user.id)
 
-    stats = await get_rating_stats(
-        message.from_user.id
-    )
-
-    rank = get_rank_info(
-        profile.karma
-    )
-
-    name = escape(
-        profile.display_name
-        or "Пользователь"
-    )
+    name = escape(profile.display_name or "Пользователь")
 
     await message.answer(
         f"👤 <b>{name}</b>\n\n"
-        f"🎖 Ранг: <b>{rank}</b>\n"
+        f"🎖 Ранг: <b>{get_rank_info(profile.karma)}</b>\n"
         f"⭐ Рейтинг: <b>{profile.karma}</b>\n"
         f"🏆 Место: <b>#{position or '-'}</b>\n\n"
         f"💬 Сообщений: <b>{profile.messages_count}</b>\n"
         f"🎮 Игр: <b>{profile.games_played}</b>\n"
         f"🏅 Побед: <b>{profile.games_won}</b>\n\n"
-        f"❤️ Положительных оценок: "
-        f"<b>{stats['positive']}</b>\n"
-        f"💔 Отрицательных оценок: "
-        f"<b>{stats['negative']}</b>",
-        parse_mode="HTML",
+        f"❤️ Положительных оценок: <b>{stats['positive']}</b>\n"
+        f"💔 Отрицательных оценок: <b>{stats['negative']}</b>"
     )
 
 
 # =========================================================
-# RATING
-# =========================================================
-#
-# ВАЖНО:
-# Этот handler теперь подходит ТОЛЬКО для "+" и "-".
-#
-# "Пиво", "Гамбургер", "Водка" и т.д.
-# сюда вообще не попадут.
-#
+# RATING (+ / -)
 # =========================================================
 
-@dp.message(
-    lambda message: (
+def is_rating_message(message: Message) -> bool:
+    return (
         message.text is not None
-        and message.text.strip() in {
-            "+",
-            "-",
-        }
-    )
-)
-async def rating_handler(
-    message: Message,
-):
-
-    if not message.from_user:
-        return
-
-    if not message.reply_to_message:
-        return
-
-    target = (
-        message.reply_to_message.from_user
+        and message.text.strip() in {"+", "-", "＋", "−"}
     )
 
-    if target is None:
+
+@root_router.message(is_rating_message)
+async def rating_handler(message: Message):
+    if not message.from_user or not message.reply_to_message:
         return
 
-    if target.is_bot:
+    target = message.reply_to_message.from_user
+
+    if target is None or target.is_bot:
         return
 
     if target.id == message.from_user.id:
-
-        await message.reply(
-            "😏 Себе рейтинг накручивать нельзя."
-        )
-
+        await message.reply("😏 Себе рейтинг накручивать нельзя.")
         return
 
-    text = message.text.strip()
-
-    amount = (
-        1
-        if text == "+"
-        else -1
-    )
+    amount = 1 if message.text.strip() in {"+", "＋"} else -1
 
     await save_user(
         telegram_id=message.from_user.id,
@@ -341,60 +229,40 @@ async def rating_handler(
         first_name=target.first_name,
     )
 
-    allowed = await can_vote_rating(
+    if not await can_vote_rating(
         giver_telegram_id=message.from_user.id,
         target_telegram_id=target.id,
-    )
-
-    if not allowed:
-
+    ):
         await message.reply(
-            "⏳ Этого пользователя можно "
-            "оценить снова через 24 часа."
+            "⏳ Этого пользователя можно оценить снова через 24 часа."
         )
-
         return
+
+    target_name = display_name_of(target)
 
     new_rating = await add_rating_vote(
         giver_telegram_id=message.from_user.id,
         target_telegram_id=target.id,
         amount=amount,
+        display_name=target_name,
     )
 
-    name = escape(
-        target.first_name
-        or target.username
-        or "Пользователь"
-    )
-
-    rank = get_rank_info(
-        new_rating
-    )
+    name = escape(target_name)
+    rank = get_rank_info(new_rating)
 
     if amount > 0:
-
         await message.reply(
             f"❤️ <b>Лайк!</b>\n\n"
-            f"Рейтинг пользователя "
-            f"<b>{name}</b> повышен на "
-            f"<b>+1</b>.\n\n"
-            f"❤️ Теперь рейтинг: "
-            f"<b>{new_rating}</b>\n"
-            f"🎖 Ранг: <b>{rank}</b>",
-            parse_mode="HTML",
+            f"Рейтинг пользователя <b>{name}</b> повышен на <b>+1</b>.\n\n"
+            f"⭐ Теперь рейтинг: <b>{new_rating}</b>\n"
+            f"🎖 Ранг: <b>{rank}</b>"
         )
-
     else:
-
         await message.reply(
             f"💔 <b>Минус!</b>\n\n"
-            f"Рейтинг пользователя "
-            f"<b>{name}</b> понижен на "
-            f"<b>-1</b>.\n\n"
-            f"⭐ Теперь рейтинг: "
-            f"<b>{new_rating}</b>\n"
-            f"🎖 Ранг: <b>{rank}</b>",
-            parse_mode="HTML",
+            f"Рейтинг пользователя <b>{name}</b> понижен на <b>-1</b>.\n\n"
+            f"⭐ Теперь рейтинг: <b>{new_rating}</b>\n"
+            f"🎖 Ранг: <b>{rank}</b>"
         )
 
 
@@ -402,203 +270,119 @@ async def rating_handler(
 # TOP
 # =========================================================
 
-@dp.message(
-    Command("top")
-)
-async def top_handler(
-    message: Message,
-):
-
-    users = await get_global_rating(
-        limit=10
-    )
+@root_router.message(Command("top"))
+async def top_handler(message: Message):
+    users = await get_global_rating(limit=10)
 
     if not users:
-
-        await message.answer(
-            "🏆 Пока рейтинг пуст."
-        )
-
+        await message.answer("🏆 Пока рейтинг пуст.")
         return
 
-    lines = [
-        "🏆 <b>Глобальный рейтинг</b>\n"
-    ]
+    lines = ["🏆 <b>Глобальный рейтинг</b>\n"]
+    medals = ["🥇", "🥈", "🥉"]
 
-    medals = [
-        "🥇",
-        "🥈",
-        "🥉",
-    ]
-
-    for index, user in enumerate(
-        users,
-        start=1,
-    ):
-
-        medal = (
-            medals[index - 1]
-            if index <= 3
-            else f"{index}."
-        )
-
-        name = escape(
-            user.display_name
-            or "Пользователь"
-        )
-
-        rank = get_rank_info(
-            user.karma
-        )
-
+    for index, user in enumerate(users, start=1):
+        medal = medals[index - 1] if index <= 3 else f"{index}."
+        name = escape(user.display_name or "Пользователь")
         lines.append(
-            f"{medal} "
-            f"<b>{name}</b> — "
-            f"{user.karma} ⭐ "
-            f"({rank})"
+            f"{medal} <b>{name}</b> — {user.karma} ⭐ "
+            f"({get_rank_info(user.karma)})"
         )
 
-    await message.answer(
-        "\n".join(lines),
-        parse_mode="HTML",
-    )
+    await message.answer("\n".join(lines))
 
 
 # =========================================================
 # AI CHAT
 # =========================================================
 #
-# КРИТИЧЕСКИ ВАЖНО:
-#
-# Если сообщение является действием,
-# AI-handler его НЕ получает.
-#
-# Например:
-#
-# Пиво      -> actions
-# Водка     -> actions
-# Гамбургер -> actions
-# Обнять    -> actions
-#
-# А:
-#
-# "Маруська, как дела?"
-#             -> AI
+# Действия обрабатываются в actions_router, который подключён
+# ПЕРЕД этим роутером. Если сообщение — действие с адресатом,
+# сюда оно уже не дойдёт. Всё остальное приходит к Маруське.
 #
 # =========================================================
 
-@dp.message(
-    lambda message: (
-        message.text is not None
-        and not is_action_message(message)
-    )
-)
-async def ai_handler(
-    message: Message,
-):
+def should_answer(message: Message) -> bool:
+    text = (message.text or "").lower()
 
-    if not message.from_user:
+    if message.chat.type == "private":
+        return True
+
+    if any(word in text for word in TRIGGER_WORDS):
+        return True
+
+    if BOT_USERNAME and f"@{BOT_USERNAME.lower()}" in text:
+        return True
+
+    reply = message.reply_to_message
+
+    if reply and reply.from_user and reply.from_user.id == BOT_ID:
+        return True
+
+    return False
+
+
+@root_router.message(lambda message: message.text is not None)
+async def ai_handler(message: Message):
+    if not message.from_user or message.from_user.is_bot:
         return
 
-    if not message.text:
-        return
-
-    if message.from_user.is_bot:
-        return
-
-    # Команды не отправляем в Gemini
+    # Неизвестные команды в Gemini не отправляем.
     if message.text.startswith("/"):
         return
 
-    # Сохраняем пользователя
     await save_user(
         telegram_id=message.from_user.id,
         username=message.from_user.username,
         first_name=message.from_user.first_name,
     )
 
-    # Сохраняем сообщение
     await save_message(
         chat_id=message.chat.id,
         telegram_user_id=message.from_user.id,
-        username=(
-            message.from_user.first_name
-            or message.from_user.username
-        ),
+        username=display_name_of(message.from_user),
         message=message.text,
     )
 
-    text_lower = message.text.lower()
-
-    bot_username = (
-        (await bot.get_me()).username
-        or "botmaruska_bot"
-    )
-
-    should_answer = (
-        "маруська" in text_lower
-        or f"@{bot_username.lower()}"
-        in text_lower
-    )
-
-    # Если пользователь отвечает на сообщение бота
-    if message.reply_to_message:
-
-        if (
-            message.reply_to_message.from_user
-            and
-            message.reply_to_message.from_user.id
-            == bot.id
-        ):
-
-            should_answer = True
-
-    if not should_answer:
+    if not should_answer(message):
         return
 
     recent_messages = await get_recent_messages(
         message.chat.id,
-        limit=8,
-    )
-
-    context = "\n".join(
-        recent_messages
+        limit=CONTEXT_MESSAGES,
     )
 
     prompt = (
         "Последние сообщения группы:\n"
-        f"{context}\n\n"
-        "Новое сообщение пользователя:\n"
-        f"{message.text}"
+        + "\n".join(recent_messages)
+        + "\n\nНовое сообщение пользователя:\n"
+        + message.text
     )
 
     try:
-
-        answer, sources = await ask_gemini(
-            prompt,
-            use_search=False,
-        )
-
+        answer, _sources = await ask_gemini(prompt, use_search=False)
     except Exception as error:
-
-        print(
-            "GEMINI ERROR:",
-            type(error).__name__,
-            str(error),
-        )
-
-        await message.reply(
-            "Что-то я задумалась 🤔"
-        )
-
+        logger.error("GEMINI ERROR: %s %s", type(error).__name__, error)
+        await message.reply("Что-то я задумалась 🤔")
         return
 
     if not answer:
         return
 
-    await message.reply(
-        answer
-    )
+    # Ответ модели — обычный текст, HTML-разметку из него не парсим.
+    await message.reply(answer, parse_mode=None)
+
+
+# =========================================================
+# ROUTERS
+# =========================================================
+#
+# Порядок важен: сначала действия, потом всё остальное.
+#
+# =========================================================
+
+dp.include_router(actions_router)
+dp.include_router(root_router)
 
 
 # =========================================================
@@ -606,74 +390,34 @@ async def ai_handler(
 # =========================================================
 
 async def main():
+    global BOT_ID, BOT_USERNAME
 
-    print(
-        "================================"
-    )
-
-    print(
-        "МАРУСЬКА ЗАПУСКАЕТСЯ..."
-    )
-
-    print(
-        "================================"
-    )
+    logger.info("МАРУСЬКА ЗАПУСКАЕТСЯ...")
 
     await init_db()
 
-    print(
-        "DATABASE: PostgreSQL подключён"
+    me = await bot.get_me()
+    BOT_ID = me.id
+    BOT_USERNAME = me.username or ""
+
+    logger.info("Бот: @%s (id=%s)", BOT_USERNAME, BOT_ID)
+    logger.info("PostgreSQL: подключён")
+    logger.info("Gemini: подключён")
+    logger.info(
+        "Unsplash: %s",
+        "подключён" if os.getenv("UNSPLASH_ACCESS_KEY") else "НЕ подключён",
     )
+    logger.info("МАРУСЬКА ЗАПУЩЕНА!")
 
-    print(
-        "Gemini: подключён"
-    )
+    try:
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    finally:
+        await bot.session.close()
+        await close_db()
 
-    if os.getenv(
-        "UNSPLASH_ACCESS_KEY"
-    ):
-
-        print(
-            "Unsplash: подключён"
-        )
-
-    else:
-
-        print(
-            "Unsplash: НЕ подключён"
-        )
-
-    print(
-        "Действия с картинками: включены"
-    )
-
-    print(
-        "Постоянная память PostgreSQL: включена"
-    )
-
-    print(
-        "Глобальный рейтинг: включён"
-    )
-
-    print(
-        "Actions router: подключён"
-    )
-
-    print(
-        "МАРУСЬКА ЗАПУЩЕНА!"
-    )
-
-    await dp.start_polling(
-        bot
-    )
-
-
-# =========================================================
-# RUN
-# =========================================================
 
 if __name__ == "__main__":
-
-    asyncio.run(
-        main()
-    )
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Маруська остановлена.")
