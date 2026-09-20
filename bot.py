@@ -7,15 +7,20 @@ from aiogram.filters import CommandStart, Command
 from aiogram.types import Message
 
 from ai.gemini import ask_gemini
+
 from database.database import init_db
+
 from database.repository import (
     save_user,
     save_message,
     get_recent_messages,
     get_profile,
     create_profile_if_needed,
-    add_rating,
+    can_vote_rating,
+    get_last_rating_vote,
+    add_rating_vote,
     get_global_rating,
+    get_rating_position,
 )
 
 
@@ -27,6 +32,26 @@ if not TOKEN:
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
+
+
+def get_rank(rating: int):
+
+    if rating >= 500:
+        return "Легенда 🏆"
+
+    if rating >= 250:
+        return "Звезда ⭐"
+
+    if rating >= 100:
+        return "Авторитет 👑"
+
+    if rating >= 50:
+        return "Уважаемый 💎"
+
+    if rating >= 10:
+        return "Активист 🔥"
+
+    return "Пользователь"
 
 
 @dp.message(CommandStart())
@@ -49,7 +74,9 @@ async def help_command(message: Message):
         "/profile — профиль\n"
         "/rating — глобальный рейтинг\n\n"
         "❤️ Рейтинг:\n"
-        "Ответь на сообщение человека и отправь + или -."
+        "Ответь на сообщение человека и отправь + или -.\n\n"
+        "Один человек может изменить рейтинг другого "
+        "не чаще одного раза в 24 часа."
     )
 
 
@@ -94,14 +121,30 @@ async def profile_command(message: Message):
 
             return
 
+        rating = profile.karma
+
+        rank = get_rank(rating)
+
+        position = await get_rating_position(
+            telegram_id=telegram_id,
+        )
+
         name = escape(
             profile.display_name
             or display_name
         )
 
+        position_text = (
+            f"🏆 Место: <b>#{position}</b>\n"
+            if position
+            else ""
+        )
+
         await message.answer(
             f"👤 <b>{name}</b>\n\n"
-            f"❤️ Рейтинг: <b>{profile.karma}</b>\n"
+            f"❤️ Рейтинг: <b>{rating}</b>\n"
+            f"🎖 Ранг: <b>{rank}</b>\n"
+            f"{position_text}"
             f"🪙 Монеты: <b>{profile.coins}</b>\n"
             f"💬 Сообщений: <b>{profile.messages_count}</b>\n\n"
             f"🎮 Игр сыграно: <b>{profile.games_played}</b>\n"
@@ -151,6 +194,10 @@ async def rating_command(message: Message):
 
         for index, user in enumerate(users):
 
+            rating = user.karma
+
+            rank = get_rank(rating)
+
             name = escape(
                 user.display_name
                 or f"ID {user.telegram_id}"
@@ -162,8 +209,8 @@ async def rating_command(message: Message):
                 prefix = f"{index + 1}."
 
             lines.append(
-                f"{prefix} {name} — "
-                f"❤️ <b>{user.karma}</b>"
+                f"{prefix} <b>{name}</b>\n"
+                f"   ❤️ {rating} · {rank}"
             )
 
         await message.answer(
@@ -203,9 +250,11 @@ async def rating_vote(message: Message):
     target_user = target_message.from_user
 
     if not target_user:
+
         await message.answer(
             "Не смогла определить пользователя 🤔"
         )
+
         return
 
     giver_id = message.from_user.id
@@ -227,12 +276,45 @@ async def rating_vote(message: Message):
 
         return
 
-    amount = 1 if message.text.strip() == "+" else -1
+    amount = (
+        1
+        if message.text.strip() == "+"
+        else -1
+    )
 
     try:
 
-        new_rating = await add_rating(
-            telegram_id=target_id,
+        allowed = await can_vote_rating(
+            giver_telegram_id=giver_id,
+            target_telegram_id=target_id,
+        )
+
+        if not allowed:
+
+            last_vote = await get_last_rating_vote(
+                giver_telegram_id=giver_id,
+                target_telegram_id=target_id,
+            )
+
+            if last_vote:
+
+                await message.answer(
+                    "Ты уже изменял рейтинг этого "
+                    "пользователя за последние 24 часа ⏳\n\n"
+                    "Попробуй позже."
+                )
+
+            else:
+
+                await message.answer(
+                    "Этот рейтинг пока нельзя изменить ⏳"
+                )
+
+            return
+
+        new_rating = await add_rating_vote(
+            giver_telegram_id=giver_id,
+            target_telegram_id=target_id,
             amount=amount,
         )
 
@@ -242,25 +324,31 @@ async def rating_vote(message: Message):
             or "Пользователь"
         )
 
+        rank = get_rank(new_rating)
+
         if amount > 0:
 
             await message.answer(
-                f"👍 Рейтинг повышен\n\n"
-                f"{target_name} получил "
-                f"<b>+1</b> к рейтингу.\n"
+                f"❤️ <b>Лайк!</b>\n\n"
+                f"Рейтинг пользователя "
+                f"<b>{target_name}</b> повышен на "
+                f"<b>+1</b>.\n\n"
                 f"❤️ Теперь рейтинг: "
-                f"<b>{new_rating}</b>",
+                f"<b>{new_rating}</b>\n"
+                f"🎖 Ранг: <b>{rank}</b>",
                 parse_mode="HTML",
             )
 
         else:
 
             await message.answer(
-                f"👎 Рейтинг понижен\n\n"
-                f"{target_name} получил "
-                f"<b>-1</b> к рейтингу.\n"
+                f"👎 <b>Рейтинг понижен</b>\n\n"
+                f"Рейтинг пользователя "
+                f"<b>{target_name}</b> изменён на "
+                f"<b>-1</b>.\n\n"
                 f"❤️ Теперь рейтинг: "
-                f"<b>{new_rating}</b>",
+                f"<b>{new_rating}</b>\n"
+                f"🎖 Ранг: <b>{rank}</b>",
                 parse_mode="HTML",
             )
 
@@ -490,6 +578,14 @@ async def main():
 
     print(
         "Глобальный рейтинг включён"
+    )
+
+    print(
+        "История рейтинга включена"
+    )
+
+    print(
+        "Антинакрутка рейтинга: 24 часа"
     )
 
     print(
