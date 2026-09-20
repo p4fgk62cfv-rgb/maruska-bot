@@ -16,11 +16,43 @@ if not GEMINI_API_KEY:
 # следующую версию, перекатывать код не придётся.
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
-MAX_OUTPUT_TOKENS = int(os.getenv("GEMINI_MAX_TOKENS", "600"))
+MAX_OUTPUT_TOKENS = int(os.getenv("GEMINI_MAX_TOKENS", "1000"))
 TEMPERATURE = float(os.getenv("GEMINI_TEMPERATURE", "0.8"))
 
 
 client = genai.Client(api_key=GEMINI_API_KEY)
+
+
+SENTENCE_ENDS = ".!?…"
+
+
+def trim_to_sentence(text: str) -> str:
+    """
+    Обрезает хвост до последнего законченного предложения.
+    Если законченных нет — отдаёт как есть с многоточием.
+    """
+    cut = max(text.rfind(char) for char in SENTENCE_ENDS)
+
+    # Эмодзи и закрывающие кавычки после точки сохраняем
+    if cut != -1:
+        tail = text[cut + 1:]
+        if len(tail) <= 3 and not tail.strip(" \"»)"):
+            return text
+
+        trimmed = text[:cut + 1].strip()
+        if len(trimmed) >= 20:
+            return trimmed
+
+    return text.rstrip(" ,-—") + "…"
+
+
+def _hit_token_limit(response) -> bool:
+    try:
+        candidate = (getattr(response, "candidates", None) or [None])[0]
+        reason = getattr(candidate, "finish_reason", None)
+        return "MAX_TOKENS" in str(reason).upper()
+    except Exception:
+        return False
 
 
 async def ask_gemini(
@@ -53,6 +85,11 @@ async def ask_gemini(
     )
 
     answer = (response.text or "").strip()
+
+    # Если модель упёрлась в лимит токенов, обрываем по последнему
+    # законченному предложению — лучше короче, чем на полуслове.
+    if answer and _hit_token_limit(response):
+        answer = trim_to_sentence(answer)
 
     sources: list[dict] = []
 
