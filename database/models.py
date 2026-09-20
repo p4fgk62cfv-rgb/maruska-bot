@@ -11,7 +11,7 @@ from sqlalchemy import (
 
 from sqlalchemy.orm import Mapped, mapped_column
 
-from database.database import Base
+from database.database import Base, utcnow
 
 
 class User(Base):
@@ -46,7 +46,7 @@ class User(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=utcnow,
     )
 
 
@@ -79,7 +79,8 @@ class MessageMemory(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=utcnow,
+        index=True,
     )
 
 
@@ -104,6 +105,7 @@ class UserProfile(Base):
 
     karma: Mapped[int] = mapped_column(
         default=0,
+        index=True,
     )
 
     coins: Mapped[int] = mapped_column(
@@ -124,12 +126,12 @@ class UserProfile(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=utcnow,
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=utcnow,
     )
 
 
@@ -152,7 +154,7 @@ class UserFact(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=utcnow,
     )
 
 
@@ -201,12 +203,12 @@ class GroupMember(Base):
 
     joined_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=utcnow,
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=utcnow,
     )
 
 
@@ -234,7 +236,7 @@ class RatingVote(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=utcnow,
         index=True,
     )
 
@@ -245,11 +247,11 @@ class ActionImage(Base):
 
     Один action = отдельная коллекция фотографий.
 
-    used=False:
-        фотография ещё не использовалась в текущем цикле.
+    used=False — не использовалась в текущем цикле.
+    used=True  — уже использовалась.
 
-    used=True:
-        уже использовалась.
+    telegram_file_id кэширует file_id после первой отправки,
+    чтобы Telegram не скачивал картинку заново каждый раз.
     """
 
     __tablename__ = "action_images"
@@ -278,6 +280,11 @@ class ActionImage(Base):
 
     image_url: Mapped[str] = mapped_column(
         Text,
+    )
+
+    telegram_file_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
     )
 
     photographer_name: Mapped[str] = mapped_column(
@@ -309,5 +316,5 @@ class ActionImage(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=utcnow,
     )

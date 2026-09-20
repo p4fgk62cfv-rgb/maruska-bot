@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from sqlalchemy import (
     select,
@@ -7,7 +7,7 @@ from sqlalchemy import (
     update,
 )
 
-from database.database import get_session
+from database.database import session_scope, utcnow
 
 from database.models import (
     User,
@@ -28,46 +28,123 @@ RATING_COOLDOWN_HOURS = 24
 # =========================================================
 
 FEMALE_NAMES = {
-    "анна", "мария", "елена", "ольга", "наталья", "наталия",
-    "александра", "екатерина", "ирина", "светлана", "татьяна",
-    "юлия", "юлиана", "виктория", "валерия", "дарья", "дария",
-    "полина", "кристина", "диана", "алина", "арина", "карина",
-    "марина", "лариса", "людмила", "оксана", "надежда", "любовь",
-    "вероника", "евгения", "жанна", "зоя", "лидия", "инна",
-    "нина", "раиса", "тамара", "вера", "галина", "алла", "лилия",
+    "анна", "аня", "мария", "маша", "елена", "лена", "ольга", "оля",
+    "наталья", "наталия", "наташа", "александра", "екатерина", "катя",
+    "ирина", "ира", "светлана", "света", "татьяна", "таня",
+    "юлия", "юля", "юлиана", "виктория", "вика", "валерия", "лера",
+    "дарья", "дария", "даша", "полина", "кристина", "диана", "алина",
+    "арина", "карина", "марина", "лариса", "людмила", "люда", "люся",
+    "оксана", "надежда", "надя", "любовь", "люба", "вероника", "ника",
+    "евгения", "жанна", "зоя", "лидия", "инна", "нина", "раиса",
+    "тамара", "вера", "галина", "галя", "алла", "лилия", "лиля",
+    "софия", "софья", "соня", "элина", "эльвира", "ульяна", "яна",
+    "маруся", "маруська", "анастасия", "настя", "ксения", "ксюша",
 }
 
 MALE_NAMES = {
-    "стас", "станислав", "иван", "андрей", "александр", "сергей",
+    "стас", "станислав", "иван", "ваня", "андрей", "александр", "сергей",
     "дмитрий", "максим", "михаил", "николай", "евгений", "роман",
     "артем", "артём", "алексей", "владимир", "виктор", "павел",
     "денис", "антон", "илья", "никита", "лука", "федор", "фёдор",
     "олег", "игорь", "василий", "юрий", "богдан", "ярослав",
     "матвей", "тимур", "глеб", "лев", "марк", "петр", "пётр",
     "саша", "женя", "валера", "миша", "дима", "серёжа", "сережа",
-    "лёша", "леша", "паша", "вова",
+    "лёша", "леша", "паша", "вова", "костя", "константин", "кирилл",
+    "даниил", "данил", "даня", "егор", "тарас", "остап", "назар",
 }
+
+
+LATIN_FEMALE_NAMES = {
+    "anna", "anya", "ania", "maria", "masha", "elena", "lena", "olga",
+    "olya", "natalia", "natalya", "natasha", "alexandra", "ekaterina",
+    "katya", "kate", "irina", "ira", "svetlana", "sveta", "tatiana",
+    "tatyana", "tanya", "julia", "yulia", "yuliya", "yulya", "victoria",
+    "vika", "valeria", "lera", "daria", "dasha", "polina", "kristina",
+    "diana", "alina", "arina", "karina", "marina", "lyudmila", "luda",
+    "lyuda", "oksana", "nadya", "lyuba", "veronika", "nika", "zhanna",
+    "nina", "vera", "galina", "alla", "lilia", "sofia", "sofya", "sonya",
+    "ulyana", "yana", "anastasia", "nastya", "ksenia", "ksyusha",
+    "marusya", "maruska",
+}
+
+LATIN_MALE_NAMES = {
+    "stanislav", "stas", "ivan", "vanya", "andrey", "andrei", "alexander",
+    "aleksandr", "sasha", "sergey", "sergei", "dmitry", "dmitriy", "dima",
+    "maxim", "mikhail", "misha", "nikolay", "evgeny", "zhenya", "roman",
+    "artem", "artyom", "alexey", "aleksey", "lesha", "vladimir", "vova",
+    "viktor", "pavel", "pasha", "denis", "anton", "ilya", "nikita",
+    "fedor", "oleg", "igor", "vasily", "yuri", "yury", "bogdan",
+    "yaroslav", "matvey", "timur", "gleb", "lev", "mark", "petr", "peter",
+    "kostya", "konstantin", "kirill", "daniil", "danil", "danya", "egor",
+    "taras", "ostap", "nazar",
+}
+
+_FEMALE_LOOKUP = {name.replace("ё", "е") for name in FEMALE_NAMES}
+_MALE_LOOKUP = {name.replace("ё", "е") for name in MALE_NAMES}
+
+# Латиница -> кириллица, чтобы "STANISLAV" и "Nastya"
+# тоже определялись по спискам имён.
+_TRANSLIT = (
+    ("shch", "щ"), ("sch", "щ"), ("zh", "ж"), ("kh", "х"), ("ts", "ц"),
+    ("ch", "ч"), ("sh", "ш"), ("yu", "ю"), ("ya", "я"), ("ye", "е"),
+    ("yo", "е"), ("iy", "ий"), ("ey", "ей"), ("j", "й"), ("y", "ы"),
+    ("a", "а"), ("b", "б"), ("v", "в"), ("g", "г"), ("d", "д"),
+    ("e", "е"), ("z", "з"), ("i", "и"), ("k", "к"), ("l", "л"),
+    ("m", "м"), ("n", "н"), ("o", "о"), ("p", "п"), ("r", "р"),
+    ("s", "с"), ("t", "т"), ("u", "у"), ("f", "ф"), ("h", "х"),
+    ("c", "к"), ("w", "в"), ("x", "кс"), ("q", "к"),
+)
+
+
+def transliterate(value: str) -> str:
+    result = value
+    for latin, cyrillic in _TRANSLIT:
+        result = result.replace(latin, cyrillic)
+    # "мариа" -> "мария", но "диана" не трогаем
+    if result.endswith("иа"):
+        result = result[:-2] + "ия"
+    return result
 
 
 def infer_gender(name: str | None) -> str:
     if not name:
         return "unknown"
 
-    value = name.strip().lower()
+    value = name.strip().lower().replace("ё", "е")
     if not value:
         return "unknown"
 
-    if value in FEMALE_NAMES:
+    # Имя может быть "Анна 🌸" или "Anna | Prague"
+    first_token = value.split()[0].strip(".,!?|-–—_")
+
+    if first_token and first_token.isascii():
+        if first_token in LATIN_FEMALE_NAMES:
+            return "female"
+        if first_token in LATIN_MALE_NAMES:
+            return "male"
+
+    candidates = [value, first_token]
+
+    if first_token and first_token.isascii():
+        candidates.append(transliterate(first_token))
+
+    for candidate in candidates:
+        if candidate in _FEMALE_LOOKUP:
+            return "female"
+        if candidate in _MALE_LOOKUP:
+            return "male"
+
+    # Осторожные эвристики только для кириллицы.
+    if not any("а" <= char <= "я" for char in first_token):
+        return "unknown"
+
+    if first_token.endswith(("а", "я")):
         return "female"
 
-    if value in MALE_NAMES:
-        return "male"
-
-    # Осторожные эвристики только для очевидных русских имён.
-    if value.endswith(("а", "я")):
-        return "female"
-
-    if value.endswith(("й", "н", "р", "л", "м", "т", "д", "к", "с", "в", "г", "б", "п", "ф", "х", "ц", "ч", "ш", "щ")):
+    if first_token.endswith((
+        "й", "н", "р", "л", "м", "т", "д", "к", "с",
+        "в", "г", "б", "п", "ф", "х", "ц", "ч", "ш", "щ",
+    )):
         return "male"
 
     return "unknown"
@@ -84,11 +161,9 @@ async def save_user(
 ):
     gender = infer_gender(first_name or username)
 
-    async for session in get_session():
+    async with session_scope() as session:
         result = await session.execute(
-            select(User).where(
-                User.telegram_id == telegram_id
-            )
+            select(User).where(User.telegram_id == telegram_id)
         )
 
         user = result.scalar_one_or_none()
@@ -110,37 +185,24 @@ async def save_user(
         await session.commit()
 
 
+async def get_user_by_username(username: str) -> User | None:
+    normalized = username.lstrip("@").lower()
 
-async def get_user_by_username(
-    username: str,
-):
-    username = username.lstrip("@").lower()
-
-    async for session in get_session():
-
+    async with session_scope() as session:
         result = await session.execute(
             select(User).where(
-                func.lower(User.username) == username
-            )
-        )
-
-        return result.scalar_one_or_none()
-
-    return None
-
-
-async def get_user_by_telegram_id(
-    telegram_id: int,
-):
-    async for session in get_session():
-        result = await session.execute(
-            select(User).where(
-                User.telegram_id == telegram_id
+                func.lower(User.username) == normalized
             )
         )
         return result.scalar_one_or_none()
 
-    return None
+
+async def get_user_by_telegram_id(telegram_id: int) -> User | None:
+    async with session_scope() as session:
+        result = await session.execute(
+            select(User).where(User.telegram_id == telegram_id)
+        )
+        return result.scalar_one_or_none()
 
 
 # =========================================================
@@ -153,19 +215,18 @@ async def save_message(
     username: str | None,
     message: str,
 ):
+    async with session_scope() as session:
 
-    async for session in get_session():
-
-        memory = MessageMemory(
-            chat_id=chat_id,
-            telegram_user_id=telegram_user_id,
-            username=username,
-            message=message,
+        session.add(
+            MessageMemory(
+                chat_id=chat_id,
+                telegram_user_id=telegram_user_id,
+                username=username,
+                message=message,
+            )
         )
 
-        session.add(memory)
-
-        # Global profile
+        # Глобальный профиль
         profile_result = await session.execute(
             select(UserProfile).where(
                 UserProfile.telegram_id == telegram_user_id
@@ -175,22 +236,20 @@ async def save_message(
         profile = profile_result.scalar_one_or_none()
 
         if profile is None:
-
-            profile = UserProfile(
-                telegram_id=telegram_user_id,
-                display_name=username,
-                messages_count=1,
+            session.add(
+                UserProfile(
+                    telegram_id=telegram_user_id,
+                    display_name=username,
+                    messages_count=1,
+                )
             )
-
-            session.add(profile)
-
         else:
-
-            profile.display_name = username
+            if username:
+                profile.display_name = username
             profile.messages_count += 1
-            profile.updated_at = datetime.utcnow()
+            profile.updated_at = utcnow()
 
-        # Group member
+        # Участник конкретной группы
         member_result = await session.execute(
             select(GroupMember).where(
                 GroupMember.chat_id == chat_id,
@@ -201,45 +260,33 @@ async def save_message(
         member = member_result.scalar_one_or_none()
 
         if member is None:
-
-            member = GroupMember(
-                chat_id=chat_id,
-                telegram_id=telegram_user_id,
-                display_name=username,
-                messages_count=1,
+            session.add(
+                GroupMember(
+                    chat_id=chat_id,
+                    telegram_id=telegram_user_id,
+                    display_name=username,
+                    messages_count=1,
+                )
             )
-
-            session.add(member)
-
         else:
-
-            member.display_name = username
+            if username:
+                member.display_name = username
             member.messages_count += 1
-            member.updated_at = datetime.utcnow()
+            member.updated_at = utcnow()
 
         await session.commit()
 
 
-async def get_recent_messages(
-    chat_id: int,
-    limit: int = 8,
-):
-
-    async for session in get_session():
-
+async def get_recent_messages(chat_id: int, limit: int = 8) -> list[str]:
+    async with session_scope() as session:
         result = await session.execute(
             select(MessageMemory)
-            .where(
-                MessageMemory.chat_id == chat_id
-            )
-            .order_by(
-                MessageMemory.created_at.desc()
-            )
+            .where(MessageMemory.chat_id == chat_id)
+            .order_by(MessageMemory.created_at.desc())
             .limit(limit)
         )
 
-        messages = result.scalars().all()
-
+        messages = list(result.scalars().all())
         messages.reverse()
 
         return [
@@ -247,37 +294,49 @@ async def get_recent_messages(
             for item in messages
         ]
 
-    return []
+
+async def cleanup_old_messages(chat_id: int, keep: int = 200):
+    """
+    Чтобы message_memory не разрасталась бесконечно.
+    """
+    async with session_scope() as session:
+        subquery = (
+            select(MessageMemory.id)
+            .where(MessageMemory.chat_id == chat_id)
+            .order_by(MessageMemory.created_at.desc())
+            .limit(keep)
+            .scalar_subquery()
+        )
+
+        await session.execute(
+            MessageMemory.__table__.delete().where(
+                MessageMemory.chat_id == chat_id,
+                MessageMemory.id.not_in(subquery),
+            )
+        )
+
+        await session.commit()
 
 
 # =========================================================
 # PROFILES
 # =========================================================
 
-async def get_profile(
-    telegram_id: int,
-):
-
-    async for session in get_session():
-
+async def get_profile(telegram_id: int) -> UserProfile | None:
+    async with session_scope() as session:
         result = await session.execute(
             select(UserProfile).where(
                 UserProfile.telegram_id == telegram_id
             )
         )
-
         return result.scalar_one_or_none()
-
-    return None
 
 
 async def create_profile_if_needed(
     telegram_id: int,
     display_name: str,
-):
-
-    async for session in get_session():
-
+) -> UserProfile | None:
+    async with session_scope() as session:
         result = await session.execute(
             select(UserProfile).where(
                 UserProfile.telegram_id == telegram_id
@@ -287,19 +346,14 @@ async def create_profile_if_needed(
         profile = result.scalar_one_or_none()
 
         if profile is None:
-
             profile = UserProfile(
                 telegram_id=telegram_id,
                 display_name=display_name,
             )
-
             session.add(profile)
-
             await session.commit()
 
         return profile
-
-    return None
 
 
 # =========================================================
@@ -309,123 +363,86 @@ async def create_profile_if_needed(
 async def can_vote_rating(
     giver_telegram_id: int,
     target_telegram_id: int,
-):
-
-    async for session in get_session():
-
-        cooldown_time = (
-            datetime.utcnow()
-            - timedelta(hours=RATING_COOLDOWN_HOURS)
-        )
+) -> bool:
+    async with session_scope() as session:
+        cooldown_time = utcnow() - timedelta(hours=RATING_COOLDOWN_HOURS)
 
         result = await session.execute(
             select(RatingVote)
             .where(
-                RatingVote.giver_telegram_id
-                == giver_telegram_id,
-
-                RatingVote.target_telegram_id
-                == target_telegram_id,
-
-                RatingVote.created_at
-                >= cooldown_time,
+                RatingVote.giver_telegram_id == giver_telegram_id,
+                RatingVote.target_telegram_id == target_telegram_id,
+                RatingVote.created_at >= cooldown_time,
             )
-            .order_by(
-                RatingVote.created_at.desc()
-            )
+            .order_by(RatingVote.created_at.desc())
             .limit(1)
         )
 
-        vote = result.scalar_one_or_none()
-
-        return vote is None
-
-    return False
+        return result.scalar_one_or_none() is None
 
 
 async def get_last_rating_vote(
     giver_telegram_id: int,
     target_telegram_id: int,
-):
-
-    async for session in get_session():
-
+) -> RatingVote | None:
+    async with session_scope() as session:
         result = await session.execute(
             select(RatingVote)
             .where(
-                RatingVote.giver_telegram_id
-                == giver_telegram_id,
-
-                RatingVote.target_telegram_id
-                == target_telegram_id,
+                RatingVote.giver_telegram_id == giver_telegram_id,
+                RatingVote.target_telegram_id == target_telegram_id,
             )
-            .order_by(
-                RatingVote.created_at.desc()
-            )
+            .order_by(RatingVote.created_at.desc())
             .limit(1)
         )
-
         return result.scalar_one_or_none()
-
-    return None
 
 
 async def add_rating_vote(
     giver_telegram_id: int,
     target_telegram_id: int,
     amount: int,
-):
-
-    async for session in get_session():
-
+    display_name: str | None = None,
+) -> int:
+    async with session_scope() as session:
         profile_result = await session.execute(
             select(UserProfile).where(
-                UserProfile.telegram_id
-                == target_telegram_id
+                UserProfile.telegram_id == target_telegram_id
             )
         )
 
         profile = profile_result.scalar_one_or_none()
 
         if profile is None:
-
             profile = UserProfile(
                 telegram_id=target_telegram_id,
+                display_name=display_name,
                 karma=max(amount, 0),
             )
-
             session.add(profile)
-
         else:
-
             profile.karma += amount
-
             if profile.karma < 0:
                 profile.karma = 0
+            if display_name:
+                profile.display_name = display_name
+            profile.updated_at = utcnow()
 
-            profile.updated_at = datetime.utcnow()
-
-        vote = RatingVote(
-            giver_telegram_id=giver_telegram_id,
-            target_telegram_id=target_telegram_id,
-            amount=amount,
+        session.add(
+            RatingVote(
+                giver_telegram_id=giver_telegram_id,
+                target_telegram_id=target_telegram_id,
+                amount=amount,
+            )
         )
-
-        session.add(vote)
 
         await session.commit()
 
         return profile.karma
 
-    return None
 
-
-async def get_global_rating(
-    limit: int = 10,
-):
-
-    async for session in get_session():
-
+async def get_global_rating(limit: int = 10):
+    async with session_scope() as session:
         result = await session.execute(
             select(UserProfile)
             .order_by(
@@ -434,18 +451,11 @@ async def get_global_rating(
             )
             .limit(limit)
         )
-
-        return result.scalars().all()
-
-    return []
+        return list(result.scalars().all())
 
 
-async def get_rating_position(
-    telegram_id: int,
-):
-
-    async for session in get_session():
-
+async def get_rating_position(telegram_id: int) -> int | None:
+    async with session_scope() as session:
         profile_result = await session.execute(
             select(UserProfile).where(
                 UserProfile.telegram_id == telegram_id
@@ -458,173 +468,79 @@ async def get_rating_position(
             return None
 
         result = await session.execute(
-            select(
-                func.count(UserProfile.id)
-            ).where(
+            select(func.count(UserProfile.id)).where(
                 UserProfile.karma > profile.karma
             )
         )
 
-        higher_count = result.scalar() or 0
-
-        return higher_count + 1
-
-    return None
+        return (result.scalar() or 0) + 1
 
 
-async def get_rating_stats(
-    telegram_id: int,
-):
+async def get_rating_stats(telegram_id: int) -> dict:
+    async with session_scope() as session:
+        week_ago = utcnow() - timedelta(days=7)
 
-    async for session in get_session():
-
-        positive_result = await session.execute(
+        result = await session.execute(
             select(
-                func.count(RatingVote.id)
-            ).where(
-                RatingVote.target_telegram_id
-                == telegram_id,
-
-                RatingVote.amount > 0,
-            )
+                func.count(RatingVote.id).filter(RatingVote.amount > 0),
+                func.count(RatingVote.id).filter(RatingVote.amount < 0),
+                func.count(RatingVote.id).filter(
+                    RatingVote.amount > 0,
+                    RatingVote.created_at >= week_ago,
+                ),
+                func.count(RatingVote.id).filter(
+                    RatingVote.amount < 0,
+                    RatingVote.created_at >= week_ago,
+                ),
+            ).where(RatingVote.target_telegram_id == telegram_id)
         )
 
-        positive = positive_result.scalar() or 0
-
-        negative_result = await session.execute(
-            select(
-                func.count(RatingVote.id)
-            ).where(
-                RatingVote.target_telegram_id
-                == telegram_id,
-
-                RatingVote.amount < 0,
-            )
-        )
-
-        negative = negative_result.scalar() or 0
-
-        week_ago = (
-            datetime.utcnow()
-            - timedelta(days=7)
-        )
-
-        week_positive_result = await session.execute(
-            select(
-                func.count(RatingVote.id)
-            ).where(
-                RatingVote.target_telegram_id
-                == telegram_id,
-
-                RatingVote.amount > 0,
-
-                RatingVote.created_at >= week_ago,
-            )
-        )
-
-        week_positive = (
-            week_positive_result.scalar() or 0
-        )
-
-        week_negative_result = await session.execute(
-            select(
-                func.count(RatingVote.id)
-            ).where(
-                RatingVote.target_telegram_id
-                == telegram_id,
-
-                RatingVote.amount < 0,
-
-                RatingVote.created_at >= week_ago,
-            )
-        )
-
-        week_negative = (
-            week_negative_result.scalar() or 0
-        )
+        positive, negative, week_positive, week_negative = result.one()
 
         return {
-            "positive": positive,
-            "negative": negative,
-            "week_positive": week_positive,
-            "week_negative": week_negative,
+            "positive": positive or 0,
+            "negative": negative or 0,
+            "week_positive": week_positive or 0,
+            "week_negative": week_negative or 0,
         }
-
-    return {
-        "positive": 0,
-        "negative": 0,
-        "week_positive": 0,
-        "week_negative": 0,
-    }
 
 
 # =========================================================
 # FACTS
 # =========================================================
 
-async def add_fact(
-    telegram_id: int,
-    fact: str,
-):
-
-    async for session in get_session():
-
-        item = UserFact(
-            telegram_id=telegram_id,
-            fact=fact,
-        )
-
-        session.add(item)
-
+async def add_fact(telegram_id: int, fact: str):
+    async with session_scope() as session:
+        session.add(UserFact(telegram_id=telegram_id, fact=fact))
         await session.commit()
 
 
-async def get_facts(
-    telegram_id: int,
-    limit: int = 20,
-):
-
-    async for session in get_session():
-
+async def get_facts(telegram_id: int, limit: int = 20) -> list[str]:
+    async with session_scope() as session:
         result = await session.execute(
             select(UserFact)
-            .where(
-                UserFact.telegram_id == telegram_id
-            )
-            .order_by(
-                UserFact.created_at.desc()
-            )
+            .where(UserFact.telegram_id == telegram_id)
+            .order_by(UserFact.created_at.desc())
             .limit(limit)
         )
-
-        return [
-            item.fact
-            for item in result.scalars().all()
-        ]
-
-    return []
+        return [item.fact for item in result.scalars().all()]
 
 
 # =========================================================
 # ACTION IMAGES
 # =========================================================
 
-async def get_unused_action_image(
-    action: str,
-):
-
-    async for session in get_session():
-
+async def get_unused_action_image(action: str) -> ActionImage | None:
+    async with session_scope() as session:
         result = await session.execute(
             select(ActionImage)
             .where(
                 ActionImage.action == action,
-                ActionImage.used == False,
+                ActionImage.used.is_(False),
             )
-            .order_by(
-                func.random()
-            )
+            .order_by(func.random())
             .limit(1)
+            .with_for_update(skip_locked=True)
         )
 
         image = result.scalar_one_or_none()
@@ -633,34 +549,31 @@ async def get_unused_action_image(
             return None
 
         image.used = True
-        image.used_at = datetime.utcnow()
+        image.used_at = utcnow()
 
         await session.commit()
 
         return image
 
-    return None
 
-
-async def get_last_action_page(
-    action: str,
-):
-
-    async for session in get_session():
-
+async def get_last_action_page(action: str) -> int:
+    async with session_scope() as session:
         result = await session.execute(
-            select(
-                func.max(ActionImage.source_page)
-            ).where(
+            select(func.max(ActionImage.source_page)).where(
                 ActionImage.action == action
             )
         )
+        return result.scalar() or 0
 
-        page = result.scalar()
 
-        return page or 0
-
-    return 0
+async def count_action_images(action: str) -> int:
+    async with session_scope() as session:
+        result = await session.execute(
+            select(func.count(ActionImage.id)).where(
+                ActionImage.action == action
+            )
+        )
+        return result.scalar() or 0
 
 
 async def add_action_image(
@@ -671,81 +584,74 @@ async def add_action_image(
     photographer_url: str,
     unsplash_url: str,
     source_page: int,
-):
-
-    async for session in get_session():
-
+) -> bool:
+    async with session_scope() as session:
         existing_result = await session.execute(
-            select(ActionImage).where(
+            select(ActionImage.id).where(
                 ActionImage.action == action,
                 ActionImage.photo_id == photo_id,
             )
         )
 
-        existing = existing_result.scalar_one_or_none()
-
-        if existing is not None:
+        if existing_result.scalar_one_or_none() is not None:
             return False
 
-        image = ActionImage(
-            action=action,
-            photo_id=photo_id,
-            image_url=image_url,
-            photographer_name=photographer_name,
-            photographer_url=photographer_url,
-            unsplash_url=unsplash_url,
-            source_page=source_page,
-            used=False,
+        session.add(
+            ActionImage(
+                action=action,
+                photo_id=photo_id,
+                image_url=image_url,
+                photographer_name=photographer_name,
+                photographer_url=photographer_url,
+                unsplash_url=unsplash_url,
+                source_page=source_page,
+                used=False,
+            )
         )
-
-        session.add(image)
 
         await session.commit()
 
         return True
 
-    return False
 
-
-async def reset_action_images(
-    action: str,
-):
-
-    async for session in get_session():
-
+async def reset_action_images(action: str):
+    async with session_scope() as session:
         await session.execute(
             update(ActionImage)
-            .where(
-                ActionImage.action == action
-            )
-            .values(
-                used=False,
-                used_at=None,
-            )
+            .where(ActionImage.action == action)
+            .values(used=False, used_at=None)
         )
-
         await session.commit()
 
-        return
+
+async def release_action_image(image_id: int):
+    async with session_scope() as session:
+        await session.execute(
+            update(ActionImage)
+            .where(ActionImage.id == image_id)
+            .values(used=False, used_at=None)
+        )
+        await session.commit()
 
 
-async def release_action_image(
-    image_id: int,
-):
+async def set_action_image_file_id(image_id: int, file_id: str):
+    async with session_scope() as session:
+        await session.execute(
+            update(ActionImage)
+            .where(ActionImage.id == image_id)
+            .values(telegram_file_id=file_id)
+        )
+        await session.commit()
 
-    async for session in get_session():
 
-        result = await session.execute(
-            select(ActionImage).where(
+async def drop_action_image(image_id: int):
+    """
+    Битая ссылка — выкидываем из коллекции совсем.
+    """
+    async with session_scope() as session:
+        await session.execute(
+            ActionImage.__table__.delete().where(
                 ActionImage.id == image_id
             )
         )
-
-        image = result.scalar_one_or_none()
-
-        if image is not None:
-
-            image.used = False
-            image.used_at = None
-
-            await session.commit()
+        await session.commit()

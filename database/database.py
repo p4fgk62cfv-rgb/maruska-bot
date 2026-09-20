@@ -1,4 +1,6 @@
 import os
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 from sqlalchemy import text
@@ -33,6 +35,7 @@ else:
     scheme = DATABASE_URL.split(":", 1)[0]
     raise RuntimeError(f"Invalid DATABASE_URL scheme: {scheme}")
 
+# asyncpg не понимает sslmode/channel_binding из строки Neon/Heroku.
 parts = urlsplit(DATABASE_URL)
 query = [
     (key, value)
@@ -40,15 +43,16 @@ query = [
     if key not in ("sslmode", "channel_binding")
 ]
 
-DATABASE_URL = urlunsplit(
-    parts._replace(query=urlencode(query))
-)
+DATABASE_URL = urlunsplit(parts._replace(query=urlencode(query)))
+
 
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
     pool_pre_ping=True,
     pool_recycle=1800,
+    pool_size=5,
+    max_overflow=5,
 )
 
 SessionLocal = async_sessionmaker(
@@ -62,31 +66,63 @@ class Base(DeclarativeBase):
     pass
 
 
+def utcnow() -> datetime:
+    """
+    Наивный UTC — колонки объявлены как DateTime без timezone.
+    Замена устаревшему datetime.utcnow().
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+@asynccontextmanager
+async def session_scope():
+    """
+    Единственный правильный способ получить сессию.
+
+    Старый вариант `async for session in get_session()` оставлял
+    асинхронный генератор незакрытым при раннем return, из-за чего
+    соединения не возвращались в пул.
+    """
+    session = SessionLocal()
+    try:
+        yield session
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await session.close()
+
+
 async def init_db():
     from database import models  # noqa: F401
 
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
 
-        # create_all() не добавляет новые колонки в уже существующие таблицы.
-        # Поэтому для gender делаем безопасную миграцию.
-        await connection.execute(
-            text(
-                "ALTER TABLE users "
-                "ADD COLUMN IF NOT EXISTS gender VARCHAR(20)"
-            )
+        # create_all() не добавляет колонки в уже существующие таблицы,
+        # поэтому мелкие миграции делаем вручную и идемпотентно.
+        migrations = (
+            "ALTER TABLE users "
+            "ADD COLUMN IF NOT EXISTS gender VARCHAR(20)",
+
+            "CREATE INDEX IF NOT EXISTS ix_users_gender "
+            "ON users (gender)",
+
+            "ALTER TABLE action_images "
+            "ADD COLUMN IF NOT EXISTS telegram_file_id VARCHAR(255)",
+
+            "CREATE INDEX IF NOT EXISTS ix_action_images_action_used "
+            "ON action_images (action, used)",
+
+            "CREATE INDEX IF NOT EXISTS ix_message_memory_chat_created "
+            "ON message_memory (chat_id, created_at DESC)",
         )
 
-        await connection.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS ix_users_gender "
-                "ON users (gender)"
-            )
-        )
+        for statement in migrations:
+            await connection.execute(text(statement))
 
     print("DATABASE: tables checked/created")
 
 
-async def get_session():
-    async with SessionLocal() as session:
-        yield session
+async def close_db():
+    await engine.dispose()
