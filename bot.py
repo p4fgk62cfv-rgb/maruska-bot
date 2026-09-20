@@ -23,6 +23,7 @@ from database.repository import (
     get_rating_stats,
 )
 
+from actions.catalog import find_action
 from actions.handler import router as actions_router
 
 
@@ -46,23 +47,36 @@ dp = Dispatcher()
 
 
 # =========================================================
+# ACTION DETECTION
+# =========================================================
+
+def is_action_message(
+    message: Message,
+) -> bool:
+
+    if not message.text:
+        return False
+
+    action = find_action(
+        message.text
+    )
+
+    return action is not None
+
+
+# =========================================================
 # ACTIONS ROUTER
 # =========================================================
 #
+# Сам обработчик действий находится в:
+#
+# actions/handler.py
+#
+# Здесь подключаем его.
+#
 # ВАЖНО:
-# Подключаем actions_router СРАЗУ после создания Dispatcher.
-#
-# Это необходимо, чтобы сообщения типа:
-#
-# Пиво
-# Гамбургер
-# Кофе
-# Пицца
-# ...
-#
-# сначала попадали в actions/handler.py,
-# а не перехватывались универсальными
-# @dp.message() ниже.
+# root-handlers ниже имеют фильтры и НЕ будут
+# перехватывать сообщения, являющиеся действиями.
 #
 # =========================================================
 
@@ -261,24 +275,29 @@ async def profile_handler(
 # =========================================================
 # RATING
 # =========================================================
+#
+# ВАЖНО:
+# Этот handler теперь подходит ТОЛЬКО для "+" и "-".
+#
+# "Пиво", "Гамбургер", "Водка" и т.д.
+# сюда вообще не попадут.
+#
+# =========================================================
 
-@dp.message()
+@dp.message(
+    lambda message: (
+        message.text is not None
+        and message.text.strip() in {
+            "+",
+            "-",
+        }
+    )
+)
 async def rating_handler(
     message: Message,
 ):
 
     if not message.from_user:
-        return
-
-    if not message.text:
-        return
-
-    text = message.text.strip()
-
-    if text not in (
-        "+",
-        "-",
-    ):
         return
 
     if not message.reply_to_message:
@@ -301,6 +320,8 @@ async def rating_handler(
         )
 
         return
+
+    text = message.text.strip()
 
     amount = (
         1
@@ -446,8 +467,32 @@ async def top_handler(
 # =========================================================
 # AI CHAT
 # =========================================================
+#
+# КРИТИЧЕСКИ ВАЖНО:
+#
+# Если сообщение является действием,
+# AI-handler его НЕ получает.
+#
+# Например:
+#
+# Пиво      -> actions
+# Водка     -> actions
+# Гамбургер -> actions
+# Обнять    -> actions
+#
+# А:
+#
+# "Маруська, как дела?"
+#             -> AI
+#
+# =========================================================
 
-@dp.message()
+@dp.message(
+    lambda message: (
+        message.text is not None
+        and not is_action_message(message)
+    )
+)
 async def ai_handler(
     message: Message,
 ):
@@ -461,7 +506,7 @@ async def ai_handler(
     if message.from_user.is_bot:
         return
 
-    # Если это команда/рейтинг — ничего не делаем.
+    # Команды не отправляем в Gemini
     if message.text.startswith("/"):
         return
 
@@ -472,6 +517,7 @@ async def ai_handler(
         first_name=message.from_user.first_name,
     )
 
+    # Сохраняем сообщение
     await save_message(
         chat_id=message.chat.id,
         telegram_user_id=message.from_user.id,
@@ -495,6 +541,7 @@ async def ai_handler(
         in text_lower
     )
 
+    # Если пользователь отвечает на сообщение бота
     if message.reply_to_message:
 
         if (
