@@ -8,7 +8,10 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import (
+    Mapped,
+    mapped_column,
+)
 
 from database.database import Base
 
@@ -98,24 +101,28 @@ class UserProfile(Base):
         nullable=True,
     )
 
-    # Старое техническое поле.
-    # В интерфейсе оно используется как глобальный рейтинг.
+    # Старое техническое название поля.
+    # Для пользователя это ГЛОБАЛЬНЫЙ РЕЙТИНГ.
     karma: Mapped[int] = mapped_column(
         default=0,
     )
 
+    # Глобальные монеты.
     coins: Mapped[int] = mapped_column(
         default=0,
     )
 
+    # Общее количество сообщений пользователя.
     messages_count: Mapped[int] = mapped_column(
         default=0,
     )
 
+    # Общее количество сыгранных игр.
     games_played: Mapped[int] = mapped_column(
         default=0,
     )
 
+    # Общее количество побед.
     games_won: Mapped[int] = mapped_column(
         default=0,
     )
@@ -219,19 +226,19 @@ class RatingVote(Base):
         autoincrement=True,
     )
 
-    # Кто поставил рейтинг
+    # Кто поставил рейтинг.
     giver_telegram_id: Mapped[int] = mapped_column(
         BigInteger,
         index=True,
     )
 
-    # Кому поставили рейтинг
+    # Кому поставили рейтинг.
     target_telegram_id: Mapped[int] = mapped_column(
         BigInteger,
         index=True,
     )
 
-    # +1 или -1
+    # +1 или -1.
     amount: Mapped[int] = mapped_column(
         default=1,
     )
