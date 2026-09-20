@@ -2,14 +2,8 @@ import asyncio
 import os
 from html import escape
 
-from aiogram import (
-    Bot,
-    Dispatcher,
-)
-from aiogram.filters import (
-    Command,
-    CommandStart,
-)
+from aiogram import Bot, Dispatcher
+from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 
 from ai.gemini import ask_gemini
@@ -36,9 +30,7 @@ from actions.handler import router as actions_router
 # CONFIG
 # =========================================================
 
-TOKEN = os.getenv(
-    "BOT_TOKEN"
-)
+TOKEN = os.getenv("BOT_TOKEN")
 
 if not TOKEN:
     raise RuntimeError(
@@ -51,6 +43,32 @@ bot = Bot(
 )
 
 dp = Dispatcher()
+
+
+# =========================================================
+# ACTIONS ROUTER
+# =========================================================
+#
+# ВАЖНО:
+# Подключаем actions_router СРАЗУ после создания Dispatcher.
+#
+# Это необходимо, чтобы сообщения типа:
+#
+# Пиво
+# Гамбургер
+# Кофе
+# Пицца
+# ...
+#
+# сначала попадали в actions/handler.py,
+# а не перехватывались универсальными
+# @dp.message() ниже.
+#
+# =========================================================
+
+dp.include_router(
+    actions_router
+)
 
 
 # =========================================================
@@ -590,10 +608,8 @@ async def main():
         "Глобальный рейтинг: включён"
     )
 
-    # Сначала действия.
-    # Они должны перехватываться раньше AI.
-    dp.include_router(
-        actions_router
+    print(
+        "Actions router: подключён"
     )
 
     print(
@@ -604,6 +620,10 @@ async def main():
         bot
     )
 
+
+# =========================================================
+# RUN
+# =========================================================
 
 if __name__ == "__main__":
 
