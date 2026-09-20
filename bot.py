@@ -27,6 +27,7 @@ from database.repository import (
 )
 
 from actions.handler import router as actions_router
+from actions.providers import available_providers
 
 
 logging.basicConfig(
@@ -403,9 +404,10 @@ async def main():
     logger.info("Бот: @%s (id=%s)", BOT_USERNAME, BOT_ID)
     logger.info("PostgreSQL: подключён")
     logger.info("Gemini: подключён")
+    providers = available_providers()
     logger.info(
-        "Unsplash: %s",
-        "подключён" if os.getenv("UNSPLASH_ACCESS_KEY") else "НЕ подключён",
+        "Картинки: %s",
+        ", ".join(providers) if providers else "НИ ОДИН ИСТОЧНИК НЕ НАСТРОЕН",
     )
     logger.info("МАРУСЬКА ЗАПУЩЕНА!")
 
