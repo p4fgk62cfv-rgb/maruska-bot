@@ -87,7 +87,7 @@ async def save_message(
             profile.messages_count += 1
             profile.updated_at = datetime.utcnow()
 
-        # Профиль участника конкретной группы
+        # Участник конкретной группы
         member_result = await session.execute(
             select(GroupMember).where(
                 GroupMember.chat_id == chat_id,
@@ -193,53 +193,15 @@ async def create_profile_if_needed(
     return None
 
 
-async def add_fact(
-    telegram_id: int,
-    fact: str,
-):
-    async for session in get_session():
-
-        new_fact = UserFact(
-            telegram_id=telegram_id,
-            fact=fact,
-        )
-
-        session.add(new_fact)
-
-        await session.commit()
-
-
-async def get_facts(
-    telegram_id: int,
-    limit: int = 20,
-):
-    async for session in get_session():
-
-        result = await session.execute(
-            select(UserFact)
-            .where(
-                UserFact.telegram_id == telegram_id
-            )
-            .order_by(
-                UserFact.created_at.desc()
-            )
-            .limit(limit)
-        )
-
-        facts = result.scalars().all()
-
-        return [
-            fact.fact
-            for fact in reversed(facts)
-        ]
-
-    return []
-
-
-async def change_karma(
+async def add_rating(
     telegram_id: int,
     amount: int,
 ):
+    """
+    Глобальный рейтинг пользователя.
+    Хранится технически в колонке karma.
+    """
+
     async for session in get_session():
 
         result = await session.execute(
@@ -285,5 +247,48 @@ async def get_global_rating(
         )
 
         return result.scalars().all()
+
+    return []
+
+
+async def add_fact(
+    telegram_id: int,
+    fact: str,
+):
+    async for session in get_session():
+
+        new_fact = UserFact(
+            telegram_id=telegram_id,
+            fact=fact,
+        )
+
+        session.add(new_fact)
+
+        await session.commit()
+
+
+async def get_facts(
+    telegram_id: int,
+    limit: int = 20,
+):
+    async for session in get_session():
+
+        result = await session.execute(
+            select(UserFact)
+            .where(
+                UserFact.telegram_id == telegram_id
+            )
+            .order_by(
+                UserFact.created_at.desc()
+            )
+            .limit(limit)
+        )
+
+        facts = result.scalars().all()
+
+        return [
+            fact.fact
+            for fact in reversed(facts)
+        ]
 
     return []
