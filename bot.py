@@ -8,7 +8,7 @@ from aiogram import Bot, Dispatcher, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message
+from aiogram.types import BufferedInputFile, Message
 
 from ai.gemini import ask_gemini
 
@@ -28,7 +28,17 @@ from database.repository import (
 )
 
 from actions.handler import router as actions_router
-from actions.providers import available_providers
+from actions.providers import available_providers, download_photo
+from actions.service import get_image_for_action
+from actions.show_me import is_show_me, pick_caption, pick_mood
+
+from database.repository import (
+    set_action_image_file_id,
+    release_action_image,
+    drop_action_image,
+)
+
+import context_cache
 
 from weather import (
     DEFAULT_CITY,
@@ -144,6 +154,8 @@ async def help_handler(message: Message):
         "🤖 <b>Маруська</b>\n\n"
         "💬 Позови по имени: <b>Мара, ...</b>\n"
         "Или ответь на моё сообщение.\n\n"
+        "🐱 <b>Покажи меня</b>\n"
+        "Мара, покажи меня — портрет по мотивам котиков\n\n"
         "🌤 <b>Погода</b>\n"
         "Мара, погода в Праге?\n"
         "или /weather Прага\n\n"
@@ -373,6 +385,80 @@ async def weather_handler(message: Message):
 
 
 # =========================================================
+# ПОКАЖИ МЕНЯ
+# =========================================================
+#
+# "Мара, покажи меня" -> случайный котик как портрет.
+#
+# =========================================================
+
+def is_show_me_request(message: Message) -> bool:
+    if not message.text or message.text.startswith("/"):
+        return False
+
+    if not is_show_me(message.text):
+        return False
+
+    return should_answer(message)
+
+
+@root_router.message(is_show_me_request)
+async def show_me_handler(message: Message):
+    try:
+        await bot.send_chat_action(message.chat.id, "upload_photo")
+    except Exception:
+        pass
+
+    mood = pick_mood()
+
+    try:
+        image = await get_image_for_action(mood)
+    except Exception as error:
+        logger.error("SHOW ME: %s %s", type(error).__name__, error)
+        image = None
+
+    if image is None:
+        await message.reply("Котики закончились, попробуй попозже 🐾")
+        return
+
+    caption = pick_caption(escape(display_name_of(message.from_user)))
+
+    if image.telegram_file_id:
+        try:
+            await message.reply_photo(
+                photo=image.telegram_file_id,
+                caption=caption,
+            )
+            return
+        except Exception as error:
+            logger.warning("SHOW ME file_id: %s", error)
+
+    content = await download_photo(image.image_url, image.fallback_url)
+
+    if content is None:
+        await drop_action_image(image.id)
+        await message.reply("Котик не загрузился 🐾")
+        return
+
+    try:
+        sent = await message.reply_photo(
+            photo=BufferedInputFile(content, filename="cat.jpg"),
+            caption=caption,
+        )
+    except Exception as error:
+        logger.warning("SHOW ME send: %s", error)
+        await release_action_image(image.id)
+        await message.reply("Котик не отправился 🐾")
+        return
+
+    if sent.photo:
+        try:
+            await set_action_image_file_id(image.id, sent.photo[-1].file_id)
+        except Exception:
+            pass
+
+
+# =========================================================
 # AI CHAT
 # =========================================================
 #
@@ -391,25 +477,40 @@ async def ai_handler(message: Message):
     if message.text.startswith("/"):
         return
 
-    await save_user(
-        telegram_id=message.from_user.id,
-        username=message.from_user.username,
-        first_name=message.from_user.first_name,
-    )
+    name = display_name_of(message.from_user)
 
-    await save_message(
-        chat_id=message.chat.id,
-        telegram_user_id=message.from_user.id,
-        username=display_name_of(message.from_user),
-        message=message.text,
+    # Контекст держим в памяти: чтение из базы перед каждым
+    # ответом добавляло заметную задержку.
+    context_cache.remember(message.chat.id, name, message.text)
+
+    # Запись в базу не задерживает ответ — уходит в фон.
+    asyncio.create_task(
+        persist_message(message, name)
     )
 
     if not should_answer(message):
         return
 
-    recent_messages = await get_recent_messages(
+    # Показываем "печатает..." сразу, чтобы ожидание не было немым.
+    try:
+        await bot.send_chat_action(message.chat.id, "typing")
+    except Exception:
+        pass
+
+    if not context_cache.is_loaded(message.chat.id):
+        try:
+            history = await get_recent_messages(
+                message.chat.id,
+                limit=CONTEXT_MESSAGES,
+            )
+            context_cache.prime(message.chat.id, history)
+        except Exception as error:
+            logger.warning("CONTEXT LOAD: %s", error)
+            context_cache.prime(message.chat.id, [])
+
+    recent_messages = context_cache.recent(
         message.chat.id,
-        limit=CONTEXT_MESSAGES,
+        CONTEXT_MESSAGES,
     )
 
     prompt = (
@@ -429,8 +530,33 @@ async def ai_handler(message: Message):
     if not answer:
         return
 
+    context_cache.remember(message.chat.id, "Мара", answer)
+
     # Ответ модели — обычный текст, HTML-разметку из него не парсим.
     await message.reply(answer, parse_mode=None)
+
+
+async def persist_message(message: Message, name: str):
+    """
+    Сохранение пользователя и сообщения в базу, вне критического пути.
+    """
+    try:
+        await save_user(
+            telegram_id=message.from_user.id,
+            username=message.from_user.username,
+            first_name=message.from_user.first_name,
+        )
+
+        await save_message(
+            chat_id=message.chat.id,
+            telegram_user_id=message.from_user.id,
+            username=name,
+            message=message.text,
+        )
+    except Exception as error:
+        logger.warning(
+            "PERSIST: %s %s", type(error).__name__, error
+        )
 
 
 # =========================================================
