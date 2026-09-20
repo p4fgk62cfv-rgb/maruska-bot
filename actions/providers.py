@@ -47,6 +47,7 @@ class RemotePhoto:
     provider: str
     photo_id: str
     image_url: str
+    tags: str = ""
     fallback_url: str | None = None
     photographer_name: str | None = None
     photographer_url: str | None = None
@@ -65,7 +66,26 @@ def _with_utm(url: str) -> str:
 # Pixabay
 # ---------------------------------------------------------
 
-async def search_pixabay(query: str, page: int) -> list[RemotePhoto]:
+def matches_tags(tags: str, required: tuple[str, ...]) -> bool:
+    """
+    Картинка подходит, если хотя бы один обязательный фрагмент
+    есть в её тегах. Теги приходят от источника; привязка идёт
+    к самому действию, а не к первому слову запроса — иначе по
+    "couple kissing" засчитывается свадебный пейзаж без поцелуя.
+    """
+    if not required:
+        return True
+
+    haystack = tags.lower()
+
+    return any(fragment.lower() in haystack for fragment in required)
+
+
+async def search_pixabay(
+    query: str,
+    page: int,
+    required: tuple[str, ...] = (),
+) -> list[RemotePhoto]:
     if not PIXABAY_API_KEY:
         raise RuntimeError("PIXABAY_API_KEY is not set")
 
@@ -91,8 +111,12 @@ async def search_pixabay(query: str, page: int) -> list[RemotePhoto]:
         photo_id = hit.get("id")
         large = hit.get("largeImageURL")
         web = hit.get("webformatURL")
+        tags = hit.get("tags") or ""
 
         if not photo_id or not (large or web):
+            continue
+
+        if required and not matches_tags(tags, required):
             continue
 
         photos.append(
@@ -100,6 +124,7 @@ async def search_pixabay(query: str, page: int) -> list[RemotePhoto]:
                 provider="pixabay",
                 photo_id=str(photo_id),
                 image_url=large or web,
+                tags=tags,
                 fallback_url=web,
             )
         )
@@ -111,7 +136,11 @@ async def search_pixabay(query: str, page: int) -> list[RemotePhoto]:
 # Unsplash (запасной, с обязательной атрибуцией)
 # ---------------------------------------------------------
 
-async def search_unsplash(query: str, page: int) -> list[RemotePhoto]:
+async def search_unsplash(
+    query: str,
+    page: int,
+    required: tuple[str, ...] = (),
+) -> list[RemotePhoto]:
     if not UNSPLASH_ACCESS_KEY:
         raise RuntimeError("UNSPLASH_ACCESS_KEY is not set")
 
@@ -147,6 +176,24 @@ async def search_unsplash(query: str, page: int) -> list[RemotePhoto]:
         if not photo_id or not image_url or not page_url:
             continue
 
+        tags = " ".join(
+            tag.get("title", "")
+            for tag in (item.get("tags") or [])
+            if isinstance(tag, dict)
+        )
+
+        description = " ".join(
+            filter(None, (
+                item.get("description"),
+                item.get("alt_description"),
+            ))
+        )
+
+        haystack = f"{tags} {description}".strip()
+
+        if required and haystack and not matches_tags(haystack, required):
+            continue
+
         user = item.get("user", {}) or {}
         username = user.get("username")
 
@@ -161,6 +208,7 @@ async def search_unsplash(query: str, page: int) -> list[RemotePhoto]:
                 provider="unsplash",
                 photo_id=photo_id,
                 image_url=image_url,
+                tags=haystack,
                 photographer_name=(
                     user.get("name")
                     or username
@@ -196,13 +244,14 @@ async def search_photos(
     provider: str,
     query: str,
     page: int,
+    required: tuple[str, ...] = (),
 ) -> list[RemotePhoto]:
     search = SEARCH_FUNCTIONS.get(provider)
 
     if search is None:
         return []
 
-    return await search(query, page)
+    return await search(query, page, required)
 
 
 # ---------------------------------------------------------

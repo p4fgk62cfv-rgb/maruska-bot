@@ -1,4 +1,3 @@
-import random
 import re
 from dataclasses import dataclass
 from html import escape
@@ -7,6 +6,7 @@ from aiogram import Router
 from aiogram.types import BufferedInputFile, Message
 
 from actions.catalog import find_action
+from actions.phrases import pick_template, render
 from actions.providers import download_photo
 from actions.service import get_image_for_action
 
@@ -66,31 +66,27 @@ def pair_key(actor_gender: str, target_gender: str) -> str:
     return "neutral"
 
 
-def contains_any(text: str, words: tuple[str, ...]) -> bool:
-    normalized = text.lower()
-    return any(word in normalized for word in words)
-
-
-def vform(male: str, female: str, gender: str) -> str:
-    """
-    Форма глагола по роду. Если род неизвестен — старый вариант "(а)".
-    """
-    if gender == "male":
-        return male
-    if gender == "female":
-        return female
-    if female.startswith(male):
-        return f"{male}({female[len(male):]})"
-    return f"{male}/{female}"
-
-
 # ---------------------------------------------------------
 # Русское склонение имён.
 # Не морфологический движок — окончания + список исключений.
 # ---------------------------------------------------------
 
-def _is_cyrillic(value: str) -> bool:
-    return bool(re.search(r"[а-яё]", value))
+_NAME_RE = re.compile(r"^[А-Яа-яЁё]+(?:-[А-Яа-яЁё]+)?$")
+
+
+def _is_declinable(name: str) -> bool:
+    """
+    Склоняем только то, что похоже на имя: одно кириллическое слово.
+
+    Ники вроде "Унесенный Ветром", "Panda 🐼" или "DJ Vova" оставляем
+    как есть — иначе получается "Унесенный Ветрому".
+    """
+    clean = name.strip()
+
+    if len(clean) < 3:
+        return False
+
+    return bool(_NAME_RE.match(clean))
 
 
 def to_accusative(name: str, gender: str = "unknown") -> str:
@@ -100,8 +96,7 @@ def to_accusative(name: str, gender: str = "unknown") -> str:
     clean = name.strip()
     lower = clean.lower()
 
-    # Латиницу и никнеймы не склоняем.
-    if not _is_cyrillic(lower):
+    if not _is_declinable(clean):
         return clean
 
     if gender == "female":
@@ -136,7 +131,7 @@ def to_dative(name: str, gender: str = "unknown") -> str:
     clean = name.strip()
     lower = clean.lower()
 
-    if not _is_cyrillic(lower):
+    if not _is_declinable(clean):
         return clean
 
     if gender == "female":
@@ -171,7 +166,7 @@ def to_instrumental(name: str, gender: str = "unknown") -> str:
     clean = name.strip()
     lower = clean.lower()
 
-    if not _is_cyrillic(lower):
+    if not _is_declinable(clean):
         return clean
 
     if gender == "female":
@@ -201,39 +196,48 @@ def to_instrumental(name: str, gender: str = "unknown") -> str:
     return clean
 
 
+def to_genitive(name: str, gender: str = "unknown") -> str:
+    if not name:
+        return name
+
+    clean = name.strip()
+    lower = clean.lower()
+
+    if not _is_declinable(clean):
+        return clean
+
+    if gender == "female":
+        if lower.endswith("ия"):
+            return clean[:-2] + "ии"
+        if lower.endswith("я"):
+            return clean[:-1] + "и"
+        if lower.endswith("а"):
+            # после г, к, х, ж, ч, ш, щ пишется "и": Ольга -> Ольги
+            if len(lower) > 1 and lower[-2] in "гкхжчшщ":
+                return clean[:-1] + "и"
+            return clean[:-1] + "ы"
+        if lower.endswith("ь"):
+            return clean[:-1] + "и"
+        return clean
+
+    if gender == "male":
+        if lower.endswith("й"):
+            return clean[:-1] + "я"
+        if lower.endswith("ь"):
+            return clean[:-1] + "я"
+        if lower.endswith("я"):
+            return clean[:-1] + "и"
+        if lower.endswith("а"):
+            if lower in MALE_NAMES:
+                return clean[:-1] + "ы"
+            return clean
+        return clean + "а"
+
+    return clean
+
 # ---------------------------------------------------------
 # Текст действия
 # ---------------------------------------------------------
-
-def _drink_verb(message_text: str) -> str:
-    text = message_text.lower()
-
-    if contains_any(text, ("угост", "угощ")):
-        return "treat"
-
-    if contains_any(text, ("напои", "напо", "поить", "пою")):
-        return "pour"
-
-    if contains_any(
-        text,
-        ("выпей", "выпить", "выпил", "выпила", "выпьем", "пью", "пить"),
-    ):
-        return "together"
-
-    return random.choice(("treat", "pour", "together"))
-
-
-def _food_verb(message_text: str) -> str:
-    text = message_text.lower()
-
-    if contains_any(text, ("накорм", "корми", "покорм")):
-        return "feed"
-
-    if contains_any(text, ("угост", "угощ")):
-        return "treat"
-
-    return random.choice(("treat", "feed"))
-
 
 def build_action_text(
     message_text: str,
@@ -243,100 +247,22 @@ def build_action_text(
     actor_gender: str = "unknown",
     target_gender: str = "unknown",
 ) -> str:
-    actor = escape(actor_name)
-    target_acc = escape(to_accusative(target_name, target_gender))
-    target_dat = escape(to_dative(target_name, target_gender))
-    target_instr = escape(to_instrumental(target_name, target_gender))
+    template = pick_template(action)
 
-    g = actor_gender
-
-    if action.category == "drink":
-        verb = _drink_verb(message_text)
-
-        if verb == "treat":
-            word = vform("угостил", "угостила", g)
-            return (
-                f"{action.emoji} <b>{actor}</b> {word} "
-                f"<b>{target_acc}</b> {action.item_instr} ♡"
-            )
-
-        if verb == "pour":
-            word = vform("напоил", "напоила", g)
-            return (
-                f"{action.emoji} <b>{actor}</b> {word} "
-                f"<b>{target_acc}</b> {action.item_instr} ♡"
-            )
-
-        word = vform("выпил", "выпила", g)
-        return (
-            f"{action.emoji} <b>{actor}</b> {word} {action.item_acc} "
-            f"вместе с <b>{target_instr}</b> ♡"
-        )
-
-    if action.category == "food":
-        verb = _food_verb(message_text)
-
-        if verb == "feed":
-            word = vform("накормил", "накормила", g)
-        else:
-            word = vform("угостил", "угостила", g)
-
-        return (
-            f"{action.emoji} <b>{actor}</b> {word} "
-            f"<b>{target_acc}</b> {action.item_instr} ♡"
-        )
-
-    if action.category in ("flower", "gift"):
-        word = vform("подарил", "подарила", g)
-        return (
-            f"{action.emoji} <b>{actor}</b> {word} "
-            f"<b>{target_dat}</b> {action.item_acc} ♡"
-        )
-
-    if action.key == "hug":
-        word = vform("обнял", "обняла", g)
-        return f"🤗 <b>{actor}</b> {word} <b>{target_acc}</b> 🤗"
-
-    if action.key == "kiss":
-        word = vform("поцеловал", "поцеловала", g)
-        return f"😘 <b>{actor}</b> {word} <b>{target_acc}</b> 😘"
-
-    if action.key == "highfive":
-        word = vform("дал", "дала", g)
-        return f"🙌 <b>{actor}</b> {word} пять <b>{target_dat}</b> ✋"
-
-    if action.key == "handshake":
-        word = vform("пожал", "пожала", g)
-        return f"🤝 <b>{actor}</b> {word} руку <b>{target_dat}</b>"
-
-    if action.key == "support":
-        word = vform("поддержал", "поддержала", g)
-        return f"🫶 <b>{actor}</b> {word} <b>{target_acc}</b>"
-
-    if action.key == "congratulations":
-        word = vform("поздравил", "поздравила", g)
-        return f"🎉 <b>{actor}</b> {word} <b>{target_acc}</b> 🎉"
-
-    if action.key == "party":
-        word = vform("оторвался", "оторвалась", g)
-        return f"🎉 <b>{actor}</b> {word} вместе с <b>{target_instr}</b>"
-
-    if action.key == "movie":
-        word = vform("посмотрел", "посмотрела", g)
-        return f"🎬 <b>{actor}</b> {word} кино вместе с <b>{target_instr}</b>"
-
-    if action.key == "music":
-        word = vform("послушал", "послушала", g)
-        return f"🎵 <b>{actor}</b> {word} музыку вместе с <b>{target_instr}</b>"
-
-    if action.key == "dance":
-        word = vform("потанцевал", "потанцевала", g)
-        return f"💃 <b>{actor}</b> {word} с <b>{target_instr}</b>"
-
-    word = vform("провёл", "провела", g)
-    return (
-        f"{action.emoji} <b>{actor}</b> {word} время "
-        f"вместе с <b>{target_instr}</b> ♡"
+    return render(
+        template,
+        actor_gender,
+        emoji=action.emoji,
+        actor=escape(actor_name),
+        actor_gen=escape(to_genitive(actor_name, actor_gender)),
+        actor_dat=escape(to_dative(actor_name, actor_gender)),
+        target=escape(target_name),
+        target_acc=escape(to_accusative(target_name, target_gender)),
+        target_dat=escape(to_dative(target_name, target_gender)),
+        target_gen=escape(to_genitive(target_name, target_gender)),
+        target_instr=escape(to_instrumental(target_name, target_gender)),
+        item=escape(action.item_acc),
+        item_instr=escape(action.item_instr),
     )
 
 

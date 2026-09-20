@@ -9,7 +9,9 @@
 Источник больше ничего не отдаёт — сбрасываем цикл и идём по кругу.
 """
 
-from actions.catalog import Action
+import hashlib
+
+from actions.catalog import Action, required_tags
 from actions.providers import (
     available_providers,
     search_photos,
@@ -39,52 +41,52 @@ PAGES_PER_FILL = 2
 
 PAIR_SEARCHES = {
     "male_female": {
-        "hug": "couple hugging happy",
-        "kiss": "couple kissing happy",
-        "highfive": "man woman high five",
-        "handshake": "man woman handshake",
-        "support": "couple smiling together",
-        "congratulations": "couple celebrating confetti",
-        "party": "couple party celebration",
-        "movie": "couple watching movie",
-        "music": "couple listening music",
-        "dance": "couple dancing happy",
+        "hug": "hugging couple happy",
+        "kiss": "kissing couple",
+        "highfive": "high five man woman",
+        "handshake": "handshake man woman",
+        "support": "smiling couple together",
+        "congratulations": "celebration confetti couple",
+        "party": "party couple celebration",
+        "movie": "movie popcorn couple",
+        "music": "music couple headphones",
+        "dance": "dancing couple happy",
     },
     "male_male": {
-        "hug": "friends hugging men",
-        "kiss": "couple kissing happy",
-        "highfive": "men high five",
-        "handshake": "men handshake smiling",
-        "support": "friends laughing men",
-        "congratulations": "friends celebrating confetti",
-        "party": "friends party celebration",
-        "movie": "friends watching movie",
-        "music": "friends listening music",
-        "dance": "friends dancing happy",
+        "hug": "hugging friends men",
+        "kiss": "kissing couple",
+        "highfive": "high five men",
+        "handshake": "handshake men smiling",
+        "support": "laughing friends men",
+        "congratulations": "celebration confetti friends",
+        "party": "party friends celebration",
+        "movie": "movie popcorn friends",
+        "music": "music friends headphones",
+        "dance": "dancing friends happy",
     },
     "female_female": {
-        "hug": "friends hugging women",
-        "kiss": "women couple happy",
-        "highfive": "women high five",
-        "handshake": "women handshake smiling",
-        "support": "friends laughing women",
-        "congratulations": "friends celebrating confetti",
-        "party": "friends party celebration",
-        "movie": "friends watching movie",
-        "music": "friends listening music",
-        "dance": "women dancing happy",
+        "hug": "hugging friends women",
+        "kiss": "kissing women couple",
+        "highfive": "high five women",
+        "handshake": "handshake women smiling",
+        "support": "laughing friends women",
+        "congratulations": "celebration confetti friends",
+        "party": "party friends celebration",
+        "movie": "movie popcorn friends",
+        "music": "music friends headphones",
+        "dance": "dancing women happy",
     },
     "neutral": {
-        "hug": "friends hugging happy",
-        "kiss": "couple kissing happy",
-        "highfive": "friends high five",
-        "handshake": "handshake smiling",
-        "support": "friends laughing together",
-        "congratulations": "celebrating confetti happy",
-        "party": "party celebration friends",
-        "movie": "watching movie popcorn",
-        "music": "listening music happy",
-        "dance": "dancing happy people",
+        "hug": "hugging friends happy",
+        "kiss": "kissing couple",
+        "highfive": "high five friends",
+        "handshake": "handshake smiling people",
+        "support": "laughing friends together",
+        "congratulations": "celebration confetti happy",
+        "party": "party celebration friends fun",
+        "movie": "movie popcorn cinema",
+        "music": "music headphones happy",
+        "dance": "dancing people happy",
     },
 }
 
@@ -116,13 +118,26 @@ def query_variants(query: str) -> list[str]:
     return variants
 
 
+def rules_version(action: Action) -> str:
+    """
+    Отпечаток правил подбора: запрос + обязательные теги.
+
+    Как только правила для действия меняются, ключ коллекции
+    становится другим и картинки, набранные по старым правилам,
+    просто перестают использоваться. Чистить базу руками не нужно.
+    """
+    payload = "|".join((action.search,) + tuple(action.tags))
+    digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()
+    return digest[:6]
+
+
 def collection_key(provider: str, action: Action, pair_key: str) -> str:
     base = action.key
 
     if action.category == "pair":
         base = f"{action.key}:{pair_key}"
 
-    return f"{provider}/{base}"
+    return f"{provider}/{base}#{rules_version(action)}"
 
 
 async def fill_collection(
@@ -131,16 +146,37 @@ async def fill_collection(
     key: str,
     pair_key: str,
 ) -> int:
+    """
+    Фильтр по тегам НЕ отключается ни при каких условиях.
+
+    Раньше при пустой строгой выдаче включался запасной проход
+    без фильтра — именно он приносил ягоды по запросу "бургер".
+    Теперь при неудаче просто упрощается запрос, а требование
+    к тегам остаётся.
+    """
+    tags = required_tags(action)
     last_page = await get_last_action_page(key)
     start_page = last_page + 1
-
-    query = get_search_query(action, pair_key)
     added = 0
 
-    for variant in query_variants(query):
+    query = get_search_query(action, pair_key)
+
+    # От точной фразы к широкой, в конце — само ключевое слово.
+    variants = query_variants(query)
+
+    for tag in tags[:2]:
+        if tag not in variants:
+            variants.append(tag)
+
+    for variant in variants:
         for page in range(start_page, start_page + PAGES_PER_FILL):
             try:
-                photos = await search_photos(provider, variant, page)
+                photos = await search_photos(
+                    provider,
+                    variant,
+                    page,
+                    required=tags,
+                )
             except Exception as error:
                 print(
                     f"{provider.upper()} SEARCH ERROR:",
@@ -168,6 +204,9 @@ async def fill_collection(
 
         if added:
             break
+
+    if not added:
+        print(f"IMAGES: ничего не найдено для {key} (запрос: {query})")
 
     return added
 
