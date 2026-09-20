@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 
 from aiogram import Bot, Dispatcher
 from aiogram.filters import CommandStart, Command
@@ -13,6 +14,8 @@ from database.repository import (
     get_recent_messages,
     get_profile,
     create_profile_if_needed,
+    change_karma,
+    get_global_rating,
 )
 
 
@@ -43,7 +46,14 @@ async def help_command(message: Message):
         "/start — запуск\n"
         "/help — помощь\n"
         "/ping — проверка связи\n"
-        "/profile — твой профиль\n\n"
+        "/profile — твой профиль\n"
+        "/rating — глобальный рейтинг кармы\n\n"
+        "Карма:\n"
+        "Ответь на сообщение человека и напиши "
+        "+карма или -карма.\n\n"
+        "Также можно:\n"
+        "+карма @username\n"
+        "-карма @username\n\n"
         "Чтобы поговорить со мной, напиши "
         "«Маруська» или ответь на моё сообщение."
     )
@@ -92,9 +102,9 @@ async def profile_command(message: Message):
 
         await message.answer(
             f"👤 <b>{profile.display_name or display_name}</b>\n\n"
-            f"💬 Сообщений: <b>{profile.messages_count}</b>\n"
             f"⭐ Карма: <b>{profile.karma}</b>\n"
-            f"🪙 Монеты: <b>{profile.coins}</b>\n\n"
+            f"🪙 Монеты: <b>{profile.coins}</b>\n"
+            f"💬 Сообщений: <b>{profile.messages_count}</b>\n\n"
             f"🎮 Игр сыграно: <b>{profile.games_played}</b>\n"
             f"🏆 Побед: <b>{profile.games_won}</b>",
             parse_mode="HTML",
@@ -110,6 +120,206 @@ async def profile_command(message: Message):
 
         await message.answer(
             "Не смогла загрузить профиль 🤔"
+        )
+
+
+async def find_karma_target(
+    message: Message,
+    username: str | None,
+):
+    """
+    Определяет пользователя, которому меняем карму.
+
+    Приоритет:
+    1. Ответ на сообщение.
+    2. @username.
+    """
+
+    if (
+        message.reply_to_message
+        and message.reply_to_message.from_user
+    ):
+        return message.reply_to_message.from_user
+
+    if not username:
+        return None
+
+    username = username.lstrip("@").lower()
+
+    from sqlalchemy import select
+    from database.database import get_session
+    from database.models import User
+
+    async for session in get_session():
+
+        result = await session.execute(
+            select(User).where(
+                User.username.ilike(username)
+            )
+        )
+
+        return result.scalar_one_or_none()
+
+    return None
+
+
+@dp.message(
+    lambda message:
+    message.text
+    and re.match(
+        r"^[+-]карма(?:\s+@?([A-Za-z0-9_]{1,32}))?\s*$",
+        message.text.strip(),
+        re.IGNORECASE,
+    )
+)
+async def karma_command(message: Message):
+
+    if not message.from_user:
+        return
+
+    text = message.text.strip()
+
+    match = re.match(
+        r"^([+-])карма(?:\s+@?([A-Za-z0-9_]{1,32}))?\s*$",
+        text,
+        re.IGNORECASE,
+    )
+
+    if not match:
+        return
+
+    sign = match.group(1)
+    username = match.group(2)
+
+    target = await find_karma_target(
+        message,
+        username,
+    )
+
+    if target is None:
+
+        await message.answer(
+            "Не поняла, кому изменить карму 🤔\n\n"
+            "Ответь на сообщение человека и напиши "
+            "+карма или -карма."
+        )
+
+        return
+
+    target_id = target.id
+    giver_id = message.from_user.id
+
+    if target_id == giver_id:
+
+        await message.answer(
+            "Самому себе карму нельзя 😏"
+        )
+
+        return
+
+    if getattr(target, "is_bot", False):
+
+        await message.answer(
+            "Ботам карму пока не выдаём 🤖"
+        )
+
+        return
+
+    amount = 1 if sign == "+" else -1
+
+    try:
+
+        new_karma = await change_karma(
+            telegram_id=target_id,
+            amount=amount,
+        )
+
+        target_name = (
+            target.first_name
+            or target.username
+            or "Пользователь"
+        )
+
+        emoji = "⭐" if amount > 0 else "💥"
+
+        await message.answer(
+            f"{emoji} {target_name}: "
+            f"карма {'+' if amount > 0 else ''}{amount}\n"
+            f"Теперь карма: <b>{new_karma}</b>"
+        )
+
+    except Exception as e:
+
+        print(
+            "KARMA ERROR:",
+            type(e).__name__,
+            str(e),
+        )
+
+        await message.answer(
+            "Не смогла изменить карму 🤔"
+        )
+
+
+@dp.message(Command("rating"))
+async def rating_command(message: Message):
+
+    try:
+
+        users = await get_global_rating(
+            limit=10,
+        )
+
+        if not users:
+
+            await message.answer(
+                "Пока рейтинг пуст 🏆"
+            )
+
+            return
+
+        lines = [
+            "🏆 <b>Глобальный рейтинг Маруськи</b>\n"
+        ]
+
+        medals = [
+            "🥇",
+            "🥈",
+            "🥉",
+        ]
+
+        for index, user in enumerate(users):
+
+            if index < 3:
+                medal = medals[index]
+            else:
+                medal = f"{index + 1}."
+
+            name = (
+                user.display_name
+                or f"ID {user.telegram_id}"
+            )
+
+            lines.append(
+                f"{medal} {name} — "
+                f"⭐ <b>{user.karma}</b>"
+            )
+
+        await message.answer(
+            "\n".join(lines),
+            parse_mode="HTML",
+        )
+
+    except Exception as e:
+
+        print(
+            "RATING ERROR:",
+            type(e).__name__,
+            str(e),
+        )
+
+        await message.answer(
+            "Не смогла загрузить рейтинг 🤔"
         )
 
 
@@ -325,6 +535,10 @@ async def main():
 
     print(
         "Профили пользователей включены"
+    )
+
+    print(
+        "Глобальная карма включена"
     )
 
     print(
