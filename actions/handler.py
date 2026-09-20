@@ -4,9 +4,10 @@ from dataclasses import dataclass
 from html import escape
 
 from aiogram import Router
-from aiogram.types import Message
+from aiogram.types import BufferedInputFile, Message
 
 from actions.catalog import find_action
+from actions.providers import download_photo
 from actions.service import get_image_for_action
 
 from database.repository import (
@@ -14,6 +15,7 @@ from database.repository import (
     save_message,
     get_user_by_username,
     infer_gender,
+    release_action_image,
     drop_action_image,
     set_action_image_file_id,
     MALE_NAMES,
@@ -437,19 +439,13 @@ async def action_handler(message: Message):
     actor_gender = infer_gender(actor_name)
     target_gender = infer_gender(target_name)
 
-    image_key = action.key
     pair = "neutral"
 
     if action.category == "pair":
         pair = pair_key(actor_gender, target_gender)
-        image_key = f"{action.key}:{pair}"
 
     try:
-        image = await get_image_for_action(
-            action,
-            image_key=image_key,
-            pair_key=pair,
-        )
+        image = await get_image_for_action(action, pair_key=pair)
     except Exception as error:
         print("ACTION IMAGE ERROR:", type(error).__name__, str(error))
         await message.reply("Не смогла найти картинку 😔")
@@ -468,42 +464,53 @@ async def action_handler(message: Message):
         target_gender=target_gender,
     )
 
-    # Unsplash требует обязательную атрибуцию — не убирать.
-    attribution = (
-        "\n\n"
-        f'📷 <a href="{escape(image.photographer_url)}">'
-        f"Фото: {escape(image.photographer_name)}</a> · "
-        f'<a href="{escape(image.unsplash_url)}">Unsplash</a>'
-    )
-
-    photo = image.telegram_file_id or image.image_url
-
-    try:
-        sent = await message.answer_photo(
-            photo=photo,
-            caption=caption + attribution,
+    # Подпись только там, где лицензия источника её требует.
+    # Pixabay атрибуции не требует — под фото ничего не пишем.
+    if image.provider == "unsplash" and image.photographer_url:
+        caption += (
+            "\n\n"
+            f'📷 <a href="{escape(image.photographer_url)}">'
+            f"Фото: {escape(image.photographer_name or 'Unsplash')}</a> · "
+            f'<a href="{escape(image.unsplash_url or "")}">Unsplash</a>'
         )
-    except Exception as error:
-        print("TELEGRAM PHOTO ERROR:", type(error).__name__, str(error))
 
-        if image.telegram_file_id:
-            # Протухший file_id — пробуем ещё раз по прямой ссылке.
-            try:
-                sent = await message.answer_photo(
-                    photo=image.image_url,
-                    caption=caption + attribution,
-                )
-            except Exception:
-                await drop_action_image(image.id)
-                await message.reply("Не получилось отправить фотографию 😔")
-                return
-        else:
-            # Битая ссылка Unsplash — выкидываем из коллекции.
+    sent = None
+
+    # 1. Уже отправляли раньше — шлём по file_id, это мгновенно.
+    if image.telegram_file_id:
+        try:
+            sent = await message.answer_photo(
+                photo=image.telegram_file_id,
+                caption=caption,
+            )
+        except Exception as error:
+            print("FILE ID SEND ERROR:", type(error).__name__, str(error))
+
+    # 2. Первый раз — скачиваем и заливаем байтами.
+    #    Pixabay запрещает постоянный хотлинк своих URL.
+    if sent is None:
+        content = await download_photo(image.image_url, image.fallback_url)
+
+        if content is None:
             await drop_action_image(image.id)
+            await message.reply("Не получилось загрузить фотографию 😔")
+            return
+
+        try:
+            sent = await message.answer_photo(
+                photo=BufferedInputFile(
+                    content,
+                    filename=f"{action.key}.jpg",
+                ),
+                caption=caption,
+            )
+        except Exception as error:
+            print("TELEGRAM PHOTO ERROR:", type(error).__name__, str(error))
+            await release_action_image(image.id)
             await message.reply("Не получилось отправить фотографию 😔")
             return
 
-    # Кэшируем file_id: следующая отправка будет мгновенной.
+    # Запоминаем file_id: больше к источнику не ходим.
     if not image.telegram_file_id and sent.photo:
         try:
             await set_action_image_file_id(image.id, sent.photo[-1].file_id)
