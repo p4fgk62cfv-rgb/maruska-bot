@@ -34,10 +34,11 @@ class Action:
     item_acc: str = ""
     item_instr: str = ""
     tags: tuple[str, ...] = field(default_factory=tuple)
+    exclude: tuple[str, ...] = field(default_factory=tuple)
 
 
 def A(key, emoji, search, aliases, category,
-      item_acc="", item_instr="", tags=""):
+      item_acc="", item_instr="", tags="", exclude=""):
     return Action(
         key=key,
         emoji=emoji,
@@ -47,6 +48,7 @@ def A(key, emoji, search, aliases, category,
         item_acc=item_acc,
         item_instr=item_instr,
         tags=tuple(t for t in tags.split("|") if t) or (key,),
+        exclude=tuple(e for e in exclude.split("|") if e),
     )
 
 
@@ -509,3 +511,7 @@ ACTION_BY_KEY = {action.key: action for action in ACTIONS}
 
 def required_tags(action: Action) -> tuple[str, ...]:
     return action.tags
+
+
+def excluded_tags(action: Action) -> tuple[str, ...]:
+    return action.exclude

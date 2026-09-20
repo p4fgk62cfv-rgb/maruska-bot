@@ -11,7 +11,7 @@
 
 import hashlib
 
-from actions.catalog import Action, required_tags
+from actions.catalog import Action, excluded_tags, required_tags
 from actions.providers import (
     available_providers,
     search_photos,
@@ -126,7 +126,9 @@ def rules_version(action: Action) -> str:
     становится другим и картинки, набранные по старым правилам,
     просто перестают использоваться. Чистить базу руками не нужно.
     """
-    payload = "|".join((action.search,) + tuple(action.tags))
+    payload = "|".join(
+        (action.search,) + tuple(action.tags) + tuple(action.exclude)
+    )
     digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()
     return digest[:6]
 
@@ -155,6 +157,7 @@ async def fill_collection(
     к тегам остаётся.
     """
     tags = required_tags(action)
+    banned = excluded_tags(action)
     last_page = await get_last_action_page(key)
     start_page = last_page + 1
     added = 0
@@ -176,6 +179,7 @@ async def fill_collection(
                     variant,
                     page,
                     required=tags,
+                    excluded=banned,
                 )
             except Exception as error:
                 print(

@@ -23,6 +23,7 @@ from actions.catalog_data import (  # noqa: F401
     ACTIONS,
     ACTION_BY_KEY,
     Action,
+    excluded_tags,
     required_tags,
 )
 
@@ -57,8 +58,8 @@ STOP_WORDS = {
     "мне", "тебе", "ему", "ей", "нам", "вам", "им",
     "меня", "тебя", "его", "ее", "её", "их", "нас", "вас",
     "а", "и", "но", "да", "ну", "же", "бы", "ли", "вот", "тут", "там",
-    "это", "эт", "так", "тоже", "ещё", "еще",
-    "хочу", "хочет", "надо", "нужно", "давай", "дай", "держи", "лови",
+    "это", "эт", "так",
+    "давай", "дай", "держи", "лови",
     "плиз", "пожалуйста", "спасибо", "пж",
     "на", "с", "со", "за", "по", "в", "во", "к", "ко", "у", "от", "для",
 }
@@ -79,6 +80,23 @@ BLACKLIST = {
     "около", "калории",
     "жмёт", "жмет", "жмут",
     "блин",  # чаще междометие, чем еда
+}
+
+
+# Глаголы намерения. Их наличие рядом с предметом не мешает
+# распознать действие: "угости пивом", "вызвал дурку".
+ACTION_VERBS = {
+    "угости", "угостить", "угощаю", "угощу", "угостил", "угостила",
+    "налей", "наливай", "налил", "налила", "разлей", "разлил", "разлила",
+    "напои", "напоил", "напоила", "накорми", "покорми", "накормил",
+    "накормила", "подари", "дарю", "подарил", "подарила", "вручи",
+    "вручил", "вручила", "принеси", "неси", "принёс", "принес",
+    "принесла", "закажи", "заказал", "заказала", "купи", "купил",
+    "купила", "отдай", "отдам", "отдал", "отдала", "поставь",
+    "поставил", "поставила", "передай", "передал", "передала",
+    "скинь", "скинул", "скинула", "кидаю", "отправь", "отправил",
+    "отправила", "вызови", "вызывай", "вызвал", "вызвала", "зови",
+    "позови", "позвал", "позвала",
 }
 
 
@@ -118,6 +136,7 @@ def find_action(text: str | None) -> Action | None:
 
     best: Action | None = None
     best_score = 0
+    best_alias = ""
 
     for action in ACTIONS:
         for alias in action.aliases:
@@ -143,5 +162,58 @@ def find_action(text: str | None) -> Action | None:
             if matched:
                 best = action
                 best_score = score
+                best_alias = needle
+
+    if best is None:
+        return None
+
+    # Главная защита от флуда: в сообщении не должно быть ничего,
+    # кроме самого действия. "Пиво" — команда, "тоже кошку" — реплика
+    # в разговоре, и лезть туда с картинкой бот не должен.
+    if _has_extra_words(words, best, best_alias):
+        return None
 
     return best
+
+
+def _word_belongs(word: str, action: Action, best_alias: str) -> bool:
+    if word in best_alias.split():
+        return True
+
+    for alias in action.aliases:
+        needle = _normalize(alias.lstrip("="))
+
+        if " " in needle:
+            if word in needle.split():
+                return True
+            continue
+
+        if alias.startswith("="):
+            if word == needle:
+                return True
+            continue
+
+        if (
+            word.startswith(needle)
+            and len(word) - len(needle) <= _allowed_tail(needle)
+        ):
+            return True
+
+    return False
+
+
+def _has_extra_words(
+    words: list[str],
+    action: Action,
+    best_alias: str,
+) -> bool:
+    for word in words:
+        if word in ACTION_VERBS:
+            continue
+
+        if _word_belongs(word, action, best_alias):
+            continue
+
+        return True
+
+    return False

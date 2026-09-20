@@ -66,17 +66,24 @@ def _with_utm(url: str) -> str:
 # Pixabay
 # ---------------------------------------------------------
 
-def matches_tags(tags: str, required: tuple[str, ...]) -> bool:
+def matches_tags(
+    tags: str,
+    required: tuple[str, ...],
+    excluded: tuple[str, ...] = (),
+) -> bool:
     """
     Картинка подходит, если хотя бы один обязательный фрагмент
     есть в её тегах. Теги приходят от источника; привязка идёт
     к самому действию, а не к первому слову запроса — иначе по
     "couple kissing" засчитывается свадебный пейзаж без поцелуя.
     """
+    haystack = tags.lower()
+
+    if any(fragment.lower() in haystack for fragment in excluded):
+        return False
+
     if not required:
         return True
-
-    haystack = tags.lower()
 
     return any(fragment.lower() in haystack for fragment in required)
 
@@ -85,6 +92,7 @@ async def search_pixabay(
     query: str,
     page: int,
     required: tuple[str, ...] = (),
+    excluded: tuple[str, ...] = (),
 ) -> list[RemotePhoto]:
     if not PIXABAY_API_KEY:
         raise RuntimeError("PIXABAY_API_KEY is not set")
@@ -116,7 +124,7 @@ async def search_pixabay(
         if not photo_id or not (large or web):
             continue
 
-        if required and not matches_tags(tags, required):
+        if not matches_tags(tags, required, excluded):
             continue
 
         photos.append(
@@ -140,6 +148,7 @@ async def search_unsplash(
     query: str,
     page: int,
     required: tuple[str, ...] = (),
+    excluded: tuple[str, ...] = (),
 ) -> list[RemotePhoto]:
     if not UNSPLASH_ACCESS_KEY:
         raise RuntimeError("UNSPLASH_ACCESS_KEY is not set")
@@ -191,7 +200,7 @@ async def search_unsplash(
 
         haystack = f"{tags} {description}".strip()
 
-        if required and haystack and not matches_tags(haystack, required):
+        if haystack and not matches_tags(haystack, required, excluded):
             continue
 
         user = item.get("user", {}) or {}
@@ -245,13 +254,14 @@ async def search_photos(
     query: str,
     page: int,
     required: tuple[str, ...] = (),
+    excluded: tuple[str, ...] = (),
 ) -> list[RemotePhoto]:
     search = SEARCH_FUNCTIONS.get(provider)
 
     if search is None:
         return []
 
-    return await search(query, page, required)
+    return await search(query, page, required, excluded)
 
 
 # ---------------------------------------------------------
