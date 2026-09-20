@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import re
 from html import escape
 
 from aiogram import Bot, Dispatcher, Router
@@ -29,6 +30,13 @@ from database.repository import (
 from actions.handler import router as actions_router
 from actions.providers import available_providers
 
+from weather import (
+    DEFAULT_CITY,
+    extract_city,
+    get_weather_text,
+    mentions_weather,
+)
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,7 +58,14 @@ if not TOKEN:
 CONTEXT_MESSAGES = int(os.getenv("CONTEXT_MESSAGES", "8"))
 
 # Имена, на которые бот откликается в группе.
-TRIGGER_WORDS = ("маруська", "маруся", "маруська,")
+# Сравнение идёт по целому слову, поэтому "мара" не ловится
+# внутри других слов.
+TRIGGER_WORDS = ("мара", "маруся", "маруська", "маня")
+
+TRIGGER_RE = re.compile(
+    r"\b(?:" + "|".join(TRIGGER_WORDS) + r")\b",
+    re.IGNORECASE,
+)
 
 
 bot = Bot(
@@ -127,7 +142,11 @@ async def start_handler(message: Message):
 async def help_handler(message: Message):
     await message.answer(
         "🤖 <b>Маруська</b>\n\n"
-        "💬 Позови меня по имени — пообщаемся.\n\n"
+        "💬 Позови по имени: <b>Мара, ...</b>\n"
+        "Или ответь на моё сообщение.\n\n"
+        "🌤 <b>Погода</b>\n"
+        "Мара, погода в Праге?\n"
+        "или /weather Прага\n\n"
         "⭐ <b>Рейтинг</b>\n"
         "+ или - в ответ на сообщение.\n\n"
         "👤 <b>Профиль</b>\n/profile\n\n"
@@ -301,26 +320,16 @@ async def top_handler(message: Message):
     await message.answer("\n".join(lines))
 
 
-# =========================================================
-# AI CHAT
-# =========================================================
-#
-# Действия обрабатываются в actions_router, который подключён
-# ПЕРЕД этим роутером. Если сообщение — действие с адресатом,
-# сюда оно уже не дойдёт. Всё остальное приходит к Маруське.
-#
-# =========================================================
-
 def should_answer(message: Message) -> bool:
-    text = (message.text or "").lower()
+    text = message.text or ""
 
     if message.chat.type == "private":
         return True
 
-    if any(word in text for word in TRIGGER_WORDS):
+    if TRIGGER_RE.search(text):
         return True
 
-    if BOT_USERNAME and f"@{BOT_USERNAME.lower()}" in text:
+    if BOT_USERNAME and f"@{BOT_USERNAME.lower()}" in text.lower():
         return True
 
     reply = message.reply_to_message
@@ -330,6 +339,48 @@ def should_answer(message: Message) -> bool:
 
     return False
 
+
+# =========================================================
+# ПОГОДА
+# =========================================================
+#
+# Open-Meteo, ключ не нужен. Срабатывает на /weather
+# и на обращение вида "Мару, погода в Праге?".
+#
+# =========================================================
+
+@root_router.message(Command("weather", "pogoda"))
+async def weather_command(message: Message):
+    args = message.text.split(maxsplit=1)
+    city = args[1].strip() if len(args) > 1 else DEFAULT_CITY
+
+    await message.answer(await get_weather_text(city))
+
+
+def is_weather_question(message: Message) -> bool:
+    if not message.text or message.text.startswith("/"):
+        return False
+
+    if not mentions_weather(message.text):
+        return False
+
+    return should_answer(message)
+
+
+@root_router.message(is_weather_question)
+async def weather_handler(message: Message):
+    await message.answer(await get_weather_text(extract_city(message.text)))
+
+
+# =========================================================
+# AI CHAT
+# =========================================================
+#
+# Действия обрабатываются в actions_router, который подключён
+# ПЕРЕД этим роутером. Если сообщение — действие с адресатом,
+# сюда оно уже не дойдёт. Всё остальное приходит к Маруське.
+#
+# =========================================================
 
 @root_router.message(lambda message: message.text is not None)
 async def ai_handler(message: Message):
