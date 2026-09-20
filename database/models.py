@@ -6,18 +6,15 @@ from sqlalchemy import (
     Text,
     DateTime,
     UniqueConstraint,
+    Boolean,
 )
 
-from sqlalchemy.orm import (
-    Mapped,
-    mapped_column,
-)
+from sqlalchemy.orm import Mapped, mapped_column
 
 from database.database import Base
 
 
 class User(Base):
-
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(
@@ -48,7 +45,6 @@ class User(Base):
 
 
 class MessageMemory(Base):
-
     __tablename__ = "message_memory"
 
     id: Mapped[int] = mapped_column(
@@ -82,7 +78,6 @@ class MessageMemory(Base):
 
 
 class UserProfile(Base):
-
     __tablename__ = "user_profiles"
 
     id: Mapped[int] = mapped_column(
@@ -101,28 +96,22 @@ class UserProfile(Base):
         nullable=True,
     )
 
-    # Старое техническое название поля.
-    # Для пользователя это ГЛОБАЛЬНЫЙ РЕЙТИНГ.
     karma: Mapped[int] = mapped_column(
         default=0,
     )
 
-    # Глобальные монеты.
     coins: Mapped[int] = mapped_column(
         default=0,
     )
 
-    # Общее количество сообщений пользователя.
     messages_count: Mapped[int] = mapped_column(
         default=0,
     )
 
-    # Общее количество сыгранных игр.
     games_played: Mapped[int] = mapped_column(
         default=0,
     )
 
-    # Общее количество побед.
     games_won: Mapped[int] = mapped_column(
         default=0,
     )
@@ -139,7 +128,6 @@ class UserProfile(Base):
 
 
 class UserFact(Base):
-
     __tablename__ = "user_facts"
 
     id: Mapped[int] = mapped_column(
@@ -163,7 +151,6 @@ class UserFact(Base):
 
 
 class GroupMember(Base):
-
     __tablename__ = "group_members"
 
     __table_args__ = (
@@ -218,7 +205,6 @@ class GroupMember(Base):
 
 
 class RatingVote(Base):
-
     __tablename__ = "rating_votes"
 
     id: Mapped[int] = mapped_column(
@@ -226,19 +212,16 @@ class RatingVote(Base):
         autoincrement=True,
     )
 
-    # Кто поставил рейтинг.
     giver_telegram_id: Mapped[int] = mapped_column(
         BigInteger,
         index=True,
     )
 
-    # Кому поставили рейтинг.
     target_telegram_id: Mapped[int] = mapped_column(
         BigInteger,
         index=True,
     )
 
-    # +1 или -1.
     amount: Mapped[int] = mapped_column(
         default=1,
     )
@@ -247,4 +230,78 @@ class RatingVote(Base):
         DateTime,
         default=datetime.utcnow,
         index=True,
+    )
+
+
+class ActionImage(Base):
+    """
+    Фотографии для действий.
+
+    Один action = отдельная коллекция фотографий.
+
+    used=False:
+        фотография ещё не использовалась в текущем цикле.
+
+    used=True:
+        уже использовалась.
+    """
+
+    __tablename__ = "action_images"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "action",
+            "photo_id",
+            name="uq_action_photo",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    action: Mapped[str] = mapped_column(
+        String(100),
+        index=True,
+    )
+
+    photo_id: Mapped[str] = mapped_column(
+        String(100),
+    )
+
+    image_url: Mapped[str] = mapped_column(
+        Text,
+    )
+
+    photographer_name: Mapped[str] = mapped_column(
+        String(255),
+    )
+
+    photographer_url: Mapped[str] = mapped_column(
+        Text,
+    )
+
+    unsplash_url: Mapped[str] = mapped_column(
+        Text,
+    )
+
+    source_page: Mapped[int] = mapped_column(
+        default=1,
+    )
+
+    used: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        index=True,
+    )
+
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
     )
