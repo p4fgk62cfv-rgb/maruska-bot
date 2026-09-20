@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, desc
 
 from database.database import get_session
 from database.models import (
@@ -8,6 +8,7 @@ from database.models import (
     UserProfile,
     UserFact,
     MessageMemory,
+    GroupMember,
 )
 
 
@@ -61,6 +62,7 @@ async def save_message(
 
         session.add(memory)
 
+        # Глобальный профиль
         profile_result = await session.execute(
             select(UserProfile).where(
                 UserProfile.telegram_id == telegram_user_id
@@ -84,6 +86,33 @@ async def save_message(
             profile.display_name = username
             profile.messages_count += 1
             profile.updated_at = datetime.utcnow()
+
+        # Профиль участника конкретной группы
+        member_result = await session.execute(
+            select(GroupMember).where(
+                GroupMember.chat_id == chat_id,
+                GroupMember.telegram_id == telegram_user_id,
+            )
+        )
+
+        member = member_result.scalar_one_or_none()
+
+        if member is None:
+
+            member = GroupMember(
+                chat_id=chat_id,
+                telegram_id=telegram_user_id,
+                display_name=username,
+                messages_count=1,
+            )
+
+            session.add(member)
+
+        else:
+
+            member.display_name = username
+            member.messages_count += 1
+            member.updated_at = datetime.utcnow()
 
         await session.commit()
 
@@ -203,5 +232,58 @@ async def get_facts(
             fact.fact
             for fact in reversed(facts)
         ]
+
+    return []
+
+
+async def change_karma(
+    telegram_id: int,
+    amount: int,
+):
+    async for session in get_session():
+
+        result = await session.execute(
+            select(UserProfile).where(
+                UserProfile.telegram_id == telegram_id
+            )
+        )
+
+        profile = result.scalar_one_or_none()
+
+        if profile is None:
+
+            profile = UserProfile(
+                telegram_id=telegram_id,
+                karma=amount,
+            )
+
+            session.add(profile)
+
+        else:
+
+            profile.karma += amount
+            profile.updated_at = datetime.utcnow()
+
+        await session.commit()
+
+        return profile.karma
+
+    return None
+
+
+async def get_global_rating(
+    limit: int = 10,
+):
+    async for session in get_session():
+
+        result = await session.execute(
+            select(UserProfile)
+            .order_by(
+                desc(UserProfile.karma)
+            )
+            .limit(limit)
+        )
+
+        return result.scalars().all()
 
     return []
