@@ -54,35 +54,86 @@ WEATHER_CODES = {
 }
 
 
-# "Мара, погода в Праге?" -> "Праге"
-CITY_RE = re.compile(
-    r"погод\w*\s+(?:в|во|на)\s+([А-Яа-яЁёA-Za-z\-\s]{2,40})",
-    re.IGNORECASE,
-)
+# Разбор фразы вида "Мара, погода Казань" / "какая погода в Праге сегодня"
 
-WEATHER_RE = re.compile(r"\bпогод\w*", re.IGNORECASE)
+WEATHER_RE = re.compile(r"погод\w*", re.IGNORECASE)
+
+WORD_RE = re.compile(r"[А-Яа-яЁёA-Za-z][А-Яа-яЁёA-Za-z\-]*")
+
+# Предлоги перед городом — просто отбрасываем
+PREPOSITIONS = {"в", "во", "на", "по", "у"}
+
+# Слова, которые городом быть не могут: на них разбор останавливается
+NOT_A_CITY = {
+    "мара", "маруся", "маруська", "маня", "бот",
+    "какая", "какой", "каково", "что", "как", "там", "тут", "здесь",
+    "сегодня", "сейчас", "завтра", "послезавтра", "вчера",
+    "утром", "днем", "днём", "вечером", "ночью",
+    "будет", "была", "было", "есть", "скажи", "покажи", "глянь",
+    "пожалуйста", "плиз", "пж", "а", "и", "но", "ну", "же",
+    "нас", "вас", "меня", "тебя", "нам", "мне",
+    "градус", "градусов", "тепло", "холодно", "дождь", "снег",
+}
+
+MAX_CITY_WORDS = 3
 
 
 def mentions_weather(text: str | None) -> bool:
     return bool(text and WEATHER_RE.search(text))
 
 
+def _clean_city(words: list[str]) -> str:
+    result = []
+
+    for word in words:
+        lowered = word.lower()
+
+        if lowered in PREPOSITIONS:
+            if result:          # предлог уже после названия — конец
+                break
+            continue            # ведущий предлог просто пропускаем
+
+        if lowered in NOT_A_CITY:
+            if result:
+                break
+            continue
+
+        result.append(word)
+
+        if len(result) >= MAX_CITY_WORDS:
+            break
+
+    return " ".join(result).strip(" -")
+
+
 def extract_city(text: str) -> str:
-    match = CITY_RE.search(text)
+    """
+    Город берётся из части фразы ПОСЛЕ слова "погода".
+    Предлог необязателен: "погода Казань" работает так же,
+    как "погода в Казани".
+
+    Если после слова ничего осмысленного нет, пробуем то,
+    что стояло перед ним.
+    """
+    match = WEATHER_RE.search(text or "")
 
     if not match:
         return DEFAULT_CITY
 
-    city = match.group(1).strip(" ?!.,")
+    after = _clean_city(WORD_RE.findall(text[match.end():]))
 
-    # Отрезаем хвост вопроса: "в Праге сегодня" -> "Праге"
-    city = re.split(
-        r"\s+(?:сегодня|сейчас|завтра|будет|там|у нас)\b",
-        city,
-        flags=re.IGNORECASE,
-    )[0].strip()
+    if after:
+        return after
 
-    return city or DEFAULT_CITY
+    before = WORD_RE.findall(text[:match.start()])
+    before = _clean_city(list(reversed(before)))
+
+    if before:
+        # разворачиваем обратно: "в Нижнем Новгороде" не должно стать
+        # "Новгороде Нижнем"
+        return " ".join(reversed(before.split()))
+
+    return DEFAULT_CITY
 
 
 def describe(code: int | None) -> tuple[str, str]:
