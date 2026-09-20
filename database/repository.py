@@ -1,8 +1,16 @@
-from datetime import datetime, timedelta
+from datetime import (
+    datetime,
+    timedelta,
+)
 
-from sqlalchemy import select, desc, func
+from sqlalchemy import (
+    select,
+    desc,
+    func,
+)
 
 from database.database import get_session
+
 from database.models import (
     User,
     UserProfile,
@@ -25,7 +33,8 @@ async def save_user(
 
         result = await session.execute(
             select(User).where(
-                User.telegram_id == telegram_id
+                User.telegram_id
+                == telegram_id
             )
         )
 
@@ -66,13 +75,17 @@ async def save_message(
 
         session.add(memory)
 
+        # Глобальный профиль.
         profile_result = await session.execute(
             select(UserProfile).where(
-                UserProfile.telegram_id == telegram_user_id
+                UserProfile.telegram_id
+                == telegram_user_id
             )
         )
 
-        profile = profile_result.scalar_one_or_none()
+        profile = (
+            profile_result.scalar_one_or_none()
+        )
 
         if profile is None:
 
@@ -90,14 +103,18 @@ async def save_message(
             profile.messages_count += 1
             profile.updated_at = datetime.utcnow()
 
+        # Профиль пользователя в конкретной группе.
         member_result = await session.execute(
             select(GroupMember).where(
                 GroupMember.chat_id == chat_id,
-                GroupMember.telegram_id == telegram_user_id,
+                GroupMember.telegram_id
+                == telegram_user_id,
             )
         )
 
-        member = member_result.scalar_one_or_none()
+        member = (
+            member_result.scalar_one_or_none()
+        )
 
         if member is None:
 
@@ -128,7 +145,8 @@ async def get_recent_messages(
         result = await session.execute(
             select(MessageMemory)
             .where(
-                MessageMemory.chat_id == chat_id
+                MessageMemory.chat_id
+                == chat_id
             )
             .order_by(
                 MessageMemory.created_at.desc()
@@ -156,7 +174,8 @@ async def get_profile(
 
         result = await session.execute(
             select(UserProfile).where(
-                UserProfile.telegram_id == telegram_id
+                UserProfile.telegram_id
+                == telegram_id
             )
         )
 
@@ -173,11 +192,14 @@ async def create_profile_if_needed(
 
         result = await session.execute(
             select(UserProfile).where(
-                UserProfile.telegram_id == telegram_id
+                UserProfile.telegram_id
+                == telegram_id
             )
         )
 
-        profile = result.scalar_one_or_none()
+        profile = (
+            result.scalar_one_or_none()
+        )
 
         if profile is None:
 
@@ -200,10 +222,9 @@ async def can_vote_rating(
     target_telegram_id: int,
 ):
     """
-    Проверяет, может ли пользователь снова
-    поставить рейтинг этому человеку.
-
-    Один голос одному человеку раз в 24 часа.
+    Один пользователь может изменить
+    рейтинг другого пользователя не чаще
+    одного раза в 24 часа.
     """
 
     async for session in get_session():
@@ -220,8 +241,10 @@ async def can_vote_rating(
             .where(
                 RatingVote.giver_telegram_id
                 == giver_telegram_id,
+
                 RatingVote.target_telegram_id
                 == target_telegram_id,
+
                 RatingVote.created_at
                 >= cooldown_time,
             )
@@ -231,7 +254,9 @@ async def can_vote_rating(
             .limit(1)
         )
 
-        vote = result.scalar_one_or_none()
+        vote = (
+            result.scalar_one_or_none()
+        )
 
         return vote is None
 
@@ -249,6 +274,7 @@ async def get_last_rating_vote(
             .where(
                 RatingVote.giver_telegram_id
                 == giver_telegram_id,
+
                 RatingVote.target_telegram_id
                 == target_telegram_id,
             )
@@ -258,7 +284,9 @@ async def get_last_rating_vote(
             .limit(1)
         )
 
-        return result.scalar_one_or_none()
+        return (
+            result.scalar_one_or_none()
+        )
 
     return None
 
@@ -269,7 +297,8 @@ async def add_rating_vote(
     amount: int,
 ):
     """
-    Добавляет голос и изменяет глобальный рейтинг.
+    Создаёт запись о голосе и меняет
+    глобальный рейтинг пользователя.
     """
 
     async for session in get_session():
@@ -281,7 +310,9 @@ async def add_rating_vote(
             )
         )
 
-        profile = profile_result.scalar_one_or_none()
+        profile = (
+            profile_result.scalar_one_or_none()
+        )
 
         if profile is None:
 
@@ -296,7 +327,7 @@ async def add_rating_vote(
 
             profile.karma += amount
 
-            # Рейтинг не уходит ниже нуля.
+            # Рейтинг не может быть меньше нуля.
             if profile.karma < 0:
                 profile.karma = 0
 
@@ -340,18 +371,22 @@ async def get_rating_position(
     telegram_id: int,
 ):
     """
-    Место пользователя в глобальном рейтинге.
+    Возвращает место пользователя
+    в глобальном рейтинге.
     """
 
     async for session in get_session():
 
         profile_result = await session.execute(
             select(UserProfile).where(
-                UserProfile.telegram_id == telegram_id
+                UserProfile.telegram_id
+                == telegram_id
             )
         )
 
-        profile = profile_result.scalar_one_or_none()
+        profile = (
+            profile_result.scalar_one_or_none()
+        )
 
         if profile is None:
             return None
@@ -359,16 +394,128 @@ async def get_rating_position(
         result = await session.execute(
             select(
                 func.count(UserProfile.id)
-            ).where(
-                UserProfile.karma > profile.karma
+            )
+            .where(
+                UserProfile.karma
+                > profile.karma
             )
         )
 
-        higher_count = result.scalar() or 0
+        higher_count = (
+            result.scalar() or 0
+        )
 
         return higher_count + 1
 
     return None
+
+
+async def get_rating_stats(
+    telegram_id: int,
+):
+    """
+    Статистика рейтинга пользователя.
+    """
+
+    async for session in get_session():
+
+        # Все положительные голоса.
+        positive_result = await session.execute(
+            select(
+                func.count(RatingVote.id)
+            )
+            .where(
+                RatingVote.target_telegram_id
+                == telegram_id,
+
+                RatingVote.amount > 0,
+            )
+        )
+
+        positive = (
+            positive_result.scalar() or 0
+        )
+
+        # Все отрицательные голоса.
+        negative_result = await session.execute(
+            select(
+                func.count(RatingVote.id)
+            )
+            .where(
+                RatingVote.target_telegram_id
+                == telegram_id,
+
+                RatingVote.amount < 0,
+            )
+        )
+
+        negative = (
+            negative_result.scalar() or 0
+        )
+
+        # Последние 7 дней.
+        week_ago = (
+            datetime.utcnow()
+            - timedelta(days=7)
+        )
+
+        week_positive_result = (
+            await session.execute(
+                select(
+                    func.count(RatingVote.id)
+                )
+                .where(
+                    RatingVote.target_telegram_id
+                    == telegram_id,
+
+                    RatingVote.amount > 0,
+
+                    RatingVote.created_at
+                    >= week_ago,
+                )
+            )
+        )
+
+        week_positive = (
+            week_positive_result.scalar()
+            or 0
+        )
+
+        week_negative_result = (
+            await session.execute(
+                select(
+                    func.count(RatingVote.id)
+                )
+                .where(
+                    RatingVote.target_telegram_id
+                    == telegram_id,
+
+                    RatingVote.amount < 0,
+
+                    RatingVote.created_at
+                    >= week_ago,
+                )
+            )
+        )
+
+        week_negative = (
+            week_negative_result.scalar()
+            or 0
+        )
+
+        return {
+            "positive": positive,
+            "negative": negative,
+            "week_positive": week_positive,
+            "week_negative": week_negative,
+        }
+
+    return {
+        "positive": 0,
+        "negative": 0,
+        "week_positive": 0,
+        "week_negative": 0,
+    }
 
 
 async def add_fact(
@@ -396,7 +543,8 @@ async def get_facts(
         result = await session.execute(
             select(UserFact)
             .where(
-                UserFact.telegram_id == telegram_id
+                UserFact.telegram_id
+                == telegram_id
             )
             .order_by(
                 UserFact.created_at.desc()
