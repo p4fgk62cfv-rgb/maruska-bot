@@ -98,7 +98,8 @@ class UserProfile(Base):
         nullable=True,
     )
 
-    # Общие для всех групп
+    # Технически пока хранится в старом поле karma.
+    # В интерфейсе это называется РЕЙТИНГ.
     karma: Mapped[int] = mapped_column(
         default=0,
     )
@@ -186,7 +187,6 @@ class GroupMember(Base):
         nullable=True,
     )
 
-    # Статистика конкретной группы
     messages_count: Mapped[int] = mapped_column(
         default=0,
     )
