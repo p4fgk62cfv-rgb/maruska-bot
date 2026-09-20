@@ -1,6 +1,13 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, String, Text, UniqueConstraint, DateTime,
+from sqlalchemy import (
+    BigInteger,
+    String,
+    Text,
+    DateTime,
+    UniqueConstraint,
+)
+
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database.database import Base
@@ -69,6 +76,8 @@ class MessageMemory(Base):
         DateTime,
         default=datetime.utcnow,
     )
+
+
 class UserProfile(Base):
 
     __tablename__ = "user_profiles"
@@ -89,11 +98,12 @@ class UserProfile(Base):
         nullable=True,
     )
 
-    coins: Mapped[int] = mapped_column(
+    # Общие для всех групп
+    karma: Mapped[int] = mapped_column(
         default=0,
     )
 
-    karma: Mapped[int] = mapped_column(
+    coins: Mapped[int] = mapped_column(
         default=0,
     )
 
@@ -142,6 +152,8 @@ class UserFact(Base):
         DateTime,
         default=datetime.utcnow,
     )
+
+
 class GroupMember(Base):
 
     __tablename__ = "group_members"
@@ -174,6 +186,7 @@ class GroupMember(Base):
         nullable=True,
     )
 
+    # Статистика конкретной группы
     messages_count: Mapped[int] = mapped_column(
         default=0,
     )
