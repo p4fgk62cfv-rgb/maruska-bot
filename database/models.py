@@ -98,8 +98,8 @@ class UserProfile(Base):
         nullable=True,
     )
 
-    # Технически пока хранится в старом поле karma.
-    # В интерфейсе это называется РЕЙТИНГ.
+    # Старое техническое поле.
+    # В интерфейсе оно используется как глобальный рейтинг.
     karma: Mapped[int] = mapped_column(
         default=0,
     )
@@ -207,4 +207,37 @@ class GroupMember(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,
+    )
+
+
+class RatingVote(Base):
+
+    __tablename__ = "rating_votes"
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    # Кто поставил рейтинг
+    giver_telegram_id: Mapped[int] = mapped_column(
+        BigInteger,
+        index=True,
+    )
+
+    # Кому поставили рейтинг
+    target_telegram_id: Mapped[int] = mapped_column(
+        BigInteger,
+        index=True,
+    )
+
+    # +1 или -1
+    amount: Mapped[int] = mapped_column(
+        default=1,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        index=True,
     )
