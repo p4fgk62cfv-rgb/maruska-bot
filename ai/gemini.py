@@ -19,8 +19,71 @@ MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 MAX_OUTPUT_TOKENS = int(os.getenv("GEMINI_MAX_TOKENS", "1000"))
 TEMPERATURE = float(os.getenv("GEMINI_TEMPERATURE", "0.8"))
 
+# У Gemini 3 по умолчанию thinking_level=HIGH: модель подолгу
+# "думает" перед ответом, и в чате это выливается в 5-6 секунд
+# ожидания. Для болтовни рассуждения не нужны.
+#   minimal — самый быстрый (Gemini 3 Flash)
+#   low     — быстрый, чуть осмысленнее
+#   off     — не передавать параметр вообще
+THINKING_LEVEL = os.getenv("GEMINI_THINKING", "low").strip().lower()
+
+# Если модель или версия SDK не знает про thinking_level,
+# выключаем его на весь процесс после первой же ошибки.
+_thinking_supported = THINKING_LEVEL not in ("", "off", "none")
+
 
 client = genai.Client(api_key=GEMINI_API_KEY)
+
+
+def _build_config(tools, with_thinking: bool):
+    options = dict(
+        system_instruction=SYSTEM_PROMPT,
+        temperature=TEMPERATURE,
+        max_output_tokens=MAX_OUTPUT_TOKENS,
+        tools=tools,
+    )
+
+    if with_thinking:
+        options["thinking_config"] = types.ThinkingConfig(
+            thinking_level=THINKING_LEVEL
+        )
+
+    return types.GenerateContentConfig(**options)
+
+
+async def _generate(prompt: str, tools):
+    global _thinking_supported
+
+    if _thinking_supported:
+        try:
+            return await client.aio.models.generate_content(
+                model=MODEL_NAME,
+                contents=prompt,
+                config=_build_config(tools, True),
+            )
+        except Exception as error:
+            message = str(error).lower()
+            unsupported = (
+                "thinking" in message
+                or "unknown field" in message
+                or "not supported" in message
+                or isinstance(error, (TypeError, AttributeError, ValueError))
+            )
+
+            if not unsupported:
+                raise
+
+            print(
+                "GEMINI: thinking_level не поддерживается, отключаю —",
+                type(error).__name__,
+            )
+            _thinking_supported = False
+
+    return await client.aio.models.generate_content(
+        model=MODEL_NAME,
+        contents=prompt,
+        config=_build_config(tools, False),
+    )
 
 
 SENTENCE_ENDS = ".!?…"
@@ -73,16 +136,7 @@ async def ask_gemini(
             types.Tool(google_search=types.GoogleSearch())
         )
 
-    response = await client.aio.models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            temperature=TEMPERATURE,
-            max_output_tokens=MAX_OUTPUT_TOKENS,
-            tools=tools,
-        ),
-    )
+    response = await _generate(prompt, tools)
 
     answer = (response.text or "").strip()
 
