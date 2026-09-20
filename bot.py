@@ -2,13 +2,24 @@ import asyncio
 import os
 from html import escape
 
-from aiogram import Bot, Dispatcher
-from aiogram.filters import CommandStart, Command
+from aiogram import (
+    Bot,
+    Dispatcher,
+)
+
+from aiogram.filters import (
+    CommandStart,
+    Command,
+)
+
 from aiogram.types import Message
+
 
 from ai.gemini import ask_gemini
 
+
 from database.database import init_db
+
 
 from database.repository import (
     save_user,
@@ -21,41 +32,127 @@ from database.repository import (
     add_rating_vote,
     get_global_rating,
     get_rating_position,
+    get_rating_stats,
 )
 
 
-TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.getenv(
+    "BOT_TOKEN"
+)
+
 
 if not TOKEN:
-    raise RuntimeError("BOT_TOKEN is not set")
+    raise RuntimeError(
+        "BOT_TOKEN is not set"
+    )
 
 
-bot = Bot(token=TOKEN)
+bot = Bot(
+    token=TOKEN
+)
+
 dp = Dispatcher()
 
 
-def get_rank(rating: int):
+def get_rank_info(
+    rating: int,
+):
+    """
+    Определяет ранг пользователя
+    и прогресс до следующего ранга.
+    """
 
-    if rating >= 500:
-        return "Легенда 🏆"
+    ranks = [
+        (
+            0,
+            "Пользователь",
+        ),
+        (
+            10,
+            "Активист 🔥",
+        ),
+        (
+            50,
+            "Уважаемый 💎",
+        ),
+        (
+            100,
+            "Авторитет 👑",
+        ),
+        (
+            250,
+            "Звезда ⭐",
+        ),
+        (
+            500,
+            "Легенда 🏆",
+        ),
+    ]
 
-    if rating >= 250:
-        return "Звезда ⭐"
 
-    if rating >= 100:
-        return "Авторитет 👑"
+    current_name = (
+        "Пользователь"
+    )
 
-    if rating >= 50:
-        return "Уважаемый 💎"
+    current_threshold = 0
 
-    if rating >= 10:
-        return "Активист 🔥"
+    next_name = None
 
-    return "Пользователь"
+    next_threshold = None
 
 
-@dp.message(CommandStart())
-async def start(message: Message):
+    for index, (
+        threshold,
+        name,
+    ) in enumerate(ranks):
+
+        if rating >= threshold:
+
+            current_name = name
+
+            current_threshold = threshold
+
+
+            if index + 1 < len(ranks):
+
+                next_threshold = (
+                    ranks[index + 1][0]
+                )
+
+                next_name = (
+                    ranks[index + 1][1]
+                )
+
+
+    if next_threshold is None:
+
+        return {
+            "name": current_name,
+            "threshold": current_threshold,
+            "next_name": None,
+            "next_threshold": None,
+            "remaining": 0,
+        }
+
+
+    return {
+        "name": current_name,
+        "threshold": current_threshold,
+        "next_name": next_name,
+        "next_threshold": next_threshold,
+        "remaining": max(
+            0,
+            next_threshold - rating,
+        ),
+    }
+
+
+@dp.message(
+    CommandStart()
+)
+async def start(
+    message: Message,
+):
 
     await message.answer(
         "Привет! Я Маруська 💜\n"
@@ -63,8 +160,12 @@ async def start(message: Message):
     )
 
 
-@dp.message(Command("help"))
-async def help_command(message: Message):
+@dp.message(
+    Command("help")
+)
+async def help_command(
+    message: Message,
+):
 
     await message.answer(
         "Команды:\n"
@@ -72,35 +173,53 @@ async def help_command(message: Message):
         "/help — помощь\n"
         "/ping — проверка связи\n"
         "/profile — профиль\n"
-        "/rating — глобальный рейтинг\n\n"
+        "/rating — глобальный рейтинг\n"
+        "/top — глобальный рейтинг\n\n"
+
         "❤️ Рейтинг:\n"
-        "Ответь на сообщение человека и отправь + или -.\n\n"
-        "Один человек может изменить рейтинг другого "
-        "не чаще одного раза в 24 часа."
+        "Ответь на сообщение человека "
+        "и отправь + или -.\n\n"
+
+        "Один человек может изменить "
+        "рейтинг другого не чаще "
+        "одного раза в 24 часа."
     )
 
 
-@dp.message(Command("ping"))
-async def ping(message: Message):
+@dp.message(
+    Command("ping")
+)
+async def ping(
+    message: Message,
+):
 
     await message.answer(
         "Маруська на связи 🟢"
     )
 
 
-@dp.message(Command("profile"))
-async def profile_command(message: Message):
+@dp.message(
+    Command("profile")
+)
+async def profile_command(
+    message: Message,
+):
 
     if not message.from_user:
         return
 
-    telegram_id = message.from_user.id
+
+    telegram_id = (
+        message.from_user.id
+    )
+
 
     display_name = (
         message.from_user.first_name
         or message.from_user.username
         or "Пользователь"
     )
+
 
     try:
 
@@ -109,9 +228,11 @@ async def profile_command(message: Message):
             display_name=display_name,
         )
 
+
         profile = await get_profile(
             telegram_id=telegram_id,
         )
+
 
         if profile is None:
 
@@ -121,36 +242,101 @@ async def profile_command(message: Message):
 
             return
 
+
         rating = profile.karma
 
-        rank = get_rank(rating)
+
+        rank_info = get_rank_info(
+            rating
+        )
+
 
         position = await get_rating_position(
             telegram_id=telegram_id,
         )
+
+
+        stats = await get_rating_stats(
+            telegram_id=telegram_id,
+        )
+
 
         name = escape(
             profile.display_name
             or display_name
         )
 
-        position_text = (
-            f"🏆 Место: <b>#{position}</b>\n"
-            if position
-            else ""
-        )
+
+        if position:
+
+            position_text = (
+                f"🏆 Место в рейтинге: "
+                f"<b>#{position}</b>\n"
+            )
+
+        else:
+
+            position_text = ""
+
+
+        if (
+            rank_info["next_threshold"]
+            is not None
+        ):
+
+            progress_text = (
+                f"📈 До ранга "
+                f"<b>{rank_info['next_name']}</b>: "
+                f"<b>{rank_info['remaining']}</b> ❤️\n"
+            )
+
+        else:
+
+            progress_text = (
+                "👑 Максимальный ранг достигнут!\n"
+            )
+
 
         await message.answer(
+
             f"👤 <b>{name}</b>\n\n"
-            f"❤️ Рейтинг: <b>{rating}</b>\n"
-            f"🎖 Ранг: <b>{rank}</b>\n"
+
+            f"❤️ Рейтинг: "
+            f"<b>{rating}</b>\n"
+
+            f"🎖 Ранг: "
+            f"<b>{rank_info['name']}</b>\n"
+
             f"{position_text}"
-            f"🪙 Монеты: <b>{profile.coins}</b>\n"
-            f"💬 Сообщений: <b>{profile.messages_count}</b>\n\n"
-            f"🎮 Игр сыграно: <b>{profile.games_played}</b>\n"
-            f"🏆 Побед: <b>{profile.games_won}</b>",
+
+            f"{progress_text}\n"
+
+            f"👍 Получено плюсов: "
+            f"<b>{stats['positive']}</b>\n"
+
+            f"👎 Получено минусов: "
+            f"<b>{stats['negative']}</b>\n\n"
+
+            f"📅 За последние 7 дней:\n"
+
+            f"👍 +{stats['week_positive']}   "
+            f"👎 -{stats['week_negative']}\n\n"
+
+            f"🪙 Монеты: "
+            f"<b>{profile.coins}</b>\n"
+
+            f"💬 Сообщений: "
+            f"<b>{profile.messages_count}</b>\n\n"
+
+            f"🎮 Игр сыграно: "
+            f"<b>{profile.games_played}</b>\n"
+
+            f"🏆 Побед: "
+            f"<b>{profile.games_won}</b>",
+
             parse_mode="HTML",
         )
+
 
     except Exception as e:
 
@@ -160,19 +346,25 @@ async def profile_command(message: Message):
             str(e),
         )
 
+
         await message.answer(
             "Не смогла загрузить профиль 🤔"
         )
 
 
-@dp.message(Command("rating"))
-async def rating_command(message: Message):
+@dp.message(
+    Command("rating")
+)
+async def rating_command(
+    message: Message,
+):
 
     try:
 
         users = await get_global_rating(
             limit=10,
         )
+
 
         if not users:
 
@@ -182,9 +374,11 @@ async def rating_command(message: Message):
 
             return
 
+
         lines = [
-            "🏆 <b>Глобальный рейтинг</b>\n"
+            "🏆 <b>ГЛОБАЛЬНЫЙ РЕЙТИНГ</b>\n"
         ]
+
 
         medals = [
             "🥇",
@@ -192,31 +386,49 @@ async def rating_command(message: Message):
             "🥉",
         ]
 
-        for index, user in enumerate(users):
+
+        for index, user in enumerate(
+            users
+        ):
 
             rating = user.karma
 
-            rank = get_rank(rating)
+
+            rank_info = get_rank_info(
+                rating
+            )
+
 
             name = escape(
                 user.display_name
                 or f"ID {user.telegram_id}"
             )
 
+
             if index < 3:
+
                 prefix = medals[index]
+
             else:
-                prefix = f"{index + 1}."
+
+                prefix = (
+                    f"<b>{index + 1}.</b>"
+                )
+
 
             lines.append(
-                f"{prefix} <b>{name}</b>\n"
-                f"   ❤️ {rating} · {rank}"
+                f"{prefix} "
+                f"<b>{name}</b>\n"
+                f"   ❤️ <b>{rating}</b> · "
+                f"{rank_info['name']}"
             )
+
 
         await message.answer(
             "\n".join(lines),
             parse_mode="HTML",
         )
+
 
     except Exception as e:
 
@@ -226,28 +438,56 @@ async def rating_command(message: Message):
             str(e),
         )
 
+
         await message.answer(
             "Не смогла загрузить рейтинг 🤔"
         )
 
 
 @dp.message(
+    Command("top")
+)
+async def top_command(
+    message: Message,
+):
+
+    await rating_command(
+        message
+    )
+
+
+@dp.message(
     lambda message:
     message.text
-    and message.text.strip() in ("+", "-")
-    and message.reply_to_message is not None
+    and message.text.strip()
+    in (
+        "+",
+        "-",
+    )
+    and message.reply_to_message
+    is not None
 )
-async def rating_vote(message: Message):
+async def rating_vote(
+    message: Message,
+):
 
     if not message.from_user:
         return
 
-    target_message = message.reply_to_message
+
+    target_message = (
+        message.reply_to_message
+    )
+
 
     if not target_message:
         return
 
-    target_user = target_message.from_user
+
+    target_user = (
+        target_message.from_user
+    )
+
 
     if not target_user:
 
@@ -257,9 +497,18 @@ async def rating_vote(message: Message):
 
         return
 
-    giver_id = message.from_user.id
-    target_id = target_user.id
 
+    giver_id = (
+        message.from_user.id
+    )
+
+
+    target_id = (
+        target_user.id
+    )
+
+
+    # Запрет самому себе.
     if giver_id == target_id:
 
         await message.answer(
@@ -268,6 +517,8 @@ async def rating_vote(message: Message):
 
         return
 
+
+    # Запрет рейтинга ботам.
     if target_user.is_bot:
 
         await message.answer(
@@ -276,11 +527,13 @@ async def rating_vote(message: Message):
 
         return
 
+
     amount = (
         1
         if message.text.strip() == "+"
         else -1
     )
+
 
     try:
 
@@ -289,34 +542,44 @@ async def rating_vote(message: Message):
             target_telegram_id=target_id,
         )
 
+
         if not allowed:
 
-            last_vote = await get_last_rating_vote(
-                giver_telegram_id=giver_id,
-                target_telegram_id=target_id,
+            last_vote = (
+                await get_last_rating_vote(
+                    giver_telegram_id=giver_id,
+                    target_telegram_id=target_id,
+                )
             )
+
 
             if last_vote:
 
                 await message.answer(
-                    "Ты уже изменял рейтинг этого "
-                    "пользователя за последние 24 часа ⏳\n\n"
+                    "Ты уже изменял рейтинг "
+                    "этого пользователя "
+                    "за последние 24 часа ⏳\n\n"
                     "Попробуй позже."
                 )
 
             else:
 
                 await message.answer(
-                    "Этот рейтинг пока нельзя изменить ⏳"
+                    "Этот рейтинг пока нельзя "
+                    "изменить ⏳"
                 )
 
             return
 
-        new_rating = await add_rating_vote(
-            giver_telegram_id=giver_id,
-            target_telegram_id=target_id,
-            amount=amount,
+
+        new_rating = (
+            await add_rating_vote(
+                giver_telegram_id=giver_id,
+                target_telegram_id=target_id,
+                amount=amount,
+            )
         )
+
 
         target_name = escape(
             target_user.first_name
@@ -324,33 +587,50 @@ async def rating_vote(message: Message):
             or "Пользователь"
         )
 
-        rank = get_rank(new_rating)
+
+        rank_info = get_rank_info(
+            new_rating
+        )
+
 
         if amount > 0:
 
             await message.answer(
+
                 f"❤️ <b>Лайк!</b>\n\n"
+
                 f"Рейтинг пользователя "
-                f"<b>{target_name}</b> повышен на "
-                f"<b>+1</b>.\n\n"
+                f"<b>{target_name}</b> "
+                f"повышен на <b>+1</b>.\n\n"
+
                 f"❤️ Теперь рейтинг: "
                 f"<b>{new_rating}</b>\n"
-                f"🎖 Ранг: <b>{rank}</b>",
+
+                f"🎖 Ранг: "
+                f"<b>{rank_info['name']}</b>",
+
                 parse_mode="HTML",
             )
 
         else:
 
             await message.answer(
+
                 f"👎 <b>Рейтинг понижен</b>\n\n"
+
                 f"Рейтинг пользователя "
-                f"<b>{target_name}</b> изменён на "
-                f"<b>-1</b>.\n\n"
+                f"<b>{target_name}</b> "
+                f"изменён на <b>-1</b>.\n\n"
+
                 f"❤️ Теперь рейтинг: "
                 f"<b>{new_rating}</b>\n"
-                f"🎖 Ранг: <b>{rank}</b>",
+
+                f"🎖 Ранг: "
+                f"<b>{rank_info['name']}</b>",
+
                 parse_mode="HTML",
             )
+
 
     except Exception as e:
 
@@ -360,31 +640,46 @@ async def rating_vote(message: Message):
             str(e),
         )
 
+
         await message.answer(
             "Не смогла изменить рейтинг 🤔"
         )
 
 
 @dp.message()
-async def ai_message(message: Message):
+async def ai_message(
+    message: Message,
+):
 
     if not message.text:
         return
 
-    if message.from_user and message.from_user.is_bot:
+
+    if (
+        message.from_user
+        and message.from_user.is_bot
+    ):
         return
+
 
     if not message.from_user:
         return
 
+
     chat_id = message.chat.id
-    telegram_user_id = message.from_user.id
+
+
+    telegram_user_id = (
+        message.from_user.id
+    )
+
 
     username = (
         message.from_user.first_name
         or message.from_user.username
         or "Пользователь"
     )
+
 
     try:
 
@@ -401,6 +696,7 @@ async def ai_message(message: Message):
             type(e).__name__,
             str(e),
         )
+
 
     try:
 
@@ -419,27 +715,47 @@ async def ai_message(message: Message):
             str(e),
         )
 
-    text_lower = message.text.lower()
+
+    text_lower = (
+        message.text.lower()
+    )
+
 
     mentioned = (
         "маруська" in text_lower
-        or "@botmaruska_bot" in text_lower
+        or "@botmaruska_bot"
+        in text_lower
     )
+
 
     replied_to_bot = (
-        message.reply_to_message is not None
-        and message.reply_to_message.from_user is not None
-        and message.reply_to_message.from_user.id == bot.id
+        message.reply_to_message
+        is not None
+
+        and
+        message.reply_to_message.from_user
+        is not None
+
+        and
+        message.reply_to_message.from_user.id
+        == bot.id
     )
 
-    if not mentioned and not replied_to_bot:
+
+    if (
+        not mentioned
+        and not replied_to_bot
+    ):
         return
+
 
     try:
 
-        recent_messages = await get_recent_messages(
-            chat_id=chat_id,
-            limit=8,
+        recent_messages = (
+            await get_recent_messages(
+                chat_id=chat_id,
+                limit=8,
+            )
         )
 
     except Exception as e:
@@ -452,9 +768,11 @@ async def ai_message(message: Message):
 
         recent_messages = []
 
+
     context = "\n".join(
         recent_messages
     )
+
 
     prompt = f"""
 Последние сообщения в группе:
@@ -480,30 +798,38 @@ Google Search сейчас отключён.
 Закончи предложение и мысль полностью.
 """
 
+
     try:
 
-        answer, sources = await ask_gemini(
-            prompt,
-            use_search=False,
+        answer, sources = (
+            await ask_gemini(
+                prompt,
+                use_search=False,
+            )
         )
+
 
         answer = (
             answer or ""
         ).strip()
 
+
         if not answer:
 
             await message.answer(
-                "Я почему-то не смогла сформулировать ответ 🤔"
+                "Я почему-то не смогла "
+                "сформулировать ответ 🤔"
             )
 
             return
+
 
         await message.answer(
             answer,
             parse_mode="HTML",
             disable_web_page_preview=True,
         )
+
 
     except Exception as e:
 
@@ -520,16 +846,22 @@ Google Search сейчас отключён.
             "=================================="
         )
 
-        error_text = str(e).lower()
+
+        error_text = (
+            str(e).lower()
+        )
+
 
         if (
             "quota" in error_text
             or "429" in error_text
-            or "resource_exhausted" in error_text
+            or "resource_exhausted"
+            in error_text
         ):
 
             await message.answer(
-                "Сейчас Gemini не принимает запросы 😴\n"
+                "Сейчас Gemini не принимает "
+                "запросы 😴\n"
                 "Попробуй немного позже."
             )
 
@@ -550,51 +882,67 @@ async def main():
         "Подключение к PostgreSQL..."
     )
 
+
     await init_db()
+
 
     print(
         "PostgreSQL подключён"
     )
 
+
     print(
         "МАРУСЬКА ЗАПУЩЕНА!"
     )
+
 
     print(
         "Gemini подключён"
     )
 
+
     print(
         "Google Search отключён"
     )
+
 
     print(
         "Постоянная память PostgreSQL включена"
     )
 
+
     print(
         "Профили пользователей включены"
     )
+
 
     print(
         "Глобальный рейтинг включён"
     )
 
+
     print(
         "История рейтинга включена"
     )
+
 
     print(
         "Антинакрутка рейтинга: 24 часа"
     )
 
+
     print(
         "==================================="
     )
 
-    await dp.start_polling(bot)
+
+    await dp.start_polling(
+        bot
+    )
 
 
 if __name__ == "__main__":
 
-    asyncio.run(main())
+    asyncio.run(
+        main()
+    )
