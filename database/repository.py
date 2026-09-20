@@ -580,10 +580,12 @@ async def add_action_image(
     action: str,
     photo_id: str,
     image_url: str,
-    photographer_name: str,
-    photographer_url: str,
-    unsplash_url: str,
     source_page: int,
+    provider: str = "pixabay",
+    fallback_url: str | None = None,
+    photographer_name: str | None = None,
+    photographer_url: str | None = None,
+    source_url: str | None = None,
 ) -> bool:
     async with session_scope() as session:
         existing_result = await session.execute(
@@ -599,11 +601,13 @@ async def add_action_image(
         session.add(
             ActionImage(
                 action=action,
+                provider=provider,
                 photo_id=photo_id,
                 image_url=image_url,
+                fallback_url=fallback_url,
                 photographer_name=photographer_name,
                 photographer_url=photographer_url,
-                unsplash_url=unsplash_url,
+                unsplash_url=source_url,
                 source_page=source_page,
                 used=False,
             )

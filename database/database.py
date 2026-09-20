@@ -111,6 +111,24 @@ async def init_db():
             "ALTER TABLE action_images "
             "ADD COLUMN IF NOT EXISTS telegram_file_id VARCHAR(255)",
 
+            "ALTER TABLE action_images "
+            "ADD COLUMN IF NOT EXISTS fallback_url TEXT",
+
+            "ALTER TABLE action_images "
+            "ADD COLUMN IF NOT EXISTS provider VARCHAR(20) "
+            "DEFAULT 'unsplash'",
+
+            # Pixabay атрибуции не требует — снимаем NOT NULL,
+            # чтобы старые колонки не мешали новым записям.
+            "ALTER TABLE action_images "
+            "ALTER COLUMN photographer_name DROP NOT NULL",
+
+            "ALTER TABLE action_images "
+            "ALTER COLUMN photographer_url DROP NOT NULL",
+
+            "ALTER TABLE action_images "
+            "ALTER COLUMN unsplash_url DROP NOT NULL",
+
             "CREATE INDEX IF NOT EXISTS ix_action_images_action_used "
             "ON action_images (action, used)",
 

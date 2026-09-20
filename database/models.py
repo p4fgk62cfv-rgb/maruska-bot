@@ -282,21 +282,39 @@ class ActionImage(Base):
         Text,
     )
 
+    # Версия поменьше на случай, если основная слишком тяжёлая.
+    fallback_url: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
     telegram_file_id: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
     )
 
-    photographer_name: Mapped[str] = mapped_column(
+    provider: Mapped[str] = mapped_column(
+        String(20),
+        default="pixabay",
+        index=True,
+    )
+
+    # Атрибуция нужна только источникам, которые её требуют
+    # (Unsplash). Для Pixabay остаётся пустой.
+    photographer_name: Mapped[str | None] = mapped_column(
         String(255),
+        nullable=True,
     )
 
-    photographer_url: Mapped[str] = mapped_column(
+    photographer_url: Mapped[str | None] = mapped_column(
         Text,
+        nullable=True,
     )
 
-    unsplash_url: Mapped[str] = mapped_column(
+    # Страница фото у источника. Нужна только для атрибуции Unsplash.
+    unsplash_url: Mapped[str | None] = mapped_column(
         Text,
+        nullable=True,
     )
 
     source_page: Mapped[int] = mapped_column(
