@@ -12,36 +12,33 @@ if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY is not set")
 
 
-MODEL_NAME = "gemini-3.6-flash"
+# Модель вынесена в переменную окружения: когда Google выкатит
+# следующую версию, перекатывать код не придётся.
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+
+MAX_OUTPUT_TOKENS = int(os.getenv("GEMINI_MAX_TOKENS", "600"))
+TEMPERATURE = float(os.getenv("GEMINI_TEMPERATURE", "0.8"))
 
 
-client = genai.Client(
-    api_key=GEMINI_API_KEY
-)
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 
 async def ask_gemini(
     prompt: str,
     use_search: bool = True,
-):
+) -> tuple[str, list[dict]]:
     """
     Отправляет запрос в Gemini.
 
-    use_search=True:
-        Gemini получает возможность использовать Google Search.
+    use_search=True — модель может пользоваться Google Search.
 
-    Возвращает:
-        answer — текст ответа
-        sources — найденные источники
+    Возвращает (текст ответа, список источников).
     """
-
     tools = []
 
     if use_search:
         tools.append(
-            types.Tool(
-                google_search=types.GoogleSearch()
-            )
+            types.Tool(google_search=types.GoogleSearch())
         )
 
     response = await client.aio.models.generate_content(
@@ -49,68 +46,38 @@ async def ask_gemini(
         contents=prompt,
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
-            temperature=0.7,
-            max_output_tokens=1000,
+            temperature=TEMPERATURE,
+            max_output_tokens=MAX_OUTPUT_TOKENS,
             tools=tools,
         ),
     )
 
-    answer = (
-        response.text or ""
-    ).strip()
+    answer = (response.text or "").strip()
 
-    sources = []
+    sources: list[dict] = []
 
     try:
-        candidate = response.candidates[0]
-        grounding_metadata = getattr(
-            candidate,
-            "grounding_metadata",
-            None,
-        )
+        candidates = getattr(response, "candidates", None) or []
 
-        if grounding_metadata:
-
-            chunks = getattr(
-                grounding_metadata,
-                "grounding_chunks",
-                []
-            )
+        if candidates:
+            grounding = getattr(candidates[0], "grounding_metadata", None)
+            chunks = getattr(grounding, "grounding_chunks", None) or []
 
             for chunk in chunks:
-
-                web = getattr(
-                    chunk,
-                    "web",
-                    None,
-                )
-
+                web = getattr(chunk, "web", None)
                 if not web:
                     continue
 
-                title = getattr(
-                    web,
-                    "title",
-                    None,
-                )
+                uri = getattr(web, "uri", None)
+                if not uri:
+                    continue
 
-                uri = getattr(
-                    web,
-                    "uri",
-                    None,
-                )
+                sources.append({
+                    "title": getattr(web, "title", None) or "Источник",
+                    "url": uri,
+                })
 
-                if uri:
-                    sources.append({
-                        "title": title or "Источник",
-                        "url": uri,
-                    })
-
-    except Exception as e:
-        print(
-            "SOURCE PARSE ERROR:",
-            type(e).__name__,
-            str(e),
-        )
+    except Exception as error:
+        print("SOURCE PARSE ERROR:", type(error).__name__, str(error))
 
     return answer, sources
