@@ -1,6 +1,6 @@
 import asyncio
 import os
-import re
+from html import escape
 
 from aiogram import Bot, Dispatcher
 from aiogram.filters import CommandStart, Command
@@ -14,7 +14,7 @@ from database.repository import (
     get_recent_messages,
     get_profile,
     create_profile_if_needed,
-    change_karma,
+    add_rating,
     get_global_rating,
 )
 
@@ -46,16 +46,10 @@ async def help_command(message: Message):
         "/start — запуск\n"
         "/help — помощь\n"
         "/ping — проверка связи\n"
-        "/profile — твой профиль\n"
-        "/rating — глобальный рейтинг кармы\n\n"
-        "Карма:\n"
-        "Ответь на сообщение человека и напиши "
-        "+карма или -карма.\n\n"
-        "Также можно:\n"
-        "+карма @username\n"
-        "-карма @username\n\n"
-        "Чтобы поговорить со мной, напиши "
-        "«Маруська» или ответь на моё сообщение."
+        "/profile — профиль\n"
+        "/rating — глобальный рейтинг\n\n"
+        "❤️ Рейтинг:\n"
+        "Ответь на сообщение человека и отправь + или -."
     )
 
 
@@ -100,9 +94,14 @@ async def profile_command(message: Message):
 
             return
 
+        name = escape(
+            profile.display_name
+            or display_name
+        )
+
         await message.answer(
-            f"👤 <b>{profile.display_name or display_name}</b>\n\n"
-            f"⭐ Карма: <b>{profile.karma}</b>\n"
+            f"👤 <b>{name}</b>\n\n"
+            f"❤️ Рейтинг: <b>{profile.karma}</b>\n"
             f"🪙 Монеты: <b>{profile.coins}</b>\n"
             f"💬 Сообщений: <b>{profile.messages_count}</b>\n\n"
             f"🎮 Игр сыграно: <b>{profile.games_played}</b>\n"
@@ -120,144 +119,6 @@ async def profile_command(message: Message):
 
         await message.answer(
             "Не смогла загрузить профиль 🤔"
-        )
-
-
-async def find_karma_target(
-    message: Message,
-    username: str | None,
-):
-    """
-    Определяет пользователя, которому меняем карму.
-
-    Приоритет:
-    1. Ответ на сообщение.
-    2. @username.
-    """
-
-    if (
-        message.reply_to_message
-        and message.reply_to_message.from_user
-    ):
-        return message.reply_to_message.from_user
-
-    if not username:
-        return None
-
-    username = username.lstrip("@").lower()
-
-    from sqlalchemy import select
-    from database.database import get_session
-    from database.models import User
-
-    async for session in get_session():
-
-        result = await session.execute(
-            select(User).where(
-                User.username.ilike(username)
-            )
-        )
-
-        return result.scalar_one_or_none()
-
-    return None
-
-
-@dp.message(
-    lambda message:
-    message.text
-    and re.match(
-        r"^[+-]карма(?:\s+@?([A-Za-z0-9_]{1,32}))?\s*$",
-        message.text.strip(),
-        re.IGNORECASE,
-    )
-)
-async def karma_command(message: Message):
-
-    if not message.from_user:
-        return
-
-    text = message.text.strip()
-
-    match = re.match(
-        r"^([+-])карма(?:\s+@?([A-Za-z0-9_]{1,32}))?\s*$",
-        text,
-        re.IGNORECASE,
-    )
-
-    if not match:
-        return
-
-    sign = match.group(1)
-    username = match.group(2)
-
-    target = await find_karma_target(
-        message,
-        username,
-    )
-
-    if target is None:
-
-        await message.answer(
-            "Не поняла, кому изменить карму 🤔\n\n"
-            "Ответь на сообщение человека и напиши "
-            "+карма или -карма."
-        )
-
-        return
-
-    target_id = target.id
-    giver_id = message.from_user.id
-
-    if target_id == giver_id:
-
-        await message.answer(
-            "Самому себе карму нельзя 😏"
-        )
-
-        return
-
-    if getattr(target, "is_bot", False):
-
-        await message.answer(
-            "Ботам карму пока не выдаём 🤖"
-        )
-
-        return
-
-    amount = 1 if sign == "+" else -1
-
-    try:
-
-        new_karma = await change_karma(
-            telegram_id=target_id,
-            amount=amount,
-        )
-
-        target_name = (
-            target.first_name
-            or target.username
-            or "Пользователь"
-        )
-
-        emoji = "⭐" if amount > 0 else "💥"
-
-        await message.answer(
-            f"{emoji} {target_name}: "
-            f"карма {'+' if amount > 0 else ''}{amount}\n"
-            f"Теперь карма: <b>{new_karma}</b>"
-        )
-
-    except Exception as e:
-
-        print(
-            "KARMA ERROR:",
-            type(e).__name__,
-            str(e),
-        )
-
-        await message.answer(
-            "Не смогла изменить карму 🤔"
         )
 
 
@@ -279,7 +140,7 @@ async def rating_command(message: Message):
             return
 
         lines = [
-            "🏆 <b>Глобальный рейтинг Маруськи</b>\n"
+            "🏆 <b>Глобальный рейтинг</b>\n"
         ]
 
         medals = [
@@ -290,19 +151,19 @@ async def rating_command(message: Message):
 
         for index, user in enumerate(users):
 
-            if index < 3:
-                medal = medals[index]
-            else:
-                medal = f"{index + 1}."
-
-            name = (
+            name = escape(
                 user.display_name
                 or f"ID {user.telegram_id}"
             )
 
+            if index < 3:
+                prefix = medals[index]
+            else:
+                prefix = f"{index + 1}."
+
             lines.append(
-                f"{medal} {name} — "
-                f"⭐ <b>{user.karma}</b>"
+                f"{prefix} {name} — "
+                f"❤️ <b>{user.karma}</b>"
             )
 
         await message.answer(
@@ -320,6 +181,99 @@ async def rating_command(message: Message):
 
         await message.answer(
             "Не смогла загрузить рейтинг 🤔"
+        )
+
+
+@dp.message(
+    lambda message:
+    message.text
+    and message.text.strip() in ("+", "-")
+    and message.reply_to_message is not None
+)
+async def rating_vote(message: Message):
+
+    if not message.from_user:
+        return
+
+    target_message = message.reply_to_message
+
+    if not target_message:
+        return
+
+    target_user = target_message.from_user
+
+    if not target_user:
+        await message.answer(
+            "Не смогла определить пользователя 🤔"
+        )
+        return
+
+    giver_id = message.from_user.id
+    target_id = target_user.id
+
+    if giver_id == target_id:
+
+        await message.answer(
+            "Самому себе рейтинг нельзя 😏"
+        )
+
+        return
+
+    if target_user.is_bot:
+
+        await message.answer(
+            "Ботам рейтинг пока не выдаём 🤖"
+        )
+
+        return
+
+    amount = 1 if message.text.strip() == "+" else -1
+
+    try:
+
+        new_rating = await add_rating(
+            telegram_id=target_id,
+            amount=amount,
+        )
+
+        target_name = escape(
+            target_user.first_name
+            or target_user.username
+            or "Пользователь"
+        )
+
+        if amount > 0:
+
+            await message.answer(
+                f"👍 Рейтинг повышен\n\n"
+                f"{target_name} получил "
+                f"<b>+1</b> к рейтингу.\n"
+                f"❤️ Теперь рейтинг: "
+                f"<b>{new_rating}</b>",
+                parse_mode="HTML",
+            )
+
+        else:
+
+            await message.answer(
+                f"👎 Рейтинг понижен\n\n"
+                f"{target_name} получил "
+                f"<b>-1</b> к рейтингу.\n"
+                f"❤️ Теперь рейтинг: "
+                f"<b>{new_rating}</b>",
+                parse_mode="HTML",
+            )
+
+    except Exception as e:
+
+        print(
+            "RATING VOTE ERROR:",
+            type(e).__name__,
+            str(e),
+        )
+
+        await message.answer(
+            "Не смогла изменить рейтинг 🤔"
         )
 
 
@@ -414,8 +368,6 @@ async def ai_message(message: Message):
         recent_messages
     )
 
-    use_search = False
-
     prompt = f"""
 Последние сообщения в группе:
 
@@ -432,7 +384,6 @@ Google Search сейчас отключён.
 
 Не выдумывай факты.
 
-Не говори о себе как о безличном ассистенте.
 Ты — Маруська, участница этой компании.
 
 Отвечай естественно.
@@ -445,7 +396,7 @@ Google Search сейчас отключён.
 
         answer, sources = await ask_gemini(
             prompt,
-            use_search=use_search,
+            use_search=False,
         )
 
         answer = (
@@ -474,7 +425,7 @@ Google Search сейчас отключён.
 
         print(
             type(e).__name__,
-            str(e)
+            str(e),
         )
 
         print(
@@ -538,7 +489,7 @@ async def main():
     )
 
     print(
-        "Глобальная карма включена"
+        "Глобальный рейтинг включён"
     )
 
     print(
