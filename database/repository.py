@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, func
 
 from database.database import get_session
 from database.models import (
@@ -9,7 +9,11 @@ from database.models import (
     UserFact,
     MessageMemory,
     GroupMember,
+    RatingVote,
 )
+
+
+RATING_COOLDOWN_HOURS = 24
 
 
 async def save_user(
@@ -62,7 +66,6 @@ async def save_message(
 
         session.add(memory)
 
-        # Глобальный профиль
         profile_result = await session.execute(
             select(UserProfile).where(
                 UserProfile.telegram_id == telegram_user_id
@@ -87,7 +90,6 @@ async def save_message(
             profile.messages_count += 1
             profile.updated_at = datetime.utcnow()
 
-        # Участник конкретной группы
         member_result = await session.execute(
             select(GroupMember).where(
                 GroupMember.chat_id == chat_id,
@@ -193,30 +195,99 @@ async def create_profile_if_needed(
     return None
 
 
-async def add_rating(
-    telegram_id: int,
-    amount: int,
+async def can_vote_rating(
+    giver_telegram_id: int,
+    target_telegram_id: int,
 ):
     """
-    Глобальный рейтинг пользователя.
-    Хранится технически в колонке karma.
+    Проверяет, может ли пользователь снова
+    поставить рейтинг этому человеку.
+
+    Один голос одному человеку раз в 24 часа.
     """
 
     async for session in get_session():
 
-        result = await session.execute(
-            select(UserProfile).where(
-                UserProfile.telegram_id == telegram_id
+        cooldown_time = (
+            datetime.utcnow()
+            - timedelta(
+                hours=RATING_COOLDOWN_HOURS
             )
         )
 
-        profile = result.scalar_one_or_none()
+        result = await session.execute(
+            select(RatingVote)
+            .where(
+                RatingVote.giver_telegram_id
+                == giver_telegram_id,
+                RatingVote.target_telegram_id
+                == target_telegram_id,
+                RatingVote.created_at
+                >= cooldown_time,
+            )
+            .order_by(
+                RatingVote.created_at.desc()
+            )
+            .limit(1)
+        )
+
+        vote = result.scalar_one_or_none()
+
+        return vote is None
+
+    return False
+
+
+async def get_last_rating_vote(
+    giver_telegram_id: int,
+    target_telegram_id: int,
+):
+    async for session in get_session():
+
+        result = await session.execute(
+            select(RatingVote)
+            .where(
+                RatingVote.giver_telegram_id
+                == giver_telegram_id,
+                RatingVote.target_telegram_id
+                == target_telegram_id,
+            )
+            .order_by(
+                RatingVote.created_at.desc()
+            )
+            .limit(1)
+        )
+
+        return result.scalar_one_or_none()
+
+    return None
+
+
+async def add_rating_vote(
+    giver_telegram_id: int,
+    target_telegram_id: int,
+    amount: int,
+):
+    """
+    Добавляет голос и изменяет глобальный рейтинг.
+    """
+
+    async for session in get_session():
+
+        profile_result = await session.execute(
+            select(UserProfile).where(
+                UserProfile.telegram_id
+                == target_telegram_id
+            )
+        )
+
+        profile = profile_result.scalar_one_or_none()
 
         if profile is None:
 
             profile = UserProfile(
-                telegram_id=telegram_id,
-                karma=amount,
+                telegram_id=target_telegram_id,
+                karma=max(amount, 0),
             )
 
             session.add(profile)
@@ -224,7 +295,20 @@ async def add_rating(
         else:
 
             profile.karma += amount
+
+            # Рейтинг не уходит ниже нуля.
+            if profile.karma < 0:
+                profile.karma = 0
+
             profile.updated_at = datetime.utcnow()
+
+        vote = RatingVote(
+            giver_telegram_id=giver_telegram_id,
+            target_telegram_id=target_telegram_id,
+            amount=amount,
+        )
+
+        session.add(vote)
 
         await session.commit()
 
@@ -241,7 +325,8 @@ async def get_global_rating(
         result = await session.execute(
             select(UserProfile)
             .order_by(
-                desc(UserProfile.karma)
+                desc(UserProfile.karma),
+                UserProfile.display_name.asc(),
             )
             .limit(limit)
         )
@@ -249,6 +334,41 @@ async def get_global_rating(
         return result.scalars().all()
 
     return []
+
+
+async def get_rating_position(
+    telegram_id: int,
+):
+    """
+    Место пользователя в глобальном рейтинге.
+    """
+
+    async for session in get_session():
+
+        profile_result = await session.execute(
+            select(UserProfile).where(
+                UserProfile.telegram_id == telegram_id
+            )
+        )
+
+        profile = profile_result.scalar_one_or_none()
+
+        if profile is None:
+            return None
+
+        result = await session.execute(
+            select(
+                func.count(UserProfile.id)
+            ).where(
+                UserProfile.karma > profile.karma
+            )
+        )
+
+        higher_count = result.scalar() or 0
+
+        return higher_count + 1
+
+    return None
 
 
 async def add_fact(
