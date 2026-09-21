@@ -6,6 +6,7 @@ from aiogram import Router
 from aiogram.types import BufferedInputFile, Message
 
 from actions.catalog import find_action
+from settings.store import is_enabled
 from actions.phrases import pick_template, render
 from actions.providers import download_photo
 from actions.service import get_image_for_action
@@ -280,6 +281,9 @@ def is_action_message(message: Message) -> bool:
     Всё остальное уходит дальше — в команды и в AI-хендлер.
     """
     if message.chat.type not in GROUP_CHATS:
+        return False
+
+    if not is_enabled(message.chat.id, "actions"):
         return False
 
     if not message.from_user or message.from_user.is_bot:
