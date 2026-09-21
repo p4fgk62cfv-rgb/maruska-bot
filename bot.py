@@ -66,10 +66,9 @@ from weather import (
 )
 
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s",
-)
+import logging_setup
+
+logging_setup.setup()
 
 logger = logging.getLogger("maruska")
 
