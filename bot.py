@@ -387,10 +387,15 @@ async def top_handler(message: Message):
     await message.answer("\n".join(lines))
 
 
-def should_answer(message: Message) -> bool:
-    if not is_enabled(message.chat.id, "ai"):
-        return False
+def is_addressed(message: Message) -> bool:
+    """
+    Обратились ли к боту: по имени, через @упоминание или
+    ответом на его сообщение.
 
+    Намеренно НЕ смотрит на настройку "ai": погода и котики
+    вызываются тем же обращением, но живут по своим флагам.
+    Иначе выключение ответов Мары молча убивало бы и их.
+    """
     text = message.text or ""
 
     if message.chat.type == "private":
@@ -408,6 +413,11 @@ def should_answer(message: Message) -> bool:
         return True
 
     return False
+
+
+def should_answer(message: Message) -> bool:
+    """Нужен ли AI-ответ: обращение плюс включённая функция."""
+    return is_enabled(message.chat.id, "ai") and is_addressed(message)
 
 
 # =========================================================
@@ -441,7 +451,7 @@ def is_weather_question(message: Message) -> bool:
     if not mentions_weather(message.text):
         return False
 
-    return should_answer(message)
+    return is_addressed(message)
 
 
 @root_router.message(is_weather_question)
@@ -520,7 +530,7 @@ def is_show_me_request(message: Message) -> bool:
     if not is_show_me(message.text):
         return False
 
-    return should_answer(message)
+    return is_addressed(message)
 
 
 @root_router.message(is_show_me_request)
@@ -541,7 +551,7 @@ def is_meow_request(message: Message) -> bool:
     if not is_meow(message.text):
         return False
 
-    return should_answer(message)
+    return is_addressed(message)
 
 
 @root_router.message(is_meow_request)
