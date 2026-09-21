@@ -4,7 +4,6 @@
 Запуск:  python test_economy.py
 """
 
-import re
 from datetime import datetime, timedelta
 
 from economy.service import (
