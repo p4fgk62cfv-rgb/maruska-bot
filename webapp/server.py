@@ -30,6 +30,7 @@ from aiogram.types import BufferedInputFile
 
 from database.repository import get_round_by_token, update_round
 from games import state
+from games.crocodile import drawing_keyboard
 from games.words import LEVEL_NAMES
 
 
@@ -150,11 +151,32 @@ async def api_round(request: web.Request):
     init_data = request.headers.get("X-Init-Data", "")
     item, _user = await _authorize(request, init_data)
 
+    drawings = request.app["drawings"]
+
     return web.json_response({
         "word": item.word or "",
         "level": LEVEL_NAMES.get(item.level or "", ""),
         "status": item.status,
+        # Если рисунок уже отправляли, холст подгрузит его
+        # и можно будет дорисовать поверх.
+        "has_drawing": item.id in drawings,
     })
+
+
+async def api_drawing(request: web.Request):
+    """
+    Отдаёт последний рисунок раунда, чтобы «Дорисовать»
+    открывало холст не пустым.
+    """
+    init_data = request.headers.get("X-Init-Data", "")
+    item, _user = await _authorize(request, init_data)
+
+    content = request.app["drawings"].get(item.id)
+
+    if not content:
+        raise web.HTTPNotFound(text="no drawing")
+
+    return web.Response(body=content, content_type="image/png")
 
 
 async def api_draw(request: web.Request):
@@ -186,6 +208,9 @@ async def api_draw(request: web.Request):
 
     name = user.get("first_name") or user.get("username") or "Ведущий"
 
+    # Запоминаем рисунок, чтобы работала кнопка «Дорисовать»
+    request.app["drawings"][item.id] = content
+
     try:
         await bot.send_photo(
             chat_id=item.chat_id,
@@ -193,6 +218,11 @@ async def api_draw(request: web.Request):
             caption=(
                 f"🎨 <b>{name}</b> нарисовал. Что это?\n"
                 "Пишите варианты в чат."
+            ),
+            reply_markup=drawing_keyboard(
+                item.id,
+                item.token or "",
+                item.likes or 0,
             ),
         )
     except Exception as error:
@@ -215,9 +245,14 @@ def create_app(bot, bot_token: str) -> web.Application:
     app["bot"] = bot
     app["bot_token"] = bot_token
 
+    # Последние рисунки раундов: нужны только для «Дорисовать»,
+    # переживать перезапуск им незачем.
+    app["drawings"] = {}
+
     app.router.add_get("/", health)
     app.router.add_get("/draw", draw_page)
     app.router.add_get("/api/round", api_round)
+    app.router.add_get("/api/drawing", api_drawing)
     app.router.add_post("/api/draw", api_draw)
 
     return app
