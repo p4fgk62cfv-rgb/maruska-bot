@@ -22,6 +22,7 @@ from aiogram.types import (
 
 from database.repository import (
     add_inventory_item,
+    bump_counter,
     change_balance,
     get_balance,
     get_inventory,
@@ -38,6 +39,9 @@ from economy.shop import (
     category_title,
     find,
 )
+
+from progress.service import award
+from progress.xp import XP_GIFT
 
 from settings.store import is_enabled
 
@@ -354,6 +358,19 @@ async def gift_command(message: Message):
         from_telegram_id=user.id,
         from_name=giver_name,
     )
+
+    if is_enabled(message.chat.id, "progress"):
+        try:
+            await bump_counter(user.id, "gifts_sent")
+
+            await award(
+                telegram_id=user.id,
+                amount=XP_GIFT,
+                display_name=giver_name,
+                chat_id=message.chat.id,
+            )
+        except Exception as error:
+            logger.warning("GIFT XP: %s %s", type(error).__name__, error)
 
     await message.answer(
         f"🎁 <b>{escape(giver_name)}</b> дарит "

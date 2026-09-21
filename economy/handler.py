@@ -11,6 +11,7 @@ from aiogram.filters import Command
 from aiogram.types import Message
 
 from database.repository import (
+    bump_counter,
     claim_daily_bonus,
     get_balance,
     get_profile,
@@ -29,6 +30,9 @@ from economy.service import (
     wealth_title,
 )
 
+from progress.service import award
+from progress.xp import XP_BONUS
+
 from settings.store import is_enabled
 
 
@@ -46,6 +50,28 @@ _WORDS_RE = re.compile(r"[А-Яа-яЁёA-Za-z]+")
 
 def display_name(user) -> str:
     return user.first_name or user.username or "Игрок"
+
+
+def _progress_note(outcome: dict) -> str:
+    """
+    Короткая приписка об уровне и достижениях — в том же сообщении,
+    чтобы не плодить отдельные.
+    """
+    if not outcome:
+        return ""
+
+    parts = []
+
+    if outcome.get("level_up"):
+        parts.append(f"🎚 Новый уровень: <b>{outcome['level']}</b>")
+
+    for item in outcome.get("unlocked", []):
+        parts.append(f"🏅 {item.emoji} <b>{item.title}</b>")
+
+    if outcome.get("reward"):
+        parts.append(f"💎 +{outcome['reward']} за достижения")
+
+    return "\n\n" + "\n".join(parts) if parts else ""
 
 
 def economy_on(message: Message) -> bool:
@@ -169,6 +195,29 @@ async def send_bonus(message: Message):
     streak = result["streak"]
     mark = streak_mark(streak)
 
+    # Опыт и достижения за бонус
+    progress_note = ""
+
+    if is_enabled(message.chat.id, "progress"):
+        try:
+            await bump_counter(user.id, "bonus_days")
+
+            from datetime import datetime, timezone
+
+            hour = datetime.now(timezone.utc).hour
+
+            outcome = await award(
+                telegram_id=user.id,
+                amount=XP_BONUS,
+                display_name=display_name(user),
+                chat_id=message.chat.id,
+                extra_stats={"night_bonus": 3 <= hour < 5},
+            )
+
+            progress_note = _progress_note(outcome)
+        except Exception as error:
+            logger.warning("BONUS XP: %s %s", type(error).__name__, error)
+
     head = (
         f"🎰 <b>ДЖЕКПОТ!</b>\n\n"
         if jackpot
@@ -180,6 +229,7 @@ async def send_bonus(message: Message):
         + f"Тебе выпало <b>{amount} {plural(amount)}</b>\n"
         + f"Баланс: <b>{money(result['balance'])}</b>\n"
         + f"🔥 Серия: <b>{streak}</b> {mark}".rstrip()
+        + progress_note
     )
 
 
