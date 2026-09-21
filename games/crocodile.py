@@ -28,8 +28,10 @@ from aiogram.types import (
 )
 
 from database.repository import (
+    add_drawing_like,
     add_karma,
     change_balance,
+    get_round,
     bump_game_stats,
     create_round,
     finish_round,
@@ -85,6 +87,37 @@ def draw_url(token: str) -> str:
 
 START_RE = re.compile(r"\bкрокодил\w*\b", re.IGNORECASE)
 
+# Сколько букв можно открыть подсказками (не больше половины слова)
+HINT_LIMIT_RATIO = 0.5
+
+
+def masked_word(word: str, revealed: int = 0) -> str:
+    """
+    Слово ячейками: "ПОКРЫШКА" -> "П О ▢ ▢ ▢ ▢ ▢ ▢"
+
+    Открываются буквы слева направо, пробелы показываются как есть.
+    """
+    cells = []
+    opened = 0
+
+    for char in word.upper():
+        if char == " ":
+            cells.append(" ")
+            continue
+
+        if opened < revealed:
+            cells.append(char)
+            opened += 1
+        else:
+            cells.append("▢")
+
+    return " ".join(cells)
+
+
+def hint_limit(word: str) -> int:
+    letters = len(word.replace(" ", ""))
+    return max(1, int(letters * HINT_LIMIT_RATIO))
+
 # Слово должно быть командой, а не частью разговора:
 # "давай крокодил" — да, "вчера видел крокодила в зоопарке" — нет.
 MAX_START_WORDS = 4
@@ -120,12 +153,58 @@ def host_keyboard(token: str = "") -> InlineKeyboardMarkup:
             callback_data="croc:swap",
         ),
         InlineKeyboardButton(
+            text="💡 Подсказка",
+            callback_data="croc:hint",
+        ),
+    ])
+
+    rows.append([
+        InlineKeyboardButton(
             text="🏳 Сдаюсь",
             callback_data="croc:give_up",
         ),
     ])
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def drawing_keyboard(round_id: int, token: str, likes: int = 0) -> InlineKeyboardMarkup:
+    """
+    Клавиатура под присланным рисунком: лайк всем, «Дорисовать» художнику.
+    """
+    like_text = f"👍 Лайк ({likes})" if likes else "👍 Лайк"
+
+    rows = [[
+        InlineKeyboardButton(
+            text=like_text,
+            callback_data=f"croc:like:{round_id}",
+        ),
+    ]]
+
+    if token and drawing_enabled():
+        rows[0].append(
+            InlineKeyboardButton(
+                text="🎨 Дорисовать",
+                url=draw_url(token),
+            )
+        )
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def want_keyboard() -> InlineKeyboardMarkup:
+    """
+    Кнопка после раунда: любой может забрать ход и начать новый круг,
+    не дожидаясь, пока победитель напишет «крокодил».
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[
+            InlineKeyboardButton(
+                text="🖐 Хочу рисовать!",
+                callback_data="croc:want",
+            ),
+        ]]
+    )
 
 
 def rules_text(host_name: str, extra: str = "") -> str:
@@ -480,11 +559,176 @@ async def give_up(callback: CallbackQuery):
 
     await callback.message.edit_text(
         "🏳 <b>Ведущий сдался.</b>\n\n"
-        f"Слово было: <b>{escape(item.word)}</b>\n\n"
-        "Напишите «крокодил», чтобы начать заново."
+        f"Слово было: <b>{escape(item.word)}</b>",
+        reply_markup=want_keyboard(),
     )
 
     await callback.answer("Раунд закрыт")
+
+
+# ---------------------------------------------------------
+# Подсказка буквами
+# ---------------------------------------------------------
+
+@router.callback_query(F.data == "croc:hint")
+async def give_hint(callback: CallbackQuery):
+    chat_id = _callback_chat_id(callback)
+
+    if chat_id is None:
+        await callback.answer("Сообщение недоступно", show_alert=True)
+        return
+
+    item = state.get(chat_id)
+
+    if item is None:
+        await callback.answer("Раунд уже закончился", show_alert=True)
+        return
+
+    if callback.from_user.id != item.host_id:
+        await callback.answer(
+            "Подсказку открывает ведущий 😏",
+            show_alert=True,
+        )
+        return
+
+    limit = hint_limit(item.word)
+
+    if item.hints_used >= limit:
+        await callback.answer(
+            "Больше подсказок нельзя — так и слово выдашь",
+            show_alert=True,
+        )
+        return
+
+    item.hints_used += 1
+
+    await callback.answer(f"Открыта буква {item.hints_used} из {limit}")
+
+    await callback.message.answer(
+        f"💡 <b>Подсказка</b>\n\n"
+        f"<code>{masked_word(item.word, item.hints_used)}</code>\n\n"
+        f"Букв в слове: {len(item.word.replace(' ', ''))}"
+    )
+
+
+# ---------------------------------------------------------
+# Лайк рисунку
+# ---------------------------------------------------------
+
+@router.callback_query(F.data.startswith("croc:like:"))
+async def like_drawing(callback: CallbackQuery):
+    try:
+        round_id = int(callback.data.split(":")[2])
+    except (IndexError, ValueError):
+        await callback.answer()
+        return
+
+    item = await get_round(round_id)
+
+    if item is None:
+        await callback.answer("Рисунок потерялся", show_alert=True)
+        return
+
+    if callback.from_user.id == item.host_telegram_id:
+        await callback.answer("Свой рисунок лайкать нескромно 😏", show_alert=True)
+        return
+
+    counted, total = await add_drawing_like(round_id, callback.from_user.id)
+
+    if not counted:
+        await callback.answer(f"Уже лайкнул. Всего: {total}")
+        return
+
+    # Художнику капает за признание
+    if item.host_telegram_id and is_enabled(
+        callback.message.chat.id if callback.message else None,
+        "economy",
+    ):
+        await change_balance(
+            telegram_id=item.host_telegram_id,
+            amount=1,
+            reason="game_host",
+            note="Лайк рисунку",
+            chat_id=item.chat_id,
+            display_name=item.host_name,
+        )
+
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=drawing_keyboard(round_id, item.token or "", total)
+        )
+    except Exception:
+        pass
+
+    await callback.answer(f"Красиво! Всего лайков: {total}")
+
+
+# ---------------------------------------------------------
+# Хочу рисовать
+# ---------------------------------------------------------
+
+@router.callback_query(F.data == "croc:want")
+async def want_to_draw(callback: CallbackQuery):
+    chat_id = _callback_chat_id(callback)
+
+    if chat_id is None:
+        await callback.answer("Сообщение недоступно", show_alert=True)
+        return
+
+    if not is_enabled(chat_id, "games"):
+        await callback.answer("Игры выключены в этой группе", show_alert=True)
+        return
+
+    if state.get(chat_id) is not None:
+        await callback.answer("Раунд уже идёт", show_alert=True)
+        return
+
+    user = callback.from_user
+    host_name = display_name(user)
+
+    await save_user(
+        telegram_id=user.id,
+        username=user.username,
+        first_name=user.first_name,
+    )
+
+    word, level = pick_word()
+    token = secrets.token_urlsafe(12)
+
+    item = await create_round(
+        chat_id=chat_id,
+        host_telegram_id=user.id,
+        host_name=host_name,
+        word=word,
+        level=level,
+        token=token,
+    )
+
+    state.start(
+        state.Round(
+            round_id=item.id,
+            chat_id=chat_id,
+            host_id=user.id,
+            host_name=host_name,
+            word=word,
+            level=level,
+            token=token,
+        )
+    )
+
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+    sent = await callback.message.answer(
+        rules_text(host_name, extra="Ход забрал первый желающий. "),
+        reply_markup=host_keyboard(token),
+    )
+
+    await update_round(item.id, message_id=sent.message_id)
+
+    await callback.answer("Твой ход! Открывай холст")
 
 
 # ---------------------------------------------------------
@@ -511,7 +755,8 @@ async def stop_game(message: Message):
 
     await message.answer(
         "🛑 Раунд остановлен.\n"
-        f"Слово было: <b>{escape(item.word)}</b>"
+        f"Слово было: <b>{escape(item.word)}</b>",
+        reply_markup=want_keyboard(),
     )
 
 
@@ -619,5 +864,6 @@ async def handle_guess(message: Message):
         f"{prize_line}"
         f"{host_line}\n"
         f"Следующий ведущий — <b>{escape(winner_name)}</b>.\n"
-        "Напишите «крокодил», чтобы продолжить."
+        "Или пусть ход заберёт кто-то другой:",
+        reply_markup=want_keyboard(),
     )
