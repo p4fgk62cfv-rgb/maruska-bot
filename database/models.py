@@ -125,6 +125,25 @@ class UserProfile(Base):
         default=0,
     )
 
+    # Опыт и уровень
+    xp: Mapped[int] = mapped_column(default=0, index=True)
+
+    level: Mapped[int] = mapped_column(default=1)
+
+    # Сколько опыта набрано за сообщения сегодня (потолок от флуда)
+    xp_today: Mapped[int] = mapped_column(default=0)
+
+    xp_day: Mapped[str | None] = mapped_column(
+        String(10),
+        nullable=True,
+    )
+
+    bonus_days: Mapped[int] = mapped_column(default=0)
+
+    gifts_sent: Mapped[int] = mapped_column(default=0)
+
+    likes_received: Mapped[int] = mapped_column(default=0)
+
     # Ежедневный бонус: когда забирали последний раз и какая серия
     last_bonus_at: Mapped[datetime | None] = mapped_column(
         DateTime,
@@ -607,6 +626,42 @@ class InventoryItem(Base):
     from_name: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=utcnow,
+    )
+
+
+class UserAchievement(Base):
+    """
+    Открытые достижения. Одна строка на человека и достижение.
+    """
+
+    __tablename__ = "user_achievements"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "telegram_id",
+            "achievement_key",
+            name="uq_user_achievement",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    telegram_id: Mapped[int] = mapped_column(
+        BigInteger,
+        index=True,
+    )
+
+    achievement_key: Mapped[str] = mapped_column(
+        String(40),
+        index=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(

@@ -161,6 +161,30 @@ async def init_db():
 
             "CREATE INDEX IF NOT EXISTS ix_inventory_owner "
             "ON inventory (telegram_id, item_key)",
+
+            "ALTER TABLE user_profiles "
+            "ADD COLUMN IF NOT EXISTS xp INTEGER DEFAULT 0",
+
+            "ALTER TABLE user_profiles "
+            "ADD COLUMN IF NOT EXISTS level INTEGER DEFAULT 1",
+
+            "ALTER TABLE user_profiles "
+            "ADD COLUMN IF NOT EXISTS xp_today INTEGER DEFAULT 0",
+
+            "ALTER TABLE user_profiles "
+            "ADD COLUMN IF NOT EXISTS xp_day VARCHAR(10)",
+
+            "ALTER TABLE user_profiles "
+            "ADD COLUMN IF NOT EXISTS bonus_days INTEGER DEFAULT 0",
+
+            "ALTER TABLE user_profiles "
+            "ADD COLUMN IF NOT EXISTS gifts_sent INTEGER DEFAULT 0",
+
+            "ALTER TABLE user_profiles "
+            "ADD COLUMN IF NOT EXISTS likes_received INTEGER DEFAULT 0",
+
+            "CREATE INDEX IF NOT EXISTS ix_user_profiles_xp "
+            "ON user_profiles (xp DESC)",
         )
 
         for statement in migrations:

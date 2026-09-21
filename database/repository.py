@@ -13,6 +13,7 @@ from database.models import (
     DrawingLike,
     GameRound,
     InventoryItem,
+    UserAchievement,
     GroupSettings,
     Transaction,
     User,
@@ -1187,3 +1188,173 @@ async def count_inventory(telegram_id: int) -> int:
             )
         )
         return result.scalar() or 0
+
+
+# =========================================================
+# ОПЫТ, УРОВНИ, ДОСТИЖЕНИЯ
+# =========================================================
+
+async def award_xp(
+    telegram_id: int,
+    amount: int,
+    display_name: str | None = None,
+    daily_cap: int | None = None,
+    per_message: int = 0,
+) -> dict:
+    """
+    Начисляет опыт и пересчитывает уровень.
+
+    daily_cap ограничивает только опыт за сообщения: награды за
+    игры и бонусы дают опыт всегда, иначе активный день обнулял бы
+    смысл побеждать.
+
+    Возвращает {xp, level, level_up, gained}.
+    """
+    from progress.xp import level_from_xp
+
+    async with session_scope() as session:
+        profile = await _profile_for_update(session, telegram_id, display_name)
+
+        today = utcnow().strftime("%Y-%m-%d")
+
+        if profile.xp_day != today:
+            profile.xp_day = today
+            profile.xp_today = 0
+
+        gain = amount
+
+        if per_message and daily_cap is not None:
+            room = max(daily_cap - profile.xp_today, 0)
+            gain = min(amount, room)
+            profile.xp_today += gain
+
+        if gain <= 0:
+            return {
+                "xp": profile.xp,
+                "level": profile.level,
+                "level_up": False,
+                "gained": 0,
+            }
+
+        old_level = profile.level or 1
+
+        profile.xp += gain
+        profile.level = level_from_xp(profile.xp)
+
+        if display_name:
+            profile.display_name = display_name
+
+        profile.updated_at = utcnow()
+
+        await session.commit()
+
+        return {
+            "xp": profile.xp,
+            "level": profile.level,
+            "level_up": profile.level > old_level,
+            "gained": gain,
+        }
+
+
+async def bump_counter(telegram_id: int, field: str, amount: int = 1):
+    """
+    Увеличивает произвольный счётчик профиля: подарки, лайки, дни бонуса.
+    """
+    allowed = {"gifts_sent", "likes_received", "bonus_days"}
+
+    if field not in allowed:
+        return
+
+    async with session_scope() as session:
+        profile = await _profile_for_update(session, telegram_id)
+
+        setattr(profile, field, (getattr(profile, field) or 0) + amount)
+        profile.updated_at = utcnow()
+
+        await session.commit()
+
+
+async def get_unlocked_achievements(telegram_id: int) -> set[str]:
+    async with session_scope() as session:
+        result = await session.execute(
+            select(UserAchievement.achievement_key).where(
+                UserAchievement.telegram_id == telegram_id
+            )
+        )
+        return set(result.scalars().all())
+
+
+async def unlock_achievement(telegram_id: int, key: str) -> bool:
+    """
+    Отмечает достижение открытым. False — уже было открыто.
+    """
+    async with session_scope() as session:
+        existing = await session.execute(
+            select(UserAchievement.id).where(
+                UserAchievement.telegram_id == telegram_id,
+                UserAchievement.achievement_key == key,
+            )
+        )
+
+        if existing.scalar_one_or_none() is not None:
+            return False
+
+        session.add(
+            UserAchievement(
+                telegram_id=telegram_id,
+                achievement_key=key,
+            )
+        )
+
+        await session.commit()
+
+        return True
+
+
+async def get_xp_top(limit: int = 10):
+    async with session_scope() as session:
+        result = await session.execute(
+            select(UserProfile)
+            .where(UserProfile.xp > 0)
+            .order_by(desc(UserProfile.xp))
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+
+async def collect_stats(telegram_id: int) -> dict:
+    """
+    Срез показателей для проверки достижений.
+    """
+    async with session_scope() as session:
+        profile_result = await session.execute(
+            select(UserProfile).where(
+                UserProfile.telegram_id == telegram_id
+            )
+        )
+
+        profile = profile_result.scalar_one_or_none()
+
+        if profile is None:
+            return {}
+
+        items_result = await session.execute(
+            select(func.coalesce(func.sum(InventoryItem.qty), 0)).where(
+                InventoryItem.telegram_id == telegram_id
+            )
+        )
+
+        return {
+            "messages": profile.messages_count or 0,
+            "level": profile.level or 1,
+            "xp": profile.xp or 0,
+            "coins": profile.coins or 0,
+            "karma": profile.karma or 0,
+            "games_won": profile.games_won or 0,
+            "games_played": profile.games_played or 0,
+            "best_streak": profile.best_streak or 0,
+            "bonus_days": profile.bonus_days or 0,
+            "gifts_sent": profile.gifts_sent or 0,
+            "likes": profile.likes_received or 0,
+            "items": items_result.scalar() or 0,
+        }
