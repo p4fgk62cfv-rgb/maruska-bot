@@ -48,6 +48,22 @@ START_CASES = [
 ]
 
 
+def load_hints():
+    """
+    Берём masked_word/hint_limit из crocodile.py без импорта модуля:
+    он тянет aiogram, которого в тестовом окружении может не быть.
+    """
+    import pathlib
+    src = (pathlib.Path(__file__).parent / "games" / "crocodile.py").read_text(
+        encoding="utf-8"
+    )
+    start = src.index("HINT_LIMIT_RATIO")
+    end = src.index("# ---------------------------------------------------------\n# Клавиатуры")
+    scope = {"re": re}
+    exec(src[start:end], scope)
+    return scope["masked_word"], scope["hint_limit"]
+
+
 def main() -> int:
     failures = []
 
@@ -80,6 +96,30 @@ def main() -> int:
             failures.append(f"  [выбор] сломанная пара {word!r}/{level!r}")
             break
 
+    # Подсказки буквами
+    masked_word, hint_limit = load_hints()
+
+    hint_cases = [
+        ("покрышка", 0, "▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢"),
+        ("покрышка", 3, "П О К ▢ ▢ ▢ ▢ ▢"),
+        ("кот", 1, "К ▢ ▢"),
+        ("кот", 3, "К О Т"),
+    ]
+
+    for word, revealed, expected in hint_cases:
+        got = masked_word(word, revealed)
+        if got != expected:
+            failures.append(
+                f"  [подсказка] {word!r} +{revealed}: {got!r}, ждали {expected!r}"
+            )
+
+    # Подсказками нельзя открыть больше половины слова
+    for word in ("кот", "покрышка", "прокрастинация", "день рождения"):
+        limit = hint_limit(word)
+        letters = len(word.replace(" ", ""))
+        if limit < 1 or limit > max(1, letters // 2 + 1):
+            failures.append(f"  [подсказка] лимит для {word!r}: {limit}")
+
     # Состояние раунда
     state.drop(-1)
     item = state.Round(
@@ -99,7 +139,7 @@ def main() -> int:
     if state.drop(-1) is None or state.get(-1) is not None:
         failures.append("  [состояние] раунд не удалился")
 
-    total = len(GUESS_CASES) + len(START_CASES) + 4
+    total = len(GUESS_CASES) + len(START_CASES) + len(hint_cases) + 8
 
     if failures:
         print(f"❌ {len(failures)} из {total} проверок не прошли:\n")
