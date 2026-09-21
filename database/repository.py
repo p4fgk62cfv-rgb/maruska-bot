@@ -29,6 +29,15 @@ from database.models import (
 RATING_COOLDOWN_HOURS = 24
 
 
+def _week_key(moment=None) -> str:
+    """
+    Ключ недели вида 2026-W38. Меняется в понедельник.
+    """
+    value = moment or utcnow()
+    year, week, _day = value.isocalendar()
+    return f"{year}-W{week:02d}"
+
+
 # =========================================================
 # GENDER HELPERS
 # =========================================================
@@ -272,6 +281,8 @@ async def save_message(
                     telegram_id=telegram_user_id,
                     display_name=username,
                     messages_count=1,
+                    week_messages=1,
+                    week_start=_week_key(),
                 )
             )
         else:
@@ -279,6 +290,14 @@ async def save_message(
                 member.display_name = username
             member.messages_count += 1
             member.updated_at = utcnow()
+
+            week = _week_key()
+
+            if member.week_start != week:
+                member.week_start = week
+                member.week_messages = 0
+
+            member.week_messages += 1
 
         await session.commit()
 
@@ -1358,3 +1377,126 @@ async def collect_stats(telegram_id: int) -> dict:
             "likes": profile.likes_received or 0,
             "items": items_result.scalar() or 0,
         }
+
+
+# =========================================================
+# НЕДЕЛЬНЫЕ ИТОГИ
+# =========================================================
+
+async def get_week_top(chat_id: int, limit: int = 5):
+    """
+    Самые активные за текущую неделю в этом чате.
+    """
+    week = _week_key()
+
+    async with session_scope() as session:
+        result = await session.execute(
+            select(GroupMember)
+            .where(
+                GroupMember.chat_id == chat_id,
+                GroupMember.week_start == week,
+                GroupMember.week_messages > 0,
+            )
+            .order_by(desc(GroupMember.week_messages))
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+
+async def get_week_earners(chat_id: int, limit: int = 3):
+    """
+    Кто больше всех заработал алмазов за неделю в этом чате.
+    """
+    since = utcnow() - timedelta(days=7)
+
+    async with session_scope() as session:
+        result = await session.execute(
+            select(
+                Transaction.telegram_id,
+                func.sum(Transaction.amount).label("total"),
+            )
+            .where(
+                Transaction.chat_id == chat_id,
+                Transaction.amount > 0,
+                Transaction.created_at >= since,
+            )
+            .group_by(Transaction.telegram_id)
+            .order_by(desc("total"))
+            .limit(limit)
+        )
+
+        rows = result.all()
+
+        if not rows:
+            return []
+
+        ids = [row[0] for row in rows]
+
+        names_result = await session.execute(
+            select(UserProfile.telegram_id, UserProfile.display_name).where(
+                UserProfile.telegram_id.in_(ids)
+            )
+        )
+
+        names = dict(names_result.all())
+
+        return [
+            (names.get(user_id) or "Игрок", int(total or 0))
+            for user_id, total in rows
+        ]
+
+
+async def get_week_winners(chat_id: int, limit: int = 3):
+    """
+    Кто чаще всех выигрывал в играх за неделю.
+    """
+    since = utcnow() - timedelta(days=7)
+
+    async with session_scope() as session:
+        result = await session.execute(
+            select(
+                GameRound.winner_name,
+                func.count(GameRound.id).label("wins"),
+            )
+            .where(
+                GameRound.chat_id == chat_id,
+                GameRound.status == "finished",
+                GameRound.winner_telegram_id.is_not(None),
+                GameRound.finished_at >= since,
+            )
+            .group_by(GameRound.winner_name)
+            .order_by(desc("wins"))
+            .limit(limit)
+        )
+
+        return [
+            (name or "Игрок", int(wins))
+            for name, wins in result.all()
+        ]
+
+
+async def get_member(chat_id: int, telegram_id: int):
+    async with session_scope() as session:
+        result = await session.execute(
+            select(GroupMember).where(
+                GroupMember.chat_id == chat_id,
+                GroupMember.telegram_id == telegram_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+
+async def get_active_chats(days: int = 14) -> list[int]:
+    """
+    Чаты, где за последние дни кто-то писал. Нужно рассылке итогов,
+    чтобы не будить мёртвые группы.
+    """
+    since = utcnow() - timedelta(days=days)
+
+    async with session_scope() as session:
+        result = await session.execute(
+            select(GroupMember.chat_id)
+            .where(GroupMember.updated_at >= since)
+            .group_by(GroupMember.chat_id)
+        )
+        return [chat_id for chat_id in result.scalars().all() if chat_id < 0]

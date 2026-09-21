@@ -235,6 +235,14 @@ class GroupMember(Base):
         default=0,
     )
 
+    # Активность за текущую неделю — для итогов
+    week_messages: Mapped[int] = mapped_column(default=0)
+
+    week_start: Mapped[str | None] = mapped_column(
+        String(10),
+        nullable=True,
+    )
+
     joined_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=utcnow,

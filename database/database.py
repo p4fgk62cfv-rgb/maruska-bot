@@ -185,6 +185,12 @@ async def init_db():
 
             "CREATE INDEX IF NOT EXISTS ix_user_profiles_xp "
             "ON user_profiles (xp DESC)",
+
+            "ALTER TABLE group_members "
+            "ADD COLUMN IF NOT EXISTS week_messages INTEGER DEFAULT 0",
+
+            "ALTER TABLE group_members "
+            "ADD COLUMN IF NOT EXISTS week_start VARCHAR(10)",
         )
 
         for statement in migrations:
