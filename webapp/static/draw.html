@@ -154,6 +154,7 @@
   var ctx = canvas.getContext("2d");
   var strokes = [];
   var current = null;
+  var baseImage = null;     // предыдущий рисунок для «Дорисовать»
   var color = "#111111";
   var size = 4;
 
@@ -174,6 +175,11 @@
     var rect = canvas.parentNode.getBoundingClientRect();
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, rect.width, rect.height);
+
+    if (baseImage) {
+      ctx.drawImage(baseImage, 0, 0, rect.width, rect.height);
+    }
+
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
@@ -268,8 +274,30 @@
 
   document.getElementById("clear").onclick = function () {
     strokes = [];
+    baseImage = null;
     redraw();
   };
+
+  function loadPreviousDrawing() {
+    fetch("/api/drawing", { headers: { "X-Init-Data": initData } })
+      .then(function (response) {
+        if (!response.ok) throw new Error(response.status);
+        return response.blob();
+      })
+      .then(function (blob) {
+        var image = new Image();
+        var url = URL.createObjectURL(blob);
+        image.onload = function () {
+          baseImage = image;
+          URL.revokeObjectURL(url);
+          redraw();
+        };
+        image.src = url;
+      })
+      .catch(function () {
+        // Рисунка ещё нет — начинаем с чистого листа
+      });
+  }
 
   // Слово для ведущего
   fetch("/api/round", { headers: { "X-Init-Data": initData } })
@@ -280,6 +308,10 @@
     .then(function (data) {
       document.getElementById("word").textContent = (data.word || "").toUpperCase();
       document.getElementById("level").textContent = data.level || "";
+
+      if (data.has_drawing) {
+        loadPreviousDrawing();
+      }
     })
     .catch(function () {
       document.getElementById("wordBox").innerHTML =
@@ -290,7 +322,7 @@
   var sendButton = document.getElementById("send");
 
   sendButton.onclick = function () {
-    if (!strokes.length) {
+    if (!strokes.length && !baseImage) {
       if (tg) tg.showAlert("Сначала нарисуй что-нибудь 🙂");
       return;
     }
