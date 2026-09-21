@@ -10,6 +10,7 @@ from sqlalchemy import (
 from database.database import session_scope, utcnow
 
 from database.models import (
+    DrawingLike,
     GameRound,
     GroupSettings,
     Transaction,
@@ -772,6 +773,46 @@ async def finish_round(
         winner_name=winner_name,
         finished_at=utcnow(),
     )
+
+
+async def get_round(round_id: int):
+    async with session_scope() as session:
+        result = await session.execute(
+            select(GameRound).where(GameRound.id == round_id)
+        )
+        return result.scalar_one_or_none()
+
+
+async def add_drawing_like(round_id: int, telegram_id: int) -> tuple[bool, int]:
+    """
+    Ставит лайк рисунку. Возвращает (засчитан ли, сколько всего).
+    Повторный лайк от того же человека не засчитывается.
+    """
+    async with session_scope() as session:
+        existing = await session.execute(
+            select(DrawingLike.id).where(
+                DrawingLike.round_id == round_id,
+                DrawingLike.telegram_id == telegram_id,
+            )
+        )
+
+        item = await session.get(GameRound, round_id)
+
+        if item is None:
+            return False, 0
+
+        if existing.scalar_one_or_none() is not None:
+            return False, item.likes
+
+        session.add(
+            DrawingLike(round_id=round_id, telegram_id=telegram_id)
+        )
+
+        item.likes += 1
+
+        await session.commit()
+
+        return True, item.likes
 
 
 async def get_last_winner(chat_id: int, game: str = "crocodile"):

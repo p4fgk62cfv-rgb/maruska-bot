@@ -421,6 +421,9 @@ class GameRound(Base):
         nullable=True,
     )
 
+    # Сколько лайков собрал рисунок этого раунда
+    likes: Mapped[int] = mapped_column(default=0)
+
     winner_telegram_id: Mapped[int | None] = mapped_column(
         BigInteger,
         nullable=True,
@@ -522,4 +525,38 @@ class Transaction(Base):
         DateTime,
         default=utcnow,
         index=True,
+    )
+
+
+class DrawingLike(Base):
+    """
+    Кто лайкнул рисунок. Нужна, чтобы один человек не мог
+    накрутить художнику сотню лайков одной кнопкой.
+    """
+
+    __tablename__ = "drawing_likes"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "round_id",
+            "telegram_id",
+            name="uq_drawing_like",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    round_id: Mapped[int] = mapped_column(index=True)
+
+    telegram_id: Mapped[int] = mapped_column(
+        BigInteger,
+        index=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=utcnow,
     )

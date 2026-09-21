@@ -144,6 +144,9 @@ async def init_db():
             "CREATE INDEX IF NOT EXISTS ix_game_rounds_token "
             "ON game_rounds (token)",
 
+            "ALTER TABLE game_rounds "
+            "ADD COLUMN IF NOT EXISTS likes INTEGER DEFAULT 0",
+
             "ALTER TABLE user_profiles "
             "ADD COLUMN IF NOT EXISTS last_bonus_at TIMESTAMP",
 
