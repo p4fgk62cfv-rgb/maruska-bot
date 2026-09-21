@@ -3,7 +3,7 @@ import os
 from google import genai
 from google.genai import types
 
-from ai.prompts import SYSTEM_PROMPT
+from ai.prompts import build_prompt
 
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -35,9 +35,9 @@ _thinking_supported = THINKING_LEVEL not in ("", "off", "none")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 
-def _build_config(tools, with_thinking: bool):
+def _build_config(tools, with_thinking: bool, persona: str | None = None):
     options = dict(
-        system_instruction=SYSTEM_PROMPT,
+        system_instruction=build_prompt(persona),
         temperature=TEMPERATURE,
         max_output_tokens=MAX_OUTPUT_TOKENS,
         tools=tools,
@@ -51,7 +51,7 @@ def _build_config(tools, with_thinking: bool):
     return types.GenerateContentConfig(**options)
 
 
-async def _generate(prompt: str, tools):
+async def _generate(prompt: str, tools, persona: str | None = None):
     global _thinking_supported
 
     if _thinking_supported:
@@ -59,7 +59,7 @@ async def _generate(prompt: str, tools):
             return await client.aio.models.generate_content(
                 model=MODEL_NAME,
                 contents=prompt,
-                config=_build_config(tools, True),
+                config=_build_config(tools, True, persona),
             )
         except Exception as error:
             message = str(error).lower()
@@ -82,7 +82,7 @@ async def _generate(prompt: str, tools):
     return await client.aio.models.generate_content(
         model=MODEL_NAME,
         contents=prompt,
-        config=_build_config(tools, False),
+        config=_build_config(tools, False, persona),
     )
 
 
@@ -121,6 +121,7 @@ def _hit_token_limit(response) -> bool:
 async def ask_gemini(
     prompt: str,
     use_search: bool = True,
+    persona: str | None = None,
 ) -> tuple[str, list[dict]]:
     """
     Отправляет запрос в Gemini.
@@ -136,7 +137,7 @@ async def ask_gemini(
             types.Tool(google_search=types.GoogleSearch())
         )
 
-    response = await _generate(prompt, tools)
+    response = await _generate(prompt, tools, persona)
 
     answer = (response.text or "").strip()
 
