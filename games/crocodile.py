@@ -30,7 +30,6 @@ from aiogram.types import (
 from database.repository import (
     add_karma,
     change_balance,
-    get_round_by_token,
     bump_game_stats,
     create_round,
     finish_round,
@@ -50,7 +49,7 @@ from economy.service import (
 from settings.store import is_enabled
 
 from games import state
-from games.words import LEVEL_NAMES, is_correct_guess, normalize, pick_word
+from games.words import LEVEL_NAMES, is_correct_guess, pick_word
 
 
 logger = logging.getLogger("maruska.crocodile")
@@ -319,9 +318,20 @@ async def start_round(message: Message):
 # Кнопки
 # ---------------------------------------------------------
 
+def _callback_chat_id(callback: CallbackQuery) -> int | None:
+    message = callback.message
+    return message.chat.id if message is not None else None
+
+
 @router.callback_query(F.data == "croc:claim")
 async def claim_host(callback: CallbackQuery):
-    item = state.get(callback.message.chat.id)
+    chat_id = _callback_chat_id(callback)
+
+    if chat_id is None:
+        await callback.answer("Сообщение недоступно", show_alert=True)
+        return
+
+    item = state.get(chat_id)
 
     if item is None:
         await callback.answer("Раунд уже закончился", show_alert=True)
@@ -365,7 +375,13 @@ async def claim_host(callback: CallbackQuery):
 
 @router.callback_query(F.data == "croc:show")
 async def show_word(callback: CallbackQuery):
-    item = state.get(callback.message.chat.id)
+    chat_id = _callback_chat_id(callback)
+
+    if chat_id is None:
+        await callback.answer("Сообщение недоступно", show_alert=True)
+        return
+
+    item = state.get(chat_id)
 
     if item is None:
         await callback.answer("Раунд уже закончился", show_alert=True)
@@ -392,7 +408,13 @@ async def show_word(callback: CallbackQuery):
 
 @router.callback_query(F.data == "croc:swap")
 async def swap_word(callback: CallbackQuery):
-    item = state.get(callback.message.chat.id)
+    chat_id = _callback_chat_id(callback)
+
+    if chat_id is None:
+        await callback.answer("Сообщение недоступно", show_alert=True)
+        return
+
+    item = state.get(chat_id)
 
     if item is None:
         await callback.answer("Раунд уже закончился", show_alert=True)
@@ -431,7 +453,13 @@ async def swap_word(callback: CallbackQuery):
 
 @router.callback_query(F.data == "croc:give_up")
 async def give_up(callback: CallbackQuery):
-    item = state.get(callback.message.chat.id)
+    chat_id = _callback_chat_id(callback)
+
+    if chat_id is None:
+        await callback.answer("Сообщение недоступно", show_alert=True)
+        return
+
+    item = state.get(chat_id)
 
     if item is None:
         await callback.answer("Раунд уже закончился", show_alert=True)
@@ -465,6 +493,9 @@ async def give_up(callback: CallbackQuery):
 
 @router.message(Command("stopgame"))
 async def stop_game(message: Message):
+    if not is_enabled(message.chat.id, "games"):
+        return
+
     item = state.drop(message.chat.id)
 
     if item is None:
