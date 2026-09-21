@@ -28,6 +28,14 @@ from database.repository import (
 )
 
 from actions.handler import router as actions_router
+from games.crocodile import (
+    drawing_enabled,
+    restore_rounds,
+    router as crocodile_router,
+    set_bot_username,
+)
+
+from webapp.server import public_url, start_web_server
 from actions.providers import available_providers, download_photo
 from actions.service import get_image_for_action
 from actions.show_me import (
@@ -45,6 +53,10 @@ from database.repository import (
 )
 
 import context_cache
+
+from settings.handler import router as settings_router
+from settings.middleware import SettingsMiddleware
+from settings.store import is_enabled
 
 from weather import (
     DEFAULT_CITY,
@@ -161,6 +173,14 @@ async def help_handler(message: Message):
         "🐱 <b>Котики</b>\n"
         "Мара, покажи меня — портрет по мотивам котиков\n"
         "Мара, мяу — просто котик\n\n"
+        "⚙️ <b>Настройки</b>\n"
+        "/settings — включить или выключить функции (для админов)\n"
+        "/features — что сейчас включено\n"
+        "/myid — узнать свой ID\n\n"
+        "🐊 <b>Крокодил</b>\n"
+        "Напиши «крокодил» — начнётся раунд.\n"
+        "Ведущий рисует на холсте, остальные отгадывают.\n"
+        "/stopgame — остановить\n\n"
         "🌤 <b>Погода</b>\n"
         "Мара, погода в Праге?\n"
         "или /weather Прага\n\n"
@@ -240,6 +260,9 @@ async def profile_handler(message: Message):
 # =========================================================
 
 def is_rating_message(message: Message) -> bool:
+    if not is_enabled(message.chat.id, "rating"):
+        return False
+
     return (
         message.text is not None
         and message.text.strip() in {"+", "-", "＋", "−"}
@@ -317,6 +340,10 @@ async def rating_handler(message: Message):
 
 @root_router.message(Command("top"))
 async def top_handler(message: Message):
+    if not is_enabled(message.chat.id, "rating"):
+        await message.reply("⭐ Рейтинг в этой группе выключен (/settings).")
+        return
+
     users = await get_global_rating(limit=10)
 
     if not users:
@@ -338,6 +365,9 @@ async def top_handler(message: Message):
 
 
 def should_answer(message: Message) -> bool:
+    if not is_enabled(message.chat.id, "ai"):
+        return False
+
     text = message.text or ""
 
     if message.chat.type == "private":
@@ -368,6 +398,10 @@ def should_answer(message: Message) -> bool:
 
 @root_router.message(Command("weather", "pogoda"))
 async def weather_command(message: Message):
+    if not is_enabled(message.chat.id, "weather"):
+        await message.reply("🌤 Погода в этой группе выключена (/settings).")
+        return
+
     args = message.text.split(maxsplit=1)
     city = args[1].strip() if len(args) > 1 else DEFAULT_CITY
 
@@ -375,6 +409,9 @@ async def weather_command(message: Message):
 
 
 def is_weather_question(message: Message) -> bool:
+    if not is_enabled(message.chat.id, "weather"):
+        return False
+
     if not message.text or message.text.startswith("/"):
         return False
 
@@ -451,6 +488,9 @@ async def send_cat(message: Message, caption: str):
 
 
 def is_show_me_request(message: Message) -> bool:
+    if not is_enabled(message.chat.id, "cats"):
+        return False
+
     if not message.text or message.text.startswith("/"):
         return False
 
@@ -469,6 +509,9 @@ async def show_me_handler(message: Message):
 
 
 def is_meow_request(message: Message) -> bool:
+    if not is_enabled(message.chat.id, "cats"):
+        return False
+
     if not message.text or message.text.startswith("/"):
         return False
 
@@ -592,6 +635,18 @@ async def persist_message(message: Message, name: str):
 #
 # =========================================================
 
+# Настройки читаются до фильтров, иначе выключенные функции
+# успеют сработать.
+dp.message.outer_middleware(SettingsMiddleware())
+dp.callback_query.outer_middleware(SettingsMiddleware())
+
+# Панель идёт первой: /settings должен работать всегда,
+# даже если всё остальное выключено.
+dp.include_router(settings_router)
+
+# Игра раньше действий: во время раунда верная отгадка должна
+# перехватываться первой.
+dp.include_router(crocodile_router)
 dp.include_router(actions_router)
 dp.include_router(root_router)
 
@@ -610,6 +665,7 @@ async def main():
     me = await bot.get_me()
     BOT_ID = me.id
     BOT_USERNAME = me.username or ""
+    set_bot_username(BOT_USERNAME)
 
     logger.info("Бот: @%s (id=%s)", BOT_USERNAME, BOT_ID)
     logger.info("PostgreSQL: подключён")
@@ -619,11 +675,40 @@ async def main():
         "Картинки: %s",
         ", ".join(providers) if providers else "НИ ОДИН ИСТОЧНИК НЕ НАСТРОЕН",
     )
+    restored = await restore_rounds()
+    if restored:
+        logger.info("Восстановлено раундов: %s", restored)
+
+    # Веб-сервер нужен Mini App с холстом. Railway отдаёт порт в PORT.
+    web_runner = None
+    port = int(os.getenv("PORT", "0") or 0)
+
+    if port:
+        try:
+            web_runner = await start_web_server(bot, TOKEN, port)
+        except Exception as error:
+            logger.error("WEB SERVER: %s %s", type(error).__name__, error)
+
+    logger.info(
+        "Крокодил: %s",
+        "холст в Telegram" if drawing_enabled() else "словесный режим",
+    )
+
+    if drawing_enabled() and not public_url():
+        logger.warning(
+            "WEBAPP_SHORT_NAME задан, но PUBLIC_URL/RAILWAY_PUBLIC_DOMAIN пуст"
+        )
+
+    from settings.registry import FEATURES
+    logger.info("Функций в реестре: %s", len(FEATURES))
+
     logger.info("МАРУСЬКА ЗАПУЩЕНА!")
 
     try:
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
+        if web_runner is not None:
+            await web_runner.cleanup()
         await bot.session.close()
         await close_db()
 
