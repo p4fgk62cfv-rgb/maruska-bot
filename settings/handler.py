@@ -23,7 +23,15 @@ from aiogram.types import (
 from database.repository import set_group_setting
 
 from settings import store
-from settings.registry import FEATURE_BY_KEY, FEATURES, by_group, groups
+from settings.registry import (
+    CHOICE_BY_KEY,
+    FEATURE_BY_KEY,
+    FEATURES,
+    by_group,
+    choices_by_group,
+    groups,
+    option_label,
+)
 
 
 logger = logging.getLogger("maruska.settings")
@@ -109,6 +117,19 @@ def build_keyboard(chat_id: int) -> InlineKeyboardMarkup:
                 )
             ])
 
+        for choice in choices_by_group(name):
+            current = values.get(choice.key, choice.default)
+
+            rows.append([
+                InlineKeyboardButton(
+                    text=(
+                        f"{choice.emoji} {choice.title}: "
+                        f"{option_label(choice.key, current)}"
+                    ),
+                    callback_data=f"set:pick:{choice.key}",
+                )
+            ])
+
     rows.append([
         InlineKeyboardButton(text="❔ Что это", callback_data="set:help"),
         InlineKeyboardButton(text="Закрыть", callback_data="set:close"),
@@ -133,13 +154,43 @@ def help_text() -> str:
 
     for name in groups():
         lines.append(f"\n<b>{name}</b>")
+
         for feature in by_group(name):
             lines.append(
                 f"{feature.emoji} <b>{feature.title}</b> — "
                 f"{feature.description}"
             )
 
+        for choice in choices_by_group(name):
+            lines.append(
+                f"{choice.emoji} <b>{choice.title}</b> — "
+                f"{choice.description}"
+            )
+
     return "\n".join(lines)
+
+
+def options_keyboard(chat_id: int, key: str) -> InlineKeyboardMarkup:
+    choice = CHOICE_BY_KEY[key]
+    current = store.values(chat_id).get(choice.key, choice.default)
+
+    rows = []
+
+    for value, label, emoji in choice.options:
+        mark = "🔘" if value == current else "⚪"
+
+        rows.append([
+            InlineKeyboardButton(
+                text=f"{mark} {emoji} {label}",
+                callback_data=f"set:set:{key}:{value}",
+            )
+        ])
+
+    rows.append([
+        InlineKeyboardButton(text="← Назад", callback_data="set:back"),
+    ])
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 @router.message(Command("settings"))
@@ -234,6 +285,83 @@ async def toggle(callback: CallbackQuery, bot):
     )
 
 
+@router.callback_query(F.data.startswith("set:pick:"))
+async def pick_option(callback: CallbackQuery, bot):
+    if not await is_admin(callback, bot):
+        await callback.answer(DENIED, show_alert=True)
+        return
+
+    key = callback.data.split(":", 2)[2]
+    choice = CHOICE_BY_KEY.get(key)
+
+    if choice is None:
+        await callback.answer("Неизвестная настройка", show_alert=True)
+        return
+
+    await callback.message.edit_text(
+        f"{choice.emoji} <b>{choice.title}</b>\n\n{choice.description}",
+        reply_markup=options_keyboard(callback.message.chat.id, key),
+    )
+
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("set:set:"))
+async def set_option(callback: CallbackQuery, bot):
+    if not await is_admin(callback, bot):
+        await callback.answer(DENIED, show_alert=True)
+        return
+
+    parts = callback.data.split(":", 3)
+
+    if len(parts) < 4:
+        await callback.answer()
+        return
+
+    key, value = parts[2], parts[3]
+    choice = CHOICE_BY_KEY.get(key)
+
+    if choice is None or value not in {o[0] for o in choice.options}:
+        await callback.answer("Неизвестный вариант", show_alert=True)
+        return
+
+    chat = callback.message.chat
+    previous = store.values(chat.id).get(key, choice.default)
+
+    store.apply(chat.id, key, value)
+
+    try:
+        await set_group_setting(
+            chat_id=chat.id,
+            key=key,
+            value=value,
+            title=chat.title,
+        )
+    except Exception as error:
+        logger.error("SETTINGS SAVE: %s %s", type(error).__name__, error)
+        store.apply(chat.id, key, previous)
+        await callback.answer("Не сохранилось", show_alert=True)
+        return
+
+    await callback.message.edit_text(
+        panel_text(chat.title),
+        reply_markup=build_keyboard(chat.id),
+    )
+
+    await callback.answer(
+        f"{choice.title}: {option_label(key, value)}"
+    )
+
+
+@router.callback_query(F.data == "set:back")
+async def back_to_panel(callback: CallbackQuery):
+    await callback.message.edit_text(
+        panel_text(callback.message.chat.title),
+        reply_markup=build_keyboard(callback.message.chat.id),
+    )
+    await callback.answer()
+
+
 @router.message(Command("features"))
 async def list_features(message: Message):
     """
@@ -249,6 +377,13 @@ async def list_features(message: Message):
     for feature in FEATURES:
         mark = "✅" if values.get(feature.key, feature.default) else "❌"
         lines.append(f"{mark} {feature.emoji} {feature.title}")
+
+    for choice in CHOICE_BY_KEY.values():
+        current = values.get(choice.key, choice.default)
+        lines.append(
+            f"{choice.emoji} {choice.title}: "
+            f"{option_label(choice.key, current)}"
+        )
 
     lines.append("\n/settings — изменить")
 

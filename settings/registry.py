@@ -60,6 +60,13 @@ FEATURES: tuple[Feature, ...] = (
         group="Общение",
     ),
     Feature(
+        key="fortune",
+        title="Предсказания",
+        emoji="🔮",
+        description="«Мара, предскажи» — одно предсказание в день на человека",
+        group="Общение",
+    ),
+    Feature(
         key="rating",
         title="Рейтинг",
         emoji="⭐",
@@ -84,16 +91,80 @@ FEATURES: tuple[Feature, ...] = (
 )
 
 
+# ---------------------------------------------------------
+# Настройки с выбором из списка
+#
+# Отличаются от переключателей тем, что хранят строку, а не
+# да/нет. Добавляются так же просто: строка здесь — и вариант
+# появится в панели.
+# ---------------------------------------------------------
+
+@dataclass(frozen=True)
+class Choice:
+    key: str
+    title: str
+    emoji: str
+    description: str
+    options: tuple[tuple[str, str, str], ...]   # (значение, подпись, эмодзи)
+    default: str
+    group: str = "Основное"
+
+
+def _persona_options() -> tuple[tuple[str, str, str], ...]:
+    from ai.personas import PERSONAS
+
+    return tuple(
+        (persona.key, persona.title, persona.emoji)
+        for persona in PERSONAS
+    )
+
+
+CHOICES: tuple[Choice, ...] = (
+    Choice(
+        key="persona",
+        title="Характер Мары",
+        emoji="🎭",
+        description="Как она себя ведёт: добрая, весёлая, дерзкая, романтичная или тролль",
+        options=_persona_options(),
+        default="funny",
+        group="Общение",
+    ),
+)
+
+
+CHOICE_BY_KEY = {choice.key: choice for choice in CHOICES}
+
 FEATURE_BY_KEY = {feature.key: feature for feature in FEATURES}
 
 DEFAULTS = {feature.key: feature.default for feature in FEATURES}
 
+DEFAULTS.update({choice.key: choice.default for choice in CHOICES})
+
+
+def choices_by_group(name: str) -> list[Choice]:
+    return [choice for choice in CHOICES if choice.group == name]
+
+
+def option_label(key: str, value: str) -> str:
+    choice = CHOICE_BY_KEY.get(key)
+
+    if choice is None:
+        return value
+
+    for option_value, label, emoji in choice.options:
+        if option_value == value:
+            return f"{emoji} {label}"
+
+    return value
+
 
 def groups() -> list[str]:
     seen = []
-    for feature in FEATURES:
-        if feature.group not in seen:
-            seen.append(feature.group)
+
+    for item in list(FEATURES) + list(CHOICES):
+        if item.group not in seen:
+            seen.append(item.group)
+
     return seen
 
 
