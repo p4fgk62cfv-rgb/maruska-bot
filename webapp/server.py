@@ -30,7 +30,7 @@ from aiogram.types import BufferedInputFile, InputMediaPhoto
 
 from database.repository import get_round_by_token, update_round
 from games import state
-from games.crocodile import drawing_keyboard
+from games.crocodile import drawing_keyboard, ensure_hint_message
 from games.words import LEVEL_NAMES
 
 
@@ -276,6 +276,9 @@ async def api_draw(request: web.Request):
     if not preview:
         # Рисунок закончен: следующий кадр начнёт новое сообщение
         live.pop(item.id, None)
+
+        # И вешаем табло с ячейками под рисунком
+        await ensure_hint_message(bot, state.get(item.chat_id))
 
     await update_round(item.id, status="playing")
 
