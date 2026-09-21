@@ -125,6 +125,20 @@ class UserProfile(Base):
         default=0,
     )
 
+    # Ежедневный бонус: когда забирали последний раз и какая серия
+    last_bonus_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    bonus_streak: Mapped[int] = mapped_column(
+        default=0,
+    )
+
+    best_streak: Mapped[int] = mapped_column(
+        default=0,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=utcnow,
@@ -458,4 +472,54 @@ class GroupSettings(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=utcnow,
+    )
+
+
+class Transaction(Base):
+    """
+    История операций с алмазами.
+
+    amount > 0 — начисление, amount < 0 — списание.
+    balance_after хранится, чтобы историю можно было читать
+    как выписку, не пересчитывая всё заново.
+    """
+
+    __tablename__ = "transactions"
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    telegram_id: Mapped[int] = mapped_column(
+        BigInteger,
+        index=True,
+    )
+
+    chat_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+        index=True,
+    )
+
+    amount: Mapped[int] = mapped_column()
+
+    balance_after: Mapped[int] = mapped_column(default=0)
+
+    # Машинный код операции: bonus, game_win, game_host, gift_in...
+    reason: Mapped[str] = mapped_column(
+        String(40),
+        index=True,
+    )
+
+    # Человеческое пояснение для истории
+    note: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=utcnow,
+        index=True,
     )

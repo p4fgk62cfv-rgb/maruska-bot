@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -11,6 +12,8 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
+
+logger = logging.getLogger("maruska.database")
 
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
@@ -140,12 +143,24 @@ async def init_db():
 
             "CREATE INDEX IF NOT EXISTS ix_game_rounds_token "
             "ON game_rounds (token)",
+
+            "ALTER TABLE user_profiles "
+            "ADD COLUMN IF NOT EXISTS last_bonus_at TIMESTAMP",
+
+            "ALTER TABLE user_profiles "
+            "ADD COLUMN IF NOT EXISTS bonus_streak INTEGER DEFAULT 0",
+
+            "ALTER TABLE user_profiles "
+            "ADD COLUMN IF NOT EXISTS best_streak INTEGER DEFAULT 0",
+
+            "CREATE INDEX IF NOT EXISTS ix_transactions_user_created "
+            "ON transactions (telegram_id, created_at DESC)",
         )
 
         for statement in migrations:
             await connection.execute(text(statement))
 
-    print("DATABASE: tables checked/created")
+    logger.info("Таблицы проверены и созданы")
 
 
 async def close_db():

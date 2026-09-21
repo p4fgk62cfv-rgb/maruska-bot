@@ -12,6 +12,7 @@ from database.database import session_scope, utcnow
 from database.models import (
     GameRound,
     GroupSettings,
+    Transaction,
     User,
     UserProfile,
     UserFact,
@@ -912,3 +913,173 @@ async def set_group_setting(
         await session.commit()
 
         return dict(item.values or {})
+
+
+# =========================================================
+# ЭКОНОМИКА
+# =========================================================
+
+async def _profile_for_update(session, telegram_id: int, display_name=None):
+    result = await session.execute(
+        select(UserProfile)
+        .where(UserProfile.telegram_id == telegram_id)
+        .with_for_update()
+    )
+
+    profile = result.scalar_one_or_none()
+
+    if profile is None:
+        profile = UserProfile(
+            telegram_id=telegram_id,
+            display_name=display_name,
+        )
+        session.add(profile)
+        await session.flush()
+
+    return profile
+
+
+async def get_balance(telegram_id: int) -> int:
+    async with session_scope() as session:
+        result = await session.execute(
+            select(UserProfile.coins).where(
+                UserProfile.telegram_id == telegram_id
+            )
+        )
+        return result.scalar() or 0
+
+
+async def change_balance(
+    telegram_id: int,
+    amount: int,
+    reason: str,
+    note: str | None = None,
+    chat_id: int | None = None,
+    display_name: str | None = None,
+    allow_negative: bool = False,
+) -> tuple[bool, int]:
+    """
+    Начисление или списание одной транзакцией.
+
+    Возвращает (получилось, новый баланс). Списание не проходит,
+    если денег не хватает и allow_negative=False.
+    """
+    async with session_scope() as session:
+        profile = await _profile_for_update(session, telegram_id, display_name)
+
+        new_balance = profile.coins + amount
+
+        if new_balance < 0 and not allow_negative:
+            return False, profile.coins
+
+        profile.coins = max(new_balance, 0)
+
+        if display_name:
+            profile.display_name = display_name
+
+        profile.updated_at = utcnow()
+
+        session.add(
+            Transaction(
+                telegram_id=telegram_id,
+                chat_id=chat_id,
+                amount=amount,
+                balance_after=profile.coins,
+                reason=reason,
+                note=note,
+            )
+        )
+
+        await session.commit()
+
+        return True, profile.coins
+
+
+async def claim_daily_bonus(
+    telegram_id: int,
+    amount: int,
+    chat_id: int | None = None,
+    display_name: str | None = None,
+) -> dict:
+    """
+    Забирает ежедневный бонус.
+
+    Одна попытка в сутки по календарной дате UTC. Серия растёт
+    только если прошлый бонус был ровно вчера; любой пропуск
+    обнуляет её.
+    """
+    async with session_scope() as session:
+        profile = await _profile_for_update(session, telegram_id, display_name)
+
+        now = utcnow()
+        last = profile.last_bonus_at
+
+        if last is not None and last.date() == now.date():
+            return {
+                "claimed": False,
+                "balance": profile.coins,
+                "streak": profile.bonus_streak,
+                "best_streak": profile.best_streak,
+                "next_at": now.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                ) + timedelta(days=1),
+            }
+
+        gap = (now.date() - last.date()).days if last is not None else None
+
+        if gap == 1:
+            profile.bonus_streak += 1
+        else:
+            profile.bonus_streak = 1
+
+        profile.best_streak = max(profile.best_streak, profile.bonus_streak)
+        profile.last_bonus_at = now
+        profile.coins += amount
+
+        if display_name:
+            profile.display_name = display_name
+
+        profile.updated_at = utcnow()
+
+        session.add(
+            Transaction(
+                telegram_id=telegram_id,
+                chat_id=chat_id,
+                amount=amount,
+                balance_after=profile.coins,
+                reason="bonus",
+                note=f"Ежедневный бонус, серия {profile.bonus_streak}",
+            )
+        )
+
+        await session.commit()
+
+        return {
+            "claimed": True,
+            "amount": amount,
+            "balance": profile.coins,
+            "streak": profile.bonus_streak,
+            "best_streak": profile.best_streak,
+        }
+
+
+async def get_transactions(telegram_id: int, limit: int = 10):
+    async with session_scope() as session:
+        result = await session.execute(
+            select(Transaction)
+            .where(Transaction.telegram_id == telegram_id)
+            .order_by(Transaction.created_at.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+
+async def get_richest(limit: int = 10):
+    async with session_scope() as session:
+        result = await session.execute(
+            select(UserProfile)
+            .where(UserProfile.coins > 0)
+            .order_by(desc(UserProfile.coins))
+            .limit(limit)
+        )
+        return list(result.scalars().all())
