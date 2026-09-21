@@ -4,14 +4,15 @@
 Запуск:  python test_features.py
 """
 
-from datetime import datetime, timedelta, timezone
-
 import fortune
 
 from ai.personas import DEFAULT_PERSONA, PERSONA_BY_KEY, PERSONAS, get_persona
 from ai.prompts import build_prompt
 
 from economy.shop import CATEGORIES, ITEMS, by_category, find
+
+from progress.achievements import ACHIEVEMENTS, check
+from progress.xp import bar, level_from_xp, progress, xp_for_level
 
 
 def main() -> int:
@@ -64,8 +65,6 @@ def main() -> int:
     # Предсказания
     # =====================================================
 
-    day = datetime(2026, 9, 21, tzinfo=timezone.utc)
-
     trigger_cases = [
         ("Мара, предскажи", True),
         ("Мара предсказание", True),
@@ -81,32 +80,37 @@ def main() -> int:
         if fortune.mentions_fortune(text) != expected:
             failures.append(f"  [предсказание] триггер {text!r}: ждали {expected}")
 
-    # Одно и то же в течение дня, разное в разные дни
+    # Спрашивать можно сколько угодно, но без повторов подряд
+    fortune.reset_history()
     checks += 1
-    first = fortune.predict(111, "Стас", day)
 
-    if first != fortune.predict(111, "Стас", day):
-        failures.append("  [предсказание] нестабильно в пределах дня")
+    bodies = [
+        fortune.predict(111, "Стас").split("\n\n")[1]
+        for _ in range(fortune.HISTORY_SIZE)
+    ]
 
-    checks += 1
-    if first == fortune.predict(111, "Стас", day + timedelta(days=1)):
-        failures.append("  [предсказание] не меняется на следующий день")
-
-    checks += 1
-    if first == fortune.predict(222, "Люда", day):
-        failures.append("  [предсказание] совпало у разных людей")
+    if len(set(bodies)) != len(bodies):
+        failures.append("  [предсказание] повтор до исчерпания истории")
 
     # Имя подставляется, разметка целая
     checks += 1
+    first = fortune.predict(111, "Стас")
+
     if "Стас" not in first or first.count("<b>") != first.count("</b>"):
         failures.append("  [предсказание] проблема с именем или разметкой")
 
+    # Больше нет обещания «завтра»
+    checks += 1
+    if "завтра" in first.lower():
+        failures.append("  [предсказание] осталось ограничение по дням")
+
     # Оба вида предсказаний встречаются
     checks += 1
+    fortune.reset_history()
     seen_funny = seen_serious = False
 
     for user_id in range(300):
-        body = fortune.predict(user_id, "X", day).split("\n\n")[1]
+        body = fortune.predict(user_id, "X").split("\n\n")[1]
         if body in fortune.FUNNY:
             seen_funny = True
         elif body in fortune.SERIOUS:
@@ -164,6 +168,108 @@ def main() -> int:
     if find("такого нет") is not None or find("") is not None:
         failures.append("  [магазин] поиск находит несуществующее")
 
+    # =====================================================
+    # Опыт и уровни
+    # =====================================================
+
+    checks += 1
+    if level_from_xp(0) != 1 or xp_for_level(1) != 0:
+        failures.append("  [опыт] стартовый уровень неверный")
+
+    # Уровень монотонно растёт вместе с опытом
+    previous = 0
+    for xp in range(0, 60000, 137):
+        level = level_from_xp(xp)
+        checks += 1
+
+        if level < previous:
+            failures.append(f"  [опыт] уровень упал на {xp} xp")
+            break
+
+        previous = level
+
+    # Порог уровня строго возрастает
+    for level in range(1, 60):
+        checks += 1
+        if xp_for_level(level + 1) <= xp_for_level(level):
+            failures.append(f"  [опыт] порог не растёт на уровне {level}")
+            break
+
+    # Прогресс внутри уровня согласован
+    for xp in (0, 99, 100, 101, 5000, 99999):
+        checks += 1
+        data = progress(xp)
+
+        if not 0 <= data["percent"] <= 100:
+            failures.append(f"  [опыт] процент вне диапазона при {xp}")
+
+        if data["into_level"] < 0 or data["left"] < 0:
+            failures.append(f"  [опыт] отрицательные значения при {xp}")
+
+        if xp_for_level(data["level"]) > xp:
+            failures.append(f"  [опыт] уровень завышен при {xp}")
+
+    checks += 1
+    if len(bar(0)) != len(bar(100)) or "█" in bar(0) or "░" in bar(100):
+        failures.append("  [опыт] полоска прогресса рисуется неверно")
+
+    # =====================================================
+    # Достижения
+    # =====================================================
+
+    keys = [item.key for item in ACHIEVEMENTS]
+    checks += 1
+
+    if len(keys) != len(set(keys)):
+        failures.append("  [достижения] дубли ключей")
+
+    for item in ACHIEVEMENTS:
+        checks += 1
+
+        if item.reward <= 0:
+            failures.append(f"  [достижения] награда {item.reward} у {item.key}")
+
+        if not item.title or not item.description:
+            failures.append(f"  [достижения] пустое описание у {item.key}")
+
+    # На пустой статистике не должно открываться ничего
+    checks += 1
+    if check({}, set()):
+        failures.append("  [достижения] открываются на пустой статистике")
+
+    # Первое сообщение открывает ровно одно достижение
+    checks += 1
+    opened = check({"messages": 1, "level": 1}, set())
+
+    if [item.key for item in opened] != ["first_words"]:
+        failures.append(
+            f"  [достижения] первое сообщение открыло {[i.key for i in opened]}"
+        )
+
+    # Уже открытые не предлагаются повторно
+    checks += 1
+    if check({"messages": 1}, {"first_words"}):
+        failures.append("  [достижения] предлагаются уже открытые")
+
+    # Сильная статистика открывает много, но не всё (есть секретные)
+    checks += 1
+    strong = {
+        "messages": 9999, "level": 30, "coins": 20000, "karma": 100,
+        "games_won": 60, "best_streak": 40, "bonus_days": 40,
+        "gifts_sent": 20, "likes": 20, "items": 30,
+    }
+    opened = check(strong, set())
+
+    if len(opened) != len(ACHIEVEMENTS) - 1:
+        failures.append(
+            f"  [достижения] открылось {len(opened)} из {len(ACHIEVEMENTS)}, "
+            "ждали все кроме секретного"
+        )
+
+    checks += 1
+    if not check({**strong, "night_bonus": True}, set()):
+        failures.append("  [достижения] секретное не открывается")
+
     if failures:
         print(f"❌ {len(failures)} проблем:\n")
         print("\n".join(failures))
@@ -172,7 +278,8 @@ def main() -> int:
     print(f"✅ Все {checks} проверок прошли.")
     print(f"   характеров: {len(PERSONAS)}, "
           f"предсказаний: {len(fortune.FUNNY) + len(fortune.SERIOUS)}, "
-          f"товаров: {len(ITEMS)}")
+          f"товаров: {len(ITEMS)}, "
+          f"достижений: {len(ACHIEVEMENTS)}")
     return 0
 
 

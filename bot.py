@@ -58,6 +58,9 @@ import context_cache
 import fortune
 
 from economy.handler import router as economy_router
+from progress.handler import router as progress_router
+from progress.service import award, level_up_text, profile_block, unlocked_text
+from progress.xp import XP_DAILY_CAP, XP_MESSAGE
 from economy.shop_handler import router as shop_router
 from economy.service import CURRENCY, money, wealth_title
 
@@ -179,6 +182,10 @@ async def help_handler(message: Message):
         "🐱 <b>Котики</b>\n"
         "Мара, покажи меня — портрет по мотивам котиков\n"
         "Мара, мяу — просто котик\n\n"
+        "🎚 <b>Прогресс</b>\n"
+        "/level — уровень и опыт\n"
+        "/achievements — достижения\n"
+        "/toplevel — топ по уровню\n\n"
         "🔮 <b>Предсказания</b>\n"
         "Мара, предскажи — одно на день\n\n"
         "💎 <b>Алмазы</b>\n"
@@ -257,6 +264,11 @@ async def profile_handler(message: Message):
 
     name = escape(profile.display_name or "Пользователь")
 
+    levels = ""
+
+    if is_enabled(message.chat.id, "progress"):
+        levels = profile_block(profile.xp or 0) + "\n"
+
     wallet = ""
 
     if is_enabled(message.chat.id, "economy"):
@@ -278,6 +290,7 @@ async def profile_handler(message: Message):
 
     await message.answer(
         f"👤 <b>{name}</b>\n\n"
+        f"{levels}"
         f"🎖 Ранг: <b>{get_rank_info(profile.karma)}</b>\n"
         f"⭐ Рейтинг: <b>{profile.karma}</b>\n"
         f"🏆 Место: <b>#{position or '-'}</b>\n\n"
@@ -698,6 +711,7 @@ async def ai_handler(message: Message):
 async def persist_message(message: Message, name: str):
     """
     Сохранение пользователя и сообщения в базу, вне критического пути.
+    Здесь же капает опыт за активность.
     """
     try:
         await save_user(
@@ -716,6 +730,57 @@ async def persist_message(message: Message, name: str):
         logger.warning(
             "PERSIST: %s %s", type(error).__name__, error
         )
+        return
+
+    if not is_enabled(message.chat.id, "progress"):
+        return
+
+    try:
+        result = await award(
+            telegram_id=message.from_user.id,
+            amount=XP_MESSAGE,
+            display_name=name,
+            chat_id=message.chat.id,
+            daily_cap=XP_DAILY_CAP,
+            per_message=True,
+            with_economy=is_enabled(message.chat.id, "economy"),
+        )
+
+        await announce_progress(message, name, result)
+    except Exception as error:
+        logger.warning("XP: %s %s", type(error).__name__, error)
+
+
+async def announce_progress(message: Message, name: str, result: dict):
+    """
+    Сообщает о новом уровне и открытых достижениях.
+    Молчит, если ничего не произошло.
+    """
+    if not result:
+        return
+
+    parts = []
+
+    if result.get("level_up"):
+        parts.append(level_up_text(name, result["level"]))
+
+    if result.get("unlocked"):
+        parts.append(
+            unlocked_text(
+                name,
+                result["unlocked"],
+                result.get("reward", 0),
+                is_enabled(message.chat.id, "economy"),
+            )
+        )
+
+    if not parts:
+        return
+
+    try:
+        await message.answer("\n\n".join(parts))
+    except Exception as error:
+        logger.warning("ANNOUNCE: %s %s", type(error).__name__, error)
 
 
 # =========================================================
@@ -736,6 +801,7 @@ dp.callback_query.outer_middleware(SettingsMiddleware())
 dp.include_router(settings_router)
 dp.include_router(economy_router)
 dp.include_router(shop_router)
+dp.include_router(progress_router)
 
 # Игра раньше действий: во время раунда верная отгадка должна
 # перехватываться первой.

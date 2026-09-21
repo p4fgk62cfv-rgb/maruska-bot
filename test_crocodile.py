@@ -4,6 +4,7 @@
 Запуск:  python test_crocodile.py
 """
 
+import os
 import re
 
 from games import state
@@ -59,7 +60,7 @@ def load_hints():
     )
     start = src.index("HINT_LIMIT_RATIO")
     end = src.index("# ---------------------------------------------------------\n# Клавиатуры")
-    scope = {"re": re}
+    scope = {"re": re, "os": os}
     exec(src[start:end], scope)
     return scope["masked_word"], scope["hint_limit"]
 

@@ -2,17 +2,15 @@
 Предсказания.
 
 Мара предсказывает будущее: иногда всерьёз, иногда откровенно
-дурачась. Одно предсказание на человека в сутки — так оно
-остаётся событием, а не кнопкой «дай ещё».
+дурачась. Спрашивать можно сколько угодно.
 
-Предсказание детерминировано: один и тот же человек в один и тот
-же день получает один и тот же текст, сколько бы раз ни спросил.
-Это и убирает соблазн перезапрашивать, и работает без базы.
+Чтобы одно и то же не выпадало подряд, последние выданные тексты
+запоминаются на человека и временно исключаются из выборки.
 """
 
-import hashlib
+import random
 import re
-from datetime import datetime, timezone
+from collections import defaultdict, deque
 
 
 # ---------------------------------------------------------
@@ -115,29 +113,41 @@ def mentions_fortune(text: str | None) -> bool:
     return len(_WORDS_RE.findall(text)) <= MAX_TRIGGER_WORDS
 
 
-def _seed(user_id: int, day: str) -> int:
-    raw = f"{user_id}:{day}".encode()
-    return int(hashlib.sha256(raw).hexdigest()[:12], 16)
+# Сколько последних предсказаний помним, чтобы не повторяться
+HISTORY_SIZE = 12
+
+_history: dict[int, deque] = defaultdict(lambda: deque(maxlen=HISTORY_SIZE))
 
 
-def predict(user_id: int, name: str, when: datetime | None = None) -> str:
+def _pick(pool: tuple[str, ...], seen: deque) -> str:
+    fresh = [text for text in pool if text not in seen]
+
+    # Если человек вычерпал весь список — начинаем круг заново
+    return random.choice(fresh or list(pool))
+
+
+def predict(user_id: int, name: str) -> str:
     """
-    Предсказание на сегодня. Для одного человека в один день
-    результат всегда одинаковый.
+    Предсказание. Можно спрашивать сколько угодно: повторов
+    подряд не будет, пока не кончатся свежие варианты.
     """
-    moment = when or datetime.now(timezone.utc)
-    day = moment.strftime("%Y-%m-%d")
+    seen = _history[user_id]
 
-    seed = _seed(user_id, day)
+    pool = FUNNY if random.random() < FUNNY_RATIO else SERIOUS
+    text = _pick(pool, seen)
 
-    # Разные части числа отвечают за разные решения,
-    # чтобы выбор текста и вступления не коррелировал
-    is_funny = (seed % 100) < int(FUNNY_RATIO * 100)
-    pool = FUNNY if is_funny else SERIOUS
+    seen.append(text)
 
-    text = pool[(seed // 100) % len(pool)]
-    intro = INTROS[(seed // 7) % len(INTROS)]
+    intro = random.choice(INTROS)
 
-    tail = "\n\n<i>Следующее предсказание — завтра.</i>"
+    return f"{intro.format(name=name)}\n\n{text}"
 
-    return f"{intro.format(name=name)}\n\n{text}{tail}"
+
+def reset_history(user_id: int | None = None) -> None:
+    """
+    Сброс памяти о выданных предсказаниях (нужен тестам).
+    """
+    if user_id is None:
+        _history.clear()
+    else:
+        _history.pop(user_id, None)
