@@ -60,6 +60,9 @@ def _short(message: Message, pattern: re.Pattern) -> bool:
     if not message.text or message.text.startswith("/"):
         return False
 
+    if message.from_user is None or message.from_user.is_bot:
+        return False
+
     if not economy_on(message):
         return False
 
@@ -75,6 +78,9 @@ def _short(message: Message, pattern: re.Pattern) -> bool:
 
 async def send_balance(message: Message):
     user = message.from_user
+
+    if user is None or user.is_bot:
+        return
 
     await save_user(
         telegram_id=user.id,
@@ -127,6 +133,9 @@ async def balance_text(message: Message):
 
 async def send_bonus(message: Message):
     user = message.from_user
+
+    if user is None or user.is_bot:
+        return
 
     await save_user(
         telegram_id=user.id,
@@ -196,6 +205,9 @@ async def bonus_text(message: Message):
 async def history_command(message: Message):
     if not economy_on(message):
         await message.reply(f"{CURRENCY} Экономика в этой группе выключена (/settings).")
+        return
+
+    if message.from_user is None:
         return
 
     items = await get_transactions(message.from_user.id, limit=10)
