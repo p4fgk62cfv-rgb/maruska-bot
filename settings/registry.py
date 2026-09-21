@@ -74,6 +74,13 @@ FEATURES: tuple[Feature, ...] = (
         group="Сообщество",
     ),
     Feature(
+        key="progress",
+        title="Уровни и достижения",
+        emoji="🎚",
+        description="Опыт за активность, уровни и 20 достижений",
+        group="Сообщество",
+    ),
+    Feature(
         key="economy",
         title="Алмазы",
         emoji="💎",
