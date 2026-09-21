@@ -29,6 +29,7 @@ from aiogram.types import (
 
 from database.repository import (
     add_karma,
+    change_balance,
     get_round_by_token,
     bump_game_stats,
     create_round,
@@ -37,6 +38,13 @@ from database.repository import (
     load_active_rounds,
     save_user,
     update_round,
+)
+
+from economy.service import (
+    CURRENCY,
+    REWARD_GAME_HOST,
+    REWARD_GAME_WIN,
+    plural,
 )
 
 from settings.store import is_enabled
@@ -527,6 +535,24 @@ async def handle_guess(message: Message):
     winner_karma = await add_karma(user.id, KARMA_FOR_WIN, winner_name)
     await bump_game_stats(user.id, played=1, won=1, display_name=winner_name)
 
+    # Алмазы — только если экономика включена в этой группе
+    with_economy = is_enabled(message.chat.id, "economy")
+    prize_line = ""
+
+    if with_economy:
+        await change_balance(
+            telegram_id=user.id,
+            amount=REWARD_GAME_WIN,
+            reason="game_win",
+            note="Победа в Крокодиле",
+            chat_id=message.chat.id,
+            display_name=winner_name,
+        )
+        prize_line = (
+            f"{CURRENCY} <b>+{REWARD_GAME_WIN}</b> "
+            f"{plural(REWARD_GAME_WIN)}\n"
+        )
+
     host_line = ""
 
     if item.host_id:
@@ -536,15 +562,30 @@ async def handle_guess(message: Message):
             played=1,
             display_name=item.host_name,
         )
+
+        host_prize = ""
+
+        if with_economy:
+            await change_balance(
+                telegram_id=item.host_id,
+                amount=REWARD_GAME_HOST,
+                reason="game_host",
+                note="Ведущий в Крокодиле",
+                chat_id=message.chat.id,
+                display_name=item.host_name,
+            )
+            host_prize = f" и {CURRENCY} <b>+{REWARD_GAME_HOST}</b>"
+
         host_line = (
-            f"🎭 Ведущий <b>{escape(item.host_name)}</b> тоже "
-            f"получает <b>+{KARMA_FOR_WIN}</b> за старания.\n"
+            f"🎭 Ведущий <b>{escape(item.host_name)}</b> получает "
+            f"<b>+{KARMA_FOR_WIN}</b> к рейтингу{host_prize}.\n"
         )
 
     await message.reply(
         f"🎉 <b>{escape(winner_name)}</b> угадал!\n\n"
         f"Слово: <b>{escape(item.word)}</b>\n"
         f"⭐ <b>+{KARMA_FOR_WIN}</b> к рейтингу, теперь <b>{winner_karma}</b>\n"
+        f"{prize_line}"
         f"{host_line}\n"
         f"Следующий ведущий — <b>{escape(winner_name)}</b>.\n"
         "Напишите «крокодил», чтобы продолжить."
