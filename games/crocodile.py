@@ -16,6 +16,7 @@ import logging
 import os
 import re
 import secrets
+import time
 from html import escape
 
 from aiogram import F, Router
@@ -29,6 +30,7 @@ from aiogram.types import (
 
 from database.repository import (
     add_drawing_like,
+    bump_counter,
     add_karma,
     change_balance,
     get_round,
@@ -47,6 +49,9 @@ from economy.service import (
     REWARD_GAME_WIN,
     plural,
 )
+
+from progress.service import award, level_up_text, unlocked_text
+from progress.xp import XP_GAME_HOST, XP_GAME_WIN, XP_LIKE
 
 from settings.store import is_enabled
 
@@ -89,6 +94,9 @@ START_RE = re.compile(r"\bкрокодил\w*\b", re.IGNORECASE)
 
 # Сколько букв можно открыть подсказками (не больше половины слова)
 HINT_LIMIT_RATIO = 0.5
+
+# Пауза между буквами, чтобы слово не вскрыли за пять секунд
+HINT_COOLDOWN = int(os.getenv("HINT_COOLDOWN", "30") or 30)
 
 
 def masked_word(word: str, revealed: int = 0) -> str:
@@ -153,13 +161,6 @@ def host_keyboard(token: str = "") -> InlineKeyboardMarkup:
             callback_data="croc:swap",
         ),
         InlineKeyboardButton(
-            text="💡 Подсказка",
-            callback_data="croc:hint",
-        ),
-    ])
-
-    rows.append([
-        InlineKeyboardButton(
             text="🏳 Сдаюсь",
             callback_data="croc:give_up",
         ),
@@ -190,6 +191,55 @@ def drawing_keyboard(round_id: int, token: str, likes: int = 0) -> InlineKeyboar
         )
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def hint_keyboard(revealed: int, limit: int) -> InlineKeyboardMarkup | None:
+    """
+    Кнопка под ячейками. Когда открывать больше нечего — кнопки нет.
+    """
+    if revealed >= limit:
+        return None
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[
+            InlineKeyboardButton(
+                text=f"💡 Открыть букву ({revealed}/{limit})",
+                callback_data="croc:hint",
+            ),
+        ]]
+    )
+
+
+def hint_text(word: str, revealed: int, limit: int) -> str:
+    letters = len(word.replace(" ", ""))
+
+    head = f"<code>{masked_word(word, revealed)}</code>\n\nБукв: {letters}"
+
+    if revealed >= limit:
+        return head + "\n\nБольше подсказок нет — дальше сами 😏"
+
+    return head
+
+
+async def ensure_hint_message(bot, item) -> None:
+    """
+    Вешает под рисунком табло с ячейками. Вызывается один раз
+    за раунд — дальше сообщение только обновляется.
+    """
+    if item is None or item.hint_message_id:
+        return
+
+    limit = hint_limit(item.word)
+
+    try:
+        sent = await bot.send_message(
+            chat_id=item.chat_id,
+            text=hint_text(item.word, 0, limit),
+            reply_markup=hint_keyboard(0, limit),
+        )
+        item.hint_message_id = sent.message_id
+    except Exception as error:
+        logger.warning("HINT BOARD: %s %s", type(error).__name__, error)
 
 
 def want_keyboard() -> InlineKeyboardMarkup:
@@ -476,6 +526,7 @@ async def show_word(callback: CallbackQuery):
     if item.status == "waiting":
         item.status = "playing"
         await update_round(item.round_id, status="playing")
+        await ensure_hint_message(callback.bot, item)
 
     level = LEVEL_NAMES.get(item.level, "")
 
@@ -584,9 +635,11 @@ async def give_hint(callback: CallbackQuery):
         await callback.answer("Раунд уже закончился", show_alert=True)
         return
 
-    if callback.from_user.id != item.host_id:
+    # Подсказку может просить любой: она нужна отгадывающим,
+    # а не ведущему.
+    if callback.from_user.id == item.host_id:
         await callback.answer(
-            "Подсказку открывает ведущий 😏",
+            "Ты и так знаешь слово 😏",
             show_alert=True,
         )
         return
@@ -594,21 +647,40 @@ async def give_hint(callback: CallbackQuery):
     limit = hint_limit(item.word)
 
     if item.hints_used >= limit:
+        await callback.answer("Больше подсказок нет", show_alert=True)
+        return
+
+    waited = time.monotonic() - item.last_hint_at
+
+    if item.last_hint_at and waited < HINT_COOLDOWN:
+        left = int(HINT_COOLDOWN - waited) + 1
         await callback.answer(
-            "Больше подсказок нельзя — так и слово выдашь",
+            f"Следующая буква через {left} сек",
             show_alert=True,
         )
         return
 
     item.hints_used += 1
+    item.last_hint_at = time.monotonic()
+
+    text = hint_text(item.word, item.hints_used, limit)
+    markup = hint_keyboard(item.hints_used, limit)
+
+    try:
+        if item.hint_message_id:
+            await callback.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=item.hint_message_id,
+                text=text,
+                reply_markup=markup,
+            )
+        else:
+            sent = await callback.message.answer(text, reply_markup=markup)
+            item.hint_message_id = sent.message_id
+    except Exception as error:
+        logger.warning("HINT: %s %s", type(error).__name__, error)
 
     await callback.answer(f"Открыта буква {item.hints_used} из {limit}")
-
-    await callback.message.answer(
-        f"💡 <b>Подсказка</b>\n\n"
-        f"<code>{masked_word(item.word, item.hints_used)}</code>\n\n"
-        f"Букв в слове: {len(item.word.replace(' ', ''))}"
-    )
 
 
 # ---------------------------------------------------------
@@ -639,19 +711,33 @@ async def like_drawing(callback: CallbackQuery):
         await callback.answer(f"Уже лайкнул. Всего: {total}")
         return
 
+    chat_id = _callback_chat_id(callback)
+
     # Художнику капает за признание
-    if item.host_telegram_id and is_enabled(
-        callback.message.chat.id if callback.message else None,
-        "economy",
-    ):
-        await change_balance(
-            telegram_id=item.host_telegram_id,
-            amount=1,
-            reason="game_host",
-            note="Лайк рисунку",
-            chat_id=item.chat_id,
-            display_name=item.host_name,
-        )
+    if item.host_telegram_id:
+        if is_enabled(chat_id, "economy"):
+            await change_balance(
+                telegram_id=item.host_telegram_id,
+                amount=1,
+                reason="game_host",
+                note="Лайк рисунку",
+                chat_id=item.chat_id,
+                display_name=item.host_name,
+            )
+
+        if is_enabled(chat_id, "progress"):
+            try:
+                await bump_counter(item.host_telegram_id, "likes_received")
+
+                await award(
+                    telegram_id=item.host_telegram_id,
+                    amount=XP_LIKE,
+                    display_name=item.host_name,
+                    chat_id=item.chat_id,
+                    with_economy=is_enabled(chat_id, "economy"),
+                )
+            except Exception as error:
+                logger.warning("LIKE XP: %s %s", type(error).__name__, error)
 
     try:
         await callback.message.edit_reply_markup(
@@ -857,6 +943,43 @@ async def handle_guess(message: Message):
             f"<b>+{KARMA_FOR_WIN}</b> к рейтингу{host_prize}.\n"
         )
 
+    # Опыт и достижения обоим
+    progress_notes = []
+
+    if is_enabled(message.chat.id, "progress"):
+        for player_id, player_name, xp_amount in (
+            (user.id, winner_name, XP_GAME_WIN),
+            (item.host_id, item.host_name, XP_GAME_HOST),
+        ):
+            if not player_id:
+                continue
+
+            try:
+                outcome = await award(
+                    telegram_id=player_id,
+                    amount=xp_amount,
+                    display_name=player_name,
+                    chat_id=message.chat.id,
+                    with_economy=with_economy,
+                )
+
+                if outcome.get("level_up"):
+                    progress_notes.append(
+                        level_up_text(player_name, outcome["level"])
+                    )
+
+                if outcome.get("unlocked"):
+                    progress_notes.append(
+                        unlocked_text(
+                            player_name,
+                            outcome["unlocked"],
+                            outcome.get("reward", 0),
+                            with_economy,
+                        )
+                    )
+            except Exception as error:
+                logger.warning("GAME XP: %s %s", type(error).__name__, error)
+
     await message.reply(
         f"🎉 <b>{escape(winner_name)}</b> угадал!\n\n"
         f"Слово: <b>{escape(item.word)}</b>\n"
@@ -867,3 +990,10 @@ async def handle_guess(message: Message):
         "Или пусть ход заберёт кто-то другой:",
         reply_markup=want_keyboard(),
     )
+
+    for note in progress_notes:
+        if note:
+            try:
+                await message.answer(note)
+            except Exception:
+                pass

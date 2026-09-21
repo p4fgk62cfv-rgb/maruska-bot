@@ -22,6 +22,8 @@ class Round:
     token: str = ""
     message_id: int | None = None
     hints_used: int = 0
+    hint_message_id: int | None = None
+    last_hint_at: float = 0.0
 
 
 _rounds: dict[int, Round] = {}
