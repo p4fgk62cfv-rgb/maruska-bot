@@ -67,6 +67,20 @@ FEATURES: tuple[Feature, ...] = (
         group="Общение",
     ),
     Feature(
+        key="greeting",
+        title="Приветствие",
+        emoji="👋",
+        description="Здороваться с новыми участниками и подсказывать команды",
+        group="Сообщество",
+    ),
+    Feature(
+        key="digest",
+        title="Итоги недели",
+        emoji="📊",
+        description="Раз в неделю подводить итоги: кто активнее, богаче, удачливее",
+        group="Сообщество",
+    ),
+    Feature(
         key="rating",
         title="Рейтинг",
         emoji="⭐",
@@ -127,6 +141,19 @@ def _persona_options() -> tuple[tuple[str, str, str], ...]:
 
 
 CHOICES: tuple[Choice, ...] = (
+    Choice(
+        key="chattiness",
+        title="Болтливость",
+        emoji="🗣",
+        description="Насколько охотно Мара вмешивается в разговор",
+        options=(
+            ("quiet", "Сдержанная", "🤐"),
+            ("normal", "Обычная", "🙂"),
+            ("active", "Болтливая", "🗯"),
+        ),
+        default="normal",
+        group="Общение",
+    ),
     Choice(
         key="persona",
         title="Характер Мары",
