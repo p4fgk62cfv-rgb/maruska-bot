@@ -134,6 +134,12 @@ async def init_db():
 
             "CREATE INDEX IF NOT EXISTS ix_message_memory_chat_created "
             "ON message_memory (chat_id, created_at DESC)",
+
+            "ALTER TABLE game_rounds "
+            "ADD COLUMN IF NOT EXISTS token VARCHAR(64)",
+
+            "CREATE INDEX IF NOT EXISTS ix_game_rounds_token "
+            "ON game_rounds (token)",
         )
 
         for statement in migrations:

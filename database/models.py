@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     String,
     Text,
@@ -333,6 +334,128 @@ class ActionImage(Base):
     )
 
     created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=utcnow,
+    )
+
+
+class GameRound(Base):
+    """
+    Раунд игры в чате. В один момент в чате активен максимум один.
+
+    status:
+        waiting  — ждём, пока ведущий возьмёт слово
+        playing  — слово взято, идёт отгадывание
+        finished — кто-то угадал
+        cancelled — ведущий сдался или раунд остановили
+    """
+
+    __tablename__ = "game_rounds"
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    chat_id: Mapped[int] = mapped_column(
+        BigInteger,
+        index=True,
+    )
+
+    game: Mapped[str] = mapped_column(
+        String(30),
+        default="crocodile",
+        index=True,
+    )
+
+    host_telegram_id: Mapped[int] = mapped_column(
+        BigInteger,
+        index=True,
+    )
+
+    host_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    word: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    level: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
+    # Разовый ключ раунда: по нему Mini App понимает,
+    # какой раунд открыт, и кто имеет право рисовать.
+    token: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        index=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default="waiting",
+        index=True,
+    )
+
+    message_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+
+    winner_telegram_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+
+    winner_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=utcnow,
+        index=True,
+    )
+
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+
+class GroupSettings(Base):
+    """
+    Настройки одной группы.
+
+    Значения лежат в JSON, поэтому новая функция в реестре
+    не требует миграции базы: незнакомые ключи просто берут
+    значение по умолчанию.
+    """
+
+    __tablename__ = "group_settings"
+
+    chat_id: Mapped[int] = mapped_column(
+        BigInteger,
+        primary_key=True,
+    )
+
+    title: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    values: Mapped[dict] = mapped_column(
+        JSON,
+        default=dict,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=utcnow,
     )

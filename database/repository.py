@@ -10,6 +10,8 @@ from sqlalchemy import (
 from database.database import session_scope, utcnow
 
 from database.models import (
+    GameRound,
+    GroupSettings,
     User,
     UserProfile,
     UserFact,
@@ -659,3 +661,254 @@ async def drop_action_image(image_id: int):
             )
         )
         await session.commit()
+
+
+# =========================================================
+# ИГРЫ
+# =========================================================
+
+async def get_active_round(chat_id: int, game: str = "crocodile"):
+    async with session_scope() as session:
+        result = await session.execute(
+            select(GameRound)
+            .where(
+                GameRound.chat_id == chat_id,
+                GameRound.game == game,
+                GameRound.status.in_(("waiting", "playing")),
+            )
+            .order_by(GameRound.started_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+
+async def load_active_rounds(game: str = "crocodile"):
+    """
+    После перезапуска подтягиваем незавершённые раунды в память.
+    """
+    async with session_scope() as session:
+        result = await session.execute(
+            select(GameRound).where(
+                GameRound.game == game,
+                GameRound.status.in_(("waiting", "playing")),
+            )
+        )
+        return list(result.scalars().all())
+
+
+async def get_round_by_token(token: str):
+    if not token:
+        return None
+
+    async with session_scope() as session:
+        result = await session.execute(
+            select(GameRound)
+            .where(GameRound.token == token)
+            .order_by(GameRound.started_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+
+async def create_round(
+    chat_id: int,
+    host_telegram_id: int,
+    host_name: str | None,
+    word: str,
+    level: str,
+    token: str | None = None,
+    game: str = "crocodile",
+) -> GameRound:
+    async with session_scope() as session:
+        # Старые незакрытые раунды в этом чате закрываем
+        await session.execute(
+            update(GameRound)
+            .where(
+                GameRound.chat_id == chat_id,
+                GameRound.game == game,
+                GameRound.status.in_(("waiting", "playing")),
+            )
+            .values(status="cancelled", finished_at=utcnow())
+        )
+
+        item = GameRound(
+            chat_id=chat_id,
+            game=game,
+            host_telegram_id=host_telegram_id,
+            host_name=host_name,
+            word=word,
+            level=level,
+            token=token,
+            status="waiting",
+        )
+
+        session.add(item)
+        await session.commit()
+
+        return item
+
+
+async def update_round(round_id: int, **values):
+    async with session_scope() as session:
+        await session.execute(
+            update(GameRound)
+            .where(GameRound.id == round_id)
+            .values(**values)
+        )
+        await session.commit()
+
+
+async def finish_round(
+    round_id: int,
+    winner_telegram_id: int | None,
+    winner_name: str | None,
+    status: str = "finished",
+):
+    await update_round(
+        round_id,
+        status=status,
+        winner_telegram_id=winner_telegram_id,
+        winner_name=winner_name,
+        finished_at=utcnow(),
+    )
+
+
+async def get_last_winner(chat_id: int, game: str = "crocodile"):
+    async with session_scope() as session:
+        result = await session.execute(
+            select(GameRound)
+            .where(
+                GameRound.chat_id == chat_id,
+                GameRound.game == game,
+                GameRound.status == "finished",
+                GameRound.winner_telegram_id.is_not(None),
+            )
+            .order_by(GameRound.finished_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+
+async def add_karma(
+    telegram_id: int,
+    amount: int,
+    display_name: str | None = None,
+) -> int:
+    """
+    Прямое начисление рейтинга (без кулдауна и без записи голоса).
+    Используется играми.
+    """
+    async with session_scope() as session:
+        result = await session.execute(
+            select(UserProfile).where(
+                UserProfile.telegram_id == telegram_id
+            )
+        )
+
+        profile = result.scalar_one_or_none()
+
+        if profile is None:
+            profile = UserProfile(
+                telegram_id=telegram_id,
+                display_name=display_name,
+                karma=max(amount, 0),
+            )
+            session.add(profile)
+        else:
+            profile.karma = max(profile.karma + amount, 0)
+            if display_name:
+                profile.display_name = display_name
+            profile.updated_at = utcnow()
+
+        await session.commit()
+
+        return profile.karma
+
+
+async def bump_game_stats(
+    telegram_id: int,
+    played: int = 0,
+    won: int = 0,
+    display_name: str | None = None,
+):
+    async with session_scope() as session:
+        result = await session.execute(
+            select(UserProfile).where(
+                UserProfile.telegram_id == telegram_id
+            )
+        )
+
+        profile = result.scalar_one_or_none()
+
+        if profile is None:
+            profile = UserProfile(
+                telegram_id=telegram_id,
+                display_name=display_name,
+                games_played=max(played, 0),
+                games_won=max(won, 0),
+            )
+            session.add(profile)
+        else:
+            profile.games_played += played
+            profile.games_won += won
+            if display_name:
+                profile.display_name = display_name
+            profile.updated_at = utcnow()
+
+        await session.commit()
+
+
+# =========================================================
+# НАСТРОЙКИ ГРУПП
+# =========================================================
+
+async def get_group_settings(chat_id: int) -> dict:
+    async with session_scope() as session:
+        result = await session.execute(
+            select(GroupSettings).where(
+                GroupSettings.chat_id == chat_id
+            )
+        )
+
+        item = result.scalar_one_or_none()
+
+        return dict(item.values or {}) if item else {}
+
+
+async def set_group_setting(
+    chat_id: int,
+    key: str,
+    value: bool,
+    title: str | None = None,
+) -> dict:
+    async with session_scope() as session:
+        result = await session.execute(
+            select(GroupSettings).where(
+                GroupSettings.chat_id == chat_id
+            )
+        )
+
+        item = result.scalar_one_or_none()
+
+        if item is None:
+            item = GroupSettings(
+                chat_id=chat_id,
+                title=title,
+                values={key: bool(value)},
+            )
+            session.add(item)
+        else:
+            # JSON-поле нужно переприсвоить целиком,
+            # иначе SQLAlchemy не заметит изменения.
+            merged = dict(item.values or {})
+            merged[key] = bool(value)
+            item.values = merged
+
+            if title:
+                item.title = title
+
+            item.updated_at = utcnow()
+
+        await session.commit()
+
+        return dict(item.values or {})
