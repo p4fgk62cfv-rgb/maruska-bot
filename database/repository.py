@@ -12,6 +12,7 @@ from database.database import session_scope, utcnow
 from database.models import (
     DrawingLike,
     GameRound,
+    InventoryItem,
     GroupSettings,
     Transaction,
     User,
@@ -920,7 +921,7 @@ async def get_group_settings(chat_id: int) -> dict:
 async def set_group_setting(
     chat_id: int,
     key: str,
-    value: bool,
+    value,
     title: str | None = None,
 ) -> dict:
     async with session_scope() as session:
@@ -936,14 +937,14 @@ async def set_group_setting(
             item = GroupSettings(
                 chat_id=chat_id,
                 title=title,
-                values={key: bool(value)},
+                values={key: value},
             )
             session.add(item)
         else:
             # JSON-поле нужно переприсвоить целиком,
             # иначе SQLAlchemy не заметит изменения.
             merged = dict(item.values or {})
-            merged[key] = bool(value)
+            merged[key] = value
             item.values = merged
 
             if title:
@@ -1124,3 +1125,65 @@ async def get_richest(limit: int = 10):
             .limit(limit)
         )
         return list(result.scalars().all())
+
+
+# =========================================================
+# ИНВЕНТАРЬ И ПОДАРКИ
+# =========================================================
+
+async def add_inventory_item(
+    telegram_id: int,
+    item_key: str,
+    qty: int = 1,
+    from_telegram_id: int | None = None,
+    from_name: str | None = None,
+):
+    async with session_scope() as session:
+        result = await session.execute(
+            select(InventoryItem).where(
+                InventoryItem.telegram_id == telegram_id,
+                InventoryItem.item_key == item_key,
+                InventoryItem.from_telegram_id.is_(None)
+                if from_telegram_id is None
+                else InventoryItem.from_telegram_id == from_telegram_id,
+            )
+        )
+
+        item = result.scalar_one_or_none()
+
+        if item is None:
+            session.add(
+                InventoryItem(
+                    telegram_id=telegram_id,
+                    item_key=item_key,
+                    qty=qty,
+                    from_telegram_id=from_telegram_id,
+                    from_name=from_name,
+                )
+            )
+        else:
+            item.qty += qty
+            if from_name:
+                item.from_name = from_name
+
+        await session.commit()
+
+
+async def get_inventory(telegram_id: int):
+    async with session_scope() as session:
+        result = await session.execute(
+            select(InventoryItem)
+            .where(InventoryItem.telegram_id == telegram_id)
+            .order_by(InventoryItem.created_at.desc())
+        )
+        return list(result.scalars().all())
+
+
+async def count_inventory(telegram_id: int) -> int:
+    async with session_scope() as session:
+        result = await session.execute(
+            select(func.coalesce(func.sum(InventoryItem.qty), 0)).where(
+                InventoryItem.telegram_id == telegram_id
+            )
+        )
+        return result.scalar() or 0

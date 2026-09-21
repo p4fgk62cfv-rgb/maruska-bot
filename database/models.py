@@ -560,3 +560,56 @@ class DrawingLike(Base):
         DateTime,
         default=utcnow,
     )
+
+
+class InventoryItem(Base):
+    """
+    Вещь в инвентаре: купленная или подаренная.
+
+    Одна строка на владельца и вид товара, количество в qty.
+    from_telegram_id заполняется только у подарков — так в профиле
+    видно, кто что подарил.
+    """
+
+    __tablename__ = "inventory"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "telegram_id",
+            "item_key",
+            "from_telegram_id",
+            name="uq_inventory_item",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    telegram_id: Mapped[int] = mapped_column(
+        BigInteger,
+        index=True,
+    )
+
+    item_key: Mapped[str] = mapped_column(
+        String(40),
+        index=True,
+    )
+
+    qty: Mapped[int] = mapped_column(default=1)
+
+    from_telegram_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+
+    from_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=utcnow,
+    )

@@ -158,6 +158,9 @@ async def init_db():
 
             "CREATE INDEX IF NOT EXISTS ix_transactions_user_created "
             "ON transactions (telegram_id, created_at DESC)",
+
+            "CREATE INDEX IF NOT EXISTS ix_inventory_owner "
+            "ON inventory (telegram_id, item_key)",
         )
 
         for statement in migrations:
