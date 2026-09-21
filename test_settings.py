@@ -30,8 +30,11 @@ SOURCES = [
     ROOT / "bot.py",
     ROOT / "actions" / "handler.py",
     ROOT / "games" / "crocodile.py",
+    ROOT / "games" / "dice.py",
     ROOT / "economy" / "handler.py",
-]
+    ROOT / "economy" / "shop_handler.py",
+    ROOT / "progress" / "handler.py",
+] + sorted((ROOT / "features").glob("*.py"))
 
 
 def collect_guarded_keys() -> set[str]:
