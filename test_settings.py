@@ -12,7 +12,15 @@ import pathlib
 import re
 
 from settings import store
-from settings.registry import DEFAULTS, FEATURE_BY_KEY, FEATURES, by_group, groups
+from settings.registry import (
+    CHOICES,
+    FEATURE_BY_KEY,
+    FEATURES,
+    by_group,
+    choices_by_group,
+    groups,
+    option_label,
+)
 
 
 ROOT = pathlib.Path(__file__).parent
@@ -99,10 +107,32 @@ def main() -> int:
         failures.append("  [личка] в приватном чате всё должно быть доступно")
 
     # 5. Разбивка по разделам покрывает весь реестр
-    covered = sum(len(by_group(name)) for name in groups())
+    covered = sum(
+        len(by_group(name)) + len(choices_by_group(name))
+        for name in groups()
+    )
 
-    if covered != len(FEATURES):
-        failures.append("  [разделы] не все функции попали в разделы")
+    if covered != len(FEATURES) + len(CHOICES):
+        failures.append("  [разделы] не все настройки попали в разделы")
+
+    # 6. Настройки-списки: варианты корректны
+    for choice in CHOICES:
+        values_seen = [option[0] for option in choice.options]
+
+        if len(values_seen) != len(set(values_seen)):
+            failures.append(f"  [список] дубли вариантов в {choice.key}")
+
+        if choice.default not in values_seen:
+            failures.append(
+                f"  [список] значение по умолчанию {choice.default!r} "
+                f"отсутствует в вариантах {choice.key}"
+            )
+
+        for value in values_seen:
+            if option_label(choice.key, value) == value:
+                failures.append(
+                    f"  [список] нет подписи для {choice.key}={value}"
+                )
 
     store.forget(chat)
 
@@ -118,11 +148,16 @@ def main() -> int:
         f"разделов: {len(groups())}"
     )
     print("   включены по умолчанию: " + ", ".join(
-        key for key, value in DEFAULTS.items() if value
+        f.key for f in FEATURES if f.default
     ))
     print("   выключены по умолчанию: " + (", ".join(
-        key for key, value in DEFAULTS.items() if not value
+        f.key for f in FEATURES if not f.default
     ) or "нет"))
+    for choice in CHOICES:
+        print(
+            f"   {choice.title}: {len(choice.options)} вариантов, "
+            f"по умолчанию {option_label(choice.key, choice.default)}"
+        )
     return 0
 
 

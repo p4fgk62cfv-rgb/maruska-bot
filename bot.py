@@ -15,6 +15,7 @@ from ai.gemini import ask_gemini
 from database.database import init_db, close_db
 
 from database.repository import (
+    count_inventory,
     get_balance,
     save_user,
     save_message,
@@ -54,13 +55,15 @@ from database.repository import (
 )
 
 import context_cache
+import fortune
 
 from economy.handler import router as economy_router
+from economy.shop_handler import router as shop_router
 from economy.service import CURRENCY, money, wealth_title
 
 from settings.handler import router as settings_router
 from settings.middleware import SettingsMiddleware
-from settings.store import is_enabled
+from settings.store import get_value, is_enabled
 
 from weather import (
     DEFAULT_CITY,
@@ -176,11 +179,15 @@ async def help_handler(message: Message):
         "🐱 <b>Котики</b>\n"
         "Мара, покажи меня — портрет по мотивам котиков\n"
         "Мара, мяу — просто котик\n\n"
+        "🔮 <b>Предсказания</b>\n"
+        "Мара, предскажи — одно на день\n\n"
         "💎 <b>Алмазы</b>\n"
         "/bonus — ежедневный бонус\n"
         "/balance — баланс\n"
         "/history — последние операции\n"
-        "/rich — топ богачей\n\n"
+        "/rich — топ богачей\n"
+        "/shop — магазин, /gift — подарить\n"
+        "/inventory — что накопилось\n\n"
         "⚙️ <b>Настройки</b>\n"
         "/settings — включить или выключить функции (для админов)\n"
         "/features — что сейчас включено\n"
@@ -261,6 +268,11 @@ async def profile_handler(message: Message):
 
         if profile.bonus_streak:
             wallet += f"🔥 Серия бонусов: <b>{profile.bonus_streak}</b>\n"
+
+        collection = await count_inventory(message.from_user.id)
+
+        if collection:
+            wallet += f"🎒 Вещей в инвентаре: <b>{collection}</b>\n"
 
         wallet += "\n"
 
@@ -560,6 +572,48 @@ async def meow_handler(message: Message):
 
 
 # =========================================================
+# ПРЕДСКАЗАНИЯ
+# =========================================================
+
+def is_fortune_request(message: Message) -> bool:
+    if not is_enabled(message.chat.id, "fortune"):
+        return False
+
+    if not message.text or message.text.startswith("/"):
+        return False
+
+    if not fortune.mentions_fortune(message.text):
+        return False
+
+    return is_addressed(message)
+
+
+@root_router.message(Command("fortune", "predict"))
+async def fortune_command(message: Message):
+    if not is_enabled(message.chat.id, "fortune"):
+        await message.reply("🔮 Предсказания в этой группе выключены (/settings).")
+        return
+
+    await send_fortune(message)
+
+
+@root_router.message(is_fortune_request)
+async def fortune_handler(message: Message):
+    await send_fortune(message)
+
+
+async def send_fortune(message: Message):
+    user = message.from_user
+
+    if user is None or user.is_bot:
+        return
+
+    await message.reply(
+        fortune.predict(user.id, escape(display_name_of(user)))
+    )
+
+
+# =========================================================
 # AI CHAT
 # =========================================================
 #
@@ -622,7 +676,11 @@ async def ai_handler(message: Message):
     )
 
     try:
-        answer, _sources = await ask_gemini(prompt, use_search=False)
+        answer, _sources = await ask_gemini(
+            prompt,
+            use_search=False,
+            persona=get_value(message.chat.id, "persona"),
+        )
     except Exception as error:
         logger.error("GEMINI ERROR: %s %s", type(error).__name__, error)
         await message.reply("Что-то я задумалась 🤔")
@@ -677,6 +735,7 @@ dp.callback_query.outer_middleware(SettingsMiddleware())
 # даже если всё остальное выключено.
 dp.include_router(settings_router)
 dp.include_router(economy_router)
+dp.include_router(shop_router)
 
 # Игра раньше действий: во время раунда верная отгадка должна
 # перехватываться первой.
