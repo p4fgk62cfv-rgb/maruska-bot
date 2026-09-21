@@ -155,6 +155,9 @@
   var strokes = [];
   var current = null;
   var baseImage = null;     // предыдущий рисунок для «Дорисовать»
+  var lastSentStrokes = -1; // сколько штрихов уже показали зрителям
+  var previewTimer = null;
+  var previewBusy = false;
   var color = "#111111";
   var size = 4;
 
@@ -222,7 +225,48 @@
     redraw();
   }
 
-  function up() { current = null; }
+  function up() {
+    current = null;
+    schedulePreview();
+  }
+
+  // Живое обновление: зрители видят рисунок по ходу дела,
+  // а не только в конце. Кадр уходит не чаще раза в 4 секунды
+  // и только если с прошлого раза что-то изменилось.
+  var PREVIEW_DELAY = 4000;
+
+  function schedulePreview() {
+    if (previewTimer) return;
+
+    previewTimer = setTimeout(function () {
+      previewTimer = null;
+      sendPreview();
+    }, PREVIEW_DELAY);
+  }
+
+  function sendPreview() {
+    if (previewBusy) return;
+    if (!strokes.length) return;
+    if (strokes.length === lastSentStrokes) return;
+
+    previewBusy = true;
+    var count = strokes.length;
+
+    fetch("/api/draw", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        initData: initData,
+        image: canvas.toDataURL("image/png"),
+        preview: true
+      })
+    })
+      .then(function (response) {
+        if (response.ok) lastSentStrokes = count;
+      })
+      .catch(function () {})
+      .then(function () { previewBusy = false; });
+  }
 
   canvas.addEventListener("pointerdown", down);
   canvas.addEventListener("pointermove", move);
@@ -329,6 +373,11 @@
 
     sendButton.disabled = true;
     sendButton.textContent = "Отправляю…";
+
+    if (previewTimer) {
+      clearTimeout(previewTimer);
+      previewTimer = null;
+    }
 
     var image = canvas.toDataURL("image/png");
 
