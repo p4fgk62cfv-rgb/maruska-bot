@@ -38,6 +38,7 @@ REASONS = {
     "jackpot": "Джекпот",
     "game_win": "Победа в игре",
     "game_host": "Ведущий раунда",
+    "achievement": "Достижение",
     "gift_out": "Подарок отправлен",
     "gift_in": "Подарок получен",
     "purchase": "Покупка",
