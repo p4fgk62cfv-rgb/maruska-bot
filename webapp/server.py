@@ -26,7 +26,7 @@ from urllib.parse import parse_qsl
 
 from aiohttp import web
 
-from aiogram.types import BufferedInputFile
+from aiogram.types import BufferedInputFile, InputMediaPhoto
 
 from database.repository import get_round_by_token, update_round
 from games import state
@@ -180,6 +180,13 @@ async def api_drawing(request: web.Request):
 
 
 async def api_draw(request: web.Request):
+    """
+    Приём рисунка.
+
+    preview=true — промежуточный кадр: сообщение в чате
+    обновляется на месте, чтобы зрители видели, как рисунок
+    рождается. Без него — финальная отправка.
+    """
     try:
         payload = await request.json()
     except Exception:
@@ -211,23 +218,64 @@ async def api_draw(request: web.Request):
     # Запоминаем рисунок, чтобы работала кнопка «Дорисовать»
     request.app["drawings"][item.id] = content
 
+    preview = bool(payload.get("preview"))
+    live = request.app["live_messages"]
+    message_id = live.get(item.id)
+
+    caption = (
+        f"🖼 <b>{name}</b> делает первые штрихи…"
+        if preview
+        else f"🎨 <b>{name}</b> нарисовал. Что это?\nПишите варианты в чат."
+    )
+
+    markup = (
+        None
+        if preview
+        else drawing_keyboard(item.id, item.token or "", item.likes or 0)
+    )
+
     try:
-        await bot.send_photo(
-            chat_id=item.chat_id,
-            photo=BufferedInputFile(content, filename="croc.png"),
-            caption=(
-                f"🎨 <b>{name}</b> нарисовал. Что это?\n"
-                "Пишите варианты в чат."
-            ),
-            reply_markup=drawing_keyboard(
-                item.id,
-                item.token or "",
-                item.likes or 0,
-            ),
-        )
+        if message_id:
+            # Обновляем уже отправленный кадр на месте
+            await bot.edit_message_media(
+                chat_id=item.chat_id,
+                message_id=message_id,
+                media=InputMediaPhoto(
+                    media=BufferedInputFile(content, filename="croc.png"),
+                    caption=caption,
+                ),
+                reply_markup=markup,
+            )
+        else:
+            sent = await bot.send_photo(
+                chat_id=item.chat_id,
+                photo=BufferedInputFile(content, filename="croc.png"),
+                caption=caption,
+                reply_markup=markup,
+            )
+            live[item.id] = sent.message_id
     except Exception as error:
         logger.error("DRAW SEND: %s %s", type(error).__name__, error)
-        raise web.HTTPBadGateway(text="send failed")
+
+        # Кадр мог устареть — пробуем отправить заново
+        if message_id:
+            live.pop(item.id, None)
+            try:
+                sent = await bot.send_photo(
+                    chat_id=item.chat_id,
+                    photo=BufferedInputFile(content, filename="croc.png"),
+                    caption=caption,
+                    reply_markup=markup,
+                )
+                live[item.id] = sent.message_id
+            except Exception:
+                raise web.HTTPBadGateway(text="send failed")
+        else:
+            raise web.HTTPBadGateway(text="send failed")
+
+    if not preview:
+        # Рисунок закончен: следующий кадр начнёт новое сообщение
+        live.pop(item.id, None)
 
     await update_round(item.id, status="playing")
 
@@ -236,7 +284,7 @@ async def api_draw(request: web.Request):
     if current is not None:
         current.status = "playing"
 
-    return web.json_response({"ok": True})
+    return web.json_response({"ok": True, "preview": preview})
 
 
 def create_app(bot, bot_token: str) -> web.Application:
@@ -248,6 +296,9 @@ def create_app(bot, bot_token: str) -> web.Application:
     # Последние рисунки раундов: нужны только для «Дорисовать»,
     # переживать перезапуск им незачем.
     app["drawings"] = {}
+
+    # id сообщения с текущим кадром: пока рисуют, оно обновляется
+    app["live_messages"] = {}
 
     app.router.add_get("/", health)
     app.router.add_get("/draw", draw_page)
