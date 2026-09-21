@@ -15,6 +15,7 @@ from ai.gemini import ask_gemini
 from database.database import init_db, close_db
 
 from database.repository import (
+    get_balance,
     save_user,
     save_message,
     get_recent_messages,
@@ -53,6 +54,9 @@ from database.repository import (
 )
 
 import context_cache
+
+from economy.handler import router as economy_router
+from economy.service import CURRENCY, money, wealth_title
 
 from settings.handler import router as settings_router
 from settings.middleware import SettingsMiddleware
@@ -172,6 +176,11 @@ async def help_handler(message: Message):
         "🐱 <b>Котики</b>\n"
         "Мара, покажи меня — портрет по мотивам котиков\n"
         "Мара, мяу — просто котик\n\n"
+        "💎 <b>Алмазы</b>\n"
+        "/bonus — ежедневный бонус\n"
+        "/balance — баланс\n"
+        "/history — последние операции\n"
+        "/rich — топ богачей\n\n"
         "⚙️ <b>Настройки</b>\n"
         "/settings — включить или выключить функции (для админов)\n"
         "/features — что сейчас включено\n"
@@ -241,11 +250,26 @@ async def profile_handler(message: Message):
 
     name = escape(profile.display_name or "Пользователь")
 
+    wallet = ""
+
+    if is_enabled(message.chat.id, "economy"):
+        balance = await get_balance(message.from_user.id)
+        wallet = (
+            f"{CURRENCY} Алмазы: <b>{money(balance)}</b> "
+            f"({wealth_title(balance)})\n"
+        )
+
+        if profile.bonus_streak:
+            wallet += f"🔥 Серия бонусов: <b>{profile.bonus_streak}</b>\n"
+
+        wallet += "\n"
+
     await message.answer(
         f"👤 <b>{name}</b>\n\n"
         f"🎖 Ранг: <b>{get_rank_info(profile.karma)}</b>\n"
         f"⭐ Рейтинг: <b>{profile.karma}</b>\n"
         f"🏆 Место: <b>#{position or '-'}</b>\n\n"
+        f"{wallet}"
         f"💬 Сообщений: <b>{profile.messages_count}</b>\n"
         f"🎮 Игр: <b>{profile.games_played}</b>\n"
         f"🏅 Побед: <b>{profile.games_won}</b>\n\n"
@@ -642,6 +666,7 @@ dp.callback_query.outer_middleware(SettingsMiddleware())
 # Панель идёт первой: /settings должен работать всегда,
 # даже если всё остальное выключено.
 dp.include_router(settings_router)
+dp.include_router(economy_router)
 
 # Игра раньше действий: во время раунда верная отгадка должна
 # перехватываться первой.

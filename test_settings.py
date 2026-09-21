@@ -22,6 +22,7 @@ SOURCES = [
     ROOT / "bot.py",
     ROOT / "actions" / "handler.py",
     ROOT / "games" / "crocodile.py",
+    ROOT / "economy" / "handler.py",
 ]
 
 
