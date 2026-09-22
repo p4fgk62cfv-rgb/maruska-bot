@@ -11,7 +11,7 @@ from typing import Any, Awaitable, Callable
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
-from database.repository import get_group_settings
+from database.repository import get_blocked_ids, get_group_settings
 
 from settings import store
 
@@ -41,5 +41,11 @@ class SettingsMiddleware(BaseMiddleware):
                 values = {}
 
             store.prime(chat.id, values)
+
+            try:
+                store.prime_blocked(chat.id, await get_blocked_ids(chat.id))
+            except Exception as error:
+                logger.warning("BLOCKED LOAD: %s", error)
+                store.prime_blocked(chat.id, set())
 
         return await handler(event, data)

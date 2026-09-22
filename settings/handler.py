@@ -153,6 +153,25 @@ def _section_summary(chat_id: int, name: str) -> str:
     return " ".join(parts)
 
 
+# Короткое имя Mini App с панелью (BotFather -> /newapp)
+WEBAPP_ADMIN_NAME = os.getenv("WEBAPP_ADMIN_NAME", "").strip()
+
+BOT_USERNAME = ""
+
+
+def set_bot_username(username: str) -> None:
+    global BOT_USERNAME
+
+    BOT_USERNAME = username or ""
+
+
+def admin_url() -> str:
+    if not (WEBAPP_ADMIN_NAME and BOT_USERNAME):
+        return ""
+
+    return f"https://t.me/{BOT_USERNAME}/{WEBAPP_ADMIN_NAME}"
+
+
 def main_keyboard(chat_id: int) -> InlineKeyboardMarkup:
     rows = []
 
@@ -162,6 +181,13 @@ def main_keyboard(chat_id: int) -> InlineKeyboardMarkup:
                 text=f"{name} · {_section_summary(chat_id, name)}",
                 callback_data=f"set:sec:{_section_id(name)}",
             )
+        ])
+
+    url = admin_url()
+
+    if url:
+        rows.append([
+            InlineKeyboardButton(text="🖥 Веб-панель", url=url),
         ])
 
     rows.append([

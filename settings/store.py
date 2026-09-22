@@ -130,5 +130,30 @@ def get_text(chat_id: int | None, key: str) -> str:
     return str(value)
 
 
+# Заблокированные: держим в памяти, чтобы проверка в фильтрах
+# не ходила в базу на каждое сообщение.
+_blocked: dict[int, set[int]] = {}
+
+
+def prime_blocked(chat_id: int, ids: set[int]) -> None:
+    _blocked[chat_id] = set(ids)
+
+
+def is_blocked(chat_id: int | None, user_id: int | None) -> bool:
+    if chat_id is None or user_id is None or chat_id >= 0:
+        return False
+
+    return user_id in _blocked.get(chat_id, ())
+
+
+def set_blocked(chat_id: int, user_id: int, blocked: bool) -> None:
+    ids = _blocked.setdefault(chat_id, set())
+
+    if blocked:
+        ids.add(user_id)
+    else:
+        ids.discard(user_id)
+
+
 def forget(chat_id: int) -> None:
     _cache.pop(chat_id, None)
