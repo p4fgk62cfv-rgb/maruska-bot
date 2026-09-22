@@ -142,7 +142,8 @@ ACTIONS = [
     A("burger", "🍔", "burger juicy", "бургер|гамбургер|чизбургер", "food",
       "бургер", "бургером", "burger|hamburger|cheeseburger"),
     A("fries", "🍟", "fries french potato", "=фри|картошк|картофел", "food",
-      "картошку фри", "картошкой фри", "fries|french fries"),
+      "картошку фри", "картошкой фри", "fries|french fries",
+      "burger|hamburger"),
     A("hotdog", "🌭", "hot dog", "хотдог|хот-дог", "food",
       "хот-дог", "хот-догом", "hot dog|hotdog|sausage"),
     A("shawarma", "🌯", "kebab wrap street food", "шаурм|шаверм|донер", "food",
@@ -152,17 +153,19 @@ ACTIONS = [
     A("ramen", "🍜", "ramen noodle soup", "рамен", "food",
       "рамен", "раменом", "ramen"),
     A("pasta", "🍝", "pasta italian", "=паста|=пасту|=пасты|спагетти|макарон", "food",
-      "пасту", "пастой", "pasta|spaghetti"),
+      "пасту", "пастой", "pasta|spaghetti", "alphabet"),
     A("lasagna", "🍲", "lasagna italian baked", "лазань", "food",
       "лазанью", "лазаньей", "lasagna|italian"),
     A("steak", "🥩", "steak grilled", "стейк", "food",
-      "стейк", "стейком", "steak|beef"),
+      "стейк", "стейком", "steak|beef",
+      "burger|sandwich|fish"),
     A("chicken", "🍗", "chicken fried", "куриц|курочк|крылышк", "food",
       "курицу", "курицей", "chicken|poultry"),
     A("meat", "🥩", "barbecue grilled meat", "=мясо|=мяса|=мясом|мяска|шашлык", "food",
       "шашлык", "шашлыком", "barbecue|bbq"),
     A("cutlet", "🍖", "cutlet meatball homemade", "котлет|тефтел", "food",
-      "котлету", "котлетой", "cutlet|meatball"),
+      "котлету", "котлетой", "cutlet|meatball",
+      "burger|hamburger|sandwich|fries"),
     A("sausages", "🌭", "sausage grilled", "сосиск|сардельк", "food",
       "сосиски", "сосисками", "sausage"),
     A("bacon", "🥓", "bacon fried breakfast", "бекон", "food",
@@ -190,7 +193,7 @@ ACTIONS = [
     A("soup", "🍲", "soup homemade", "=суп|=супа|=супу|=супом|супчик", "food",
       "суп", "супом", "soup|broth"),
     A("borscht", "🍲", "borscht beetroot soup", "борщ", "food",
-      "борщ", "борщом", "borscht|soup|beetroot"),
+      "борщ", "борщом", "borscht|beetroot"),
     A("dumplings", "🥟", "dumplings homemade", "пельмен|вареник|хинкал", "food",
       "пельмени", "пельменями", "dumpling|ravioli|pierogi"),
     A("golubtsy", "🥬", "cabbage rolls dish", "голубц", "food",
@@ -509,9 +512,24 @@ ACTIONS = [
 ACTION_BY_KEY = {action.key: action for action in ACTIONS}
 
 
+# Категории, где сток особенно любит подсунуть не то:
+# надпись из макарон вместо супа, рисунок вместо блюда.
+EDIBLE = ("alcohol", "drink", "food", "sweet", "fruit")
+
+GLOBAL_FOOD_EXCLUDE = (
+    "letters", "letter", "alphabet", "font", "typography",
+    "text", "word", "sign", "poster", "menu", "blackboard",
+    "drawing", "illustration", "vector", "clipart", "sketch",
+    "logo", "icon", "3d", "render",
+)
+
+
 def required_tags(action: Action) -> tuple[str, ...]:
     return action.tags
 
 
 def excluded_tags(action: Action) -> tuple[str, ...]:
+    if action.category in EDIBLE:
+        return action.exclude + GLOBAL_FOOD_EXCLUDE
+
     return action.exclude

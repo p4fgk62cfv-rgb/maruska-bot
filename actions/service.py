@@ -129,7 +129,9 @@ def rules_version(action: Action) -> str:
     просто перестают использоваться. Чистить базу руками не нужно.
     """
     payload = "|".join(
-        (action.search,) + tuple(action.tags) + tuple(action.exclude)
+        (action.search,)
+        + tuple(required_tags(action))
+        + tuple(excluded_tags(action))
     )
     digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()
     return digest[:6]
