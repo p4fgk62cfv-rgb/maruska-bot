@@ -169,7 +169,7 @@ async def send_bonus(message: Message):
         first_name=user.first_name,
     )
 
-    amount, jackpot = roll_bonus()
+    amount, jackpot = roll_bonus(message.chat.id)
 
     try:
         result = await claim_daily_bonus(

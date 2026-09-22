@@ -46,14 +46,28 @@ REASONS = {
 }
 
 
-def roll_bonus() -> tuple[int, bool]:
+def roll_bonus(chat_id: int | None = None) -> tuple[int, bool]:
     """
     Возвращает (сумма, это ли джекпот).
+
+    Границы и шанс джекпота берутся из настроек группы, а если их
+    там нет — из переменных окружения.
     """
-    if random.random() < JACKPOT_CHANCE:
+    from settings.store import get_number
+
+    low = get_number(chat_id, "bonus_min") or BONUS_MIN
+    high = get_number(chat_id, "bonus_max") or BONUS_MAX
+
+    # Админ мог выставить минимум выше максимума — не падаем
+    if low > high:
+        low, high = high, low
+
+    chance = get_number(chat_id, "jackpot_chance")
+
+    if chance and random.random() < chance / 100:
         return random.randint(JACKPOT_MIN, JACKPOT_MAX), True
 
-    return random.randint(BONUS_MIN, BONUS_MAX), False
+    return random.randint(low, high), False
 
 
 def plural(amount: int) -> str:
