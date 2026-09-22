@@ -7,6 +7,7 @@
 """
 
 import logging
+import random
 from html import escape
 
 from aiogram import F, Router
@@ -14,7 +15,9 @@ from aiogram.types import ChatMemberUpdated, Message
 
 from database.repository import save_user
 
-from settings.store import is_enabled
+from settings.registry import DEFAULT_GREETING, DEFAULT_GREETING_HINT
+
+from settings.store import get_text, is_enabled
 
 
 logger = logging.getLogger("maruska.greeting")
@@ -22,8 +25,10 @@ logger = logging.getLogger("maruska.greeting")
 router = Router(name="greeting")
 
 
+# Стандартные варианты. Если админ задал свой текст в /settings,
+# берётся он, а эти нужны только для разнообразия по умолчанию.
 GREETINGS = (
-    "👋 <b>{name}</b>, заходи, располагайся.",
+    DEFAULT_GREETING,
     "👋 О, новенький! Привет, <b>{name}</b>.",
     "👋 <b>{name}</b> с нами. Уже интересно.",
     "👋 Привет, <b>{name}</b>! Чувствуй себя как дома.",
@@ -31,13 +36,23 @@ GREETINGS = (
 )
 
 
-HINT = (
-    "Я Мара, живу в этом чате.\n\n"
-    "💬 Позови по имени — поболтаем\n"
-    "🎁 <code>/bonus</code> — забрать ежедневные алмазы\n"
-    "🎲 Ответь кому-нибудь словом «пиво» или «обнять»\n"
-    "❔ <code>/help</code> — что я ещё умею"
-)
+def greeting_line(chat_id: int, name: str) -> str:
+    """
+    Свой текст группы, а если его нет — случайный стандартный.
+    """
+    own = get_text(chat_id, "greeting_text")
+
+    template = own if own != DEFAULT_GREETING else random.choice(GREETINGS)
+
+    try:
+        return template.format(name=name)
+    except (KeyError, IndexError, ValueError):
+        # Админ мог вписать что-то непонятное — не падаем
+        return template
+
+
+def greeting_hint(chat_id: int) -> str:
+    return get_text(chat_id, "greeting_hint") or DEFAULT_GREETING_HINT
 
 
 def _name(user) -> str:
@@ -50,10 +65,8 @@ async def welcome(bot, chat_id: int, users) -> None:
     if not people:
         return
 
-    import random
-
     if len(people) == 1:
-        head = random.choice(GREETINGS).format(name=_name(people[0]))
+        head = greeting_line(chat_id, _name(people[0]))
     else:
         names = ", ".join(f"<b>{_name(user)}</b>" for user in people)
         head = f"👋 Пополнение: {names}"
@@ -69,7 +82,10 @@ async def welcome(bot, chat_id: int, users) -> None:
             logger.warning("GREET SAVE: %s", error)
 
     try:
-        await bot.send_message(chat_id, f"{head}\n\n{HINT}")
+        await bot.send_message(
+            chat_id,
+            f"{head}\n\n{greeting_hint(chat_id)}",
+        )
     except Exception as error:
         logger.warning("GREET SEND: %s %s", type(error).__name__, error)
 
@@ -92,7 +108,7 @@ async def new_members(message: Message):
     if added_self:
         await message.answer(
             "👋 Всем привет! Я Мара.\n\n"
-            + HINT
+            + greeting_hint(message.chat.id)
             + "\n\n⚙️ <code>/settings</code> — что включить, "
             "а что выключить (для админов)"
         )

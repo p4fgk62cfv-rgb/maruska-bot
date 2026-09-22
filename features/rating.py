@@ -28,7 +28,7 @@ from economy.service import CURRENCY, money, wealth_title
 
 from progress.service import profile_block
 
-from settings.store import is_enabled
+from settings.store import get_number, is_enabled
 
 logger = logging.getLogger("maruska.rating")
 
@@ -73,12 +73,15 @@ async def rating_handler(message: Message):
         first_name=target.first_name,
     )
 
+    cooldown = get_number(message.chat.id, "rating_cooldown") or 24
+
     if not await can_vote_rating(
         giver_telegram_id=message.from_user.id,
         target_telegram_id=target.id,
+        cooldown_hours=cooldown,
     ):
         await message.reply(
-            "⏳ Этого пользователя можно оценить снова через 24 часа."
+            f"⏳ Этого пользователя можно оценить снова через {cooldown} ч."
         )
         return
 

@@ -29,7 +29,7 @@ from database.repository import (
 from progress.service import award, level_up_text, unlocked_text
 from progress.xp import XP_DAILY_CAP, XP_MESSAGE
 
-from settings.store import get_value, is_enabled
+from settings.store import get_number, get_value, is_enabled
 
 
 logger = logging.getLogger("maruska.chat")
@@ -127,17 +127,17 @@ async def ai_handler(message: Message):
         try:
             history = await get_recent_messages(
                 message.chat.id,
-                limit=CONTEXT_MESSAGES,
+                limit=get_number(message.chat.id, "context_messages")
+                or CONTEXT_MESSAGES,
             )
             context_cache.prime(message.chat.id, history)
         except Exception as error:
             logger.warning("CONTEXT LOAD: %s", error)
             context_cache.prime(message.chat.id, [])
 
-    recent_messages = context_cache.recent(
-        message.chat.id,
-        CONTEXT_MESSAGES,
-    )
+    depth = get_number(message.chat.id, "context_messages") or CONTEXT_MESSAGES
+
+    recent_messages = context_cache.recent(message.chat.id, depth)
 
     prompt = (
         "Последние сообщения группы:\n"
@@ -194,10 +194,12 @@ async def persist_message(message: Message, name: str):
     try:
         result = await award(
             telegram_id=message.from_user.id,
-            amount=XP_MESSAGE,
+            amount=get_number(message.chat.id, "xp_message") or XP_MESSAGE,
             display_name=name,
             chat_id=message.chat.id,
-            daily_cap=XP_DAILY_CAP,
+            daily_cap=(
+                get_number(message.chat.id, "xp_daily_cap") or XP_DAILY_CAP
+            ),
             per_message=True,
             with_economy=is_enabled(message.chat.id, "economy"),
         )

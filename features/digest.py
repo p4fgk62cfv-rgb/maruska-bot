@@ -31,7 +31,7 @@ from database.repository import (
 
 from economy.service import money
 
-from settings.store import is_enabled, prime, is_loaded
+from settings.store import get_number, is_enabled, is_loaded, prime
 from database.repository import get_group_settings
 
 
@@ -172,7 +172,7 @@ async def digest_loop(bot):
     подвести итоги, и рассылает их по живым чатам.
     """
     logger.info(
-        "Итоги недели: %s, %s:00 UTC",
+        "Итоги недели: по умолчанию %s, %s:00 UTC (у групп может быть своё)",
         ("пн", "вт", "ср", "чт", "пт", "сб", "вс")[DIGEST_WEEKDAY % 7],
         DIGEST_HOUR,
     )
@@ -182,9 +182,6 @@ async def digest_loop(bot):
             await asyncio.sleep(CHECK_INTERVAL)
 
             now = datetime.now(timezone.utc)
-
-            if now.weekday() != DIGEST_WEEKDAY or now.hour != DIGEST_HOUR:
-                continue
 
             week = _week_key(now)
             chats = await get_active_chats()
@@ -201,7 +198,19 @@ async def digest_loop(bot):
                         prime(chat_id, {})
 
                 if not is_enabled(chat_id, "digest"):
-                    _sent_weeks[chat_id] = week
+                    continue
+
+                # День и час у каждой группы свои
+                weekday = get_number(chat_id, "digest_weekday")
+                hour = get_number(chat_id, "digest_hour")
+
+                if weekday is None:
+                    weekday = DIGEST_WEEKDAY
+
+                if hour is None:
+                    hour = DIGEST_HOUR
+
+                if now.weekday() != weekday or now.hour != hour:
                     continue
 
                 text = await build_digest(chat_id)
