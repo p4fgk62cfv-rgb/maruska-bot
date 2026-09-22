@@ -191,6 +191,9 @@ async def init_db():
 
             "ALTER TABLE group_members "
             "ADD COLUMN IF NOT EXISTS week_start VARCHAR(10)",
+
+            "CREATE INDEX IF NOT EXISTS ix_daily_stats_chat_day "
+            "ON daily_stats (chat_id, day DESC)",
         )
 
         for statement in migrations:

@@ -676,3 +676,70 @@ class UserAchievement(Base):
         DateTime,
         default=utcnow,
     )
+
+
+class DailyStat(Base):
+    """
+    Активность чата по дням — для графиков в веб-панели.
+
+    message_memory для этого не годится: она обрезается, а
+    недельные счётчики в group_members обнуляются каждый
+    понедельник. Здесь копится история.
+    """
+
+    __tablename__ = "daily_stats"
+
+    __table_args__ = (
+        UniqueConstraint("chat_id", "day", name="uq_daily_stat"),
+    )
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    chat_id: Mapped[int] = mapped_column(
+        BigInteger,
+        index=True,
+    )
+
+    day: Mapped[str] = mapped_column(
+        String(10),
+        index=True,
+    )
+
+    messages: Mapped[int] = mapped_column(default=0)
+
+    actions: Mapped[int] = mapped_column(default=0)
+
+    games: Mapped[int] = mapped_column(default=0)
+
+    active_users: Mapped[int] = mapped_column(default=0)
+
+
+class BlockedUser(Base):
+    """
+    Кого бот игнорирует в конкретной группе.
+    """
+
+    __tablename__ = "blocked_users"
+
+    __table_args__ = (
+        UniqueConstraint("chat_id", "telegram_id", name="uq_blocked_user"),
+    )
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=utcnow,
+    )

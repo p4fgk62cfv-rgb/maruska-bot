@@ -10,6 +10,8 @@ from sqlalchemy import (
 from database.database import session_scope, utcnow
 
 from database.models import (
+    BlockedUser,
+    DailyStat,
     DrawingLike,
     GameRound,
     InventoryItem,
@@ -1617,3 +1619,625 @@ async def get_active_chats(days: int = 14) -> list[int]:
             .group_by(GroupMember.chat_id)
         )
         return [chat_id for chat_id in result.scalars().all() if chat_id < 0]
+
+
+# =========================================================
+# СТАТИСТИКА ПО ДНЯМ (для веб-панели)
+# =========================================================
+
+def _day_key(moment=None) -> str:
+    return (moment or utcnow()).strftime("%Y-%m-%d")
+
+
+async def bump_daily_stat(chat_id: int, field: str = "messages", amount: int = 1):
+    """
+    Копит активность по дням. Вызывается из горячего пути,
+    поэтому ошибки здесь не должны ломать обработку сообщения.
+    """
+    if field not in ("messages", "actions", "games"):
+        return
+
+    day = _day_key()
+
+    async with session_scope() as session:
+        result = await session.execute(
+            select(DailyStat).where(
+                DailyStat.chat_id == chat_id,
+                DailyStat.day == day,
+            )
+        )
+
+        item = result.scalar_one_or_none()
+
+        if item is None:
+            item = DailyStat(chat_id=chat_id, day=day)
+            setattr(item, field, amount)
+            session.add(item)
+        else:
+            setattr(item, field, (getattr(item, field) or 0) + amount)
+
+        await session.commit()
+
+
+async def get_daily_series(chat_id: int | None, days: int = 7) -> list[dict]:
+    """
+    Ряд по дням для графика. chat_id=None — по всем чатам сразу.
+    """
+    since = (utcnow() - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+
+    async with session_scope() as session:
+        query = select(
+            DailyStat.day,
+            func.sum(DailyStat.messages),
+            func.sum(DailyStat.actions),
+            func.sum(DailyStat.games),
+        ).where(DailyStat.day >= since)
+
+        if chat_id is not None:
+            query = query.where(DailyStat.chat_id == chat_id)
+
+        result = await session.execute(
+            query.group_by(DailyStat.day).order_by(DailyStat.day)
+        )
+
+        rows = {
+            day: {
+                "messages": int(messages or 0),
+                "actions": int(actions or 0),
+                "games": int(games or 0),
+            }
+            for day, messages, actions, games in result.all()
+        }
+
+    series = []
+    start = utcnow() - timedelta(days=days - 1)
+
+    for offset in range(days):
+        day = (start + timedelta(days=offset)).strftime("%Y-%m-%d")
+        values = rows.get(day, {"messages": 0, "actions": 0, "games": 0})
+        series.append({"day": day, **values})
+
+    return series
+
+
+# =========================================================
+# БЛОКИРОВКИ
+# =========================================================
+
+async def block_user(chat_id: int, telegram_id: int, reason: str | None = None):
+    async with session_scope() as session:
+        existing = await session.execute(
+            select(BlockedUser.id).where(
+                BlockedUser.chat_id == chat_id,
+                BlockedUser.telegram_id == telegram_id,
+            )
+        )
+
+        if existing.scalar_one_or_none() is not None:
+            return
+
+        session.add(
+            BlockedUser(
+                chat_id=chat_id,
+                telegram_id=telegram_id,
+                reason=reason,
+            )
+        )
+
+        await session.commit()
+
+
+async def unblock_user(chat_id: int, telegram_id: int):
+    async with session_scope() as session:
+        await session.execute(
+            BlockedUser.__table__.delete().where(
+                BlockedUser.chat_id == chat_id,
+                BlockedUser.telegram_id == telegram_id,
+            )
+        )
+        await session.commit()
+
+
+async def get_blocked_ids(chat_id: int) -> set[int]:
+    async with session_scope() as session:
+        result = await session.execute(
+            select(BlockedUser.telegram_id).where(
+                BlockedUser.chat_id == chat_id
+            )
+        )
+        return set(result.scalars().all())
+
+
+# =========================================================
+# ДАННЫЕ ДЛЯ ВЕБ-ПАНЕЛИ
+# =========================================================
+
+async def list_known_chats() -> list[dict]:
+    """
+    Все группы, где бот кого-то видел.
+    """
+    async with session_scope() as session:
+        result = await session.execute(
+            select(
+                GroupMember.chat_id,
+                func.count(GroupMember.id),
+                func.max(GroupMember.updated_at),
+            )
+            .group_by(GroupMember.chat_id)
+            .order_by(desc(func.max(GroupMember.updated_at)))
+        )
+
+        rows = result.all()
+
+        if not rows:
+            return []
+
+        ids = [row[0] for row in rows]
+
+        titles_result = await session.execute(
+            select(GroupSettings.chat_id, GroupSettings.title).where(
+                GroupSettings.chat_id.in_(ids)
+            )
+        )
+
+        titles = dict(titles_result.all())
+
+    fresh_after = utcnow() - timedelta(days=7)
+
+    return [
+        {
+            "chat_id": chat_id,
+            "title": titles.get(chat_id) or f"Группа {chat_id}",
+            "members": int(members or 0),
+            "last_seen": last_seen.isoformat() if last_seen else None,
+            "active": bool(last_seen and last_seen >= fresh_after),
+        }
+        for chat_id, members, last_seen in rows
+        if chat_id < 0
+    ]
+
+
+async def get_overview(chat_id: int | None) -> dict:
+    """
+    Цифры для главной: люди, сообщения, экономика.
+    """
+    async with session_scope() as session:
+        member_query = select(
+            func.count(func.distinct(GroupMember.telegram_id)),
+            func.coalesce(func.sum(GroupMember.messages_count), 0),
+            func.count(func.distinct(GroupMember.chat_id)),
+        )
+
+        if chat_id is not None:
+            member_query = member_query.where(GroupMember.chat_id == chat_id)
+
+        people, messages, chats = (
+            await session.execute(member_query)
+        ).one()
+
+        if chat_id is None:
+            economy_query = select(
+                func.coalesce(func.sum(UserProfile.coins), 0),
+                func.coalesce(func.sum(UserProfile.xp), 0),
+            )
+            coins, xp = (await session.execute(economy_query)).one()
+        else:
+            ids_result = await session.execute(
+                select(GroupMember.telegram_id).where(
+                    GroupMember.chat_id == chat_id
+                )
+            )
+            ids = list(ids_result.scalars().all())
+
+            if ids:
+                economy_query = select(
+                    func.coalesce(func.sum(UserProfile.coins), 0),
+                    func.coalesce(func.sum(UserProfile.xp), 0),
+                ).where(UserProfile.telegram_id.in_(ids))
+
+                coins, xp = (await session.execute(economy_query)).one()
+            else:
+                coins, xp = 0, 0
+
+        active_since = utcnow() - timedelta(days=1)
+
+        active_query = select(
+            func.count(func.distinct(GroupMember.telegram_id))
+        ).where(GroupMember.updated_at >= active_since)
+
+        if chat_id is not None:
+            active_query = active_query.where(GroupMember.chat_id == chat_id)
+
+        active = (await session.execute(active_query)).scalar() or 0
+
+    return {
+        "people": int(people or 0),
+        "messages": int(messages or 0),
+        "chats": int(chats or 0),
+        "coins": int(coins or 0),
+        "xp": int(xp or 0),
+        "active_today": int(active),
+    }
+
+
+async def list_members(
+    chat_id: int | None,
+    query: str = "",
+    limit: int = 50,
+) -> list[dict]:
+    """
+    Участники с их профилями — для экрана «Пользователи».
+    """
+    async with session_scope() as session:
+        members_query = select(
+            GroupMember.telegram_id,
+            func.max(GroupMember.display_name),
+            func.sum(GroupMember.messages_count),
+            func.max(GroupMember.updated_at),
+        ).group_by(GroupMember.telegram_id)
+
+        if chat_id is not None:
+            members_query = members_query.where(
+                GroupMember.chat_id == chat_id
+            )
+
+        if query:
+            members_query = members_query.where(
+                GroupMember.display_name.ilike(f"%{query}%")
+            )
+
+        members_query = members_query.order_by(
+            desc(func.max(GroupMember.updated_at))
+        ).limit(limit)
+
+        rows = (await session.execute(members_query)).all()
+
+        if not rows:
+            return []
+
+        ids = [row[0] for row in rows]
+
+        profiles_result = await session.execute(
+            select(UserProfile).where(UserProfile.telegram_id.in_(ids))
+        )
+
+        profiles = {
+            profile.telegram_id: profile
+            for profile in profiles_result.scalars().all()
+        }
+
+    people = []
+
+    for telegram_id, name, messages, last_seen in rows:
+        profile = profiles.get(telegram_id)
+
+        people.append({
+            "telegram_id": telegram_id,
+            "name": name or (profile.display_name if profile else "Игрок"),
+            "messages": int(messages or 0),
+            "last_seen": last_seen.isoformat() if last_seen else None,
+            "coins": profile.coins if profile else 0,
+            "xp": profile.xp if profile else 0,
+            "level": profile.level if profile else 1,
+            "karma": profile.karma if profile else 0,
+        })
+
+    return people
+
+
+async def get_user_card(telegram_id: int) -> dict | None:
+    """
+    Подробности одного человека для карточки в панели.
+    """
+    async with session_scope() as session:
+        profile = (
+            await session.execute(
+                select(UserProfile).where(
+                    UserProfile.telegram_id == telegram_id
+                )
+            )
+        ).scalar_one_or_none()
+
+        if profile is None:
+            return None
+
+        user = (
+            await session.execute(
+                select(User).where(User.telegram_id == telegram_id)
+            )
+        ).scalar_one_or_none()
+
+        items = (
+            await session.execute(
+                select(func.coalesce(func.sum(InventoryItem.qty), 0)).where(
+                    InventoryItem.telegram_id == telegram_id
+                )
+            )
+        ).scalar() or 0
+
+        achievements = (
+            await session.execute(
+                select(func.count(UserAchievement.id)).where(
+                    UserAchievement.telegram_id == telegram_id
+                )
+            )
+        ).scalar() or 0
+
+        chats = (
+            await session.execute(
+                select(func.count(func.distinct(GroupMember.chat_id))).where(
+                    GroupMember.telegram_id == telegram_id
+                )
+            )
+        ).scalar() or 0
+
+        transactions = (
+            await session.execute(
+                select(Transaction)
+                .where(Transaction.telegram_id == telegram_id)
+                .order_by(Transaction.created_at.desc())
+                .limit(10)
+            )
+        ).scalars().all()
+
+    return {
+        "telegram_id": telegram_id,
+        "name": profile.display_name or "Игрок",
+        "username": user.username if user else None,
+        "coins": profile.coins,
+        "xp": profile.xp,
+        "level": profile.level,
+        "karma": profile.karma,
+        "messages": profile.messages_count,
+        "games_played": profile.games_played,
+        "games_won": profile.games_won,
+        "best_streak": profile.best_streak,
+        "items": int(items),
+        "achievements": int(achievements),
+        "chats": int(chats),
+        "created_at": (
+            profile.created_at.isoformat() if profile.created_at else None
+        ),
+        "updated_at": (
+            profile.updated_at.isoformat() if profile.updated_at else None
+        ),
+        "history": [
+            {
+                "amount": item.amount,
+                "reason": item.reason,
+                "note": item.note,
+                "balance_after": item.balance_after,
+                "created_at": item.created_at.isoformat(),
+            }
+            for item in transactions
+        ],
+    }
+
+
+# =========================================================
+# СВОДКИ ДЛЯ ОСТАЛЬНЫХ ЭКРАНОВ ПАНЕЛИ
+# =========================================================
+
+async def achievements_stats() -> dict[str, int]:
+    """
+    Сколько человек открыло каждое достижение.
+    """
+    async with session_scope() as session:
+        result = await session.execute(
+            select(
+                UserAchievement.achievement_key,
+                func.count(UserAchievement.id),
+            ).group_by(UserAchievement.achievement_key)
+        )
+        return {key: int(count) for key, count in result.all()}
+
+
+async def shop_stats() -> dict[str, dict]:
+    """
+    Сколько каждого товара куплено и подарено.
+    """
+    async with session_scope() as session:
+        result = await session.execute(
+            select(
+                InventoryItem.item_key,
+                func.coalesce(func.sum(InventoryItem.qty), 0),
+                func.count(InventoryItem.id).filter(
+                    InventoryItem.from_telegram_id.is_not(None)
+                ),
+            ).group_by(InventoryItem.item_key)
+        )
+
+        return {
+            key: {"total": int(total or 0), "gifted": int(gifted or 0)}
+            for key, total, gifted in result.all()
+        }
+
+
+async def recent_transactions(chat_id: int | None, limit: int = 30):
+    async with session_scope() as session:
+        query = select(Transaction).order_by(Transaction.created_at.desc())
+
+        if chat_id is not None:
+            query = query.where(Transaction.chat_id == chat_id)
+
+        rows = (await session.execute(query.limit(limit))).scalars().all()
+
+        if not rows:
+            return []
+
+        ids = {row.telegram_id for row in rows}
+
+        names_result = await session.execute(
+            select(UserProfile.telegram_id, UserProfile.display_name).where(
+                UserProfile.telegram_id.in_(ids)
+            )
+        )
+
+        names = dict(names_result.all())
+
+    return [
+        {
+            "telegram_id": row.telegram_id,
+            "name": names.get(row.telegram_id) or "Игрок",
+            "amount": row.amount,
+            "reason": row.reason,
+            "note": row.note,
+            "balance_after": row.balance_after,
+            "created_at": row.created_at.isoformat(),
+        }
+        for row in rows
+    ]
+
+
+async def media_stats(limit: int = 60) -> list[dict]:
+    """
+    Собранные коллекции картинок: сколько всего и сколько уже
+    закэшировано в Telegram.
+    """
+    async with session_scope() as session:
+        result = await session.execute(
+            select(
+                ActionImage.action,
+                func.count(ActionImage.id),
+                func.count(ActionImage.id).filter(
+                    ActionImage.telegram_file_id.is_not(None)
+                ),
+                func.count(ActionImage.id).filter(ActionImage.used.is_(True)),
+            )
+            .group_by(ActionImage.action)
+            .order_by(desc(func.count(ActionImage.id)))
+            .limit(limit)
+        )
+
+        return [
+            {
+                "collection": action,
+                "total": int(total or 0),
+                "cached": int(cached or 0),
+                "used": int(used or 0),
+            }
+            for action, total, cached, used in result.all()
+        ]
+
+
+async def game_stats(chat_id: int | None, days: int = 30) -> dict:
+    since = utcnow() - timedelta(days=days)
+
+    async with session_scope() as session:
+        query = select(
+            func.count(GameRound.id),
+            func.count(GameRound.id).filter(GameRound.status == "finished"),
+            func.coalesce(func.sum(GameRound.likes), 0),
+        ).where(GameRound.started_at >= since)
+
+        if chat_id is not None:
+            query = query.where(GameRound.chat_id == chat_id)
+
+        total, finished, likes = (await session.execute(query)).one()
+
+        top_query = select(
+            GameRound.winner_name,
+            func.count(GameRound.id),
+        ).where(
+            GameRound.status == "finished",
+            GameRound.winner_telegram_id.is_not(None),
+            GameRound.started_at >= since,
+        )
+
+        if chat_id is not None:
+            top_query = top_query.where(GameRound.chat_id == chat_id)
+
+        top = (
+            await session.execute(
+                top_query.group_by(GameRound.winner_name)
+                .order_by(desc(func.count(GameRound.id)))
+                .limit(5)
+            )
+        ).all()
+
+    return {
+        "rounds": int(total or 0),
+        "finished": int(finished or 0),
+        "likes": int(likes or 0),
+        "top": [
+            {"name": name or "Игрок", "wins": int(wins)}
+            for name, wins in top
+        ],
+    }
+
+
+async def system_counts() -> dict:
+    async with session_scope() as session:
+        async def count(model):
+            return (
+                await session.execute(select(func.count(model.id)))
+            ).scalar() or 0
+
+        return {
+            "users": int(await count(User)),
+            "profiles": int(await count(UserProfile)),
+            "chats": int(
+                (
+                    await session.execute(
+                        select(func.count(func.distinct(GroupMember.chat_id)))
+                    )
+                ).scalar()
+                or 0
+            ),
+            "transactions": int(await count(Transaction)),
+            "images": int(await count(ActionImage)),
+            "rounds": int(await count(GameRound)),
+            "achievements": int(await count(UserAchievement)),
+            "inventory": int(await count(InventoryItem)),
+        }
+
+
+async def top_by(field: str, chat_id: int | None, limit: int = 10):
+    """
+    Топ по любому полю профиля: coins, xp, karma, messages_count.
+    """
+    allowed = {
+        "coins": UserProfile.coins,
+        "xp": UserProfile.xp,
+        "karma": UserProfile.karma,
+        "messages_count": UserProfile.messages_count,
+        "games_won": UserProfile.games_won,
+    }
+
+    column = allowed.get(field)
+
+    if column is None:
+        return []
+
+    async with session_scope() as session:
+        if chat_id is not None:
+            ids_result = await session.execute(
+                select(GroupMember.telegram_id).where(
+                    GroupMember.chat_id == chat_id
+                )
+            )
+            ids = list(ids_result.scalars().all())
+
+            if not ids:
+                return []
+
+            query = select(UserProfile).where(
+                UserProfile.telegram_id.in_(ids),
+                column > 0,
+            )
+        else:
+            query = select(UserProfile).where(column > 0)
+
+        rows = (
+            await session.execute(query.order_by(desc(column)).limit(limit))
+        ).scalars().all()
+
+    return [
+        {
+            "telegram_id": row.telegram_id,
+            "name": row.display_name or "Игрок",
+            "value": getattr(row, field, 0),
+            "level": row.level,
+        }
+        for row in rows
+    ]
