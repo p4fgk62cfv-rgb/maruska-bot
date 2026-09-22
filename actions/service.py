@@ -10,18 +10,20 @@
 """
 
 import hashlib
+import random
+from dataclasses import dataclass
 
 from actions.catalog import Action, excluded_tags, required_tags
 from actions.providers import (
     available_providers,
+    download_photo,
     search_photos,
 )
 from database.repository import (
-    get_unused_action_image,
-    get_last_action_page,
-    add_action_image,
-    reset_action_images,
-    count_action_images,
+    count_cached_images,
+    get_cached_action_image,
+    known_photo_ids,
+    reset_cached_images,
 )
 
 
@@ -142,29 +144,52 @@ def collection_key(provider: str, action: Action, pair_key: str) -> str:
     return f"{provider}/{base}#{rules_version(action)}"
 
 
-async def fill_collection(
+@dataclass
+class Picked:
+    """
+    Что вернул подбор картинки.
+
+    cached — уже лежит в Telegram, отправляем по file_id.
+    fresh  — только что скачали, отправляем байтами и запоминаем
+             полученный file_id.
+    """
+    kind: str
+    collection: str
+    provider: str = "pixabay"
+    photo_id: str = ""
+    file_id: str | None = None
+    content: bytes | None = None
+    image_id: int | None = None
+    photographer_name: str | None = None
+    photographer_url: str | None = None
+    source_url: str | None = None
+
+
+# Сколько страниц источника считаем доступными для случайного выбора
+MAX_RANDOM_PAGE = 6
+
+# Сколько картинок пробуем скачать, прежде чем сдаться
+DOWNLOAD_ATTEMPTS = 3
+
+
+async def fetch_fresh(
     provider: str,
     action: Action,
-    key: str,
+    collection: str,
     pair_key: str,
-) -> int:
+) -> Picked | None:
     """
-    Фильтр по тегам НЕ отключается ни при каких условиях.
+    Ищет картинку в источнике и сразу скачивает её.
 
-    Раньше при пустой строгой выдаче включался запасной проход
-    без фильтра — именно он приносил ягоды по запросу "бургер".
-    Теперь при неудаче просто упрощается запрос, а требование
-    к тегам остаётся.
+    Ссылки Pixabay живут около суток, поэтому между поиском и
+    отправкой не должно проходить времени.
     """
     tags = required_tags(action)
     banned = excluded_tags(action)
-    last_page = await get_last_action_page(key)
-    start_page = last_page + 1
-    added = 0
-
     query = get_search_query(action, pair_key)
 
-    # От точной фразы к широкой, в конце — само ключевое слово.
+    seen = await known_photo_ids(collection)
+
     variants = query_variants(query)
 
     for tag in tags[:2]:
@@ -172,53 +197,65 @@ async def fill_collection(
             variants.append(tag)
 
     for variant in variants:
-        for page in range(start_page, start_page + PAGES_PER_FILL):
-            try:
-                photos = await search_photos(
-                    provider,
-                    variant,
-                    page,
-                    required=tags,
-                    excluded=banned,
-                )
-            except Exception as error:
-                print(
-                    f"{provider.upper()} SEARCH ERROR:",
-                    type(error).__name__,
-                    str(error),
-                )
-                return added
+        page = random.randint(1, MAX_RANDOM_PAGE)
 
-            if not photos:
-                break
+        try:
+            photos = await search_photos(
+                provider,
+                variant,
+                page,
+                required=tags,
+                excluded=banned,
+            )
+        except Exception as error:
+            print(
+                f"{provider.upper()} SEARCH ERROR:",
+                type(error).__name__,
+                str(error),
+            )
+            continue
 
-            for photo in photos:
-                if await add_action_image(
-                    action=key,
-                    provider=photo.provider,
-                    photo_id=photo.photo_id,
-                    image_url=photo.image_url,
-                    fallback_url=photo.fallback_url,
-                    photographer_name=photo.photographer_name,
-                    photographer_url=photo.photographer_url,
-                    source_url=photo.source_url,
-                    source_page=page,
-                ):
-                    added += 1
+        if not photos:
+            continue
 
-        if added:
-            break
+        # Сначала то, чего ещё не показывали
+        fresh_first = [p for p in photos if p.photo_id not in seen]
+        candidates = fresh_first or photos
 
-    if not added:
-        print(f"IMAGES: ничего не найдено для {key} (запрос: {query})")
+        random.shuffle(candidates)
 
-    return added
+        for photo in candidates[:DOWNLOAD_ATTEMPTS]:
+            content = await download_photo(photo.image_url, photo.fallback_url)
+
+            if not content:
+                continue
+
+            return Picked(
+                kind="fresh",
+                collection=collection,
+                provider=photo.provider,
+                photo_id=photo.photo_id,
+                content=content,
+                photographer_name=photo.photographer_name,
+                photographer_url=photo.photographer_url,
+                source_url=photo.source_url,
+            )
+
+    return None
 
 
 async def get_image_for_action(
     action: Action,
     pair_key: str = "neutral",
-):
+) -> Picked | None:
+    """
+    Порядок такой:
+
+    1. Берём из коллекции то, что уже загружено в Telegram —
+       это мгновенно и не тратит запросы к источнику.
+    2. Коллекция кончилась — идём в источник и качаем свежую.
+    3. Источник молчит — прокручиваем коллекцию по кругу.
+    """
     providers = available_providers()
 
     if not providers:
@@ -226,24 +263,45 @@ async def get_image_for_action(
         return None
 
     for provider in providers:
-        key = collection_key(provider, action, pair_key)
+        collection = collection_key(provider, action, pair_key)
 
-        image = await get_unused_action_image(key)
-        if image is not None:
-            return image
+        cached = await get_cached_action_image(collection)
 
-        added = await fill_collection(provider, action, key, pair_key)
+        if cached is not None:
+            return Picked(
+                kind="cached",
+                collection=collection,
+                provider=cached.provider or provider,
+                photo_id=cached.photo_id,
+                file_id=cached.telegram_file_id,
+                image_id=cached.id,
+                photographer_name=cached.photographer_name,
+                photographer_url=cached.photographer_url,
+                source_url=cached.unsplash_url,
+            )
 
-        if added:
-            image = await get_unused_action_image(key)
-            if image is not None:
-                return image
+        picked = await fetch_fresh(provider, action, collection, pair_key)
 
-        # Новых картинок нет — крутим по кругу уже собранные.
-        if await count_action_images(key):
-            await reset_action_images(key)
-            image = await get_unused_action_image(key)
-            if image is not None:
-                return image
+        if picked is not None:
+            return picked
+
+        # Свежего нет — пускаем по кругу уже собранное
+        if await count_cached_images(collection):
+            await reset_cached_images(collection)
+
+            cached = await get_cached_action_image(collection)
+
+            if cached is not None:
+                return Picked(
+                    kind="cached",
+                    collection=collection,
+                    provider=cached.provider or provider,
+                    photo_id=cached.photo_id,
+                    file_id=cached.telegram_file_id,
+                    image_id=cached.id,
+                    photographer_name=cached.photographer_name,
+                    photographer_url=cached.photographer_url,
+                    source_url=cached.unsplash_url,
+                )
 
     return None

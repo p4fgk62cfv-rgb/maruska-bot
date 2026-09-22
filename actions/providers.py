@@ -38,6 +38,15 @@ UNSPLASH_API_URL = "https://api.unsplash.com/search/photos"
 PER_PAGE = 50
 REQUEST_TIMEOUT = 20
 
+# Без User-Agent Pixabay отвечает 400 на скачивание
+DOWNLOAD_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (compatible; MaruskaBot/1.0; "
+        "+https://t.me/BotMaruska_bot)"
+    ),
+    "Accept": "image/avif,image/webp,image/png,image/jpeg,*/*",
+}
+
 # Telegram принимает фото до 10 МБ, но лучше держаться ниже.
 MAX_PHOTO_BYTES = 5 * 1024 * 1024
 
@@ -273,8 +282,12 @@ async def download_photo(
     fallback_url: str | None = None,
 ) -> bytes | None:
     """
-    Pixabay запрещает постоянный хотлинк, поэтому файл скачивается
-    и отправляется в Telegram байтами. Дальше используется file_id.
+    Скачивает картинку.
+
+    ВАЖНО: ссылки Pixabay подписаны и живут около суток. Хранить их
+    в базе и использовать позже нельзя — придёт 400. Поэтому
+    скачивание происходит сразу после поиска, а в базу кладётся
+    уже telegram_file_id, который не протухает.
     """
     urls = [url]
 
@@ -284,6 +297,7 @@ async def download_photo(
     async with httpx.AsyncClient(
         timeout=REQUEST_TIMEOUT,
         follow_redirects=True,
+        headers=DOWNLOAD_HEADERS,
     ) as client:
 
         for candidate in urls:

@@ -8,17 +8,15 @@ from aiogram.types import BufferedInputFile, Message
 from actions.catalog import find_action
 from settings.store import is_enabled
 from actions.phrases import pick_template, render
-from actions.providers import download_photo
 from actions.service import get_image_for_action
 
 from database.repository import (
+    save_sent_image,
     save_user,
     save_message,
     get_user_by_username,
     infer_gender,
-    release_action_image,
     drop_action_image,
-    set_action_image_file_id,
     MALE_NAMES,
 )
 
@@ -375,13 +373,13 @@ async def action_handler(message: Message):
         pair = pair_key(actor_gender, target_gender)
 
     try:
-        image = await get_image_for_action(action, pair_key=pair)
+        picked = await get_image_for_action(action, pair_key=pair)
     except Exception as error:
         print("ACTION IMAGE ERROR:", type(error).__name__, str(error))
         await message.reply("Не смогла найти картинку 😔")
         return
 
-    if image is None:
+    if picked is None:
         await message.reply("Для этого действия пока нет картинки 😔")
         return
 
@@ -396,53 +394,72 @@ async def action_handler(message: Message):
 
     # Подпись только там, где лицензия источника её требует.
     # Pixabay атрибуции не требует — под фото ничего не пишем.
-    if image.provider == "unsplash" and image.photographer_url:
+    if picked.provider == "unsplash" and picked.photographer_url:
+        name = escape(picked.photographer_name or "Unsplash")
+        author = escape(picked.photographer_url)
+        source = escape(picked.source_url or "")
+
         caption += (
-            "\n\n"
-            f'📷 <a href="{escape(image.photographer_url)}">'
-            f"Фото: {escape(image.photographer_name or 'Unsplash')}</a> · "
-            f'<a href="{escape(image.unsplash_url or "")}">Unsplash</a>'
+            f'\n\n📷 <a href="{author}">Фото: {name}</a> · '
+            f'<a href="{source}">Unsplash</a>'
         )
 
-    sent = None
+    sent = await send_picked(message, picked, caption, action.key)
 
-    # 1. Уже отправляли раньше — шлём по file_id, это мгновенно.
-    if image.telegram_file_id:
+    if sent is None:
+        await message.reply("Не получилось отправить фотографию 😔")
+
+
+async def send_picked(message, picked, caption: str, filename: str):
+    """
+    Отправляет подобранную картинку.
+
+    cached — по file_id, мгновенно и без обращения к источнику.
+    fresh  — байтами; полученный file_id сохраняется, чтобы
+             в следующий раз обойтись без скачивания.
+    """
+    if picked.kind == "cached" and picked.file_id:
         try:
-            sent = await message.answer_photo(
-                photo=image.telegram_file_id,
+            return await message.answer_photo(
+                photo=picked.file_id,
                 caption=caption,
             )
         except Exception as error:
             print("FILE ID SEND ERROR:", type(error).__name__, str(error))
 
-    # 2. Первый раз — скачиваем и заливаем байтами.
-    #    Pixabay запрещает постоянный хотлинк своих URL.
-    if sent is None:
-        content = await download_photo(image.image_url, image.fallback_url)
+            # file_id протух — выкидываем запись, чтобы не мешала
+            if picked.image_id:
+                try:
+                    await drop_action_image(picked.image_id)
+                except Exception:
+                    pass
 
-        if content is None:
-            await drop_action_image(image.id)
-            await message.reply("Не получилось загрузить фотографию 😔")
-            return
+            return None
 
+    if not picked.content:
+        return None
+
+    try:
+        sent = await message.answer_photo(
+            photo=BufferedInputFile(
+                picked.content,
+                filename=f"{filename}.jpg",
+            ),
+            caption=caption,
+        )
+    except Exception as error:
+        print("TELEGRAM PHOTO ERROR:", type(error).__name__, str(error))
+        return None
+
+    if sent.photo:
         try:
-            sent = await message.answer_photo(
-                photo=BufferedInputFile(
-                    content,
-                    filename=f"{action.key}.jpg",
-                ),
-                caption=caption,
+            await save_sent_image(
+                action=picked.collection,
+                provider=picked.provider,
+                photo_id=picked.photo_id,
+                file_id=sent.photo[-1].file_id,
             )
         except Exception as error:
-            print("TELEGRAM PHOTO ERROR:", type(error).__name__, str(error))
-            await release_action_image(image.id)
-            await message.reply("Не получилось отправить фотографию 😔")
-            return
+            print("SAVE IMAGE ERROR:", type(error).__name__, str(error))
 
-    # Запоминаем file_id: больше к источнику не ходим.
-    if not image.telegram_file_id and sent.photo:
-        try:
-            await set_action_image_file_id(image.id, sent.photo[-1].file_id)
-        except Exception as error:
-            print("FILE ID CACHE ERROR:", type(error).__name__, str(error))
+    return sent
