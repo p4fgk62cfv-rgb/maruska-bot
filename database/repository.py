@@ -388,9 +388,12 @@ async def create_profile_if_needed(
 async def can_vote_rating(
     giver_telegram_id: int,
     target_telegram_id: int,
+    cooldown_hours: int | None = None,
 ) -> bool:
+    hours = cooldown_hours or RATING_COOLDOWN_HOURS
+
     async with session_scope() as session:
-        cooldown_time = utcnow() - timedelta(hours=RATING_COOLDOWN_HOURS)
+        cooldown_time = utcnow() - timedelta(hours=hours)
 
         result = await session.execute(
             select(RatingVote)
