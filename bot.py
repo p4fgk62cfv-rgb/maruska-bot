@@ -53,7 +53,10 @@ from games.dice import router as dice_router
 
 from progress.handler import router as progress_router
 
-from settings.handler import router as settings_router
+from settings.handler import (
+    router as settings_router,
+    set_bot_username as set_settings_username,
+)
 from settings.middleware import SettingsMiddleware
 from settings.registry import CHOICES, FEATURES
 
@@ -140,6 +143,7 @@ async def main():
     me = await bot.get_me()
     set_identity(me.id, me.username or "")
     set_bot_username(me.username or "")
+    set_settings_username(me.username or "")
 
     logger.info("Бот: @%s (id=%s)", me.username, me.id)
     logger.info("PostgreSQL: подключён")

@@ -63,6 +63,43 @@ class ColorFormatter(logging.Formatter):
         return f"{color}{text}{RESET}" if color else text
 
 
+class RingHandler(logging.Handler):
+    """
+    Держит последние записи в памяти — чтобы веб-панель могла
+    показать, что происходило, без доступа к серверу.
+    """
+
+    def __init__(self, capacity: int = 300):
+        super().__init__()
+        self.capacity = capacity
+        self.records: list[dict] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            self.records.append({
+                "time": record.created,
+                "level": record.levelname,
+                "logger": record.name,
+                "message": record.getMessage()[:500],
+            })
+
+            if len(self.records) > self.capacity:
+                del self.records[: len(self.records) - self.capacity]
+        except Exception:
+            pass
+
+    def tail(self, limit: int = 100, level: str = "") -> list[dict]:
+        items = self.records
+
+        if level:
+            items = [item for item in items if item["level"] == level]
+
+        return list(reversed(items[-limit:]))
+
+
+ring = RingHandler()
+
+
 def setup(level: int = logging.INFO) -> None:
     handler = logging.StreamHandler(sys.stdout)
 
@@ -80,6 +117,7 @@ def setup(level: int = logging.INFO) -> None:
         root.removeHandler(existing)
 
     root.addHandler(handler)
+    root.addHandler(ring)
     root.setLevel(level)
 
     # aiogram шумит на каждое сообщение — оставляем только важное
