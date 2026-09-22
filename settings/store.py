@@ -8,7 +8,12 @@
 Кэш прогревается мидлварью до того, как отработают фильтры.
 """
 
-from settings.registry import CHOICE_BY_KEY, DEFAULTS
+from settings.registry import (
+    CHOICE_BY_KEY,
+    DEFAULTS,
+    NUMBER_BY_KEY,
+    TEXT_BY_KEY,
+)
 
 
 _cache: dict[int, dict] = {}
@@ -30,6 +35,18 @@ def prime(chat_id: int, values: dict | None) -> dict:
             allowed = {option[0] for option in CHOICE_BY_KEY[key].options}
             if value in allowed:
                 merged[key] = value
+
+        elif key in NUMBER_BY_KEY:
+            # Число: приводим к границам, мусор игнорируем
+            try:
+                merged[key] = NUMBER_BY_KEY[key].clamp(int(value))
+            except (TypeError, ValueError):
+                pass
+
+        elif key in TEXT_BY_KEY:
+            if isinstance(value, str) and value.strip():
+                merged[key] = value[: TEXT_BY_KEY[key].max_length]
+
         else:
             merged[key] = bool(value)
 
@@ -67,7 +84,50 @@ def is_enabled(chat_id: int | None, key: str) -> bool:
 
 def apply(chat_id: int, key: str, value) -> None:
     current = _cache.setdefault(chat_id, dict(DEFAULTS))
-    current[key] = value if key in CHOICE_BY_KEY else bool(value)
+
+    if key in CHOICE_BY_KEY:
+        current[key] = value
+    elif key in NUMBER_BY_KEY:
+        current[key] = NUMBER_BY_KEY[key].clamp(int(value))
+    elif key in TEXT_BY_KEY:
+        current[key] = str(value)[: TEXT_BY_KEY[key].max_length]
+    else:
+        current[key] = bool(value)
+
+
+def get_number(chat_id: int | None, key: str) -> int:
+    """
+    Числовая настройка группы. В личке и при отсутствии записи
+    берётся значение по умолчанию.
+    """
+    number = NUMBER_BY_KEY.get(key)
+    fallback = DEFAULTS.get(key, 0)
+
+    if chat_id is None or chat_id >= 0:
+        return int(fallback)
+
+    value = values(chat_id).get(key, fallback)
+
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        return int(fallback)
+
+    return number.clamp(value) if number else value
+
+
+def get_text(chat_id: int | None, key: str) -> str:
+    """
+    Текстовая настройка группы. Пусто или не задано — стандартный текст.
+    """
+    fallback = DEFAULTS.get(key, "")
+
+    if chat_id is None or chat_id >= 0:
+        return str(fallback)
+
+    value = values(chat_id).get(key) or fallback
+
+    return str(value)
 
 
 def forget(chat_id: int) -> None:

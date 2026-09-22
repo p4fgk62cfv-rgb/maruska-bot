@@ -17,6 +17,7 @@
     group       — раздел панели
 """
 
+import os
 from dataclasses import dataclass
 
 
@@ -166,6 +167,262 @@ CHOICES: tuple[Choice, ...] = (
 )
 
 
+
+
+# ---------------------------------------------------------
+# Числовые настройки
+#
+# Третий тип: не да/нет и не выбор из списка, а величина.
+# Меняется кнопками − и +, поэтому у каждой задан шаг.
+#
+# Значение по умолчанию берётся из переменной окружения, если она
+# задана: так глобальный дефолт можно поменять для всех групп сразу,
+# а конкретная группа при этом может выставить своё.
+# ---------------------------------------------------------
+
+@dataclass(frozen=True)
+class Number:
+    key: str
+    title: str
+    emoji: str
+    description: str
+    default: int
+    minimum: int
+    maximum: int
+    step: int
+    env: str = ""
+    unit: str = ""
+    group: str = "Основное"
+
+    def resolve_default(self) -> int:
+        raw = os.getenv(self.env, "").strip() if self.env else ""
+
+        if raw.lstrip("-").isdigit():
+            return self.clamp(int(raw))
+
+        return self.default
+
+    def clamp(self, value: int) -> int:
+        return max(self.minimum, min(self.maximum, value))
+
+    def label(self, value: int) -> str:
+        if self.key == "digest_weekday":
+            return WEEKDAYS[value % 7]
+
+        if self.unit:
+            return f"{value} {self.unit}"
+
+        return str(value)
+
+
+WEEKDAYS = (
+    "понедельник", "вторник", "среда", "четверг",
+    "пятница", "суббота", "воскресенье",
+)
+
+
+NUMBERS: tuple[Number, ...] = (
+    # Общение
+    Number(
+        key="context_messages",
+        title="Глубина памяти",
+        emoji="🧠",
+        description="Сколько последних сообщений Мара видит как контекст",
+        default=8, minimum=2, maximum=30, step=2,
+        env="CONTEXT_MESSAGES", unit="сообщ.",
+        group="Общение",
+    ),
+
+    # Алмазы
+    Number(
+        key="bonus_min",
+        title="Бонус: минимум",
+        emoji="💎",
+        description="Нижняя граница ежедневного бонуса",
+        default=50, minimum=10, maximum=1000, step=10,
+        env="BONUS_MIN", unit="💎",
+        group="Сообщество",
+    ),
+    Number(
+        key="bonus_max",
+        title="Бонус: максимум",
+        emoji="💎",
+        description="Верхняя граница ежедневного бонуса",
+        default=150, minimum=20, maximum=2000, step=10,
+        env="BONUS_MAX", unit="💎",
+        group="Сообщество",
+    ),
+    Number(
+        key="jackpot_chance",
+        title="Шанс джекпота",
+        emoji="🎰",
+        description="Как часто вместо бонуса выпадает крупный выигрыш",
+        default=5, minimum=0, maximum=50, step=1,
+        unit="%",
+        group="Сообщество",
+    ),
+
+    # Прогресс
+    Number(
+        key="xp_message",
+        title="Опыт за сообщение",
+        emoji="✨",
+        description="Сколько опыта даёт одно сообщение",
+        default=2, minimum=0, maximum=20, step=1,
+        env="XP_MESSAGE",
+        group="Сообщество",
+    ),
+    Number(
+        key="xp_daily_cap",
+        title="Потолок опыта в сутки",
+        emoji="🚧",
+        description="Больше этого за сообщения не начислится — защита от флуда",
+        default=120, minimum=20, maximum=2000, step=20,
+        env="XP_DAILY_CAP",
+        group="Сообщество",
+    ),
+    Number(
+        key="rating_cooldown",
+        title="Пауза рейтинга",
+        emoji="⏳",
+        description="Как часто можно оценивать одного и того же человека",
+        default=24, minimum=1, maximum=168, step=1,
+        unit="ч",
+        group="Сообщество",
+    ),
+
+    # Итоги
+    Number(
+        key="digest_weekday",
+        title="День итогов",
+        emoji="📅",
+        description="В какой день недели подводить итоги",
+        default=6, minimum=0, maximum=6, step=1,
+        env="DIGEST_WEEKDAY",
+        group="Сообщество",
+    ),
+    Number(
+        key="digest_hour",
+        title="Час итогов",
+        emoji="🕐",
+        description="Во сколько подводить итоги, по UTC",
+        default=17, minimum=0, maximum=23, step=1,
+        env="DIGEST_HOUR", unit="ч UTC",
+        group="Сообщество",
+    ),
+
+    # Игры
+    Number(
+        key="reward_game_win",
+        title="Награда за победу",
+        emoji="🏆",
+        description="Сколько алмазов получает угадавший",
+        default=25, minimum=0, maximum=500, step=5,
+        env="REWARD_GAME_WIN", unit="💎",
+        group="Развлечения",
+    ),
+    Number(
+        key="reward_game_host",
+        title="Награда ведущему",
+        emoji="🎭",
+        description="Сколько алмазов получает тот, кто рисовал",
+        default=15, minimum=0, maximum=500, step=5,
+        env="REWARD_GAME_HOST", unit="💎",
+        group="Развлечения",
+    ),
+    Number(
+        key="hint_cooldown",
+        title="Пауза подсказки",
+        emoji="💡",
+        description="Через сколько можно открыть следующую букву",
+        default=30, minimum=0, maximum=300, step=5,
+        env="HINT_COOLDOWN", unit="сек",
+        group="Развлечения",
+    ),
+)
+
+
+NUMBER_BY_KEY = {number.key: number for number in NUMBERS}
+
+
+def numbers_by_group(name: str) -> list[Number]:
+    return [number for number in NUMBERS if number.group == name]
+
+
+
+
+# ---------------------------------------------------------
+# Текстовые настройки
+#
+# Четвёртый тип: свой текст вместо стандартного. Меняется
+# ответом на сообщение бота — кнопками текст не наберёшь.
+#
+# placeholders перечисляет разрешённые подстановки. Если человек
+# впишет неизвестную, настройка не сохранится: лучше отказать,
+# чем потом падать при отправке.
+# ---------------------------------------------------------
+
+@dataclass(frozen=True)
+class Text:
+    key: str
+    title: str
+    emoji: str
+    description: str
+    default: str
+    placeholders: tuple[str, ...] = ()
+    max_length: int = 500
+    group: str = "Основное"
+
+    def hint(self) -> str:
+        if not self.placeholders:
+            return ""
+
+        names = ", ".join(f"<code>{{{p}}}</code>" for p in self.placeholders)
+
+        return f"Можно использовать: {names}"
+
+
+DEFAULT_GREETING = "👋 <b>{name}</b>, заходи, располагайся."
+
+DEFAULT_GREETING_HINT = (
+    "Я Мара, живу в этом чате.\n\n"
+    "💬 Позови по имени — поболтаем\n"
+    "🎁 /bonus — забрать ежедневные алмазы\n"
+    "🎲 Ответь кому-нибудь словом «пиво» или «обнять»\n"
+    "❔ /help — что я ещё умею"
+)
+
+
+TEXTS: tuple[Text, ...] = (
+    Text(
+        key="greeting_text",
+        title="Текст приветствия",
+        emoji="👋",
+        description="Первая строка, которой бот здоровается с новичком",
+        default=DEFAULT_GREETING,
+        placeholders=("name",),
+        max_length=300,
+        group="Сообщество",
+    ),
+    Text(
+        key="greeting_hint",
+        title="Подсказка новичку",
+        emoji="📝",
+        description="Что бот пишет новичку после приветствия",
+        default=DEFAULT_GREETING_HINT,
+        max_length=800,
+        group="Сообщество",
+    ),
+)
+
+
+TEXT_BY_KEY = {text.key: text for text in TEXTS}
+
+
+def texts_by_group(name: str) -> list[Text]:
+    return [text for text in TEXTS if text.group == name]
+
+
 CHOICE_BY_KEY = {choice.key: choice for choice in CHOICES}
 
 FEATURE_BY_KEY = {feature.key: feature for feature in FEATURES}
@@ -173,6 +430,12 @@ FEATURE_BY_KEY = {feature.key: feature for feature in FEATURES}
 DEFAULTS = {feature.key: feature.default for feature in FEATURES}
 
 DEFAULTS.update({choice.key: choice.default for choice in CHOICES})
+
+DEFAULTS.update(
+    {number.key: number.resolve_default() for number in NUMBERS}
+)
+
+DEFAULTS.update({text.key: text.default for text in TEXTS})
 
 
 def choices_by_group(name: str) -> list[Choice]:
@@ -195,7 +458,7 @@ def option_label(key: str, value: str) -> str:
 def groups() -> list[str]:
     seen = []
 
-    for item in list(FEATURES) + list(CHOICES):
+    for item in list(FEATURES) + list(CHOICES) + list(NUMBERS) + list(TEXTS):
         if item.group not in seen:
             seen.append(item.group)
 
