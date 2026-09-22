@@ -6,9 +6,9 @@ import logging
 from html import escape
 
 from aiogram import Router
-from aiogram.types import BufferedInputFile, Message
+from aiogram.types import Message
 
-from actions.providers import download_photo
+from actions.handler import send_picked
 from actions.service import get_image_for_action
 from actions.show_me import (
     is_meow,
@@ -19,12 +19,6 @@ from actions.show_me import (
 )
 
 from botcontext import display_name_of, is_addressed
-
-from database.repository import (
-    drop_action_image,
-    release_action_image,
-    set_action_image_file_id,
-)
 
 from settings.store import is_enabled
 
@@ -42,48 +36,19 @@ async def send_cat(message: Message, caption: str):
     mood = pick_mood()
 
     try:
-        image = await get_image_for_action(mood)
+        picked = await get_image_for_action(mood)
     except Exception as error:
         logger.error("CAT: %s %s", type(error).__name__, error)
-        image = None
+        picked = None
 
-    if image is None:
+    if picked is None:
         await message.reply("Котики закончились, попробуй попозже 🐾")
         return
 
-    if image.telegram_file_id:
-        try:
-            await message.reply_photo(
-                photo=image.telegram_file_id,
-                caption=caption,
-            )
-            return
-        except Exception as error:
-            logger.warning("CAT file_id: %s", error)
+    sent = await send_picked(message, picked, caption, "cat")
 
-    content = await download_photo(image.image_url, image.fallback_url)
-
-    if content is None:
-        await drop_action_image(image.id)
-        await message.reply("Котик не загрузился 🐾")
-        return
-
-    try:
-        sent = await message.reply_photo(
-            photo=BufferedInputFile(content, filename="cat.jpg"),
-            caption=caption,
-        )
-    except Exception as error:
-        logger.warning("CAT send: %s", error)
-        await release_action_image(image.id)
+    if sent is None:
         await message.reply("Котик не отправился 🐾")
-        return
-
-    if sent.photo:
-        try:
-            await set_action_image_file_id(image.id, sent.photo[-1].file_id)
-        except Exception:
-            pass
 
 
 def is_show_me_request(message: Message) -> bool:
