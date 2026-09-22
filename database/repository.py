@@ -555,6 +555,120 @@ async def get_facts(telegram_id: int, limit: int = 20) -> list[str]:
 # ACTION IMAGES
 # =========================================================
 
+async def get_cached_action_image(action: str) -> ActionImage | None:
+    """
+    Неиспользованная картинка с готовым telegram_file_id.
+
+    Только такие и годятся для повторной отправки: ссылки источника
+    протухают через сутки, а file_id живёт вечно.
+    """
+    async with session_scope() as session:
+        result = await session.execute(
+            select(ActionImage)
+            .where(
+                ActionImage.action == action,
+                ActionImage.used.is_(False),
+                ActionImage.telegram_file_id.is_not(None),
+            )
+            .order_by(func.random())
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+
+        image = result.scalar_one_or_none()
+
+        if image is None:
+            return None
+
+        image.used = True
+        image.used_at = utcnow()
+
+        await session.commit()
+
+        return image
+
+
+async def count_cached_images(action: str) -> int:
+    async with session_scope() as session:
+        result = await session.execute(
+            select(func.count(ActionImage.id)).where(
+                ActionImage.action == action,
+                ActionImage.telegram_file_id.is_not(None),
+            )
+        )
+        return result.scalar() or 0
+
+
+async def reset_cached_images(action: str):
+    """
+    Возвращает в оборот только те картинки, что уже в Telegram.
+    """
+    async with session_scope() as session:
+        await session.execute(
+            update(ActionImage)
+            .where(
+                ActionImage.action == action,
+                ActionImage.telegram_file_id.is_not(None),
+            )
+            .values(used=False, used_at=None)
+        )
+        await session.commit()
+
+
+async def known_photo_ids(action: str, limit: int = 300) -> set[str]:
+    """
+    Что уже есть в коллекции — чтобы не качать одно и то же дважды.
+    """
+    async with session_scope() as session:
+        result = await session.execute(
+            select(ActionImage.photo_id)
+            .where(ActionImage.action == action)
+            .limit(limit)
+        )
+        return set(result.scalars().all())
+
+
+async def save_sent_image(
+    action: str,
+    provider: str,
+    photo_id: str,
+    file_id: str,
+) -> None:
+    """
+    Запоминает отправленную картинку по file_id. Ссылка источника
+    не сохраняется: она всё равно протухнет.
+    """
+    async with session_scope() as session:
+        existing = await session.execute(
+            select(ActionImage).where(
+                ActionImage.action == action,
+                ActionImage.photo_id == photo_id,
+            )
+        )
+
+        item = existing.scalar_one_or_none()
+
+        if item is None:
+            session.add(
+                ActionImage(
+                    action=action,
+                    provider=provider,
+                    photo_id=photo_id,
+                    image_url="",
+                    telegram_file_id=file_id,
+                    source_page=0,
+                    used=True,
+                    used_at=utcnow(),
+                )
+            )
+        else:
+            item.telegram_file_id = file_id
+            item.used = True
+            item.used_at = utcnow()
+
+        await session.commit()
+
+
 async def get_unused_action_image(action: str) -> ActionImage | None:
     async with session_scope() as session:
         result = await session.execute(
