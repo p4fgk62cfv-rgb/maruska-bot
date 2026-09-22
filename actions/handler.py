@@ -6,11 +6,12 @@ from aiogram import Router
 from aiogram.types import BufferedInputFile, Message
 
 from actions.catalog import find_action
-from settings.store import is_enabled
+from settings.store import is_blocked, is_enabled
 from actions.phrases import pick_template, render
 from actions.service import get_image_for_action
 
 from database.repository import (
+    bump_daily_stat,
     save_sent_image,
     save_user,
     save_message,
@@ -284,6 +285,9 @@ def is_action_message(message: Message) -> bool:
     if not is_enabled(message.chat.id, "actions"):
         return False
 
+    if is_blocked(message.chat.id, message.from_user.id if message.from_user else None):
+        return False
+
     if not message.from_user or message.from_user.is_bot:
         return False
 
@@ -408,6 +412,12 @@ async def action_handler(message: Message):
 
     if sent is None:
         await message.reply("Не получилось отправить фотографию 😔")
+        return
+
+    try:
+        await bump_daily_stat(message.chat.id, "actions")
+    except Exception:
+        pass
 
 
 async def send_picked(message, picked, caption: str, filename: str):
