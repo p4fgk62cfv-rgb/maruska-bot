@@ -157,6 +157,60 @@ SHOULD_NOT_MATCH.extend([
 ])
 
 
+def check_exclusions() -> list[str]:
+    """
+    Проверяем, что теги-исключения реально отсекают мусор,
+    на котором мы уже спотыкались в чате.
+    """
+    import sys, types
+
+    sys.modules.setdefault("httpx", types.ModuleType("httpx"))
+
+    from actions.catalog import ACTION_BY_KEY
+    from actions.catalog_data import excluded_tags, required_tags
+    from actions.providers import matches_tags
+
+    cases = [
+        # (действие, теги фото, должно ли подойти)
+        ("borscht", "soup noodle letters alphabet macaroni", False),
+        ("borscht", "noodle soup macaroni bowl", False),
+        ("borscht", "borscht beetroot soup bowl", True),
+        ("cutlet", "burger hamburger fries fast food", False),
+        ("cutlet", "cutlet meatball meat plate", True),
+        ("pasta", "alphabet letters noodles", False),
+        ("pasta", "pasta spaghetti italian", True),
+        ("fries", "burger hamburger fries", False),
+        ("fries", "fries potato snack", True),
+        ("steak", "burger sandwich bun", False),
+        ("steak", "steak beef grill", True),
+        ("soup", "noodle macaroni alphabet letters", False),
+        ("soup", "noodle soup bowl chicken", True),
+        ("soup", "soup broth bowl vegetables", True),
+        ("pizza", "pizza drawing illustration vector", False),
+        ("pizza", "pizza cheese italian", True),
+        ("beer", "beer logo sign poster", False),
+        ("beer", "beer glass pub foam", True),
+    ]
+
+    problems = []
+
+    for key, tags, expected in cases:
+        action = ACTION_BY_KEY[key]
+
+        got = matches_tags(
+            tags,
+            required_tags(action),
+            excluded_tags(action),
+        )
+
+        if got != expected:
+            problems.append(
+                f"  [теги] {key}: фото «{tags}» -> {got}, ждали {expected}"
+            )
+
+    return problems
+
+
 def main() -> int:
     failures = []
 
@@ -171,7 +225,9 @@ def main() -> int:
         if action is not None:
             failures.append(f"  [ложное срабатывание] {text!r} -> {action.key}")
 
-    total = len(SHOULD_MATCH) + len(SHOULD_NOT_MATCH)
+    failures.extend(check_exclusions())
+
+    total = len(SHOULD_MATCH) + len(SHOULD_NOT_MATCH) + 18
 
     if failures:
         print(f"❌ {len(failures)} из {total} проверок не прошли:\n")
