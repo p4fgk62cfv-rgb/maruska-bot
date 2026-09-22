@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Мара — панель администратора</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: #0e0b18;
+    --card: #17132a;
+    --card-2: #1e1838;
+    --line: #2a2348;
+    --text: #f2eefc;
+    --muted: #9a8fc0;
+    --accent: #8b5cf6;
+    --accent-2: #c084fc;
+    --green: #34d399;
+    --red: #f87171;
+    --gold: #fbbf24;
+    box-sizing: border-box;
+  }
+
+  *, *::before, *::after { box-sizing: inherit; }
+
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    padding:
+      calc(env(safe-area-inset-top, 0px) + 12px)
+      14px
+      calc(env(safe-area-inset-bottom, 0px) + 86px);
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  a { color: var(--accent-2); }
+
+  /* --- шапка --- */
+  .head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .avatar {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    overflow: hidden;
+    flex: 0 0 auto;
+  }
+
+  .avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+  .head h1 { font-size: 18px; margin: 0; }
+  .head .sub { font-size: 12px; color: var(--muted); }
+
+  /* --- выбор группы --- */
+  select, input, textarea {
+    width: 100%;
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 11px 12px;
+    font: inherit;
+    outline: none;
+  }
+
+  select:focus, input:focus, textarea:focus { border-color: var(--accent); }
+
+  .chat-pick { margin-bottom: 14px; }
+
+  /* --- карточки метрик --- */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .metric {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px;
+  }
+
+  .metric .label {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .metric .value {
+    font-size: 24px;
+    font-weight: 700;
+    margin-top: 6px;
+  }
+
+  .metric .delta { font-size: 12px; color: var(--green); margin-top: 2px; }
+
+  /* --- график --- */
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+
+  .panel h2 {
+    font-size: 15px;
+    margin: 0 0 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .chart { width: 100%; height: 150px; display: block; }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; }
+
+  .tab {
+    padding: 7px 14px;
+    border-radius: 999px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .tab.on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+
+  /* --- строки настроек --- */
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .row:last-child { border-bottom: 0; }
+
+  .row .icon { font-size: 20px; flex: 0 0 auto; }
+  .row .body { flex: 1 1 auto; min-width: 0; }
+  .row .title { font-size: 14px; font-weight: 600; }
+  .row .hint { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* --- тумблер --- */
+  .switch {
+    width: 48px; height: 28px;
+    border-radius: 999px;
+    background: var(--line);
+    position: relative;
+    flex: 0 0 auto;
+    transition: background .18s;
+  }
+
+  .switch.on { background: var(--green); }
+
+  .switch::after {
+    content: "";
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform .18s;
+  }
+
+  .switch.on::after { transform: translateX(20px); }
+
+  /* --- число --- */
+  .stepper { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+
+  .stepper button {
+    width: 32px; height: 32px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--card-2);
+    color: var(--text);
+    font-size: 17px;
+  }
+
+  .stepper .num {
+    min-width: 64px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 14px;
+  }
+
+  /* --- список людей --- */
+  .person {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    margin-bottom: 8px;
+  }
+
+  .person .name { font-weight: 600; font-size: 14px; }
+  .person .meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+  .chips { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+
+  .chip {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--card-2);
+    border: 1px solid var(--line);
+  }
+
+  .chip.coins { color: var(--accent-2); }
+  .chip.xp { color: var(--gold); }
+  .chip.karma { color: var(--red); }
+
+  /* --- низ --- */
+  .nav {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    display: flex;
+    background: rgba(14, 11, 24, .94);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line);
+    padding: 8px 0 calc(env(safe-area-inset-bottom, 0px) + 8px);
+  }
+
+  .nav button {
+    flex: 1;
+    background: none;
+    border: 0;
+    color: var(--muted);
+    font: inherit;
+    font-size: 11px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 4px 0;
+  }
+
+  .nav button .ic { font-size: 19px; }
+  .nav button.on { color: var(--accent-2); }
+
+  .muted { color: var(--muted); font-size: 13px; }
+  .center { text-align: center; padding: 40px 20px; }
+
+  button.primary {
+    width: 100%;
+    padding: 13px;
+    border: 0;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    margin-top: 10px;
+  }
+
+  button.ghost {
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--card-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+  }
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    margin-bottom: 8px;
+  }
+
+  .menu-item .ic { font-size: 20px; }
+  .menu-item .arrow { color: var(--muted); }
+
+  .bars { display: flex; flex-direction: column; gap: 8px; }
+
+  .bar-row { font-size: 13px; }
+
+  .bar-row .top {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+
+  .bar {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--card-2);
+    overflow: hidden;
+  }
+
+  .bar span {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  }
+
+  .log {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: var(--card-2);
+    margin-bottom: 6px;
+    word-break: break-word;
+  }
+
+  .log.ERROR, .log.CRITICAL { border-left: 3px solid var(--red); }
+  .log.WARNING { border-left: 3px solid var(--gold); }
+  .log.INFO { border-left: 3px solid var(--green); }
+
+  .log .when { color: var(--muted); }
+
+  .back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+
+  .kv {
+    display: flex;
+    justify-content: space-between;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+  }
+
+  .kv:last-child { border-bottom: 0; }
+  .kv .k { color: var(--muted); }
+
+  .actions-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .toast {
+    position: fixed;
+    left: 50%; bottom: 96px;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--card-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 16px;
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity .2s, transform .2s;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div id="app"><div class="center muted">Загружаю…</div></div>
+
+<div class="nav" id="nav" style="display:none">
+  <button data-tab="home" class="on"><span class="ic">🏠</span>Главная</button>
+  <button data-tab="settings"><span class="ic">⚙️</span>Настройки</button>
+  <button data-tab="users"><span class="ic">👥</span>Люди</button>
+  <button data-tab="groups"><span class="ic">💬</span>Группы</button>
+  <button data-tab="more"><span class="ic">•••</span>Ещё</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  var tg = window.Telegram && window.Telegram.WebApp;
+  if (tg) { tg.ready(); tg.expand(); }
+
+  var initData = (tg && tg.initData) || "";
+  var app = document.getElementById("app");
+  var nav = document.getElementById("nav");
+  var toastEl = document.getElementById("toast");
+
+  var state = {
+    tab: "home",
+    chat: null,
+    session: null,
+    days: 7,
+    user: null,          // открытая карточка человека
+    logLevel: "",
+    catalogFilter: ""
+  };
+
+  function toast(text) {
+    toastEl.textContent = text;
+    toastEl.classList.add("show");
+    setTimeout(function () { toastEl.classList.remove("show"); }, 1800);
+  }
+
+  function api(path, options) {
+    options = options || {};
+    options.headers = Object.assign(
+      { "X-Init-Data": initData, "Content-Type": "application/json" },
+      options.headers || {}
+    );
+    return fetch(path, options).then(function (response) {
+      if (!response.ok) throw new Error(response.status);
+      return response.json();
+    });
+  }
+
+  function esc(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function num(value) {
+    return String(value || 0).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  }
+
+  function ago(iso) {
+    if (!iso) return "давно";
+    var diff = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (diff < 300) return "онлайн";
+    if (diff < 3600) return Math.floor(diff / 60) + " мин назад";
+    if (diff < 86400) return Math.floor(diff / 3600) + " ч назад";
+    return Math.floor(diff / 86400) + " дн назад";
+  }
+
+  // ---------- график ----------
+  function chart(series, field) {
+    var width = 320, height = 150, pad = 24;
+    var values = series.map(function (p) { return p[field] || 0; });
+    var top = Math.max.apply(null, values.concat([1]));
+
+    var points = values.map(function (value, index) {
+      var x = pad + index * (width - pad * 2) / Math.max(values.length - 1, 1);
+      var y = height - pad - (value / top) * (height - pad * 2);
+      return [x, y];
+    });
+
+    var line = points.map(function (p, i) {
+      return (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1);
+    }).join(" ");
+
+    var area = line
+      + " L " + points[points.length - 1][0].toFixed(1) + " " + (height - pad)
+      + " L " + points[0][0].toFixed(1) + " " + (height - pad) + " Z";
+
+    var labels = series.map(function (p, i) {
+      if (series.length > 8 && i % 2) return "";
+      var x = pad + i * (width - pad * 2) / Math.max(series.length - 1, 1);
+      return '<text x="' + x.toFixed(1) + '" y="' + (height - 6)
+        + '" fill="#9a8fc0" font-size="9" text-anchor="middle">'
+        + p.day.slice(8) + "</text>";
+    }).join("");
+
+    return '<svg class="chart" viewBox="0 0 ' + width + " " + height
+      + '" preserveAspectRatio="none">'
+      + '<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">'
+      + '<stop offset="0%" stop-color="#8b5cf6" stop-opacity=".45"/>'
+      + '<stop offset="100%" stop-color="#8b5cf6" stop-opacity="0"/>'
+      + "</linearGradient></defs>"
+      + '<path d="' + area + '" fill="url(#g)"/>'
+      + '<path d="' + line + '" fill="none" stroke="#c084fc" stroke-width="2" '
+      + 'stroke-linejoin="round" stroke-linecap="round"/>'
+      + labels
+      + "<text x=\"4\" y=\"14\" fill=\"#9a8fc0\" font-size=\"9\">" + num(top) + "</text>"
+      + "</svg>";
+  }
+
+  // ---------- экраны ----------
+  function chatPicker() {
+    var chats = state.session.chats;
+    if (!chats.length) return "";
+
+    var options = ['<option value="">Все группы</option>'];
+
+    chats.forEach(function (chat) {
+      options.push(
+        '<option value="' + chat.chat_id + '"'
+        + (String(state.chat) === String(chat.chat_id) ? " selected" : "")
+        + ">" + esc(chat.title) + " · " + chat.members + "</option>"
+      );
+    });
+
+    return '<div class="chat-pick"><select id="chatPick">'
+      + options.join("") + "</select></div>";
+  }
+
+  function renderHome(data) {
+    var t = data.totals;
+
+    var html = chatPicker()
+      + '<div class="tabs">'
+      + [7, 14, 30].map(function (d) {
+          return '<div class="tab' + (state.days === d ? " on" : "")
+            + '" data-days="' + d + '">' + d + " дней</div>";
+        }).join("")
+      + "</div>"
+      + '<div class="grid">'
+      + metric("👥", "Участники", num(t.people), t.active_today + " активны сегодня")
+      + metric("💬", "Сообщения", num(t.messages), "")
+      + metric("💎", "Алмазы", num(t.coins), "")
+      + metric("✨", "Опыт", num(t.xp), "")
+      + "</div>"
+      + '<div class="panel"><h2>Активность</h2>'
+      + chart(data.series, "messages") + "</div>";
+
+    app.innerHTML = html;
+    bindChatPick();
+
+    Array.prototype.forEach.call(
+      app.querySelectorAll("[data-days]"),
+      function (el) {
+        el.onclick = function () {
+          state.days = parseInt(el.dataset.days, 10);
+          load();
+        };
+      }
+    );
+  }
+
+  function metric(icon, label, value, delta) {
+    return '<div class="metric"><div class="label">' + icon + " " + label
+      + '</div><div class="value">' + value + "</div>"
+      + (delta ? '<div class="delta">' + esc(delta) + "</div>" : "")
+      + "</div>";
+  }
+
+  function renderSettings(data) {
+    if (!state.chat) {
+      app.innerHTML = chatPicker()
+        + '<div class="center muted">Выбери группу — настройки задаются для каждой отдельно.</div>';
+      bindChatPick();
+      return;
+    }
+
+    var html = chatPicker();
+
+    data.sections.forEach(function (section) {
+      html += '<div class="panel"><h2>' + esc(section.name) + "</h2>";
+
+      section.items.forEach(function (item) {
+        html += '<div class="row" data-key="' + item.key + '">'
+          + '<div class="icon">' + item.emoji + "</div>"
+          + '<div class="body"><div class="title">' + esc(item.title) + "</div>"
+          + '<div class="hint">' + esc(item.description) + "</div>";
+
+        if (item.kind === "choice") {
+          html += '<select class="pickOption" style="margin-top:8px">'
+            + item.options.map(function (option) {
+                return '<option value="' + option.value + '"'
+                  + (option.value === item.value ? " selected" : "") + ">"
+                  + option.emoji + " " + esc(option.label) + "</option>";
+              }).join("")
+            + "</select>";
+        }
+
+        if (item.kind === "text") {
+          html += '<textarea class="editText" rows="3" maxlength="'
+            + item.max_length + '" style="margin-top:8px">'
+            + esc(item.value) + "</textarea>"
+            + (item.placeholders.length
+                ? '<div class="hint">Подстановки: '
+                  + item.placeholders.map(function (p) { return "{" + p + "}"; }).join(", ")
+                  + "</div>"
+                : "")
+            + '<button class="ghost saveText" style="margin-top:8px">Сохранить</button>';
+        }
+
+        html += "</div>";
+
+        if (item.kind === "toggle") {
+          html += '<div class="switch' + (item.value ? " on" : "") + '"></div>';
+        }
+
+        if (item.kind === "number") {
+          html += '<div class="stepper">'
+            + '<button class="minus">−</button>'
+            + '<div class="num">' + esc(item.label) + "</div>"
+            + '<button class="plus">+</button></div>';
+        }
+
+        html += "</div>";
+      });
+
+      html += "</div>";
+    });
+
+    app.innerHTML = html;
+    bindChatPick();
+    bindSettings(data);
+  }
+
+  function bindSettings(data) {
+    var index = {};
+
+    data.sections.forEach(function (section) {
+      section.items.forEach(function (item) { index[item.key] = item; });
+    });
+
+    Array.prototype.forEach.call(app.querySelectorAll(".row"), function (row) {
+      var item = index[row.dataset.key];
+      if (!item) return;
+
+      var toggle = row.querySelector(".switch");
+
+      if (toggle) {
+        toggle.onclick = function () {
+          var next = !toggle.classList.contains("on");
+          toggle.classList.toggle("on", next);
+
+          save(item.key, next).catch(function () {
+            toggle.classList.toggle("on", !next);
+          });
+        };
+      }
+
+      var picker = row.querySelector(".pickOption");
+
+      if (picker) {
+        picker.onchange = function () { save(item.key, picker.value); };
+      }
+
+      var minus = row.querySelector(".minus");
+      var plus = row.querySelector(".plus");
+      var numEl = row.querySelector(".num");
+
+      function step(delta) {
+        var next = Math.max(item.min, Math.min(item.max, item.value + delta));
+        if (next === item.value) { toast("Дальше некуда"); return; }
+
+        item.value = next;
+        numEl.textContent = next + (item.unit ? " " + item.unit : "");
+
+        save(item.key, next);
+      }
+
+      if (minus) minus.onclick = function () { step(-item.step); };
+      if (plus) plus.onclick = function () { step(item.step); };
+
+      var area = row.querySelector(".editText");
+      var saveBtn = row.querySelector(".saveText");
+
+      if (saveBtn) {
+        saveBtn.onclick = function () { save(item.key, area.value); };
+      }
+    });
+  }
+
+  function save(key, value) {
+    return api("/api/admin/settings", {
+      method: "POST",
+      body: JSON.stringify({ chat_id: state.chat, key: key, value: value })
+    }).then(function () {
+      toast("Сохранено");
+      if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+    }).catch(function () {
+      toast("Не сохранилось");
+      throw new Error("save failed");
+    });
+  }
+
+  function renderUsers(data) {
+    var html = chatPicker()
+      + '<input id="search" placeholder="Поиск по имени…" style="margin-bottom:12px">';
+
+    if (!data.users.length) {
+      html += '<div class="center muted">Никого не нашла</div>';
+    }
+
+    data.users.forEach(function (person) {
+      html += '<div class="person">'
+        + '<div class="avatar">' + esc((person.name || "?").slice(0, 1)) + "</div>"
+        + '<div style="flex:1;min-width:0">'
+        + '<div class="name">' + esc(person.name) + "</div>"
+        + '<div class="meta">Уровень ' + person.level + " · " + ago(person.last_seen)
+        + " · " + num(person.messages) + " сообщ.</div>"
+        + '<div class="chips">'
+        + '<span class="chip coins">💎 ' + num(person.coins) + "</span>"
+        + '<span class="chip xp">✨ ' + num(person.xp) + "</span>"
+        + '<span class="chip karma">❤️ ' + person.karma + "</span>"
+        + "</div></div></div>";
+    });
+
+    app.innerHTML = html;
+    bindChatPick();
+
+    Array.prototype.forEach.call(
+      app.querySelectorAll("[data-user]"),
+      function (el) {
+        el.onclick = function () {
+          state.user = el.dataset.user;
+          app.innerHTML = '<div class="center muted">Загружаю…</div>';
+          load();
+        };
+      }
+    );
+
+    var search = document.getElementById("search");
+    var timer = null;
+
+    search.oninput = function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () { load(search.value); }, 350);
+    };
+  }
+
+  function renderGroups() {
+    var html = "";
+
+    state.session.chats.forEach(function (chat) {
+      html += '<div class="person">'
+        + '<div class="avatar">' + esc(chat.title.slice(0, 1)) + "</div>"
+        + '<div style="flex:1;min-width:0">'
+        + '<div class="name">' + esc(chat.title) + "</div>"
+        + '<div class="meta">ID ' + chat.chat_id + " · "
+        + chat.members + " участников · " + ago(chat.last_seen) + "</div>"
+        + "</div>"
+        + '<div class="chip" style="color:'
+        + (chat.active ? "var(--green)" : "var(--muted)") + '">'
+        + (chat.active ? "активна" : "тихо") + "</div></div>";
+    });
+
+    if (!state.session.chats.length) {
+      html = '<div class="center muted">Нет групп, где ты администратор.</div>';
+    }
+
+    app.innerHTML = html;
+  }
+
+
+  // ---------- меню «Ещё» ----------
+  var MORE = [
+    ["economy", "💎", "Экономика", "Баланс, топ богачей, операции"],
+    ["achievements", "🏆", "Достижения", "20 наград и кто их открыл"],
+    ["shop", "🛍", "Магазин", "27 товаров и продажи"],
+    ["stats", "📊", "Статистика", "Графики и топы"],
+    ["games", "🎮", "Игры", "Крокодил: раунды и победы"],
+    ["catalog", "⚡", "Действия", "205 реакций на слова"],
+    ["media", "🖼", "Медиа", "Собранные коллекции картинок"],
+    ["broadcast", "📣", "Рассылка", "Написать сразу во все группы"],
+    ["logs", "📋", "Логи", "Что происходило последним"],
+    ["system", "🗄", "Система", "Состояние и цифры"]
+  ];
+
+  function renderMore() {
+    app.innerHTML = MORE.map(function (row) {
+      return '<div class="menu-item" data-go="' + row[0] + '">'
+        + '<div class="ic">' + row[1] + "</div>"
+        + '<div style="flex:1"><div class="title">' + row[2] + "</div>"
+        + '<div class="hint">' + row[3] + "</div></div>"
+        + '<div class="arrow">›</div></div>';
+    }).join("");
+
+    Array.prototype.forEach.call(app.querySelectorAll("[data-go]"), function (el) {
+      el.onclick = function () {
+        state.tab = el.dataset.go;
+        app.innerHTML = '<div class="center muted">Загружаю…</div>';
+        load();
+      };
+    });
+  }
+
+  function backButton() {
+    return '<div class="back" id="back">← Назад</div>';
+  }
+
+  function bindBack(to) {
+    var el = document.getElementById("back");
+    if (!el) return;
+
+    el.onclick = function () {
+      state.tab = to || "more";
+      state.user = null;
+      app.innerHTML = '<div class="center muted">Загружаю…</div>';
+      load();
+    };
+  }
+
+  function bars(rows, unit) {
+    if (!rows.length) return '<div class="muted">Пока пусто</div>';
+
+    var top = Math.max.apply(null, rows.map(function (r) { return r.value || r.wins || 0; }));
+
+    return '<div class="bars">' + rows.map(function (row) {
+      var value = row.value || row.wins || 0;
+      return '<div class="bar-row"><div class="top"><span>'
+        + esc(row.name) + "</span><span>" + num(value) + (unit || "") + "</span></div>"
+        + '<div class="bar"><span style="width:'
+        + Math.round(value * 100 / Math.max(top, 1)) + '%"></span></div></div>';
+    }).join("") + "</div>";
+  }
+
+  // ---------- карточка человека ----------
+  function renderUserCard(card) {
+    var html = backButton()
+      + '<div class="panel" style="text-align:center">'
+      + '<div class="avatar" style="width:64px;height:64px;margin:0 auto 10px;font-size:24px">'
+      + esc(card.name.slice(0, 1)) + "</div>"
+      + "<h2 style=\"justify-content:center\">" + esc(card.name) + "</h2>"
+      + '<div class="muted">ID ' + card.telegram_id
+      + (card.username ? " · @" + esc(card.username) : "") + "</div></div>"
+
+      + '<div class="grid">'
+      + metric("💎", "Баланс", num(card.coins), "")
+      + metric("👑", "Уровень", card.level, "")
+      + metric("✨", "Опыт", num(card.xp), "")
+      + metric("❤️", "Карма", card.karma, "")
+      + "</div>"
+
+      + '<div class="panel"><h2>Цифры</h2>'
+      + kv("Сообщений", num(card.messages))
+      + kv("Игр сыграно", card.games_played)
+      + kv("Побед", card.games_won)
+      + kv("Лучшая серия бонусов", card.best_streak)
+      + kv("Вещей в инвентаре", card.items)
+      + kv("Достижений", card.achievements)
+      + kv("Групп", card.chats)
+      + "</div>";
+
+    if (card.history.length) {
+      html += '<div class="panel"><h2>Последние операции</h2>'
+        + card.history.map(function (row) {
+            return kv(
+              (row.note || row.reason) + " · " + row.created_at.slice(5, 10),
+              (row.amount > 0 ? "+" : "") + row.amount
+            );
+          }).join("")
+        + "</div>";
+    }
+
+    html += '<div class="panel"><h2>Действия</h2>'
+      + '<input id="amount" type="number" placeholder="Сколько (можно минус)">'
+      + '<div class="actions-grid">'
+      + '<button class="ghost" id="giveCoins">💎 Изменить баланс</button>'
+      + '<button class="ghost" id="giveXp">✨ Изменить опыт</button>'
+      + "</div>"
+      + (state.chat
+          ? '<button class="ghost" id="blockUser" style="width:100%;margin-top:8px;color:var(--red)">🚫 Заблокировать в этой группе</button>'
+          : '<div class="hint" style="margin-top:8px">Выбери группу, чтобы блокировать</div>')
+      + "</div>";
+
+    app.innerHTML = html;
+    bindBack("users");
+
+    var amount = document.getElementById("amount");
+
+    function act(action) {
+      var value = parseInt(amount.value, 10);
+
+      if (!value) { toast("Введи число"); return; }
+
+      api("/api/admin/user", {
+        method: "POST",
+        body: JSON.stringify({
+          action: action,
+          user_id: card.telegram_id,
+          chat_id: state.chat,
+          amount: value
+        })
+      }).then(function () {
+        toast("Готово");
+        load();
+      }).catch(function () { toast("Не получилось"); });
+    }
+
+    document.getElementById("giveCoins").onclick = function () { act("coins"); };
+    document.getElementById("giveXp").onclick = function () { act("xp"); };
+
+    var block = document.getElementById("blockUser");
+
+    if (block) {
+      block.onclick = function () {
+        api("/api/admin/user", {
+          method: "POST",
+          body: JSON.stringify({
+            action: "block",
+            user_id: card.telegram_id,
+            chat_id: state.chat
+          })
+        }).then(function () { toast("Заблокирован"); })
+          .catch(function () { toast("Не получилось"); });
+      };
+    }
+  }
+
+  function kv(key, value) {
+    return '<div class="kv"><span class="k">' + esc(key)
+      + "</span><span>" + esc(value) + "</span></div>";
+  }
+
+  // ---------- экономика ----------
+  function renderEconomy(data) {
+    var t = data.totals;
+
+    var html = backButton() + chatPicker()
+      + '<div class="grid">'
+      + metric("💎", "Всего алмазов", num(t.coins), "")
+      + metric("👥", "Владельцев", num(t.people), "")
+      + "</div>"
+      + '<div class="panel"><h2>Топ богачей</h2>' + bars(data.rich, " 💎") + "</div>"
+      + '<div class="panel"><h2>Последние операции</h2>'
+      + (data.history.length
+          ? data.history.map(function (row) {
+              return kv(
+                esc(row.name) + " · " + (row.note || row.reason),
+                (row.amount > 0 ? "+" : "") + row.amount
+              );
+            }).join("")
+          : '<div class="muted">Пока пусто</div>')
+      + "</div>";
+
+    app.innerHTML = html;
+    bindBack();
+    bindChatPick();
+  }
+
+  // ---------- достижения ----------
+  function renderAchievements(data) {
+    var html = backButton() + '<div class="panel"><h2>Достижения</h2>';
+
+    data.items.forEach(function (item) {
+      html += '<div class="row"><div class="icon">' + item.emoji + "</div>"
+        + '<div class="body"><div class="title">' + esc(item.title)
+        + (item.secret ? " 🔒" : "") + "</div>"
+        + '<div class="hint">' + esc(item.description)
+        + " · награда " + item.reward + " 💎</div></div>"
+        + '<div class="chip">' + item.unlocked + "</div></div>";
+    });
+
+    app.innerHTML = html + "</div>";
+    bindBack();
+  }
+
+  // ---------- магазин ----------
+  function renderShop(data) {
+    var html = backButton();
+
+    data.categories.forEach(function (category) {
+      html += '<div class="panel"><h2>' + esc(category.title) + "</h2>";
+
+      category.items.forEach(function (item) {
+        html += '<div class="row"><div class="icon">' + item.emoji + "</div>"
+          + '<div class="body"><div class="title">' + esc(item.title)
+          + "</div><div class=\"hint\">" + esc(item.description) + "</div></div>"
+          + '<div style="text-align:right"><div class="chip coins">'
+          + num(item.price) + " 💎</div>"
+          + '<div class="hint" style="margin-top:4px">куплено ' + item.owned
+          + "</div></div></div>";
+      });
+
+      html += "</div>";
+    });
+
+    app.innerHTML = html;
+    bindBack();
+  }
+
+  // ---------- статистика ----------
+  function renderStats(data) {
+    var html = backButton() + chatPicker()
+      + '<div class="panel"><h2>Сообщения</h2>' + chart(data.series, "messages") + "</div>"
+      + '<div class="panel"><h2>Действия</h2>' + chart(data.series, "actions") + "</div>"
+      + '<div class="panel"><h2>Топ по сообщениям</h2>' + bars(data.tops.messages) + "</div>"
+      + '<div class="panel"><h2>Топ по опыту</h2>' + bars(data.tops.xp, " xp") + "</div>"
+      + '<div class="panel"><h2>Топ по карме</h2>' + bars(data.tops.karma) + "</div>";
+
+    app.innerHTML = html;
+    bindBack();
+    bindChatPick();
+  }
+
+  // ---------- игры ----------
+  function renderGames(data) {
+    var g = data.games;
+
+    app.innerHTML = backButton() + chatPicker()
+      + '<div class="grid">'
+      + metric("🎮", "Раундов", num(g.rounds), "")
+      + metric("🏁", "Доиграно", num(g.finished), "")
+      + metric("👍", "Лайков рисункам", num(g.likes), "")
+      + metric("📈", "Игр за период", num(
+          data.series.reduce(function (sum, row) { return sum + row.games; }, 0)
+        ), "")
+      + "</div>"
+      + '<div class="panel"><h2>Чаще всех угадывают</h2>' + bars(g.top) + "</div>";
+
+    bindBack();
+    bindChatPick();
+  }
+
+  // ---------- каталог действий ----------
+  function renderCatalog(data) {
+    var filter = state.catalogFilter || "";
+
+    var visible = data.items.filter(function (item) {
+      return !filter || item.category === filter;
+    });
+
+    var html = backButton()
+      + '<div class="tabs"><div class="tab' + (filter ? "" : " on")
+      + '" data-cat="">Все</div>'
+      + data.categories.map(function (category) {
+          return '<div class="tab' + (filter === category ? " on" : "")
+            + '" data-cat="' + category + '">' + category + "</div>";
+        }).join("")
+      + "</div>"
+      + '<div class="muted" style="margin-bottom:10px">Всего действий: '
+      + data.items.length + ". Каталог живёт в коде, здесь только просмотр.</div>"
+      + '<div class="panel">';
+
+    visible.slice(0, 120).forEach(function (item) {
+      html += '<div class="row"><div class="icon">' + item.emoji + "</div>"
+        + '<div class="body"><div class="title">' + esc(item.title) + "</div>"
+        + '<div class="hint">' + esc(item.aliases.slice(0, 4).join(", "))
+        + " · " + item.phrases + " фраз · " + item.images + " картинок</div></div></div>";
+    });
+
+    app.innerHTML = html + "</div>";
+    bindBack();
+
+    Array.prototype.forEach.call(app.querySelectorAll("[data-cat]"), function (el) {
+      el.onclick = function () {
+        state.catalogFilter = el.dataset.cat;
+        renderCatalog(data);
+      };
+    });
+  }
+
+  // ---------- медиа ----------
+  function renderMedia(data) {
+    var html = backButton() + '<div class="panel"><h2>Коллекции картинок</h2>';
+
+    if (!data.collections.length) {
+      html += '<div class="muted">Пока ничего не собрано</div>';
+    }
+
+    data.collections.forEach(function (row) {
+      html += '<div class="row"><div class="body">'
+        + '<div class="title">' + esc(row.collection.split("#")[0]) + "</div>"
+        + '<div class="hint">' + row.cached + " в Telegram · "
+        + row.used + " показано</div></div>"
+        + '<div class="chip">' + row.total + "</div></div>";
+    });
+
+    app.innerHTML = html + "</div>";
+    bindBack();
+  }
+
+  // ---------- логи ----------
+  function renderLogs(data) {
+    var html = backButton()
+      + '<div class="tabs">'
+      + [["", "Все"], ["ERROR", "Ошибки"], ["WARNING", "Предупреждения"]]
+        .map(function (row) {
+          return '<div class="tab' + (state.logLevel === row[0] ? " on" : "")
+            + '" data-level="' + row[0] + '">' + row[1] + "</div>";
+        }).join("")
+      + "</div>";
+
+    if (!data.records.length) {
+      html += '<div class="center muted">Пусто</div>';
+    }
+
+    data.records.forEach(function (row) {
+      var when = new Date(row.time * 1000).toTimeString().slice(0, 8);
+
+      html += '<div class="log ' + row.level + '">'
+        + '<span class="when">' + when + "</span> " + esc(row.message) + "</div>";
+    });
+
+    app.innerHTML = html;
+    bindBack();
+
+    Array.prototype.forEach.call(app.querySelectorAll("[data-level]"), function (el) {
+      el.onclick = function () {
+        state.logLevel = el.dataset.level;
+        load();
+      };
+    });
+  }
+
+  // ---------- система ----------
+  function renderSystem(data) {
+    var hours = Math.floor(data.uptime / 3600);
+    var minutes = Math.floor((data.uptime % 3600) / 60);
+
+    var html = backButton()
+      + '<div class="panel"><h2>Состояние</h2>'
+      + kv("Время работы", hours + " ч " + minutes + " мин")
+      + kv("Источники картинок", data.providers.join(", ") || "нет")
+      + kv("Холст крокодила", data.drawing ? "включён" : "словесный режим")
+      + kv("Твоих групп", data.your_chats)
+      + kv("Роль", data.owner ? "владелец" : "администратор")
+      + "</div>"
+      + '<div class="panel"><h2>В базе</h2>'
+      + Object.keys(data.counts).map(function (key) {
+          var titles = {
+            users: "Пользователей", profiles: "Профилей", chats: "Чатов",
+            transactions: "Операций", images: "Картинок", rounds: "Раундов",
+            achievements: "Выдано достижений", inventory: "Вещей"
+          };
+          return kv(titles[key] || key, num(data.counts[key]));
+        }).join("")
+      + "</div>";
+
+    app.innerHTML = html;
+    bindBack();
+  }
+
+  // ---------- рассылка ----------
+  function renderBroadcast() {
+    app.innerHTML = backButton()
+      + '<div class="panel"><h2>Рассылка</h2>'
+      + '<div class="hint" style="margin-bottom:10px">Сообщение уйдёт '
+      + (state.chat ? "в выбранную группу" : "во все твои группы")
+      + ". Поддерживается <b>жирный</b> и <i>курсив</i>.</div>"
+      + chatPicker()
+      + '<textarea id="bcText" rows="5" placeholder="Что написать…"></textarea>'
+      + '<button class="primary" id="bcSend">Отправить</button></div>';
+
+    bindBack();
+    bindChatPick();
+
+    document.getElementById("bcSend").onclick = function () {
+      var text = document.getElementById("bcText").value.trim();
+
+      if (!text) { toast("Пустое сообщение"); return; }
+
+      api("/api/admin/broadcast", {
+        method: "POST",
+        body: JSON.stringify({ text: text, chat_id: state.chat || "all" })
+      }).then(function (result) {
+        toast("Отправлено: " + result.sent);
+        document.getElementById("bcText").value = "";
+      }).catch(function () { toast("Не отправилось"); });
+    };
+  }
+
+  function bindChatPick() {
+    var pick = document.getElementById("chatPick");
+    if (!pick) return;
+
+    pick.onchange = function () {
+      state.chat = pick.value || null;
+      load();
+    };
+  }
+
+  // ---------- загрузка ----------
+  function load(query) {
+    var suffix = state.chat ? "?chat_id=" + state.chat : "?";
+    var tab = state.tab;
+
+    if (tab === "home") {
+      api("/api/admin/overview" + suffix + "&days=" + state.days)
+        .then(renderHome).catch(fail);
+
+    } else if (tab === "settings") {
+      if (!state.chat) { renderSettings({ sections: [] }); return; }
+      api("/api/admin/settings" + suffix).then(renderSettings).catch(fail);
+
+    } else if (tab === "users") {
+      if (state.user) {
+        api("/api/admin/user?user_id=" + state.user)
+          .then(renderUserCard).catch(fail);
+        return;
+      }
+
+      api("/api/admin/users" + suffix + "&q=" + encodeURIComponent(query || ""))
+        .then(renderUsers).catch(fail);
+
+    } else if (tab === "groups") {
+      renderGroups();
+
+    } else if (tab === "more") {
+      renderMore();
+
+    } else if (tab === "economy") {
+      api("/api/admin/economy" + suffix).then(renderEconomy).catch(fail);
+
+    } else if (tab === "achievements") {
+      api("/api/admin/achievements").then(renderAchievements).catch(fail);
+
+    } else if (tab === "shop") {
+      api("/api/admin/shop").then(renderShop).catch(fail);
+
+    } else if (tab === "stats") {
+      api("/api/admin/stats" + suffix + "&days=30")
+        .then(renderStats).catch(fail);
+
+    } else if (tab === "games") {
+      api("/api/admin/stats" + suffix + "&days=30")
+        .then(renderGames).catch(fail);
+
+    } else if (tab === "catalog") {
+      api("/api/admin/catalog").then(renderCatalog).catch(fail);
+
+    } else if (tab === "media") {
+      api("/api/admin/media").then(renderMedia).catch(fail);
+
+    } else if (tab === "logs") {
+      api("/api/admin/logs?level=" + (state.logLevel || ""))
+        .then(renderLogs).catch(fail);
+
+    } else if (tab === "system") {
+      api("/api/admin/system").then(renderSystem).catch(fail);
+
+    } else if (tab === "broadcast") {
+      renderBroadcast();
+    }
+  }
+
+  function fail(error) {
+    app.innerHTML = '<div class="center muted">Не удалось загрузить данные.<br>'
+      + "Попробуй открыть панель заново.</div>";
+  }
+
+  Array.prototype.forEach.call(nav.querySelectorAll("button"), function (button) {
+    button.onclick = function () {
+      Array.prototype.forEach.call(nav.querySelectorAll("button"), function (other) {
+        other.classList.toggle("on", other === button);
+      });
+      state.tab = button.dataset.tab;
+      state.user = null;
+      app.innerHTML = '<div class="center muted">Загружаю…</div>';
+      load();
+    };
+  });
+
+  // ---------- старт ----------
+  api("/api/admin/session").then(function (session) {
+    state.session = session;
+
+    if (session.chats.length === 1) {
+      state.chat = session.chats[0].chat_id;
+    }
+
+    var head = document.createElement("div");
+    head.className = "head";
+    head.innerHTML = '<div class="avatar">'
+      + (session.user.photo
+          ? '<img src="' + esc(session.user.photo) + '" alt="">'
+          : esc(session.user.name.slice(0, 1)))
+      + "</div><div><h1>Мара 💜</h1><div class=\"sub\">"
+      + esc(session.user.name)
+      + (session.user.owner ? " · владелец" : " · администратор")
+      + "</div></div>";
+
+    document.body.insertBefore(head, app);
+
+    nav.style.display = "flex";
+    load();
+  }).catch(function () {
+    app.innerHTML = '<div class="center">'
+      + '<div style="font-size:40px">🔒</div>'
+      + "<h2>Нет доступа</h2>"
+      + '<div class="muted">Панель открывается из Telegram и только для '
+      + "администраторов групп, где работает Мара.</div></div>";
+  });
+})();
+</script>
+</body>
+</html>
