@@ -31,6 +31,8 @@ from aiogram.types import BufferedInputFile, InputMediaPhoto
 from database.repository import get_round_by_token, update_round
 from games import state
 from games.crocodile import drawing_keyboard, ensure_hint_message
+
+from webapp.admin import setup_admin_routes
 from games.words import LEVEL_NAMES
 
 
@@ -136,6 +138,15 @@ async def _authorize(request: web.Request, init_data: str):
 
 async def health(request: web.Request):
     return web.json_response({"ok": True, "service": "maruska"})
+
+
+async def admin_page(request: web.Request):
+    page = STATIC_DIR / "admin.html"
+
+    if not page.exists():
+        raise web.HTTPNotFound(text="page missing")
+
+    return web.FileResponse(page)
 
 
 async def draw_page(request: web.Request):
@@ -293,8 +304,11 @@ async def api_draw(request: web.Request):
 def create_app(bot, bot_token: str) -> web.Application:
     app = web.Application(client_max_size=MAX_IMAGE_BYTES + 1024 * 1024)
 
+    import time as _time
+
     app["bot"] = bot
     app["bot_token"] = bot_token
+    app["started_at"] = _time.time()
 
     # Последние рисунки раундов: нужны только для «Дорисовать»,
     # переживать перезапуск им незачем.
@@ -305,9 +319,12 @@ def create_app(bot, bot_token: str) -> web.Application:
 
     app.router.add_get("/", health)
     app.router.add_get("/draw", draw_page)
+    app.router.add_get("/admin", admin_page)
     app.router.add_get("/api/round", api_round)
     app.router.add_get("/api/drawing", api_drawing)
     app.router.add_post("/api/draw", api_draw)
+
+    setup_admin_routes(app)
 
     return app
 
