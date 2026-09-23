@@ -745,11 +745,17 @@ async def _download_file(bot, file_id: str) -> bytes | None:
         return None
 
 
+MISSING_TTL = 300
+
 async def _cached(key: str, loader) -> bytes | None:
     cached = _avatar_cache.get(key)
 
-    if cached and time.monotonic() - cached[0] < AVATAR_TTL:
-        return cached[1]
+    if cached:
+        age = time.monotonic() - cached[0]
+        ttl = AVATAR_TTL if cached[1] else MISSING_TTL
+
+        if age < ttl:
+            return cached[1]
 
     content = await loader()
 
@@ -779,7 +785,8 @@ async def api_avatar(request: web.Request):
     async def load():
         try:
             photos = await bot.get_user_profile_photos(user_id, limit=1)
-        except Exception:
+        except Exception as error:
+            logger.warning("AVATAR %s: %s", user_id, error)
             return None
 
         if not photos.photos:
@@ -789,6 +796,41 @@ async def api_avatar(request: web.Request):
         return await _download_file(bot, photos.photos[0][0].file_id)
 
     content = await _cached(f"user:{user_id}", load)
+
+    if not content:
+        raise web.HTTPNotFound(text="no photo")
+
+    return web.Response(
+        body=content,
+        content_type="image/jpeg",
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
+
+
+async def api_bot_photo(request: web.Request):
+    """
+    Аватарка Мары для шапки панели.
+    """
+    await require_admin(request)
+
+    bot = request.app["bot"]
+
+    async def load():
+        try:
+            me = await bot.me()
+            photos = await bot.get_user_profile_photos(me.id, limit=1)
+        except Exception as error:
+            logger.warning("BOT PHOTO: %s", error)
+            return None
+
+        if not photos.photos:
+            return None
+
+        # Средний размер: в шапке аватарка крупнее, чем в списке
+        sizes = photos.photos[0]
+        return await _download_file(bot, sizes[min(1, len(sizes) - 1)].file_id)
+
+    content = await _cached("bot", load)
 
     if not content:
         raise web.HTTPNotFound(text="no photo")
@@ -970,6 +1012,7 @@ def setup_admin_routes(app: web.Application) -> None:
     app.router.add_post("/api/admin/broadcast", api_broadcast)
     app.router.add_get("/api/admin/avatar", api_avatar)
     app.router.add_get("/api/admin/chat_photo", api_chat_photo)
+    app.router.add_get("/api/admin/bot_photo", api_bot_photo)
     app.router.add_post("/api/admin/moderate", api_moderate)
     app.router.add_get("/api/admin/chat_lock", api_chat_lock)
     app.router.add_post("/api/admin/chat_lock", api_chat_lock)
