@@ -625,8 +625,21 @@ async def api_media(request: web.Request):
 # Логи и система
 # ---------------------------------------------------------
 
+async def require_owner(request: web.Request):
+    """
+    Логи и система показывают внутренности бота целиком —
+    это только для создателя, не для админов отдельных групп.
+    """
+    user, chats = await require_admin(request)
+
+    if not is_owner(user["id"]):
+        raise web.HTTPForbidden(text="owner only")
+
+    return user, chats
+
+
 async def api_logs(request: web.Request):
-    await require_admin(request)
+    await require_owner(request)
 
     level = request.query.get("level", "").upper()
 
@@ -639,7 +652,7 @@ async def api_logs(request: web.Request):
 
 
 async def api_system(request: web.Request):
-    user, chats = await require_admin(request)
+    user, chats = await require_owner(request)
 
     from actions.providers import available_providers
     from games.crocodile import drawing_enabled
@@ -706,6 +719,238 @@ async def api_broadcast(request: web.Request):
     return web.json_response({"ok": True, "sent": sent, "failed": failed})
 
 
+# ---------------------------------------------------------
+# Аватарки
+# ---------------------------------------------------------
+#
+# Фото людей и групп Telegram отдаёт только боту, по file_id.
+# Браузер напрямую их не получит, поэтому сервер скачивает и
+# отдаёт сам. Кэш на час, плюс отдельный кэш «фото нет», чтобы
+# не дёргать Telegram по людям без аватарки на каждом открытии.
+#
+# ---------------------------------------------------------
+
+AVATAR_TTL = 3600
+
+_avatar_cache: dict[str, tuple[float, bytes | None]] = {}
+
+
+async def _download_file(bot, file_id: str) -> bytes | None:
+    try:
+        telegram_file = await bot.get_file(file_id)
+        buffer = await bot.download_file(telegram_file.file_path)
+        return buffer.read() if buffer else None
+    except Exception as error:
+        logger.warning("AVATAR DOWNLOAD: %s", error)
+        return None
+
+
+async def _cached(key: str, loader) -> bytes | None:
+    cached = _avatar_cache.get(key)
+
+    if cached and time.monotonic() - cached[0] < AVATAR_TTL:
+        return cached[1]
+
+    content = await loader()
+
+    _avatar_cache[key] = (time.monotonic(), content)
+
+    # Держим кэш в разумных пределах
+    if len(_avatar_cache) > 2000:
+        oldest = sorted(_avatar_cache.items(), key=lambda item: item[1][0])
+
+        for stale_key, _value in oldest[:500]:
+            _avatar_cache.pop(stale_key, None)
+
+    return content
+
+
+async def api_avatar(request: web.Request):
+    await require_admin(request)
+
+    raw = request.query.get("user_id", "")
+
+    if not raw.lstrip("-").isdigit():
+        raise web.HTTPBadRequest(text="bad user_id")
+
+    user_id = int(raw)
+    bot = request.app["bot"]
+
+    async def load():
+        try:
+            photos = await bot.get_user_profile_photos(user_id, limit=1)
+        except Exception:
+            return None
+
+        if not photos.photos:
+            return None
+
+        # Самый маленький размер — для списка его хватает
+        return await _download_file(bot, photos.photos[0][0].file_id)
+
+    content = await _cached(f"user:{user_id}", load)
+
+    if not content:
+        raise web.HTTPNotFound(text="no photo")
+
+    return web.Response(
+        body=content,
+        content_type="image/jpeg",
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
+
+
+async def api_chat_photo(request: web.Request):
+    _user, chats = await require_admin(request)
+
+    chat_id = _requested_chat(request, chats)
+
+    if chat_id is None:
+        raise web.HTTPBadRequest(text="chat_id required")
+
+    bot = request.app["bot"]
+
+    async def load():
+        try:
+            chat = await bot.get_chat(chat_id)
+        except Exception:
+            return None
+
+        if not chat.photo:
+            return None
+
+        return await _download_file(bot, chat.photo.small_file_id)
+
+    content = await _cached(f"chat:{chat_id}", load)
+
+    if not content:
+        raise web.HTTPNotFound(text="no photo")
+
+    return web.Response(
+        body=content,
+        content_type="image/jpeg",
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
+
+
+# ---------------------------------------------------------
+# Модерация
+# ---------------------------------------------------------
+
+async def api_moderate(request: web.Request):
+    """
+    Мут, размут, бан, разбан и выкинуть — для конкретной группы.
+    """
+    from features.moderation import (
+        ModerationError,
+        ban,
+        kick,
+        mute,
+        unban,
+        unmute,
+    )
+
+    admin, chats = await require_admin(request)
+
+    try:
+        body = await request.json()
+    except Exception:
+        raise web.HTTPBadRequest(text="bad json")
+
+    try:
+        chat_id = int(body.get("chat_id"))
+        target = int(body.get("user_id"))
+    except (TypeError, ValueError):
+        raise web.HTTPBadRequest(text="bad ids")
+
+    if chat_id not in {chat["chat_id"] for chat in chats}:
+        raise web.HTTPForbidden(text="no access to this chat")
+
+    if target == admin["id"]:
+        return web.json_response(
+            {"ok": False, "error": "Себя ограничивать нельзя."},
+            status=400,
+        )
+
+    action = body.get("action")
+    bot = request.app["bot"]
+
+    try:
+        if action == "mute":
+            try:
+                minutes = int(body.get("minutes") or 60)
+            except (TypeError, ValueError):
+                minutes = 60
+
+            # Не меньше минуты и не больше месяца
+            minutes = max(1, min(minutes, 60 * 24 * 30))
+
+            await mute(bot, chat_id, target, minutes)
+        elif action == "unmute":
+            await unmute(bot, chat_id, target)
+        elif action == "ban":
+            await ban(bot, chat_id, target)
+        elif action == "unban":
+            await unban(bot, chat_id, target)
+        elif action == "kick":
+            await kick(bot, chat_id, target)
+        else:
+            raise web.HTTPBadRequest(text="unknown action")
+    except ModerationError as error:
+        return web.json_response(
+            {"ok": False, "error": str(error)},
+            status=400,
+        )
+
+    logger.info(
+        "Модерация: %s -> %s в %s (%s)",
+        admin["id"], target, chat_id, action,
+    )
+
+    return web.json_response({"ok": True})
+
+
+async def api_chat_lock(request: web.Request):
+    from features.moderation import (
+        ModerationError,
+        is_chat_locked,
+        set_chat_locked,
+    )
+
+    _admin, chats = await require_admin(request)
+
+    if request.method == "GET":
+        chat_id = _requested_chat(request, chats)
+
+        if chat_id is None:
+            raise web.HTTPBadRequest(text="chat_id required")
+
+        locked = await is_chat_locked(request.app["bot"], chat_id)
+
+        return web.json_response({"locked": locked})
+
+    try:
+        body = await request.json()
+        chat_id = int(body.get("chat_id"))
+    except Exception:
+        raise web.HTTPBadRequest(text="bad request")
+
+    if chat_id not in {chat["chat_id"] for chat in chats}:
+        raise web.HTTPForbidden(text="no access to this chat")
+
+    locked = bool(body.get("locked"))
+
+    try:
+        await set_chat_locked(request.app["bot"], chat_id, locked)
+    except ModerationError as error:
+        return web.json_response(
+            {"ok": False, "error": str(error)},
+            status=400,
+        )
+
+    return web.json_response({"ok": True, "locked": locked})
+
+
 def setup_admin_routes(app: web.Application) -> None:
     app.router.add_get("/api/admin/session", api_session)
     app.router.add_get("/api/admin/overview", api_overview)
@@ -723,3 +968,8 @@ def setup_admin_routes(app: web.Application) -> None:
     app.router.add_get("/api/admin/logs", api_logs)
     app.router.add_get("/api/admin/system", api_system)
     app.router.add_post("/api/admin/broadcast", api_broadcast)
+    app.router.add_get("/api/admin/avatar", api_avatar)
+    app.router.add_get("/api/admin/chat_photo", api_chat_photo)
+    app.router.add_post("/api/admin/moderate", api_moderate)
+    app.router.add_get("/api/admin/chat_lock", api_chat_lock)
+    app.router.add_post("/api/admin/chat_lock", api_chat_lock)
