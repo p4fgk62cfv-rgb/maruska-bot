@@ -421,6 +421,7 @@
     session: null,
     days: 7,
     user: null,          // открытая карточка человека
+    group: null,         // открытая карточка группы
     logLevel: "",
     catalogFilter: ""
   };
@@ -721,6 +722,8 @@
     app.innerHTML = html;
     bindChatPick();
 
+    loadAvatars();
+
     Array.prototype.forEach.call(
       app.querySelectorAll("[data-user]"),
       function (el) {
@@ -742,15 +745,18 @@
   }
 
   function renderGroups() {
+    if (state.group) { renderGroupCard(state.group); return; }
+
     var html = "";
 
     state.session.chats.forEach(function (chat) {
-      html += '<div class="person">'
-        + '<div class="avatar">' + esc(chat.title.slice(0, 1)) + "</div>"
+      html += '<div class="person" data-group="' + chat.chat_id + '">'
+        + '<div class="avatar" data-avatar="/api/admin/chat_photo?chat_id='
+        + chat.chat_id + '">' + esc(chat.title.slice(0, 1)) + "</div>"
         + '<div style="flex:1;min-width:0">'
         + '<div class="name">' + esc(chat.title) + "</div>"
-        + '<div class="meta">ID ' + chat.chat_id + " · "
-        + chat.members + " участников · " + ago(chat.last_seen) + "</div>"
+        + '<div class="meta">' + chat.members + " участников · "
+        + ago(chat.last_seen) + "</div>"
         + "</div>"
         + '<div class="chip" style="color:'
         + (chat.active ? "var(--green)" : "var(--muted)") + '">'
@@ -762,8 +768,99 @@
     }
 
     app.innerHTML = html;
+    loadAvatars();
+
+    Array.prototype.forEach.call(app.querySelectorAll("[data-group]"), function (el) {
+      el.onclick = function () {
+        state.group = el.dataset.group;
+        renderGroupCard(state.group);
+      };
+    });
   }
 
+  function renderGroupCard(chatId) {
+    var chat = state.session.chats.filter(function (c) {
+      return String(c.chat_id) === String(chatId);
+    })[0];
+
+    if (!chat) { state.group = null; renderGroups(); return; }
+
+    app.innerHTML = '<div class="back" id="groupBack">← Группы</div>'
+      + '<div class="panel" style="text-align:center">'
+      + '<div class="avatar" style="width:64px;height:64px;margin:0 auto 10px;font-size:24px" '
+      + 'data-avatar="/api/admin/chat_photo?chat_id=' + chat.chat_id + '">'
+      + esc(chat.title.slice(0, 1)) + "</div>"
+      + '<h2 style="justify-content:center">' + esc(chat.title) + "</h2>"
+      + '<div class="muted">ID ' + chat.chat_id + " · " + chat.members
+      + " участников</div></div>"
+
+      + '<div class="panel"><h2>Чат</h2>'
+      + '<div class="hint" style="margin-bottom:10px">Закрытый чат — '
+      + "писать могут только администраторы.</div>"
+      + '<div id="lockState" class="muted" style="margin-bottom:10px">Проверяю…</div>'
+      + '<div class="actions-grid">'
+      + '<button class="ghost" id="lockChat">🔒 Закрыть чат</button>'
+      + '<button class="ghost" id="unlockChat">🔓 Открыть чат</button>'
+      + "</div></div>"
+
+      + '<div class="panel"><h2>Быстрые переходы</h2>'
+      + '<div class="actions-grid">'
+      + '<button class="ghost" id="goSettings">⚙️ Настройки</button>'
+      + '<button class="ghost" id="goUsers">👥 Участники</button>'
+      + "</div></div>";
+
+    loadAvatars();
+
+    document.getElementById("groupBack").onclick = function () {
+      state.group = null;
+      renderGroups();
+    };
+
+    var lockState = document.getElementById("lockState");
+
+    function showLock(locked) {
+      lockState.textContent = locked === null || locked === undefined
+        ? "Не удалось узнать состояние — у Мары может не быть прав."
+        : locked ? "Сейчас: 🔒 закрыт" : "Сейчас: 🔓 открыт";
+    }
+
+    api("/api/admin/chat_lock?chat_id=" + chat.chat_id)
+      .then(function (data) { showLock(data.locked); })
+      .catch(function () { showLock(null); });
+
+    function setLock(locked) {
+      fetch("/api/admin/chat_lock", {
+        method: "POST",
+        headers: { "X-Init-Data": initData, "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chat.chat_id, locked: locked })
+      }).then(function (response) {
+        return response.json().then(function (data) {
+          if (!response.ok || !data.ok) throw new Error(data.error || "Не получилось");
+          showLock(locked);
+          toast(locked ? "Чат закрыт" : "Чат открыт");
+        });
+      }).catch(function (error) { toast(error.message); });
+    }
+
+    document.getElementById("lockChat").onclick = function () { setLock(true); };
+    document.getElementById("unlockChat").onclick = function () { setLock(false); };
+
+    function jump(tab) {
+      state.chat = chat.chat_id;
+      state.group = null;
+      state.tab = tab;
+
+      Array.prototype.forEach.call(nav.querySelectorAll("button"), function (b) {
+        b.classList.toggle("on", b.dataset.tab === tab);
+      });
+
+      app.innerHTML = '<div class="center muted">Загружаю…</div>';
+      load();
+    }
+
+    document.getElementById("goSettings").onclick = function () { jump("settings"); };
+    document.getElementById("goUsers").onclick = function () { jump("users"); };
+  }
 
   // ---------- меню «Ещё» ----------
   var MORE = [
@@ -779,8 +876,15 @@
     ["system", "🗄", "Система", "Состояние и цифры"]
   ];
 
+  // Логи и система видны только создателю бота
+  var OWNER_ONLY = { logs: true, system: true };
+
   function renderMore() {
-    app.innerHTML = MORE.map(function (row) {
+    var owner = state.session && state.session.user.owner;
+
+    app.innerHTML = MORE.filter(function (row) {
+      return owner || !OWNER_ONLY[row[0]];
+    }).map(function (row) {
       return '<div class="menu-item" data-go="' + row[0] + '">'
         + '<div class="ic">' + row[1] + "</div>"
         + '<div style="flex:1"><div class="title">' + row[2] + "</div>"
@@ -831,7 +935,8 @@
   function renderUserCard(card) {
     var html = backButton()
       + '<div class="panel" style="text-align:center">'
-      + '<div class="avatar" style="width:64px;height:64px;margin:0 auto 10px;font-size:24px">'
+      + '<div class="avatar" style="width:64px;height:64px;margin:0 auto 10px;font-size:24px" '
+      + 'data-avatar="/api/admin/avatar?user_id=' + card.telegram_id + '">'
       + esc(card.name.slice(0, 1)) + "</div>"
       + "<h2 style=\"justify-content:center\">" + esc(card.name) + "</h2>"
       + '<div class="muted">ID ' + card.telegram_id
@@ -865,16 +970,49 @@
         + "</div>";
     }
 
-    html += '<div class="panel"><h2>Действия</h2>'
+    html += '<div class="panel"><h2>Алмазы и опыт</h2>'
       + '<input id="amount" type="number" placeholder="Сколько (можно минус)">'
       + '<div class="actions-grid">'
       + '<button class="ghost" id="giveCoins">💎 Изменить баланс</button>'
       + '<button class="ghost" id="giveXp">✨ Изменить опыт</button>'
-      + "</div>"
-      + (state.chat
-          ? '<button class="ghost" id="blockUser" style="width:100%;margin-top:8px;color:var(--red)">🚫 Заблокировать в этой группе</button>'
-          : '<div class="hint" style="margin-top:8px">Выбери группу, чтобы блокировать</div>')
-      + "</div>";
+      + "</div></div>";
+
+    if (state.chat) {
+      html += '<div class="panel"><h2>Модерация</h2>'
+        + '<div class="hint" style="margin-bottom:10px">Работает, если Мара — '
+        + "администратор группы с правом ограничивать участников.</div>"
+        + '<div class="tabs" id="muteTime">'
+        + [[10, "10 мин"], [60, "1 час"], [1440, "1 день"], [10080, "неделя"]]
+          .map(function (row, index) {
+            return '<div class="tab' + (index === 1 ? " on" : "")
+              + '" data-minutes="' + row[0] + '">' + row[1] + "</div>";
+          }).join("")
+        + "</div>"
+        + '<div style="display:flex;gap:8px;margin-bottom:10px">'
+        + '<input id="muteCustom" type="number" min="1" placeholder="Своё время" style="flex:1">'
+        + '<select id="muteUnit" style="width:110px">'
+        + '<option value="1">минут</option>'
+        + '<option value="60">часов</option>'
+        + '<option value="1440">дней</option>'
+        + "</select></div>"
+        + '<div class="actions-grid">'
+        + '<button class="ghost" data-mod="mute">🔇 Замутить</button>'
+        + '<button class="ghost" data-mod="unmute">🔊 Размутить</button>'
+        + '<button class="ghost" data-mod="kick">👢 Выкинуть</button>'
+        + '<button class="ghost" data-mod="unban">✅ Разбанить</button>'
+        + "</div>"
+        + '<button class="ghost" data-mod="ban" style="width:100%;margin-top:8px;'
+        + 'color:var(--red);border-color:var(--red)">⛔ Забанить навсегда</button>'
+        + '<div class="hint" style="margin-top:14px">Игнор — Мара перестанет '
+        + "отвечать человеку, но писать он сможет.</div>"
+        + '<div class="actions-grid">'
+        + '<button class="ghost" id="blockUser">🙈 Игнорировать</button>'
+        + '<button class="ghost" id="unblockUser">👂 Снять игнор</button>'
+        + "</div></div>";
+    } else {
+      html += '<div class="panel"><div class="hint">Выбери группу вверху '
+        + "на экране «Люди», чтобы модерировать.</div></div>";
+    }
 
     app.innerHTML = html;
     bindBack("users");
@@ -903,21 +1041,89 @@
     document.getElementById("giveCoins").onclick = function () { act("coins"); };
     document.getElementById("giveXp").onclick = function () { act("xp"); };
 
-    var block = document.getElementById("blockUser");
+    var minutes = 60;
 
-    if (block) {
-      block.onclick = function () {
-        api("/api/admin/user", {
-          method: "POST",
-          body: JSON.stringify({
-            action: "block",
-            user_id: card.telegram_id,
-            chat_id: state.chat
-          })
-        }).then(function () { toast("Заблокирован"); })
-          .catch(function () { toast("Не получилось"); });
-      };
+    // Своё время перекрывает кнопки, пока в поле что-то есть
+    function currentMinutes() {
+      var custom = document.getElementById("muteCustom");
+      var unit = document.getElementById("muteUnit");
+
+      if (custom && custom.value) {
+        var value = parseInt(custom.value, 10) * parseInt(unit.value, 10);
+        if (value > 0) return Math.min(value, 43200);
+      }
+
+      return minutes;
     }
+
+    Array.prototype.forEach.call(
+      app.querySelectorAll("[data-minutes]"),
+      function (el) {
+        el.onclick = function () {
+          var custom = document.getElementById("muteCustom");
+          if (custom) custom.value = "";
+          minutes = parseInt(el.dataset.minutes, 10);
+          Array.prototype.forEach.call(
+            app.querySelectorAll("[data-minutes]"),
+            function (other) { other.classList.toggle("on", other === el); }
+          );
+        };
+      }
+    );
+
+    var labels = {
+      mute: "Замучен", unmute: "Размучен", kick: "Выкинут",
+      ban: "Забанен", unban: "Разбанен"
+    };
+
+    Array.prototype.forEach.call(
+      app.querySelectorAll("[data-mod]"),
+      function (button) {
+        button.onclick = function () {
+          var action = button.dataset.mod;
+
+          if (action === "ban" && !confirm("Забанить " + card.name + " навсегда?")) {
+            return;
+          }
+
+          fetch("/api/admin/moderate", {
+            method: "POST",
+            headers: { "X-Init-Data": initData, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: action,
+              chat_id: state.chat,
+              user_id: card.telegram_id,
+              minutes: currentMinutes()
+            })
+          }).then(function (response) {
+            return response.json().then(function (data) {
+              if (!response.ok || !data.ok) throw new Error(data.error || "Не получилось");
+              toast(labels[action] || "Готово");
+            });
+          }).catch(function (error) { toast(error.message); });
+        };
+      }
+    );
+
+    function ignore(action, done) {
+      api("/api/admin/user", {
+        method: "POST",
+        body: JSON.stringify({
+          action: action,
+          user_id: card.telegram_id,
+          chat_id: state.chat
+        })
+      }).then(function () { toast(done); })
+        .catch(function () { toast("Не получилось"); });
+    }
+
+    var block = document.getElementById("blockUser");
+    var unblock = document.getElementById("unblockUser");
+
+    if (block) block.onclick = function () { ignore("block", "Мара его не слышит"); };
+    if (unblock) unblock.onclick = function () { ignore("unblock", "Снова слышит"); };
+
+    loadAvatars();
   }
 
   function kv(key, value) {
@@ -1173,6 +1379,35 @@
     };
   }
 
+  var avatarCache = {};
+
+  function loadAvatars(root) {
+    Array.prototype.forEach.call(
+      (root || app).querySelectorAll("[data-avatar]"),
+      function (el) {
+        var url = el.dataset.avatar;
+
+        function apply(src) {
+          if (!src) return;
+          el.innerHTML = '<img src="' + src + '" alt="">';
+        }
+
+        if (url in avatarCache) { apply(avatarCache[url]); return; }
+
+        fetch(url, { headers: { "X-Init-Data": initData } })
+          .then(function (response) {
+            if (!response.ok) throw new Error(response.status);
+            return response.blob();
+          })
+          .then(function (blob) {
+            avatarCache[url] = URL.createObjectURL(blob);
+            apply(avatarCache[url]);
+          })
+          .catch(function () { avatarCache[url] = null; });
+      }
+    );
+  }
+
   function bindChatPick() {
     var pick = document.getElementById("chatPick");
     if (!pick) return;
@@ -1259,6 +1494,7 @@
       });
       state.tab = button.dataset.tab;
       state.user = null;
+      state.group = null;
       app.innerHTML = '<div class="center muted">Загружаю…</div>';
       load();
     };
