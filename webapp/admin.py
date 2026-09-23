@@ -167,7 +167,10 @@ async def _ensure_settings_loaded(chat_id: int) -> None:
 async def api_session(request: web.Request):
     user, chats = await require_admin(request)
 
+    import changelog
+
     return web.json_response({
+        "version": changelog.latest().version,
         "user": {
             "id": user["id"],
             "name": user.get("first_name") or user.get("username") or "Админ",
@@ -993,6 +996,18 @@ async def api_chat_lock(request: web.Request):
     return web.json_response({"ok": True, "locked": locked})
 
 
+# ---------------------------------------------------------
+# Обновления
+# ---------------------------------------------------------
+
+async def api_changelog(request: web.Request):
+    await require_admin(request)
+
+    import changelog
+
+    return web.json_response(changelog.as_dict())
+
+
 def setup_admin_routes(app: web.Application) -> None:
     app.router.add_get("/api/admin/session", api_session)
     app.router.add_get("/api/admin/overview", api_overview)
@@ -1013,6 +1028,7 @@ def setup_admin_routes(app: web.Application) -> None:
     app.router.add_get("/api/admin/avatar", api_avatar)
     app.router.add_get("/api/admin/chat_photo", api_chat_photo)
     app.router.add_get("/api/admin/bot_photo", api_bot_photo)
+    app.router.add_get("/api/admin/changelog", api_changelog)
     app.router.add_post("/api/admin/moderate", api_moderate)
     app.router.add_get("/api/admin/chat_lock", api_chat_lock)
     app.router.add_post("/api/admin/chat_lock", api_chat_lock)
