@@ -27,6 +27,7 @@ import logging_setup
 from botcontext import set_identity
 
 from database.database import close_db, init_db
+from database.repository import backfill_daily_stats
 
 from actions.handler import router as actions_router
 from actions.providers import available_providers
@@ -40,6 +41,7 @@ from features.chat import router as chat_router, set_context_size
 from features.digest import digest_loop, router as digest_router
 from features.fortune import router as fortune_router
 from features.greeting import router as greeting_router
+from features.moderation import router as moderation_router
 from features.rating import router as rating_router
 from features.weather import router as weather_router
 
@@ -57,7 +59,7 @@ from settings.handler import (
     router as settings_router,
     set_bot_username as set_settings_username,
 )
-from settings.middleware import SettingsMiddleware
+from settings.middleware import SettingsMiddleware, StatsMiddleware
 from settings.registry import CHOICES, FEATURES
 
 from webapp.server import public_url, start_web_server
@@ -102,6 +104,9 @@ dp = Dispatcher()
 dp.message.outer_middleware(SettingsMiddleware())
 dp.callback_query.outer_middleware(SettingsMiddleware())
 
+# Статистика для графиков — до роутеров, чтобы видеть все сообщения
+dp.message.outer_middleware(StatsMiddleware())
+
 # Панель первой: /settings должен работать, даже если всё выключено
 dp.include_router(settings_router)
 
@@ -110,6 +115,7 @@ dp.include_router(greeting_router)
 
 # Команды
 dp.include_router(basic_router)
+dp.include_router(moderation_router)
 dp.include_router(economy_router)
 dp.include_router(shop_router)
 dp.include_router(progress_router)
@@ -154,6 +160,13 @@ async def main():
         "Картинки: %s",
         ", ".join(providers) if providers else "НИ ОДИН ИСТОЧНИК НЕ НАСТРОЕН",
     )
+
+    try:
+        filled = await backfill_daily_stats()
+        if filled:
+            logger.info("История графиков восстановлена: %s дней", filled)
+    except Exception as error:
+        logger.warning("BACKFILL: %s %s", type(error).__name__, error)
 
     restored = await restore_rounds()
 
