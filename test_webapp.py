@@ -88,6 +88,8 @@ def main() -> int:
         ("renderUserCard", "data-avatar=", "в карточке нужно фото"),
         ("renderGroupCard", "lockChat", "в карточке группы нужно закрытие чата"),
         ("renderMore", "OWNER_ONLY", "логи и система только владельцу"),
+        ("renderChangelog", "markSeen(", "просмотр должен гасить отметку «новое»"),
+        ("renderChangelog", "timeline", "обновления показываются лентой"),
     ]
 
     for function, marker, why in placements:
@@ -138,6 +140,43 @@ def main() -> int:
 
     if "/api/admin/bot_photo" not in script:
         failures.append("  [шапка] рядом с «Мара» должна быть её аватарка")
+
+    # 6. Журнал обновлений
+    import sys
+
+    sys.path.insert(0, str(ROOT))
+
+    import changelog
+
+    versions = [release.version for release in changelog.RELEASES]
+
+    checks += 1
+    if versions != sorted(versions, reverse=True):
+        failures.append("  [обновления] версии должны идти от новой к старой")
+
+    checks += 1
+    if len(versions) != len(set(versions)):
+        failures.append("  [обновления] повторяющиеся номера версий")
+
+    dates = [release.date for release in changelog.RELEASES]
+
+    checks += 1
+    if dates != sorted(dates, reverse=True):
+        failures.append("  [обновления] даты должны идти от новой к старой")
+
+    for release in changelog.RELEASES:
+        checks += 1
+
+        if not release.items:
+            failures.append(f"  [обновления] v{release.version} без пунктов")
+
+        for kind, text in release.items:
+            if kind not in changelog.KINDS:
+                failures.append(
+                    f"  [обновления] v{release.version}: неизвестный вид «{kind}»"
+                )
+            if not text.strip():
+                failures.append(f"  [обновления] v{release.version}: пустой пункт")
 
     if failures:
         print(f"❌ {len(failures)} проблем:\n")
