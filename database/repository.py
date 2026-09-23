@@ -1659,6 +1659,63 @@ async def bump_daily_stat(chat_id: int, field: str = "messages", amount: int = 1
         await session.commit()
 
 
+async def backfill_daily_stats() -> int:
+    """
+    Восстанавливает историю графиков из message_memory.
+
+    Таблица daily_stats появилась позже, чем бот начал работать,
+    поэтому прошлые дни в ней пусты. А message_memory хранит все
+    сообщения с датами — из неё и досчитываем.
+
+    Заполняет только отсутствующие дни, так что запускать можно
+    при каждом старте: повторно ничего не задвоится.
+    """
+    day_expr = func.to_char(MessageMemory.created_at, "YYYY-MM-DD")
+
+    async with session_scope() as session:
+        history = (
+            await session.execute(
+                select(
+                    MessageMemory.chat_id,
+                    day_expr,
+                    func.count(MessageMemory.id),
+                )
+                .where(MessageMemory.chat_id < 0)
+                .group_by(MessageMemory.chat_id, day_expr)
+            )
+        ).all()
+
+        if not history:
+            return 0
+
+        existing = (
+            await session.execute(
+                select(DailyStat.chat_id, DailyStat.day)
+            )
+        ).all()
+
+        known = {(chat_id, day) for chat_id, day in existing}
+
+        added = 0
+
+        for chat_id, day, count in history:
+            if (chat_id, day) in known:
+                continue
+
+            session.add(
+                DailyStat(
+                    chat_id=chat_id,
+                    day=day,
+                    messages=int(count or 0),
+                )
+            )
+            added += 1
+
+        await session.commit()
+
+        return added
+
+
 async def get_daily_series(chat_id: int | None, days: int = 7) -> list[dict]:
     """
     Ряд по дням для графика. chat_id=None — по всем чатам сразу.
