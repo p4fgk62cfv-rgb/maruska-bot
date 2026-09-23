@@ -224,6 +224,9 @@
   }
 
   .person .name { font-weight: 600; font-size: 14px; }
+
+  .person.tappable { cursor: pointer; }
+  .person.tappable:active { background: var(--card-2); }
   .person .meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
 
   .chips { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
@@ -706,17 +709,20 @@
     }
 
     data.users.forEach(function (person) {
-      html += '<div class="person">'
-        + '<div class="avatar">' + esc((person.name || "?").slice(0, 1)) + "</div>"
+      html += '<div class="person tappable" data-user="' + person.telegram_id + '">'
+        + '<div class="avatar" data-avatar="/api/admin/avatar?user_id='
+        + person.telegram_id + '">' + esc((person.name || "?").slice(0, 1)) + "</div>"
         + '<div style="flex:1;min-width:0">'
-        + '<div class="name">' + esc(person.name) + "</div>"
+        + '<div class="name">' + esc(person.name)
+        + (person.blocked ? ' <span class="chip" style="color:var(--red)">игнор</span>' : "")
+        + "</div>"
         + '<div class="meta">Уровень ' + person.level + " · " + ago(person.last_seen)
         + " · " + num(person.messages) + " сообщ.</div>"
         + '<div class="chips">'
         + '<span class="chip coins">💎 ' + num(person.coins) + "</span>"
         + '<span class="chip xp">✨ ' + num(person.xp) + "</span>"
         + '<span class="chip karma">❤️ ' + person.karma + "</span>"
-        + "</div></div></div>";
+        + '</div></div><div class="arrow" style="color:var(--muted)">›</div></div>';
     });
 
     app.innerHTML = html;
@@ -1010,8 +1016,15 @@
         + '<button class="ghost" id="unblockUser">👂 Снять игнор</button>'
         + "</div></div>";
     } else {
-      html += '<div class="panel"><div class="hint">Выбери группу вверху '
-        + "на экране «Люди», чтобы модерировать.</div></div>";
+      // Группа не выбрана — даём выбрать прямо здесь, не уходя из карточки
+      html += '<div class="panel"><h2>Модерация</h2>'
+        + '<div class="hint" style="margin-bottom:10px">В какой группе?</div>'
+        + '<select id="cardChat"><option value="">— выбери группу —</option>'
+        + state.session.chats.map(function (chat) {
+            return '<option value="' + chat.chat_id + '">'
+              + esc(chat.title) + "</option>";
+          }).join("")
+        + "</select></div>";
     }
 
     app.innerHTML = html;
@@ -1115,6 +1128,16 @@
         })
       }).then(function () { toast(done); })
         .catch(function () { toast("Не получилось"); });
+    }
+
+    var cardChat = document.getElementById("cardChat");
+
+    if (cardChat) {
+      cardChat.onchange = function () {
+        if (!cardChat.value) return;
+        state.chat = cardChat.value;
+        renderUserCard(card);
+      };
     }
 
     var block = document.getElementById("blockUser");
@@ -1510,16 +1533,23 @@
 
     var head = document.createElement("div");
     head.className = "head";
-    head.innerHTML = '<div class="avatar">'
+
+    // Слева — сама Мара, её аватарка и имя.
+    // Справа — кто сейчас управляет, маленьким кружком.
+    head.innerHTML = '<div class="avatar" data-avatar="/api/admin/bot_photo">М</div>'
+      + '<div style="flex:1;min-width:0"><h1>Мара 💜</h1>'
+      + '<div class="sub">Панель управления</div></div>'
+      + '<div style="text-align:right;font-size:11px;color:var(--muted);line-height:1.3">'
+      + esc(session.user.name) + "<br>"
+      + (session.user.owner ? "владелец" : "администратор") + "</div>"
+      + '<div class="avatar" style="width:30px;height:30px;font-size:12px">'
       + (session.user.photo
           ? '<img src="' + esc(session.user.photo) + '" alt="">'
           : esc(session.user.name.slice(0, 1)))
-      + "</div><div><h1>Мара 💜</h1><div class=\"sub\">"
-      + esc(session.user.name)
-      + (session.user.owner ? " · владелец" : " · администратор")
-      + "</div></div>";
+      + "</div>";
 
     document.body.insertBefore(head, app);
+    loadAvatars(head);
 
     nav.style.display = "flex";
     load();
