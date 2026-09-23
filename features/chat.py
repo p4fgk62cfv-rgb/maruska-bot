@@ -21,7 +21,6 @@ from ai.gemini import ask_gemini
 from botcontext import display_name_of, is_addressed
 
 from database.repository import (
-    bump_daily_stat,
     get_recent_messages,
     save_message,
     save_user,
@@ -188,7 +187,6 @@ async def persist_message(message: Message, name: str):
             username=name,
             message=message.text,
         )
-        await bump_daily_stat(message.chat.id, "messages")
     except Exception as error:
         logger.warning("PERSIST: %s %s", type(error).__name__, error)
         return
