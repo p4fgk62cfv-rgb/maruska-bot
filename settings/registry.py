@@ -82,6 +82,13 @@ FEATURES: tuple[Feature, ...] = (
         group="Сообщество",
     ),
     Feature(
+        key="moderation",
+        title="Модерация",
+        emoji="🛡",
+        description="Мут, бан, выкинуть и закрыть чат — командами и из панели",
+        group="Сообщество",
+    ),
+    Feature(
         key="rating",
         title="Рейтинг",
         emoji="⭐",
@@ -288,6 +295,17 @@ NUMBERS: tuple[Number, ...] = (
         description="Как часто можно оценивать одного и того же человека",
         default=24, minimum=1, maximum=168, step=1,
         unit="ч",
+        group="Сообщество",
+    ),
+
+    # Модерация
+    Number(
+        key="mute_minutes",
+        title="Мут по умолчанию",
+        emoji="🔇",
+        description="На сколько минут /mute, если время не указано",
+        default=60, minimum=1, maximum=10080, step=10,
+        unit="мин",
         group="Сообщество",
     ),
 

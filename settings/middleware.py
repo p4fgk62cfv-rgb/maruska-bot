@@ -11,7 +11,13 @@ from typing import Any, Awaitable, Callable
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
-from database.repository import get_blocked_ids, get_group_settings
+import asyncio
+
+from database.repository import (
+    bump_daily_stat,
+    get_blocked_ids,
+    get_group_settings,
+)
 
 from settings import store
 
@@ -49,3 +55,38 @@ class SettingsMiddleware(BaseMiddleware):
                 store.prime_blocked(chat.id, set())
 
         return await handler(event, data)
+
+
+
+class StatsMiddleware(BaseMiddleware):
+    """
+    Считает каждое сообщение группы для графиков панели.
+
+    Стоит снаружи, до роутеров: раньше счётчик жил в последнем
+    обработчике, и всё, что перехватили раньше — действия, команды,
+    отгадки в крокодиле — в статистику не попадало.
+    """
+
+    async def __call__(
+        self,
+        handler: Callable[[TelegramObject, dict], Awaitable[Any]],
+        event: TelegramObject,
+        data: dict,
+    ) -> Any:
+        if (
+            isinstance(event, Message)
+            and event.chat.id < 0
+            and event.from_user is not None
+            and not event.from_user.is_bot
+        ):
+            # В фоне: запись в базу не должна тормозить ответ
+            asyncio.create_task(_count(event.chat.id))
+
+        return await handler(event, data)
+
+
+async def _count(chat_id: int) -> None:
+    try:
+        await bump_daily_stat(chat_id, "messages")
+    except Exception as error:
+        logger.warning("STATS: %s", error)
