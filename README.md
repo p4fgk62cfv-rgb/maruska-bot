@@ -634,3 +634,10 @@ database/               модели, миграции, запросы
   `UserProfile`, но пока не используются.
 - `cleanup_old_messages()` написан, но не вызывается — повесить на
   периодическую задачу, когда `message_memory` начнёт разрастаться.
+
+---
+
+## 💜 Maruska Control Center
+
+Новая мобильная админ-панель описана в `ADMIN_CONTROL_CENTER.md`.
+Краткий список изменений — `CHANGELOG_CONTROL_CENTER.md`.

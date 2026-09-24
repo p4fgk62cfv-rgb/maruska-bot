@@ -42,6 +42,7 @@ from features.digest import digest_loop, router as digest_router
 from features.fortune import router as fortune_router
 from features.greeting import router as greeting_router
 from features.moderation import router as moderation_router
+from features.auto_moderation import router as auto_moderation_router
 from features.rating import router as rating_router
 from features.weather import router as weather_router
 
@@ -109,6 +110,9 @@ dp.message.outer_middleware(StatsMiddleware())
 
 # Панель первой: /settings должен работать, даже если всё выключено
 dp.include_router(settings_router)
+
+# Автоматическая модерация должна стоять до общих обработчиков сообщений.
+dp.include_router(auto_moderation_router)
 
 # Служебные события чата
 dp.include_router(greeting_router)
