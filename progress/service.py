@@ -49,6 +49,14 @@ async def award(
         per_message=1 if per_message else 0,
     )
 
+    # Выданный опыт — в дневную статистику группы (для аналитики)
+    gained = result.get("gained", amount) if isinstance(result, dict) else amount
+
+    if chat_id and chat_id < 0 and gained:
+        import audit
+
+        audit.count_amount(chat_id, "xp", gained)
+
     unlocked = []
     reward = 0
 
