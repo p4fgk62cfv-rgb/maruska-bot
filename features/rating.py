@@ -3,6 +3,7 @@
 """
 
 import logging
+import re
 from html import escape
 
 from aiogram import Router
@@ -17,6 +18,7 @@ from database.repository import (
     count_inventory,
     get_balance,
     get_global_rating,
+    top_by,
     get_profile,
     get_rating_position,
     get_rating_stats,
@@ -142,6 +144,52 @@ async def top_handler(message: Message):
 
     await message.answer("\n".join(lines))
 
+
+
+@router.message(Command("топ"))
+async def top_chatters_handler(message: Message):
+    """Показывает топ самых активных участников по числу сообщений в группе."""
+    if not is_enabled(message.chat.id, "rating"):
+        await message.reply("⭐ Рейтинг в этой группе выключен (/settings).")
+        return
+
+    text = (message.text or "").strip()
+
+    # Поддерживаем:
+    # /топ
+    # /топ болтунов
+    # /топ 10
+    # /топ 10 болтунов
+    # /топ 20 болтунов
+    # Также допускаем /топ@botname 10 болтунов.
+    match = re.match(r"^/топ(?:@[A-Za-z0-9_]+)?(?:\s+(.*))?$", text, re.IGNORECASE)
+    args = (match.group(1) if match else "") or ""
+
+    number_match = re.search(r"\b(\d+)\b", args)
+    limit = int(number_match.group(1)) if number_match else 10
+    limit = max(1, min(limit, 50))
+
+    users = await top_by("messages_count", message.chat.id, limit=limit)
+
+    if not users:
+        await message.answer("🗣 Пока статистики сообщений нет.")
+        return
+
+    lines = [f"🗣 <b>ТОП БОЛТУНОВ — {len(users)}</b>\n"]
+
+    medals = ["🥇", "🥈", "🥉"]
+
+    for index, user in enumerate(users, start=1):
+        medal = medals[index - 1] if index <= 3 else f"{index}."
+        name = escape(user["name"])
+        count = int(user.get("value") or 0)
+        word = "сообщение" if count % 10 == 1 and count % 100 != 11 else (
+            "сообщения" if count % 10 in {2, 3, 4} and count % 100 not in {12, 13, 14}
+            else "сообщений"
+        )
+        lines.append(f"{medal} <b>{name}</b> — <b>{count:,}</b> {word}".replace(",", " "))
+
+    await message.answer("\n".join(lines))
 
 
 @router.message(Command("profile"))
