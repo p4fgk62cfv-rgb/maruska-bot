@@ -10,6 +10,7 @@
 """
 
 import hashlib
+import logging
 import random
 from dataclasses import dataclass
 
@@ -146,6 +147,9 @@ def collection_key(provider: str, action: Action, pair_key: str) -> str:
     return f"{provider}/{base}#{rules_version(action)}"
 
 
+
+logger = logging.getLogger("maruska.images")
+
 @dataclass
 class Picked:
     """
@@ -210,11 +214,7 @@ async def fetch_fresh(
                 excluded=banned,
             )
         except Exception as error:
-            print(
-                f"{provider.upper()} SEARCH ERROR:",
-                type(error).__name__,
-                str(error),
-            )
+            logger.error("IMAGE %s SEARCH ERROR: %s %s", provider.upper(), type(error).__name__, error)
             continue
 
         if not photos:
@@ -261,7 +261,7 @@ async def get_image_for_action(
     providers = available_providers()
 
     if not providers:
-        print("IMAGE PROVIDERS: ни один источник не настроен")
+        logger.error("IMAGE PROVIDERS: ни один источник не настроен")
         return None
 
     for provider in providers:

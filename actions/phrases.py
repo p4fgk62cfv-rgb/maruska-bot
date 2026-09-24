@@ -378,7 +378,8 @@ FALLBACK = (
 )
 
 
-def pick_template(action) -> str:
+def templates_for(action) -> tuple:
+    """Все встроенные фразы действия."""
     if action.category == "call":
         options = CALLS.get(action.key)
     elif action.category == "pair":
@@ -386,7 +387,16 @@ def pick_template(action) -> str:
     else:
         options = CATEGORY_PHRASES.get(action.category)
 
-    if not options:
-        options = FALLBACK
+    return tuple(options) if options else tuple(FALLBACK)
+
+
+def pick_template(action, hidden=None) -> str:
+    """Случайная встроенная фраза, кроме скрытых в группе."""
+    options = templates_for(action)
+
+    if hidden:
+        visible = [t for t in options if t not in hidden]
+        # Скрыли всё — лучше старая фраза, чем действие без текста
+        options = visible or options
 
     return random.choice(options)

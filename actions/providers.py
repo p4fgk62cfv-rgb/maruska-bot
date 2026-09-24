@@ -246,10 +246,31 @@ SEARCH_FUNCTIONS = {
 }
 
 
+KNOWN_PROVIDERS = ("pixabay", "unsplash")
+
+# Порядок из панели владельца. None — берём из IMAGE_PROVIDERS.
+_order_override: list[str] | None = None
+
+
+def set_provider_order(order: list[str] | None) -> None:
+    global _order_override
+
+    if order:
+        clean = [name for name in order if name in KNOWN_PROVIDERS]
+        _order_override = list(dict.fromkeys(clean)) or None
+    else:
+        _order_override = None
+
+
+def provider_order() -> list[str]:
+    """Порядок опроса источников: сначала первый, при ошибке — следующий."""
+    return _order_override or IMAGE_PROVIDERS
+
+
 def available_providers() -> list[str]:
     ready = []
 
-    for name in IMAGE_PROVIDERS:
+    for name in provider_order():
         if name == "pixabay" and PIXABAY_API_KEY:
             ready.append(name)
         elif name == "unsplash" and UNSPLASH_ACCESS_KEY:

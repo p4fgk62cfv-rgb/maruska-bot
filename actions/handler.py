@@ -2,17 +2,20 @@ import re
 from dataclasses import dataclass
 from html import escape
 
+import logging
+
 from aiogram import Router
 from aiogram.types import BufferedInputFile, Message
 
 from actions.catalog import find_action
-from settings.store import is_blocked, is_enabled
+from settings.store import is_action_disabled, is_blocked, is_enabled
+
+from actions import custom
 from actions.phrases import pick_template, render
 from actions.service import get_image_for_action
 
-from webapp.admin_store import action_override
-
 from database.repository import (
+    bump_action_usage,
     bump_daily_stat,
     save_sent_image,
     save_user,
@@ -23,6 +26,8 @@ from database.repository import (
     MALE_NAMES,
 )
 
+
+logger = logging.getLogger("maruska.actions")
 
 router = Router(name="actions")
 
@@ -248,8 +253,9 @@ def build_action_text(
     action,
     actor_gender: str = "unknown",
     target_gender: str = "unknown",
+    template: str | None = None,
 ) -> str:
-    template = pick_template(action)
+    template = template or pick_template(action)
 
     return render(
         template,
@@ -296,7 +302,12 @@ def is_action_message(message: Message) -> bool:
     if not message.text:
         return False
 
-    if find_action(message.text) is None:
+    found = custom.resolve(message.chat.id, message.text)
+
+    if found is None:
+        return False
+
+    if is_action_disabled(message.chat.id, found.key):
         return False
 
     reply = message.reply_to_message
@@ -339,12 +350,14 @@ async def find_target(message: Message) -> Target | None:
 
 @router.message(is_action_message)
 async def action_handler(message: Message):
-    action = find_action(message.text)
+    chat_id = message.chat.id
+    action = custom.resolve(chat_id, message.text)
+
     if action is None:
         return
 
-    override = await action_override(message.chat.id, action.key)
-    if override and not override.get("enabled", True):
+    # Задержка между срабатываниями — молча игнорируем
+    if custom.cooling_down(chat_id, action.key):
         return
 
     target = await find_target(message)
@@ -382,17 +395,6 @@ async def action_handler(message: Message):
     if action.category == "pair":
         pair = pair_key(actor_gender, target_gender)
 
-    try:
-        picked = await get_image_for_action(action, pair_key=pair)
-    except Exception as error:
-        print("ACTION IMAGE ERROR:", type(error).__name__, str(error))
-        await message.reply("Не смогла найти картинку 😔")
-        return
-
-    if picked is None:
-        await message.reply("Для этого действия пока нет картинки 😔")
-        return
-
     caption = build_action_text(
         message.text,
         actor_name,
@@ -400,7 +402,47 @@ async def action_handler(message: Message):
         action,
         actor_gender=actor_gender,
         target_gender=target_gender,
+        template=custom.pick_phrase(chat_id, action),
     )
+
+    # Лимит картинок в час: сверх него — действие текстом
+    if images_over_limit(chat_id):
+        await message.answer(caption)
+        custom.mark_used(chat_id, action.key)
+        await _count_action(chat_id, action.key, message.from_user.id, with_image=False)
+        return
+
+    own = custom.pick_custom_image(chat_id, action.key)
+
+    if own is not None:
+        sent = await send_custom_image(message, own, caption)
+
+        if sent is not None:
+            custom.mark_used(chat_id, action.key)
+            await _count_action(chat_id, action.key, message.from_user.id)
+            return
+
+        if custom.only_own_images(chat_id, action.key):
+            await message.reply("Не получилось отправить картинку 😔")
+            return
+
+    picked = None
+
+    try:
+        # Скрытые в этой группе картинки пропускаем
+        for _ in range(6):
+            picked = await get_image_for_action(action, pair_key=pair)
+
+            if picked is None or not custom.is_hidden(chat_id, picked.image_id):
+                break
+    except Exception as error:
+        logger.error("ACTION IMAGE ERROR: %s %s", type(error).__name__, error)
+        await message.reply("Не смогла найти картинку 😔")
+        return
+
+    if picked is None or custom.is_hidden(chat_id, picked.image_id):
+        await message.reply("Для этого действия пока нет картинки 😔")
+        return
 
     # Подпись только там, где лицензия источника её требует.
     # Pixabay атрибуции не требует — под фото ничего не пишем.
@@ -420,10 +462,109 @@ async def action_handler(message: Message):
         await message.reply("Не получилось отправить фотографию 😔")
         return
 
+    custom.mark_used(chat_id, action.key)
+    await _count_action(chat_id, action.key, message.from_user.id)
+
+
+_image_times: dict[int, list[float]] = {}
+
+
+def images_over_limit(chat_id: int) -> bool:
+    """
+    Проверяет лимит «картинок в час» и, если не превышен,
+    засчитывает ещё одну.
+    """
+    import time as _time
+
+    from settings.store import get_number
+
+    limit = get_number(chat_id, "image_limit_hour") or 0
+
+    if not limit:
+        return False
+
+    now = _time.monotonic()
+    recent = [t for t in _image_times.get(chat_id, []) if now - t < 3600]
+
+    if len(recent) >= limit:
+        _image_times[chat_id] = recent
+        return True
+
+    recent.append(now)
+    _image_times[chat_id] = recent
+
+    return False
+
+
+async def _count_action(chat_id: int, key: str, user_id: int | None = None,
+                        with_image: bool = True) -> None:
+    from database.repository import bump_member_counter
+    from settings.store import get_number
+
     try:
-        await bump_daily_stat(message.chat.id, "actions")
+        await bump_daily_stat(chat_id, "actions")
+
+        if with_image:
+            await bump_daily_stat(chat_id, "images")
+        await bump_action_usage(chat_id, key)
+
+        if user_id:
+            await bump_member_counter(chat_id, user_id, "actions_count")
     except Exception:
         pass
+
+    # Опыт за действие — кто угостил, обнял и т. п.
+    amount = get_number(chat_id, "xp_action") or 0
+
+    if user_id and amount and is_enabled(chat_id, "progress"):
+        try:
+            from progress.service import award
+
+            await award(telegram_id=user_id, amount=amount, chat_id=chat_id)
+        except Exception as error:
+            logger.warning("ACTION XP: %s %s", type(error).__name__, error)
+
+
+async def send_custom_image(message, image: dict, caption: str):
+    """
+    Своя картинка группы: по file_id, по ссылке или из загрузки.
+    После первой отправки запоминаем file_id.
+    """
+    import base64
+
+    from database.repository import bump_custom_shows, remember_custom_file_id
+
+    try:
+        if image.get("file_id"):
+            sent = await message.answer_photo(photo=image["file_id"], caption=caption)
+            await bump_custom_shows(image["id"])
+            return sent
+
+        value = image["value"]
+
+        if value.startswith("data:"):
+            photo = BufferedInputFile(
+                base64.b64decode(value.split(",", 1)[1]),
+                filename="action.jpg",
+            )
+        else:
+            photo = value
+
+        sent = await message.answer_photo(photo=photo, caption=caption)
+    except Exception as error:
+        logger.error("CUSTOM IMAGE ERROR: %s %s", type(error).__name__, error)
+        return None
+
+    if sent.photo:
+        file_id = sent.photo[-1].file_id
+        image["file_id"] = file_id
+
+        try:
+            await remember_custom_file_id(image["id"], file_id)
+        except Exception:
+            pass
+
+    return sent
 
 
 async def send_picked(message, picked, caption: str, filename: str):
@@ -441,7 +582,7 @@ async def send_picked(message, picked, caption: str, filename: str):
                 caption=caption,
             )
         except Exception as error:
-            print("FILE ID SEND ERROR:", type(error).__name__, str(error))
+            logger.error("FILE ID SEND ERROR: %s %s", type(error).__name__, error)
 
             # file_id протух — выкидываем запись, чтобы не мешала
             if picked.image_id:
@@ -464,7 +605,7 @@ async def send_picked(message, picked, caption: str, filename: str):
             caption=caption,
         )
     except Exception as error:
-        print("TELEGRAM PHOTO ERROR:", type(error).__name__, str(error))
+        logger.error("TELEGRAM PHOTO ERROR: %s %s", type(error).__name__, error)
         return None
 
     if sent.photo:
@@ -476,6 +617,6 @@ async def send_picked(message, picked, caption: str, filename: str):
                 file_id=sent.photo[-1].file_id,
             )
         except Exception as error:
-            print("SAVE IMAGE ERROR:", type(error).__name__, str(error))
+            logger.error("SAVE IMAGE ERROR: %s %s", type(error).__name__, error)
 
     return sent

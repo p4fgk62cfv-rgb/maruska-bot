@@ -104,7 +104,7 @@ def _normalize(word: str) -> str:
     return word.lower().replace("ё", "е")
 
 
-def find_action(text: str | None) -> Action | None:
+def find_action(text: str | None, hidden: dict | None = None) -> Action | None:
     """
     Возвращает Action, если сообщение является коротким действием.
     Во всех остальных случаях — None (и тогда сообщение уходит в AI).
@@ -139,7 +139,13 @@ def find_action(text: str | None) -> Action | None:
     best_alias = ""
 
     for action in ACTIONS:
+        skip = hidden.get(action.key, ()) if hidden else ()
+
         for alias in action.aliases:
+            # Слово, скрытое в этой группе, действие не запускает
+            if alias in skip:
+                continue
+
             exact = alias.startswith("=")
             needle = _normalize(alias[1:] if exact else alias)
 
