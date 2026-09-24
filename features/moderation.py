@@ -21,7 +21,10 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import ChatPermissions, Message
 
+import audit
+
 from botcontext import display_name_of
+from i18n import t
 
 from settings.handler import ADMIN_STATUSES, is_owner
 from settings.store import get_number, is_enabled
@@ -143,6 +146,16 @@ async def unban(bot, chat_id: int, user_id: int) -> None:
         raise _explain(error)
 
 
+async def tempban(bot, chat_id: int, user_id: int, minutes: int) -> None:
+    """Бан на время: Telegram сам снимет его по истечении срока."""
+    until = datetime.now(timezone.utc) + timedelta(minutes=max(minutes, 1))
+
+    try:
+        await bot.ban_chat_member(chat_id=chat_id, user_id=user_id, until_date=until)
+    except Exception as error:
+        raise _explain(error)
+
+
 async def kick(bot, chat_id: int, user_id: int) -> None:
     """
     Выкинуть без бана: бан и тут же разбан — человек сможет вернуться
@@ -218,6 +231,20 @@ async def _check(message: Message) -> bool:
         return False
 
     return True
+
+
+def _record(message: Message, action: str, target=None, details: str | None = None, counter: str | None = None):
+    audit.log(
+        "moderation", action, chat_id=message.chat.id,
+        actor_kind="admin", actor_id=message.from_user.id,
+        actor_name=display_name_of(message.from_user),
+        target_id=target.id if target else None,
+        target_name=display_name_of(target) if target else None,
+        details=details,
+    )
+
+    if counter:
+        audit.count(message.chat.id, counter)
 
 
 def _target(message: Message):
@@ -307,9 +334,10 @@ async def mute_command(message: Message):
         await message.reply(f"⚠️ {error}")
         return
 
+    _record(message, "mute", target, _plural_minutes(minutes), "mutes")
+
     await message.answer(
-        f"🔇 <b>{escape(display_name_of(target))}</b> помолчит "
-        f"{_plural_minutes(minutes)}."
+        t(message.chat.id, "cmd.mute", name=escape(display_name_of(target)), span=_plural_minutes(minutes))
     )
 
 
@@ -330,8 +358,10 @@ async def unmute_command(message: Message):
         await message.reply(f"⚠️ {error}")
         return
 
+    _record(message, "unmute", target)
+
     await message.answer(
-        f"🔊 <b>{escape(display_name_of(target))}</b> снова может писать."
+        t(message.chat.id, "cmd.unmute", name=escape(display_name_of(target)))
     )
 
 
@@ -352,8 +382,10 @@ async def ban_command(message: Message):
         await message.reply(f"⚠️ {error}")
         return
 
+    _record(message, "ban", target, counter="bans")
+
     await message.answer(
-        f"⛔ <b>{escape(display_name_of(target))}</b> забанен."
+        t(message.chat.id, "cmd.ban", name=escape(display_name_of(target)))
     )
 
 
@@ -377,8 +409,10 @@ async def unban_command(message: Message):
         await message.reply(f"⚠️ {error}")
         return
 
+    _record(message, "unban", target)
+
     await message.answer(
-        f"✅ <b>{escape(display_name_of(target))}</b> разбанен."
+        t(message.chat.id, "cmd.unban", name=escape(display_name_of(target)))
     )
 
 
@@ -399,10 +433,9 @@ async def kick_command(message: Message):
         await message.reply(f"⚠️ {error}")
         return
 
-    await message.answer(
-        f"👢 <b>{escape(display_name_of(target))}</b> выставлен за дверь. "
-        "Вернуться может по ссылке."
-    )
+    _record(message, "kick", target)
+
+    await message.answer(t(message.chat.id, "cmd.kick", name=escape(display_name_of(target))))
 
 
 @router.message(Command("lock", "close"))
@@ -416,10 +449,9 @@ async def lock_command(message: Message):
         await message.reply(f"⚠️ {error}")
         return
 
-    await message.answer(
-        "🔒 Чат закрыт. Писать могут только администраторы.\n"
-        "/unlock — открыть."
-    )
+    _record(message, "lock")
+
+    await message.answer(t(message.chat.id, "cmd.lock"))
 
 
 @router.message(Command("unlock", "open"))
@@ -433,4 +465,62 @@ async def unlock_command(message: Message):
         await message.reply(f"⚠️ {error}")
         return
 
-    await message.answer("🔓 Чат открыт, пишите.")
+    _record(message, "unlock")
+
+    await message.answer(t(message.chat.id, "cmd.unlock"))
+
+
+@router.message(Command("warn"))
+async def warn_command(message: Message):
+    if not await _check(message):
+        return
+
+    target = _target(message)
+
+    if target is None:
+        await message.reply(
+            "⚠️ Ответь на сообщение человека: <code>/warn причина</code>\n"
+            "После лимита предупреждений сработает наказание из настроек."
+        )
+        return
+
+    parts = (message.text or "").split(maxsplit=1)
+    reason = parts[1].strip()[:120] if len(parts) > 1 else "предупреждение от админа"
+
+    from features.automod import warn
+
+    await warn(
+        message.bot, message.chat.id, target.id, display_name_of(target), reason,
+        actor_kind="admin", actor_id=message.from_user.id,
+        actor_name=display_name_of(message.from_user),
+        notify=message.answer,
+    )
+
+
+@router.message(Command("tban"))
+async def tempban_command(message: Message):
+    if not await _check(message):
+        return
+
+    target = _target(message)
+
+    if target is None:
+        await message.reply(
+            "⏳ Ответь на сообщение человека: <code>/tban 1д</code>\n"
+            "Бан на время — потом человек сможет вернуться."
+        )
+        return
+
+    minutes = _minutes(message)
+
+    try:
+        await tempban(message.bot, message.chat.id, target.id, minutes)
+    except ModerationError as error:
+        await message.reply(f"⚠️ {error}")
+        return
+
+    _record(message, "tempban", target, _plural_minutes(minutes), "bans")
+
+    await message.answer(
+        t(message.chat.id, "cmd.tempban", name=escape(display_name_of(target)), span=_plural_minutes(minutes))
+    )

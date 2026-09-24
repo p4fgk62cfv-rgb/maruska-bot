@@ -64,8 +64,13 @@ HELP_TEXT = (
     "/digest — итоги недели\n"
     "/mydays — сколько ты здесь\n\n"
 
+    "🛡 <b>Автомодерация</b> — включается в /settings → Модерация:\n"
+    "антифлуд, ссылки, стоп-слова, предупреждения\n\n"
+
     "🛡 <b>Модерация</b> (для админов, реплаем)\n"
+    "/warn причина — предупредить\n"
     "/mute 30 — замутить, /unmute — размутить\n"
+    "/tban 1д — бан на время\n"
     "/ban, /unban, /kick — бан, разбан, выкинуть\n"
     "/lock, /unlock — закрыть и открыть чат\n\n"
 
@@ -84,6 +89,16 @@ async def start_handler(message: Message):
             username=message.from_user.username,
             first_name=message.from_user.first_name,
         )
+
+        # Человек сам написал боту в личку — теперь ему можно
+        # отправлять личные рассылки (первыми боты писать не могут)
+        if message.chat.type == "private":
+            try:
+                from database.repository import mark_dm_ok
+
+                await mark_dm_ok(message.from_user.id, True)
+            except Exception:
+                pass
 
         await create_profile_if_needed(
             telegram_id=message.from_user.id,

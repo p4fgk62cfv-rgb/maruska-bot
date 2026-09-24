@@ -7,6 +7,7 @@
 """
 
 import asyncio
+import re
 import logging
 import random
 import time
@@ -29,7 +30,7 @@ from database.repository import (
 from progress.service import award, level_up_text, unlocked_text
 from progress.xp import XP_DAILY_CAP, XP_MESSAGE
 
-from settings.store import get_number, get_value, is_blocked, is_enabled
+from settings.store import get_number, get_text, get_value, is_blocked, is_enabled
 
 
 logger = logging.getLogger("maruska.chat")
@@ -51,8 +52,81 @@ CONTEXT_MESSAGES = 8
 
 QUIET_COOLDOWN = 120        # секунд между ответами в тихом режиме
 ACTIVE_CHANCE = 0.06        # шанс вмешаться без обращения
+FUN_CHANCE = 0.15           # развлекательный режим вмешивается чаще
+
+FUN_HINT = (
+    "Сейчас режим развлечения: будь игривее, шути больше, "
+    "подкалывай по-доброму, предлагай мини-игры и челленджи.\n\n"
+)
 
 _last_reply: dict[int, float] = {}
+
+# Лимиты AI: сколько ответов за сутки и когда отвечали человеку
+_daily: dict[int, tuple[str, int]] = {}
+_user_last: dict[tuple[int, int], float] = {}
+
+
+def _today() -> str:
+    return time.strftime("%Y-%m-%d", time.gmtime())
+
+
+def within_limits(chat_id: int, user_id: int | None) -> bool:
+    """Суточный лимит группы и пауза для одного человека."""
+    limit = get_number(chat_id, "ai_daily_limit") or 0
+
+    if limit:
+        day, used = _daily.get(chat_id, ("", 0))
+        if day == _today() and used >= limit:
+            return False
+
+    pause = get_number(chat_id, "ai_cooldown") or 0
+
+    if pause and user_id is not None:
+        last = _user_last.get((chat_id, user_id))
+        if last is not None and time.monotonic() - last < pause:
+            return False
+
+    return True
+
+
+def note_reply(chat_id: int, user_id: int | None) -> None:
+    day, used = _daily.get(chat_id, ("", 0))
+    _daily[chat_id] = (_today(), used + 1 if day == _today() else 1)
+
+    if user_id is not None:
+        _user_last[(chat_id, user_id)] = time.monotonic()
+
+
+def parse_exceptions(raw: str) -> set[str]:
+    """«@kate, 12345, Vasya» → {"kate", "12345", "vasya"}."""
+    return {
+        item.strip().lstrip("@").lower()
+        for item in re.split(r"[,\s;]+", raw or "")
+        if item.strip().lstrip("@")
+    }
+
+
+def remembers(message: Message) -> bool:
+    """Запоминать ли это сообщение: память включена и человек не в исключениях."""
+    chat_id = message.chat.id
+
+    if not is_enabled(chat_id, "memory"):
+        return False
+
+    user = message.from_user
+
+    if user is None:
+        return True
+
+    excluded = parse_exceptions(get_text(chat_id, "memory_except"))
+
+    if not excluded:
+        return True
+
+    return not (
+        str(user.id) in excluded
+        or (user.username or "").lower() in excluded
+    )
 
 
 def set_context_size(size: int) -> None:
@@ -70,6 +144,9 @@ def should_answer(message: Message) -> bool:
 
     mode = get_value(message.chat.id, "chattiness") or "normal"
 
+    if not within_limits(message.chat.id, message.from_user.id if message.from_user else None):
+        return False
+
     addressed = is_addressed(message)
 
     if addressed:
@@ -84,17 +161,17 @@ def should_answer(message: Message) -> bool:
 
         return True
 
-    # Без обращения вмешиваемся только в активном режиме
-    if mode != "active":
+    # Без обращения вмешиваемся только в активном и развлекательном режимах
+    if mode not in ("active", "fun"):
         return False
 
     if message.chat.type == "private":
         return False
 
-    if not message.text or len(message.text) < 12:
+    if not message.text or len(message.text) < (8 if mode == "fun" else 12):
         return False
 
-    return random.random() < ACTIVE_CHANCE
+    return random.random() < (FUN_CHANCE if mode == "fun" else ACTIVE_CHANCE)
 
 
 @router.message(lambda message: message.text is not None)
@@ -110,15 +187,36 @@ async def ai_handler(message: Message):
 
     # Контекст держим в памяти: чтение из базы перед каждым
     # ответом добавляло заметную задержку.
-    context_cache.remember(message.chat.id, name, message.text)
+    keep = remembers(message)
+
+    if keep:
+        context_cache.remember(message.chat.id, name, message.text)
 
     # Запись в базу не задерживает ответ — уходит в фон.
-    asyncio.create_task(persist_message(message, name))
+    asyncio.create_task(persist_message(message, name, keep))
 
     if not should_answer(message):
         return
 
     _last_reply[message.chat.id] = time.monotonic()
+    note_reply(message.chat.id, message.from_user.id if message.from_user else None)
+
+    import audit
+
+    audit.count(message.chat.id, "ai_requests")
+
+    if message.from_user and message.chat.id < 0:
+        import asyncio
+
+        from database.repository import bump_member_counter
+
+        async def _count_ai(chat_id=message.chat.id, user_id=message.from_user.id):
+            try:
+                await bump_member_counter(chat_id, user_id, "ai_count")
+            except Exception:
+                pass
+
+        asyncio.create_task(_count_ai())
 
     # Показываем "печатает..." сразу, чтобы ожидание не было немым.
     try:
@@ -140,12 +238,21 @@ async def ai_handler(message: Message):
 
     depth = get_number(message.chat.id, "context_messages") or CONTEXT_MESSAGES
 
-    recent_messages = context_cache.recent(message.chat.id, depth)
+    # Память выключена — Мара видит только само обращение
+    recent_messages = (
+        context_cache.recent(message.chat.id, depth)
+        if is_enabled(message.chat.id, "memory") else []
+    )
+
+    fun = (get_value(message.chat.id, "chattiness") or "normal") == "fun"
+
+    from i18n import ai_instruction
 
     prompt = (
-        "Последние сообщения группы:\n"
-        + "\n".join(recent_messages)
-        + "\n\nНовое сообщение пользователя:\n"
+        ai_instruction(message.chat.id)
+        + (FUN_HINT if fun else "")
+        + ("Последние сообщения группы:\n" + "\n".join(recent_messages) + "\n\n" if recent_messages else "")
+        + "Новое сообщение пользователя:\n"
         + message.text
     )
 
@@ -169,7 +276,7 @@ async def ai_handler(message: Message):
     await message.reply(answer, parse_mode=None)
 
 
-async def persist_message(message: Message, name: str):
+async def persist_message(message: Message, name: str, keep: bool = True):
     """
     Сохранение пользователя и сообщения в базу, вне критического пути.
     Здесь же капает опыт за активность.
@@ -186,6 +293,7 @@ async def persist_message(message: Message, name: str):
             telegram_user_id=message.from_user.id,
             username=name,
             message=message.text,
+            store_text=keep,
         )
     except Exception as error:
         logger.warning("PERSIST: %s %s", type(error).__name__, error)

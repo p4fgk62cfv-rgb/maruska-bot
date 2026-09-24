@@ -210,7 +210,12 @@ async def digest_loop(bot):
                 if hour is None:
                     hour = DIGEST_HOUR
 
-                if now.weekday() != weekday or now.hour != hour:
+                # День и час — по часовому поясу группы, а не сервера
+                from settings.store import local_now
+
+                here = local_now(chat_id)
+
+                if here.weekday() != weekday or here.hour != hour:
                     continue
 
                 text = await build_digest(chat_id)
