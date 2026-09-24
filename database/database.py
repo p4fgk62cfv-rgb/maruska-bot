@@ -199,6 +199,10 @@ async def init_db():
         for statement in migrations:
             await connection.execute(text(statement))
 
+    # Persistent Control Center tables: roles, audit, gifts, broadcasts, rules.
+    from webapp.admin_store import ensure_schema
+    await ensure_schema()
+
     logger.info("Таблицы проверены и созданы")
 
 

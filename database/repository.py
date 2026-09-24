@@ -5,6 +5,9 @@ from sqlalchemy import (
     desc,
     func,
     update,
+    or_,
+    cast,
+    String,
 )
 
 from database.database import session_scope, utcnow
@@ -1939,8 +1942,15 @@ async def list_members(
             )
 
         if query:
-            members_query = members_query.where(
-                GroupMember.display_name.ilike(f"%{query}%")
+            like = f"%{query}%"
+            members_query = members_query.join(
+                User, User.telegram_id == GroupMember.telegram_id, isouter=True
+            ).where(
+                or_(
+                    GroupMember.display_name.ilike(like),
+                    User.username.ilike(like),
+                    cast(GroupMember.telegram_id, String).ilike(like),
+                )
             )
 
         members_query = members_query.order_by(
