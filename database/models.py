@@ -16,6 +16,8 @@ from database.database import Base, utcnow
 
 
 class User(Base):
+    # dm_ok: человек сам писал боту в личку — значит, ему можно
+    # отправить рассылку. Telegram не даёт ботам писать первыми.
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(
@@ -49,6 +51,8 @@ class User(Base):
         DateTime,
         default=utcnow,
     )
+
+    dm_ok: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class MessageMemory(Base):
@@ -242,6 +246,14 @@ class GroupMember(Base):
         String(10),
         nullable=True,
     )
+
+    actions_count: Mapped[int] = mapped_column(default=0)
+
+    ai_count: Mapped[int] = mapped_column(default=0)
+
+    vip: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    left_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     joined_at: Mapped[datetime] = mapped_column(
         DateTime,
@@ -716,6 +728,26 @@ class DailyStat(Base):
 
     active_users: Mapped[int] = mapped_column(default=0)
 
+    new_users: Mapped[int] = mapped_column(default=0)
+
+    warnings: Mapped[int] = mapped_column(default=0)
+
+    mutes: Mapped[int] = mapped_column(default=0)
+
+    bans: Mapped[int] = mapped_column(default=0)
+
+    deleted: Mapped[int] = mapped_column(default=0)
+
+    ai_requests: Mapped[int] = mapped_column(default=0)
+
+    commands: Mapped[int] = mapped_column(default=0)
+
+    autoreplies: Mapped[int] = mapped_column(default=0)
+
+    images: Mapped[int] = mapped_column(default=0)
+
+    xp: Mapped[int] = mapped_column(default=0)
+
 
 class BlockedUser(Base):
     """
@@ -743,3 +775,290 @@ class BlockedUser(Base):
         DateTime,
         default=utcnow,
     )
+
+
+class AuditEvent(Base):
+    """
+    Журнал: кто, что, над кем, когда.
+
+    actor_kind: admin | bot | system
+    category:   moderation | economy | settings | broadcast | system | actions
+    """
+
+    __tablename__ = "audit_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+
+    actor_kind: Mapped[str] = mapped_column(String(10), default="system")
+
+    actor_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+
+    actor_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    target_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+
+    target_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    category: Mapped[str] = mapped_column(String(20), index=True)
+
+    action: Mapped[str] = mapped_column(String(40), index=True)
+
+    details: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class ChatWarning(Base):
+    """Предупреждения участнику в группе."""
+
+    __tablename__ = "warnings"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class AdminRole(Base):
+    """
+    Роль администратора в группе. Если записи нет — роль берётся
+    из прав в Telegram: создатель → super_admin, админ → moderator.
+    """
+
+    __tablename__ = "admin_roles"
+
+    __table_args__ = (
+        UniqueConstraint("chat_id", "telegram_id", name="uq_admin_role"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    role: Mapped[str] = mapped_column(String(20))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ActionToggle(Base):
+    """Отключённые в группе действия."""
+
+    __tablename__ = "action_toggles"
+
+    __table_args__ = (
+        UniqueConstraint("chat_id", "action_key", name="uq_action_toggle"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    action_key: Mapped[str] = mapped_column(String(40))
+
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class ActionUsage(Base):
+    """Сколько раз действие срабатывало по дням."""
+
+    __tablename__ = "action_usage"
+
+    __table_args__ = (
+        UniqueConstraint("chat_id", "action_key", "day", name="uq_action_usage"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    action_key: Mapped[str] = mapped_column(String(40), index=True)
+
+    day: Mapped[str] = mapped_column(String(10), index=True)
+
+    count: Mapped[int] = mapped_column(default=0)
+
+
+class HourlyStat(Base):
+    """Сообщения по часам — для тепловой карты."""
+
+    __tablename__ = "hourly_stats"
+
+    __table_args__ = (
+        UniqueConstraint("chat_id", "day", "hour", name="uq_hourly_stat"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    day: Mapped[str] = mapped_column(String(10), index=True)
+
+    hour: Mapped[int] = mapped_column()
+
+    messages: Mapped[int] = mapped_column(default=0)
+
+
+class Broadcast(Base):
+    """
+    Рассылка. status: scheduled | sent | failed | cancelled
+    """
+
+    __tablename__ = "broadcasts"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    author_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    author_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    chat_ids: Mapped[list] = mapped_column(JSON, default=list)
+
+    text: Mapped[str] = mapped_column(Text)
+
+    photo: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    media_type: Mapped[str] = mapped_column(String(10), default="photo")
+
+    # groups — в группы; dm — в личку тем, кто запускал бота
+    mode: Mapped[str] = mapped_column(String(8), default="groups")
+
+    segment: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    buttons: Mapped[list] = mapped_column(JSON, default=list)
+
+    send_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+    status: Mapped[str] = mapped_column(String(12), default="scheduled", index=True)
+
+    sent: Mapped[int] = mapped_column(default=0)
+
+    failed: Mapped[int] = mapped_column(default=0)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ActionCustom(Base):
+    """
+    Правки действий для конкретной группы — слой поверх каталога.
+
+    kind:
+        alias       — своё слово-триггер
+        phrase      — своя фраза (шаблон с {actor}, {target_acc}…)
+        image       — своя картинка: https-ссылка или data:-URL загрузки
+        hide_image  — скрыть картинку из общей коллекции (value = id)
+        cooldown    — задержка между срабатываниями, секунд
+        image_mode  — mix (свои вперемешку с общими) | own (только свои)
+    """
+
+    __tablename__ = "action_custom"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    action_key: Mapped[str] = mapped_column(String(40), index=True)
+
+    kind: Mapped[str] = mapped_column(String(12), index=True)
+
+    value: Mapped[str] = mapped_column(Text)
+
+    file_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    shows: Mapped[int] = mapped_column(default=0)
+
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    author_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ShopOverride(Base):
+    """
+    Правила магазина для группы: своя цена, доступность, остаток.
+    price=None — цена из каталога; stock=None — без ограничений.
+    """
+
+    __tablename__ = "shop_overrides"
+
+    __table_args__ = (
+        UniqueConstraint("chat_id", "item_key", name="uq_shop_override"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    item_key: Mapped[str] = mapped_column(String(40))
+
+    price: Mapped[int | None] = mapped_column(nullable=True)
+
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    stock: Mapped[int | None] = mapped_column(nullable=True)
+
+
+class AutoReply(Base):
+    """
+    Автоответ группы: на ключевое слово — заготовленная фраза.
+    match: contains | exact | start
+    """
+
+    __tablename__ = "auto_replies"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    trigger: Mapped[str] = mapped_column(String(100))
+
+    response: Mapped[str] = mapped_column(Text)
+
+    match: Mapped[str] = mapped_column(String(10), default="contains")
+
+    probability: Mapped[int] = mapped_column(default=100)
+
+    cooldown: Mapped[int] = mapped_column(default=30)
+
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    hits: Mapped[int] = mapped_column(default=0)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class PunishRule(Base):
+    """
+    Свое правило наказания: «если [нарушение] N раз за M минут →
+    [действие] на [срок]». Проверяются по порядку, срабатывает первое.
+    violation = "any" — любое нарушение.
+    """
+
+    __tablename__ = "punish_rules"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    position: Mapped[int] = mapped_column(default=0)
+
+    violation: Mapped[str] = mapped_column(String(20))
+
+    count: Mapped[int] = mapped_column(default=3)
+
+    window_minutes: Mapped[int] = mapped_column(default=10)
+
+    action: Mapped[str] = mapped_column(String(10))
+
+    duration_minutes: Mapped[int] = mapped_column(default=60)
+
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -194,14 +194,56 @@ async def init_db():
 
             "CREATE INDEX IF NOT EXISTS ix_daily_stats_chat_day "
             "ON daily_stats (chat_id, day DESC)",
+
+            "ALTER TABLE daily_stats "
+            "ADD COLUMN IF NOT EXISTS new_users INTEGER DEFAULT 0",
+
+            "ALTER TABLE daily_stats "
+            "ADD COLUMN IF NOT EXISTS warnings INTEGER DEFAULT 0",
+
+            "ALTER TABLE daily_stats "
+            "ADD COLUMN IF NOT EXISTS mutes INTEGER DEFAULT 0",
+
+            "ALTER TABLE daily_stats "
+            "ADD COLUMN IF NOT EXISTS bans INTEGER DEFAULT 0",
+
+            "ALTER TABLE daily_stats "
+            "ADD COLUMN IF NOT EXISTS deleted INTEGER DEFAULT 0",
+
+            "ALTER TABLE daily_stats "
+            "ADD COLUMN IF NOT EXISTS ai_requests INTEGER DEFAULT 0",
+
+            "ALTER TABLE group_members "
+            "ADD COLUMN IF NOT EXISTS actions_count INTEGER DEFAULT 0",
+
+            "ALTER TABLE group_members "
+            "ADD COLUMN IF NOT EXISTS ai_count INTEGER DEFAULT 0",
+
+            "ALTER TABLE group_members "
+            "ADD COLUMN IF NOT EXISTS vip BOOLEAN DEFAULT FALSE",
+
+            "ALTER TABLE group_members "
+            "ADD COLUMN IF NOT EXISTS left_at TIMESTAMP",
+
+            "ALTER TABLE daily_stats ADD COLUMN IF NOT EXISTS commands INTEGER DEFAULT 0",
+            "ALTER TABLE daily_stats ADD COLUMN IF NOT EXISTS autoreplies INTEGER DEFAULT 0",
+            "ALTER TABLE daily_stats ADD COLUMN IF NOT EXISTS images INTEGER DEFAULT 0",
+            "ALTER TABLE daily_stats ADD COLUMN IF NOT EXISTS xp INTEGER DEFAULT 0",
+
+            "ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS media_type VARCHAR(10) DEFAULT 'photo'",
+
+            "ALTER TABLE action_custom ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMP",
+
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS dm_ok BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS mode VARCHAR(8) DEFAULT 'groups'",
+            "ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS segment JSON",
+
+            "CREATE INDEX IF NOT EXISTS ix_audit_chat_created "
+            "ON audit_events (chat_id, created_at DESC)",
         )
 
         for statement in migrations:
             await connection.execute(text(statement))
-
-    # Persistent Control Center tables: roles, audit, gifts, broadcasts, rules.
-    from webapp.admin_store import ensure_schema
-    await ensure_schema()
 
     logger.info("Таблицы проверены и созданы")
 
