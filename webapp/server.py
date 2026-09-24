@@ -320,6 +320,7 @@ def create_app(bot, bot_token: str) -> web.Application:
     app.router.add_get("/", health)
     app.router.add_get("/draw", draw_page)
     app.router.add_get("/admin", admin_page)
+    app.router.add_static("/static/admin/", STATIC_DIR / "admin", show_index=False)
     app.router.add_get("/api/round", api_round)
     app.router.add_get("/api/drawing", api_drawing)
     app.router.add_post("/api/draw", api_draw)
