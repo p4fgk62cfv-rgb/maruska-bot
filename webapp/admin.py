@@ -16,6 +16,7 @@ import time
 from aiohttp import web
 
 from database.repository import (
+    member_chats,
     achievements_stats,
     block_user,
     game_stats,
@@ -47,29 +48,10 @@ from economy.shop import CATEGORIES, ITEMS, category_title
 
 from progress.achievements import ACHIEVEMENTS
 
+import audit
+
 from settings import store
 from settings.handler import ADMIN_STATUSES, is_owner
-from webapp.admin_store import (
-    ROLE_PERMISSIONS,
-    audit,
-    audit_list,
-    get_role,
-    set_role,
-    list_roles,
-    get_rules,
-    set_rules,
-    set_action_override,
-    action_override,
-    action_overrides,
-    sync_gifts,
-    gifts_list,
-    set_gift_price,
-    create_gift_tx,
-    update_gift_tx,
-    gift_transactions,
-    broadcast_history,
-    save_broadcast,
-)
 from settings.registry import (
     CHOICE_BY_KEY,
     CHOICES,
@@ -153,6 +135,41 @@ async def require_admin(request: web.Request):
     return user, chats
 
 
+async def ensure_target_access(
+    admin: dict,
+    chats: list[dict],
+    target: int,
+    chat_id: int | None = None,
+) -> None:
+    """
+    Может ли этот админ трогать этого человека.
+
+    Раньше не проверялось: админ группы А передавал Telegram ID
+    человека из группы Б и менял ему глобальный баланс. Теперь:
+
+      - владелец бота может всё;
+      - остальные — только людей из своих групп;
+      - если указана конкретная группа, человек должен быть именно в ней.
+    """
+    if is_owner(admin["id"]):
+        return
+
+    allowed = {chat["chat_id"] for chat in chats}
+
+    if chat_id is not None and chat_id not in allowed:
+        raise web.HTTPForbidden(text="no access to this chat")
+
+    where = await member_chats(target)
+
+    if chat_id is not None:
+        if chat_id not in where:
+            raise web.HTTPForbidden(text="user is not in this chat")
+        return
+
+    if not where & allowed:
+        raise web.HTTPForbidden(text="user is not in your chats")
+
+
 def _requested_chat(request: web.Request, chats: list[dict]) -> int | None:
     """
     Какую группу смотрим. Пусто — сводка по всем доступным.
@@ -179,34 +196,6 @@ async def _ensure_settings_loaded(chat_id: int) -> None:
             store.prime(chat_id, await get_group_settings(chat_id))
         except Exception:
             store.prime(chat_id, {})
-
-
-async def _role_for(user_id: int, chat_id: int | None) -> str:
-    if is_owner(user_id):
-        return "owner"
-    if chat_id is None:
-        return "moderator"
-    return (await get_role(chat_id, user_id)) or "moderator"
-
-
-async def require_permission(request: web.Request, permission: str, chat_id: int | None = None):
-    user, chats = await require_admin(request)
-    if chat_id is not None and chat_id not in {c["chat_id"] for c in chats}:
-        raise web.HTTPForbidden(text="no access to this chat")
-    role = await _role_for(user["id"], chat_id)
-    if "*" not in ROLE_PERMISSIONS.get(role, set()) and permission not in ROLE_PERMISSIONS.get(role, set()):
-        raise web.HTTPForbidden(text="insufficient role")
-    return user, chats, role
-
-
-async def _target_in_chat(chat_id: int, telegram_id: int) -> bool:
-    from database.database import session_scope
-    from sqlalchemy import text
-    async with session_scope() as session:
-        found = await session.scalar(text(
-            "SELECT 1 FROM group_members WHERE chat_id=:chat AND telegram_id=:user LIMIT 1"
-        ), {"chat": chat_id, "user": telegram_id})
-    return bool(found)
 
 
 # ---------------------------------------------------------
@@ -358,12 +347,22 @@ async def api_set_setting(request: web.Request):
 
     if chat_id not in {chat["chat_id"] for chat in chats}:
         raise web.HTTPForbidden(text="no access to this chat")
-    role = await _role_for(_user["id"], chat_id)
-    if "*" not in ROLE_PERMISSIONS.get(role, set()):
-        raise web.HTTPForbidden(text="only owner or super admin can change settings")
 
     key = body.get("key")
     value = body.get("value")
+
+    from settings.registry import CHOICE_BY_KEY as _C, FEATURE_BY_KEY as _F
+    from webapp.admin_v2 import require_perm
+    from webapp.roles import SECTION_PERMISSION
+
+    item = _F.get(key) or _C.get(key) or NUMBER_BY_KEY.get(key) or TEXT_BY_KEY.get(key)
+
+    if item is None:
+        raise web.HTTPBadRequest(text="unknown key")
+
+    admin, _c, _role = await require_perm(
+        request, chat_id, SECTION_PERMISSION.get(item.group, "settings"),
+    )
 
     await _ensure_settings_loaded(chat_id)
 
@@ -383,7 +382,7 @@ async def api_set_setting(request: web.Request):
     elif key in TEXT_BY_KEY:
         text = TEXT_BY_KEY[key]
 
-        if not isinstance(value, str) or not value.strip():
+        if not isinstance(value, str) or (not value.strip() and not text.allow_empty):
             raise web.HTTPBadRequest(text="empty text")
 
         value = value[: text.max_length]
@@ -402,54 +401,120 @@ async def api_set_setting(request: web.Request):
         logger.error("ADMIN SAVE: %s %s", type(error).__name__, error)
         raise web.HTTPBadGateway(text="save failed")
 
-    await audit(_user["id"], "setting_change", "settings", chat_id=chat_id, details={"key": key, "value": value})
+    audit.log(
+        "settings", "change", chat_id=chat_id,
+        actor_kind="admin", actor_id=admin["id"],
+        actor_name=admin.get("first_name") or admin.get("username"),
+        details=f"{item.title}: {value if not isinstance(value, str) or len(value) < 60 else value[:57] + '…'}",
+    )
+
     return web.json_response({"ok": True, "key": key, "value": value})
 
 
+_admins_cache: dict[int, tuple[float, set[int]]] = {}
+
+
+async def chat_admin_ids(bot, chat_ids: list[int]) -> set[int]:
+    """Администраторы групп — для фильтра и отметки «админ». Кэш 5 минут."""
+    result = set()
+
+    for chat_id in chat_ids[:20]:
+        cached = _admins_cache.get(chat_id)
+
+        if cached and time.monotonic() - cached[0] < 300:
+            result |= cached[1]
+            continue
+
+        try:
+            admins = await bot.get_chat_administrators(chat_id)
+            ids = {m.user.id for m in admins if not m.user.is_bot}
+        except Exception:
+            ids = set()
+
+        _admins_cache[chat_id] = (time.monotonic(), ids)
+        result |= ids
+
+    return result
+
+
 async def api_users(request: web.Request):
+    from database.repository import members_page
+
     _user, chats = await require_admin(request)
     chat_id = _requested_chat(request, chats)
+    chat_ids = [chat_id] if chat_id else [c["chat_id"] for c in chats]
 
     query = request.query.get("q", "").strip()[:60]
+    flt = request.query.get("filter", "all")[:20]
+    sort = request.query.get("sort", "activity")[:20]
 
-    people = await list_members(chat_id, query=query, limit=60)
+    try:
+        offset = max(0, int(request.query.get("offset", "0")))
+    except ValueError:
+        offset = 0
 
-    blocked = await get_blocked_ids(chat_id) if chat_id else set()
+    admin_ids = await chat_admin_ids(request.app["bot"], chat_ids)
 
-    for person in people:
-        person["blocked"] = person["telegram_id"] in blocked
+    page = await members_page(chat_ids, query=query, flt=flt, sort=sort,
+                              admin_ids=admin_ids, limit=40, offset=offset)
 
-    return web.json_response({"users": people})
+    return web.json_response(page)
 
 
 async def api_user(request: web.Request):
-    user, chats = await require_admin(request)
+    admin, chats = await require_admin(request)
 
-    raw = request.query.get("user_id", "")
+    # И /api/admin/user?user_id=…, и /api/admin/users/{id}
+    raw = request.match_info.get("id") or request.query.get("user_id", "")
 
     if not raw.lstrip("-").isdigit():
         raise web.HTTPBadRequest(text="bad user_id")
 
-    target_id = int(raw)
-    raw_chat = request.query.get("chat_id", "").strip()
-    chat_id = None
-    if raw_chat:
-        try:
-            chat_id = int(raw_chat)
-        except ValueError:
-            raise web.HTTPBadRequest(text="bad chat_id")
-        if chat_id not in {chat["chat_id"] for chat in chats}:
-            raise web.HTTPForbidden(text="no access to this chat")
-    elif not is_owner(user["id"]):
-        raise web.HTTPBadRequest(text="chat_id required")
+    target = int(raw)
 
-    if chat_id is not None and not await _target_in_chat(chat_id, target_id):
-        raise web.HTTPNotFound(text="user is not a member of this chat")
+    await ensure_target_access(admin, chats, target)
 
-    card = await get_user_card(target_id)
+    card = await get_user_card(target)
 
     if card is None:
         raise web.HTTPNotFound(text="user not found")
+
+    from database.repository import member_profile, user_history
+    from progress.achievements import ACHIEVEMENT_BY_KEY
+
+    chat_id = _requested_chat(request, chats)
+    chat_ids = [chat_id] if chat_id else [c["chat_id"] for c in chats]
+
+    member = await member_profile(target, chat_ids)
+
+    for item in member["achievements"]:
+        info = ACHIEVEMENT_BY_KEY.get(item["key"])
+        item["title"] = info.title if info else item["key"]
+        item["emoji"] = info.emoji if info else "🏆"
+
+    history = await user_history(target, chat_ids)
+
+    for item in history:
+        if item["type"] == "achievement":
+            info = ACHIEVEMENT_BY_KEY.get(item["action"])
+            item["details"] = f"{info.emoji} {info.title}" if info else item["action"]
+
+    status = None
+
+    if chat_id:
+        try:
+            m = await request.app["bot"].get_chat_member(chat_id, target)
+            status = m.status
+        except Exception:
+            status = None
+
+    from progress.xp import progress as xp_progress
+
+    card["progress"] = xp_progress(card["xp"])
+    card["member"] = member
+    card["history_all"] = history
+    card["status"] = status
+    card["admin"] = target in await chat_admin_ids(request.app["bot"], chat_ids)
 
     return web.json_response(card)
 
@@ -468,7 +533,8 @@ async def api_user_action(request: web.Request):
     action = body.get("action")
 
     try:
-        target = int(body.get("user_id"))
+        # И POST /api/admin/user, и POST /api/admin/users/{id}/actions
+        target = int(request.match_info.get("id") or body.get("user_id"))
     except (TypeError, ValueError):
         raise web.HTTPBadRequest(text="bad user_id")
 
@@ -483,20 +549,20 @@ async def api_user_action(request: web.Request):
         if chat_id not in {chat["chat_id"] for chat in chats}:
             raise web.HTTPForbidden(text="no access to this chat")
 
-    if action in ("coins", "xp", "achievement"):
-        role = await _role_for(admin["id"], chat_id)
-        if "*" not in ROLE_PERMISSIONS.get(role, set()) and "economy" not in ROLE_PERMISSIONS.get(role, set()):
-            raise web.HTTPForbidden(text="economy permission required")
-    if action in ("block", "unblock"):
-        role = await _role_for(admin["id"], chat_id)
-        if "*" not in ROLE_PERMISSIONS.get(role, set()) and "moderation" not in ROLE_PERMISSIONS.get(role, set()):
-            raise web.HTTPForbidden(text="moderation permission required")
-
-    if not is_owner(admin["id"]):
+    # Баланс и опыт глобальные: не-владелец обязан указать свою группу,
+    # и человек должен в ней состоять
+    if action in ("coins", "xp", "achievement", "karma", "vip") and not is_owner(admin["id"]):
         if chat_id is None:
             raise web.HTTPBadRequest(text="chat_id required")
-        if not await _target_in_chat(chat_id, target):
-            raise web.HTTPNotFound(text="user is not a member of this chat")
+
+    await ensure_target_access(admin, chats, target, chat_id)
+
+    from webapp.admin_v2 import require_perm
+
+    needed = "moderation" if action in ("block", "unblock", "vip") else "economy"
+    await require_perm(request, chat_id, needed)
+
+    admin_name = admin.get("first_name") or admin.get("username")
 
     if action in ("coins", "xp"):
         try:
@@ -519,12 +585,62 @@ async def api_user_action(request: web.Request):
 
             if not ok:
                 raise web.HTTPBadRequest(text="not enough coins")
-            await audit(admin["id"], "balance_change", "economy", chat_id=chat_id, target_user_id=target, details={"amount": amount, "balance": balance})
+
+            audit.log(
+                "economy", "coins", chat_id=chat_id, actor_kind="admin",
+                actor_id=admin["id"], actor_name=admin_name,
+                target_id=target, details=f"{amount:+d} 💎",
+            )
+
             return web.json_response({"ok": True, "balance": balance})
 
         result = await award_xp(telegram_id=target, amount=amount)
-        await audit(admin["id"], "xp_change", "economy", chat_id=chat_id, target_user_id=target, details={"amount": amount, "xp": result.get("xp", 0)})
+
+        audit.log(
+            "economy", "xp", chat_id=chat_id, actor_kind="admin",
+            actor_id=admin["id"], actor_name=admin_name,
+            target_id=target, details=f"{amount:+d} xp",
+        )
+
         return web.json_response({"ok": True, "xp": result.get("xp", 0)})
+
+    if action == "karma":
+        from database.repository import add_karma
+
+        try:
+            amount = int(body.get("amount"))
+        except (TypeError, ValueError):
+            raise web.HTTPBadRequest(text="bad amount")
+
+        if abs(amount) > 10_000:
+            raise web.HTTPBadRequest(text="too much")
+
+        karma = await add_karma(target, amount)
+
+        audit.log(
+            "economy", "karma", chat_id=chat_id, actor_kind="admin",
+            actor_id=admin["id"], actor_name=admin_name,
+            target_id=target, details=f"{amount:+d} ❤️",
+        )
+
+        return web.json_response({"ok": True, "karma": karma})
+
+    if action == "vip":
+        from database.repository import set_member_vip
+
+        if chat_id is None:
+            raise web.HTTPBadRequest(text="chat_id required")
+
+        vip = bool(body.get("value"))
+        await set_member_vip(chat_id, target, vip)
+
+        audit.log(
+            "moderation", "vip" if vip else "unvip", chat_id=chat_id,
+            actor_kind="admin", actor_id=admin["id"], actor_name=admin_name,
+            target_id=target,
+        )
+
+        return web.json_response({"ok": True, "vip": vip})
 
     if action == "achievement":
         key = body.get("key")
@@ -560,6 +676,12 @@ async def api_user_action(request: web.Request):
             await unblock_user(chat_id, target)
             store.set_blocked(chat_id, target, False)
 
+        audit.log(
+            "moderation", "ignore" if action == "block" else "unignore",
+            chat_id=chat_id, actor_kind="admin", actor_id=admin["id"],
+            actor_name=admin_name, target_id=target,
+        )
+
         return web.json_response({"ok": True})
 
     raise web.HTTPBadRequest(text="unknown action")
@@ -591,26 +713,42 @@ async def api_achievements(request: web.Request):
 
 
 async def api_shop(request: web.Request):
-    await require_admin(request)
+    from database.repository import shop_purchases
+    from economy import shop_rules
+
+    _user, chats = await require_admin(request)
+    chat_id = _requested_chat(request, chats)
+    chat_ids = [chat_id] if chat_id else [c["chat_id"] for c in chats]
+
+    if chat_id and not shop_rules.is_loaded(chat_id):
+        await shop_rules.reload(chat_id)
 
     stats = await shop_stats()
-
     categories = []
 
     for key, (emoji, title) in CATEGORIES.items():
-        items = [
-            {
+        items = []
+
+        for item in ITEMS:
+            if item.category != key:
+                continue
+
+            rule = shop_rules.rule(chat_id, item.key)
+
+            items.append({
                 "key": item.key,
                 "emoji": item.emoji,
                 "title": item.title,
-                "price": item.price,
                 "description": item.description,
+                "base_price": item.price,
+                "price": shop_rules.price(chat_id, item),
+                "custom_price": rule.price is not None,
+                "enabled": rule.enabled,
+                "stock": rule.stock,
+                "giftable": item.giftable,
                 "owned": stats.get(item.key, {}).get("total", 0),
                 "gifted": stats.get(item.key, {}).get("gifted", 0),
-            }
-            for item in ITEMS
-            if item.category == key
-        ]
+            })
 
         categories.append({
             "key": key,
@@ -618,17 +756,31 @@ async def api_shop(request: web.Request):
             "items": sorted(items, key=lambda row: row["price"]),
         })
 
-    return web.json_response({"categories": categories})
+    return web.json_response({
+        "categories": categories,
+        "purchases": await shop_purchases(chat_ids),
+    })
 
 
 async def api_economy(request: web.Request):
+    from database.repository import economy_flow
+
     _user, chats = await require_admin(request)
     chat_id = _requested_chat(request, chats)
+    chat_ids = [chat_id] if chat_id else [c["chat_id"] for c in chats]
+
+    reason = request.query.get("reason", "")[:30]
+    history = await recent_transactions(chat_id, limit=80)
+
+    if reason:
+        history = [h for h in history if h["reason"] == reason]
 
     return web.json_response({
         "totals": await get_overview(chat_id),
+        "today": await economy_flow(chat_ids, days=1),
+        "week": await economy_flow(chat_ids, days=7),
         "rich": await top_by("coins", chat_id),
-        "history": await recent_transactions(chat_id, limit=30),
+        "history": history[:40],
     })
 
 
@@ -656,10 +808,10 @@ async def api_stats(request: web.Request):
 
 
 async def api_catalog(request: web.Request):
-    """Каталог действий + per-group runtime overrides."""
-    _user, chats = await require_admin(request)
-    chat_id = _requested_chat(request, chats)
-    overrides = await action_overrides(chat_id) if chat_id is not None else {}
+    """
+    Каталог действий — только просмотр: он живёт в коде.
+    """
+    await require_admin(request)
 
     phrase_count = {}
 
@@ -694,8 +846,6 @@ async def api_catalog(request: web.Request):
             "tags": list(action.tags),
             "phrases": phrases,
             "images": images_for(action.key),
-            "enabled": overrides.get(action.key, {}).get("enabled", True),
-            "cooldown_seconds": overrides.get(action.key, {}).get("cooldown_seconds", 0),
         })
 
     return web.json_response({
@@ -803,9 +953,10 @@ async def api_broadcast(request: web.Request):
             failed += 1
             logger.warning("BROADCAST %s: %s", chat_id, error)
 
-    logger.info("Рассылка от %s: %s из %s", user["id"], sent, len(targets))
-    await save_broadcast(user["id"], None if len(targets) != 1 else targets[0], text, sent, failed)
-    await audit(user["id"], "broadcast", "broadcast", chat_id=None if len(targets) != 1 else targets[0], details={"sent": sent, "failed": failed})
+    audit.log(
+        "broadcast", "sent", actor_kind="admin", actor_id=user["id"],
+        actor_name=user.get("first_name"), details=f"{sent} из {len(targets)}",
+    )
 
     return web.json_response({"ok": True, "sent": sent, "failed": failed})
 
@@ -979,6 +1130,7 @@ async def api_moderate(request: web.Request):
         ban,
         kick,
         mute,
+        tempban,
         unban,
         unmute,
     )
@@ -998,9 +1150,6 @@ async def api_moderate(request: web.Request):
 
     if chat_id not in {chat["chat_id"] for chat in chats}:
         raise web.HTTPForbidden(text="no access to this chat")
-    role = await _role_for(admin["id"], chat_id)
-    if "*" not in ROLE_PERMISSIONS.get(role, set()) and "moderation" not in ROLE_PERMISSIONS.get(role, set()):
-        raise web.HTTPForbidden(text="moderation permission required")
 
     if target == admin["id"]:
         return web.json_response(
@@ -1008,8 +1157,40 @@ async def api_moderate(request: web.Request):
             status=400,
         )
 
+    await ensure_target_access(admin, chats, target, chat_id)
+
+    from webapp.admin_v2 import require_perm
+    from webapp.roles import bot_rights
+
+    await require_perm(request, chat_id, "moderation")
+
     action = body.get("action")
     bot = request.app["bot"]
+
+    # Предупреждение не требует прав бота — это запись в базе,
+    # а наказание при лимите само проверит права
+    if action == "warn":
+        from features.automod import warn
+        from database.repository import get_user_card
+
+        card = await get_user_card(target)
+        reason = str(body.get("reason") or "предупреждение от админа")[:120]
+
+        result = await warn(
+            bot, chat_id, target, (card or {}).get("name") or str(target), reason,
+            actor_kind="admin", actor_id=admin["id"],
+            actor_name=admin.get("first_name") or admin.get("username"),
+        )
+
+        return web.json_response({"ok": True, "result": result})
+
+    rights = await bot_rights(bot, chat_id)
+
+    if not rights["restrict"]:
+        return web.json_response(
+            {"ok": False, "error": "У Мары нет права ограничивать участников в этой группе."},
+            status=400,
+        )
 
     try:
         if action == "mute":
@@ -1026,6 +1207,12 @@ async def api_moderate(request: web.Request):
             await unmute(bot, chat_id, target)
         elif action == "ban":
             await ban(bot, chat_id, target)
+        elif action == "tempban":
+            try:
+                minutes = int(body.get("minutes") or 1440)
+            except (TypeError, ValueError):
+                minutes = 1440
+            await tempban(bot, chat_id, target, max(1, min(minutes, 60 * 24 * 365)))
         elif action == "unban":
             await unban(bot, chat_id, target)
         elif action == "kick":
@@ -1038,11 +1225,14 @@ async def api_moderate(request: web.Request):
             status=400,
         )
 
-    logger.info(
-        "Модерация: %s -> %s в %s (%s)",
-        admin["id"], target, chat_id, action,
+    audit.log(
+        "moderation", action, chat_id=chat_id, actor_kind="admin",
+        actor_id=admin["id"], actor_name=admin.get("first_name") or admin.get("username"),
+        target_id=target,
+        details=f"{body.get('minutes')} мин" if action == "mute" else None,
     )
-    await audit(admin["id"], action, "moderation", chat_id=chat_id, target_user_id=target, details={"minutes": body.get("minutes")})
+
+    audit.count(chat_id, {"mute": "mutes", "ban": "bans", "tempban": "bans"}.get(action, "") or "none")
 
     return web.json_response({"ok": True})
 
@@ -1077,6 +1267,10 @@ async def api_chat_lock(request: web.Request):
 
     locked = bool(body.get("locked"))
 
+    from webapp.admin_v2 import require_perm
+
+    admin, _c, _r = await require_perm(request, chat_id, "moderation")
+
     try:
         await set_chat_locked(request.app["bot"], chat_id, locked)
     except ModerationError as error:
@@ -1084,6 +1278,12 @@ async def api_chat_lock(request: web.Request):
             {"ok": False, "error": str(error)},
             status=400,
         )
+
+    audit.log(
+        "moderation", "lock" if locked else "unlock", chat_id=chat_id,
+        actor_kind="admin", actor_id=admin["id"],
+        actor_name=admin.get("first_name") or admin.get("username"),
+    )
 
     return web.json_response({"ok": True, "locked": locked})
 
@@ -1100,203 +1300,6 @@ async def api_changelog(request: web.Request):
     return web.json_response(changelog.as_dict())
 
 
-
-async def api_attention(request: web.Request):
-    user, chats = await require_admin(request)
-    chat_id = _requested_chat(request, chats)
-    events = await audit_list(chat_id=chat_id, limit=100)
-    attention = []
-    for event in events:
-        if event.get("result") == "error":
-            attention.append({"severity": "critical", "title": event["action"], "details": event.get("details") or {}})
-    blocked = await get_blocked_ids(chat_id) if chat_id else set()
-    if blocked:
-        attention.append({"severity": "warning", "title": "Заблокированные пользователи", "count": len(blocked)})
-    return web.json_response({"items": attention[:20]})
-
-
-async def api_audit(request: web.Request):
-    user, chats = await require_admin(request)
-    chat_id = _requested_chat(request, chats)
-    target = request.query.get("target_user_id")
-    target_id = int(target) if target and target.lstrip("-").isdigit() else None
-    category = request.query.get("category") or None
-    rows = await audit_list(chat_id=chat_id, category=category, target_user_id=target_id, limit=200)
-    return web.json_response({"items": rows})
-
-
-async def api_roles(request: web.Request):
-    user, chats = await require_admin(request)
-    chat_id = _requested_chat(request, chats)
-    if chat_id is None:
-        raise web.HTTPBadRequest(text="chat_id required")
-    if request.method == "GET":
-        return web.json_response({"items": await list_roles(chat_id)})
-    if not is_owner(user["id"]):
-        raise web.HTTPForbidden(text="owner only")
-    body = await request.json()
-    try:
-        target = int(body.get("telegram_id"))
-    except (TypeError, ValueError):
-        raise web.HTTPBadRequest(text="bad telegram_id")
-    role = str(body.get("role") or "moderator")
-    if role not in ROLE_PERMISSIONS or role == "owner":
-        raise web.HTTPBadRequest(text="bad role")
-    await set_role(chat_id, target, role)
-    await audit(user["id"], "role_change", "admins", chat_id=chat_id, target_user_id=target, details={"role": role})
-    return web.json_response({"ok": True})
-
-
-async def api_rules(request: web.Request):
-    user, chats = await require_admin(request)
-    chat_id = _requested_chat(request, chats)
-    if chat_id is None:
-        raise web.HTTPBadRequest(text="chat_id required")
-    if request.method == "GET":
-        return web.json_response({"config": await get_rules(chat_id)})
-    if not is_owner(user["id"]):
-        role = await _role_for(user["id"], chat_id)
-        if "moderation" not in ROLE_PERMISSIONS.get(role, set()):
-            raise web.HTTPForbidden(text="insufficient role")
-    body = await request.json()
-    config = body.get("config")
-    if not isinstance(config, dict):
-        raise web.HTTPBadRequest(text="config must be object")
-    await set_rules(chat_id, config, user["id"])
-    await audit(user["id"], "moderation_rules_change", "moderation", chat_id=chat_id, details=config)
-    return web.json_response({"ok": True, "config": config})
-
-
-async def api_action_override(request: web.Request):
-    user, chats = await require_admin(request)
-    chat_id = _requested_chat(request, chats)
-    if chat_id is None:
-        raise web.HTTPBadRequest(text="chat_id required")
-    if request.method == "GET":
-        key = request.query.get("action_key", "")
-        if not key:
-            raise web.HTTPBadRequest(text="action_key required")
-        return web.json_response({"override": await action_override(chat_id, key)})
-    role = await _role_for(user["id"], chat_id)
-    if "*" not in ROLE_PERMISSIONS.get(role, set()) and "actions" not in ROLE_PERMISSIONS.get(role, set()):
-        raise web.HTTPForbidden(text="insufficient role")
-    body = await request.json()
-    key = str(body.get("action_key") or "")
-    if not key or key not in {a.key for a in ACTIONS}:
-        raise web.HTTPBadRequest(text="unknown action")
-    enabled = bool(body.get("enabled", True))
-    cooldown = int(body.get("cooldown_seconds") or 0)
-    aliases = body.get("aliases") if isinstance(body.get("aliases"), list) else []
-    await set_action_override(chat_id, key, enabled=enabled, cooldown_seconds=cooldown, aliases=[str(x)[:64] for x in aliases[:20]])
-    await audit(user["id"], "action_override", "actions", chat_id=chat_id, details={"action": key, "enabled": enabled, "cooldown": cooldown})
-    return web.json_response({"ok": True})
-
-
-async def api_gifts(request: web.Request):
-    user, chats = await require_admin(request)
-    chat_id = _requested_chat(request, chats)
-    token = request.app["bot_token"]
-    if request.method == "GET":
-        from webapp.telegram_gifts import star_balance
-        try:
-            balance = await star_balance(token)
-        except Exception as error:
-            balance = None
-            logger.warning("GIFTS BALANCE: %s", error)
-        return web.json_response({"balance": balance, "items": await gifts_list(), "transactions": await gift_transactions()})
-    role = await _role_for(user["id"], chat_id)
-    if "*" not in ROLE_PERMISSIONS.get(role, set()) and "gifts" not in ROLE_PERMISSIONS.get(role, set()):
-        raise web.HTTPForbidden(text="insufficient role")
-    body = await request.json()
-    operation = body.get("operation", "sync")
-    if operation == "sync":
-        from webapp.telegram_gifts import available_gifts
-        raw = await available_gifts(token)
-        items = []
-        for gift in raw:
-            items.append({
-                "id": gift.get("id"),
-                "star_count": int(gift.get("star_count", 0)),
-                "upgrade_star_count": int(gift.get("upgrade_star_count", 0)),
-                "is_premium": bool(gift.get("is_premium", False)),
-                "total_count": gift.get("total_count"),
-                "remaining_count": gift.get("remaining_count"),
-                "personal_total_count": gift.get("personal_total_count"),
-                "personal_remaining_count": gift.get("personal_remaining_count"),
-                "sticker": gift.get("sticker") or {},
-            })
-        await sync_gifts(items)
-        await audit(user["id"], "gift_catalog_sync", "gifts", chat_id=chat_id, details={"count": len(items)})
-        return web.json_response({"ok": True, "count": len(items), "items": await gifts_list()})
-    if operation == "price":
-        gift_id = str(body.get("gift_id") or "")
-        price = int(body.get("internal_price") or 0)
-        enabled = body.get("enabled")
-        await set_gift_price(gift_id, price, None if enabled is None else bool(enabled))
-        await audit(user["id"], "gift_price_change", "gifts", chat_id=chat_id, details={"gift_id": gift_id, "price": price, "enabled": enabled})
-        return web.json_response({"ok": True})
-    if operation == "send":
-        try:
-            target = int(body.get("target_user_id"))
-        except (TypeError, ValueError):
-            raise web.HTTPBadRequest(text="bad target_user_id")
-        gift_id = str(body.get("gift_id") or "")
-        gift = next((x for x in await gifts_list() if x["gift_id"] == gift_id), None)
-        if not gift or not gift["enabled"]:
-            raise web.HTTPBadRequest(text="gift unavailable")
-        if chat_id is None or not await _target_in_chat(chat_id, target):
-            raise web.HTTPBadRequest(text="target must belong to selected group")
-        from webapp.telegram_gifts import send_gift
-        from database.repository import change_balance
-        cost = int(gift["internal_price"])
-        if cost <= 0:
-            raise web.HTTPBadRequest(text="gift has no internal price")
-        ok, balance = await change_balance(target, -cost, reason="telegram_gift", note=f"Gift {gift_id}", chat_id=chat_id, allow_negative=False)
-        if not ok:
-            raise web.HTTPBadRequest(text="not enough diamonds")
-        tx = await create_gift_tx(user["id"], target, gift_id, cost, int(gift["star_count"]), chat_id=chat_id)
-        try:
-            result = await send_gift(token, user_id=target, gift_id=gift_id, text=str(body.get("text") or "")[:128])
-        except Exception as error:
-            await change_balance(target, cost, reason="telegram_gift_refund", note=f"Gift refund {gift_id}", chat_id=chat_id)
-            await update_gift_tx(tx, "failed", {"error": str(error)[:500]})
-            await audit(user["id"], "gift_send", "gifts", chat_id=chat_id, target_user_id=target, details={"gift_id": gift_id, "error": str(error)[:300]}, result="error")
-            raise web.HTTPBadGateway(text="Telegram gift failed")
-        await update_gift_tx(tx, "sent", result if isinstance(result, dict) else {"result": result})
-        await audit(user["id"], "gift_send", "gifts", chat_id=chat_id, target_user_id=target, details={"gift_id": gift_id, "diamond_cost": cost, "star_cost": gift["star_count"]})
-        return web.json_response({"ok": True, "balance": balance, "transaction_id": tx})
-    raise web.HTTPBadRequest(text="unknown operation")
-
-
-async def api_analytics(request: web.Request):
-    user, chats = await require_admin(request)
-    chat_id = _requested_chat(request, chats)
-    days_raw = request.query.get("days", "30")
-    days = max(1, min(90, int(days_raw) if days_raw.isdigit() else 30))
-    overview = await get_overview(chat_id)
-    series = await get_daily_series(chat_id, days)
-    stats = await get_daily_series(chat_id, days)
-    return web.json_response({"overview": overview, "series": series, "days": days, "audit": await audit_list(chat_id=chat_id, limit=50), "stats": stats})
-
-
-async def api_broadcast_history(request: web.Request):
-    await require_admin(request)
-    return web.json_response({"items": await broadcast_history()})
-
-
-async def api_chat_permissions(request: web.Request):
-    _user, chats = await require_admin(request)
-    chat_id = _requested_chat(request, chats)
-    if chat_id is None:
-        raise web.HTTPBadRequest(text="chat_id required")
-    bot = request.app["bot"]
-    me = await bot.get_me()
-    member = await bot.get_chat_member(chat_id, me.id)
-    rights = {}
-    for key in ("can_manage_chat", "can_delete_messages", "can_restrict_members", "can_promote_members", "can_change_info", "can_invite_users", "can_pin_messages", "can_manage_topics", "can_manage_tags"):
-        rights[key] = bool(getattr(member, key, False))
-    return web.json_response({"rights": rights, "status": member.status})
-
 def setup_admin_routes(app: web.Application) -> None:
     app.router.add_get("/api/admin/session", api_session)
     app.router.add_get("/api/admin/overview", api_overview)
@@ -1305,6 +1308,10 @@ def setup_admin_routes(app: web.Application) -> None:
     app.router.add_get("/api/admin/users", api_users)
     app.router.add_get("/api/admin/user", api_user)
     app.router.add_post("/api/admin/user", api_user_action)
+
+    # Адреса по схеме концепции — синонимы, старые тоже работают
+    app.router.add_get("/api/admin/users/{id}", api_user)
+    app.router.add_post("/api/admin/users/{id}/actions", api_user_action)
     app.router.add_get("/api/admin/achievements", api_achievements)
     app.router.add_get("/api/admin/shop", api_shop)
     app.router.add_get("/api/admin/economy", api_economy)
@@ -1321,16 +1328,3 @@ def setup_admin_routes(app: web.Application) -> None:
     app.router.add_post("/api/admin/moderate", api_moderate)
     app.router.add_get("/api/admin/chat_lock", api_chat_lock)
     app.router.add_post("/api/admin/chat_lock", api_chat_lock)
-    app.router.add_get("/api/admin/attention", api_attention)
-    app.router.add_get("/api/admin/audit", api_audit)
-    app.router.add_get("/api/admin/roles", api_roles)
-    app.router.add_post("/api/admin/roles", api_roles)
-    app.router.add_get("/api/admin/rules", api_rules)
-    app.router.add_post("/api/admin/rules", api_rules)
-    app.router.add_get("/api/admin/action_override", api_action_override)
-    app.router.add_post("/api/admin/action_override", api_action_override)
-    app.router.add_get("/api/admin/gifts", api_gifts)
-    app.router.add_post("/api/admin/gifts", api_gifts)
-    app.router.add_get("/api/admin/analytics", api_analytics)
-    app.router.add_get("/api/admin/broadcast_history", api_broadcast_history)
-    app.router.add_get("/api/admin/chat_permissions", api_chat_permissions)

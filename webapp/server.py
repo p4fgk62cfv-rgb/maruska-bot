@@ -33,6 +33,7 @@ from games import state
 from games.crocodile import drawing_keyboard, ensure_hint_message
 
 from webapp.admin import setup_admin_routes
+from webapp.admin_v2 import setup_v2_routes
 from games.words import LEVEL_NAMES
 
 
@@ -140,13 +141,68 @@ async def health(request: web.Request):
     return web.json_response({"ok": True, "service": "maruska"})
 
 
+# Telegram кэширует страницы мини-приложений и может неделями
+# показывать старую версию после деплоя. Запрещаем кэш явно.
+NO_CACHE = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
+
+
+def _page_with_version(page) -> web.Response:
+    """
+    Отдаёт страницу, вшивая в неё текущую версию бота. Так по шапке
+    панели сразу видно, какая версия реально открылась: если там
+    старый номер — открыт устаревший файл.
+    """
+    import changelog
+
+    html = page.read_text(encoding="utf-8")
+    html = html.replace("__MARA_VERSION__", str(changelog.latest().version))
+
+    return web.Response(
+        text=html,
+        content_type="text/html",
+        charset="utf-8",
+        headers=NO_CACHE,
+    )
+
+
+ASSET_TYPES = {".css": "text/css", ".js": "application/javascript"}
+
+
+async def admin_asset(request: web.Request):
+    """
+    Модули админки. Отдаются только файлы из webapp/static/admin
+    с известным расширением — никаких путей наружу.
+    """
+    name = request.match_info["name"]
+
+    if "/" in name or ".." in name:
+        raise web.HTTPNotFound()
+
+    path = STATIC_DIR / "admin" / name
+    kind = ASSET_TYPES.get(path.suffix)
+
+    if kind is None or not path.is_file():
+        raise web.HTTPNotFound()
+
+    return web.Response(
+        text=path.read_text(encoding="utf-8"),
+        content_type=kind,
+        charset="utf-8",
+        headers=NO_CACHE,
+    )
+
+
 async def admin_page(request: web.Request):
     page = STATIC_DIR / "admin.html"
 
     if not page.exists():
         raise web.HTTPNotFound(text="page missing")
 
-    return web.FileResponse(page)
+    return _page_with_version(page)
 
 
 async def draw_page(request: web.Request):
@@ -155,7 +211,7 @@ async def draw_page(request: web.Request):
     if not page.exists():
         raise web.HTTPNotFound(text="page missing")
 
-    return web.FileResponse(page)
+    return _page_with_version(page)
 
 
 async def api_round(request: web.Request):
@@ -320,12 +376,15 @@ def create_app(bot, bot_token: str) -> web.Application:
     app.router.add_get("/", health)
     app.router.add_get("/draw", draw_page)
     app.router.add_get("/admin", admin_page)
-    app.router.add_static("/static/admin/", STATIC_DIR / "admin", show_index=False)
     app.router.add_get("/api/round", api_round)
     app.router.add_get("/api/drawing", api_drawing)
     app.router.add_post("/api/draw", api_draw)
 
     setup_admin_routes(app)
+    setup_v2_routes(app)
+
+    # Модули новой админки: стили и скрипты отдельными файлами
+    app.router.add_get("/admin-assets/{name}", admin_asset)
 
     return app
 
