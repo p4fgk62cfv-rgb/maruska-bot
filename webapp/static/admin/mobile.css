@@ -1,0 +1,7 @@
+/* Адаптация под ширину экрана: телефон по умолчанию, дальше — шире. */
+
+@media (min-width: 560px) {
+  .metrics { grid-template-columns: repeat(4, minmax(0,1fr)); }
+  .action-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .menu-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+}
