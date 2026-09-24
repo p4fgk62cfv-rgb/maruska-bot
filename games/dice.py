@@ -9,7 +9,6 @@
 
 import logging
 import random
-import re
 from html import escape
 
 from aiogram import Router
@@ -27,7 +26,6 @@ router = Router(name="dice")
 
 
 from games.dice_core import (
-    DICE_RE,
     EIGHT_BALL,
     FACES,
     MAX_DICE,
@@ -41,7 +39,53 @@ COIN_SIDES = (("🪙", "Орёл"), ("🪙", "Решка"))
 
 
 def games_on(message: Message) -> bool:
-    return is_enabled(message.chat.id, "games")
+    return is_enabled(message.chat.id, "games") and is_enabled(message.chat.id, "game_dice")
+
+
+_last_play: dict[tuple[int, int], float] = {}
+
+
+def gate(message: Message, kind: str) -> str | None:
+    """
+    Можно ли играть сейчас. Возвращает причину отказа или None.
+    Если можно — учитывает игру в статистике.
+    """
+    import asyncio
+    import time
+
+    from settings.store import get_number
+
+    if not games_on(message):
+        return "🎲 Игры в этой группе выключены (/settings)."
+
+    chat_id = message.chat.id
+    user_id = message.from_user.id if message.from_user else 0
+    pause = get_number(chat_id, "dice_cooldown") or 0
+
+    if pause and chat_id < 0:
+        last = _last_play.get((chat_id, user_id))
+        left = pause - (time.monotonic() - last) if last is not None else 0
+
+        if left > 0:
+            return f"⏳ Подожди ещё {int(left) + 1} сек."
+
+        _last_play[(chat_id, user_id)] = time.monotonic()
+
+    if chat_id < 0:
+        async def count():
+            try:
+                from database.repository import bump_action_usage
+
+                await bump_action_usage(chat_id, f"game:{kind}")
+            except Exception:
+                pass
+
+        try:
+            asyncio.get_running_loop().create_task(count())
+        except RuntimeError:
+            pass
+
+    return None
 
 
 def format_roll(name: str, count: int, sides: int, modifier: int) -> str:
@@ -78,8 +122,10 @@ def format_roll(name: str, count: int, sides: int, modifier: int) -> str:
 
 @router.message(Command("dice", "roll", "d"))
 async def dice_command(message: Message):
-    if not games_on(message):
-        await message.reply("🎲 Игры в этой группе выключены (/settings).")
+    reason = gate(message, "dice")
+
+    if reason:
+        await message.reply(reason)
         return
 
     parts = (message.text or "").split(maxsplit=1)
@@ -110,8 +156,10 @@ async def dice_command(message: Message):
 
 @router.message(Command("coin", "flip"))
 async def coin_command(message: Message):
-    if not games_on(message):
-        await message.reply("🎲 Игры в этой группе выключены (/settings).")
+    reason = gate(message, "coin")
+
+    if reason:
+        await message.reply(reason)
         return
 
     emoji, side = random.choice(COIN_SIDES)
@@ -128,8 +176,10 @@ async def random_command(message: Message):
     /random 1 100        — число в диапазоне
     /random чай кофе пиво — выбор из списка
     """
-    if not games_on(message):
-        await message.reply("🎲 Игры в этой группе выключены (/settings).")
+    reason = gate(message, "random")
+
+    if reason:
+        await message.reply(reason)
         return
 
     parts = (message.text or "").split(maxsplit=1)
@@ -180,8 +230,10 @@ async def random_command(message: Message):
 
 @router.message(Command("8ball", "ball", "shar"))
 async def eight_ball(message: Message):
-    if not games_on(message):
-        await message.reply("🎲 Игры в этой группе выключены (/settings).")
+    reason = gate(message, "8ball")
+
+    if reason:
+        await message.reply(reason)
         return
 
     parts = (message.text or "").split(maxsplit=1)

@@ -53,7 +53,7 @@ from economy.service import (
 from progress.service import award, level_up_text, unlocked_text
 from progress.xp import XP_GAME_HOST, XP_GAME_WIN, XP_LIKE
 
-from settings.store import is_enabled
+from settings.store import get_number, is_enabled
 
 from games import state
 from games.words import LEVEL_NAMES, is_correct_guess, pick_word
@@ -122,9 +122,48 @@ def masked_word(word: str, revealed: int = 0) -> str:
     return " ".join(cells)
 
 
-def hint_limit(word: str) -> int:
+def hint_limit(word: str, chat_id: int | None = None) -> int:
     letters = len(word.replace(" ", ""))
-    return max(1, int(letters * HINT_LIMIT_RATIO))
+
+    percent = None
+
+    if chat_id is not None:
+        try:
+            from settings.store import get_number as _get_number
+
+            percent = _get_number(chat_id, "hint_max_percent")
+        except Exception:
+            percent = None
+
+    ratio = (percent / 100) if percent else HINT_LIMIT_RATIO
+
+    return max(1, int(letters * ratio))
+
+
+def crocodile_on(chat_id: int) -> bool:
+    """Игры включены в группе и сам Крокодил не выключен отдельно."""
+    return is_enabled(chat_id, "games") and is_enabled(chat_id, "game_crocodile")
+
+
+def game_rules(chat_id: int) -> dict:
+    """
+    Все награды и правила раунда — из настроек группы.
+
+    Одно место на всю игру: раньше часть значений читалась из
+    настроек, а часть оставалась константами, и админка показывала
+    одно, а игра платила другое.
+    """
+    def pick(key: str, fallback: int) -> int:
+        value = get_number(chat_id, key)
+        return fallback if value is None else value
+
+    return {
+        "win_prize": pick("reward_game_win", REWARD_GAME_WIN),
+        "host_prize": pick("reward_game_host", REWARD_GAME_HOST),
+        "karma": pick("karma_game_win", KARMA_FOR_WIN),
+        "xp_win": pick("xp_game_win", XP_GAME_WIN),
+        "xp_host": pick("xp_game_host", XP_GAME_HOST),
+    }
 
 # Слово должно быть командой, а не частью разговора:
 # "давай крокодил" — да, "вчера видел крокодила в зоопарке" — нет.
@@ -229,7 +268,7 @@ async def ensure_hint_message(bot, item) -> None:
     if item is None or item.hint_message_id:
         return
 
-    limit = hint_limit(item.word)
+    limit = hint_limit(item.word, item.chat_id)
 
     try:
         sent = await bot.send_message(
@@ -330,7 +369,7 @@ def is_start_request(message: Message) -> bool:
     if message.chat.type not in GROUP_CHATS:
         return False
 
-    if not is_enabled(message.chat.id, "games"):
+    if not crocodile_on(message.chat.id):
         return False
 
     if not message.text or message.text.startswith("/"):
@@ -352,7 +391,7 @@ async def start_round(message: Message):
         await message.answer("🐊 В крокодила играют компанией, добавь меня в чат.")
         return
 
-    if not is_enabled(message.chat.id, "games"):
+    if not crocodile_on(message.chat.id):
         await message.reply(
             "🐊 Игры в этой группе выключены. "
             "Администратор может включить их в /settings."
@@ -644,16 +683,21 @@ async def give_hint(callback: CallbackQuery):
         )
         return
 
-    limit = hint_limit(item.word)
+    limit = hint_limit(item.word, chat_id)
 
     if item.hints_used >= limit:
         await callback.answer("Больше подсказок нет", show_alert=True)
         return
 
+    cooldown = get_number(chat_id, "hint_cooldown")
+
+    if cooldown is None:
+        cooldown = HINT_COOLDOWN
+
     waited = time.monotonic() - item.last_hint_at
 
-    if item.last_hint_at and waited < HINT_COOLDOWN:
-        left = int(HINT_COOLDOWN - waited) + 1
+    if item.last_hint_at and waited < cooldown:
+        left = int(cooldown - waited) + 1
         await callback.answer(
             f"Следующая буква через {left} сек",
             show_alert=True,
@@ -761,7 +805,7 @@ async def want_to_draw(callback: CallbackQuery):
         await callback.answer("Сообщение недоступно", show_alert=True)
         return
 
-    if not is_enabled(chat_id, "games"):
+    if not crocodile_on(chat_id):
         await callback.answer("Игры выключены в этой группе", show_alert=True)
         return
 
@@ -823,7 +867,7 @@ async def want_to_draw(callback: CallbackQuery):
 
 @router.message(Command("stopgame"))
 async def stop_game(message: Message):
-    if not is_enabled(message.chat.id, "games"):
+    if not crocodile_on(message.chat.id):
         return
 
     item = state.drop(message.chat.id)
@@ -894,31 +938,40 @@ async def handle_guess(message: Message):
         winner_name=winner_name,
     )
 
-    winner_karma = await add_karma(user.id, KARMA_FOR_WIN, winner_name)
+    rules = game_rules(message.chat.id)
+
+    import audit
+
+    audit.count(message.chat.id, "games")
+
+    win_prize = rules["win_prize"]
+    host_prize_amount = rules["host_prize"]
+    karma_amount = rules["karma"]
+
+    winner_karma = await add_karma(user.id, karma_amount, winner_name)
     await bump_game_stats(user.id, played=1, won=1, display_name=winner_name)
 
     # Алмазы — только если экономика включена в этой группе
     with_economy = is_enabled(message.chat.id, "economy")
     prize_line = ""
 
-    if with_economy:
+    if with_economy and win_prize:
         await change_balance(
             telegram_id=user.id,
-            amount=REWARD_GAME_WIN,
+            amount=win_prize,
             reason="game_win",
             note="Победа в Крокодиле",
             chat_id=message.chat.id,
             display_name=winner_name,
         )
         prize_line = (
-            f"{CURRENCY} <b>+{REWARD_GAME_WIN}</b> "
-            f"{plural(REWARD_GAME_WIN)}\n"
+            f"{CURRENCY} <b>+{win_prize}</b> {plural(win_prize)}\n"
         )
 
     host_line = ""
 
     if item.host_id:
-        await add_karma(item.host_id, KARMA_FOR_WIN, item.host_name)
+        await add_karma(item.host_id, karma_amount, item.host_name)
         await bump_game_stats(
             item.host_id,
             played=1,
@@ -927,20 +980,20 @@ async def handle_guess(message: Message):
 
         host_prize = ""
 
-        if with_economy:
+        if with_economy and host_prize_amount:
             await change_balance(
                 telegram_id=item.host_id,
-                amount=REWARD_GAME_HOST,
+                amount=host_prize_amount,
                 reason="game_host",
                 note="Ведущий в Крокодиле",
                 chat_id=message.chat.id,
                 display_name=item.host_name,
             )
-            host_prize = f" и {CURRENCY} <b>+{REWARD_GAME_HOST}</b>"
+            host_prize = f" и {CURRENCY} <b>+{host_prize_amount}</b>"
 
         host_line = (
             f"🎭 Ведущий <b>{escape(item.host_name)}</b> получает "
-            f"<b>+{KARMA_FOR_WIN}</b> к рейтингу{host_prize}.\n"
+            f"<b>+{karma_amount}</b> к рейтингу{host_prize}.\n"
         )
 
     # Опыт и достижения обоим
@@ -948,8 +1001,8 @@ async def handle_guess(message: Message):
 
     if is_enabled(message.chat.id, "progress"):
         for player_id, player_name, xp_amount in (
-            (user.id, winner_name, XP_GAME_WIN),
-            (item.host_id, item.host_name, XP_GAME_HOST),
+            (user.id, winner_name, rules["xp_win"]),
+            (item.host_id, item.host_name, rules["xp_host"]),
         ):
             if not player_id:
                 continue
@@ -983,7 +1036,7 @@ async def handle_guess(message: Message):
     await message.reply(
         f"🎉 <b>{escape(winner_name)}</b> угадал!\n\n"
         f"Слово: <b>{escape(item.word)}</b>\n"
-        f"⭐ <b>+{KARMA_FOR_WIN}</b> к рейтингу, теперь <b>{winner_karma}</b>\n"
+        f"⭐ <b>+{karma_amount}</b> к рейтингу, теперь <b>{winner_karma}</b>\n"
         f"{prize_line}"
         f"{host_line}\n"
         f"Следующий ведущий — <b>{escape(winner_name)}</b>.\n"
