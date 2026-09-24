@@ -10,6 +10,8 @@ from settings.store import is_blocked, is_enabled
 from actions.phrases import pick_template, render
 from actions.service import get_image_for_action
 
+from webapp.admin_store import action_override
+
 from database.repository import (
     bump_daily_stat,
     save_sent_image,
@@ -339,6 +341,10 @@ async def find_target(message: Message) -> Target | None:
 async def action_handler(message: Message):
     action = find_action(message.text)
     if action is None:
+        return
+
+    override = await action_override(message.chat.id, action.key)
+    if override and not override.get("enabled", True):
         return
 
     target = await find_target(message)
