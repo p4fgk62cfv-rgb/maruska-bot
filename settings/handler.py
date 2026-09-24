@@ -470,7 +470,7 @@ def _validate_text(text, value: str) -> str | None:
     """
     Возвращает сообщение об ошибке или None, если всё хорошо.
     """
-    if not value.strip():
+    if not value.strip() and not text.allow_empty:
         return "Пустой текст не подойдёт."
 
     if len(value) > text.max_length:

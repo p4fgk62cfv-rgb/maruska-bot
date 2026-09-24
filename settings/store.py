@@ -44,8 +44,10 @@ def prime(chat_id: int, values: dict | None) -> dict:
                 pass
 
         elif key in TEXT_BY_KEY:
-            if isinstance(value, str) and value.strip():
-                merged[key] = value[: TEXT_BY_KEY[key].max_length]
+            spec = TEXT_BY_KEY[key]
+
+            if isinstance(value, str) and (value.strip() or spec.allow_empty):
+                merged[key] = value[: spec.max_length]
 
         else:
             merged[key] = bool(value)
@@ -125,9 +127,13 @@ def get_text(chat_id: int | None, key: str) -> str:
     if chat_id is None or chat_id >= 0:
         return str(fallback)
 
-    value = values(chat_id).get(key) or fallback
+    stored = values(chat_id).get(key)
 
-    return str(value)
+    # Пустое значение у списка — осознанный выбор, а не «не задано»
+    if stored == "" and key in TEXT_BY_KEY and TEXT_BY_KEY[key].allow_empty:
+        return ""
+
+    return str(stored or fallback)
 
 
 # Заблокированные: держим в памяти, чтобы проверка в фильтрах
@@ -155,5 +161,53 @@ def set_blocked(chat_id: int, user_id: int, blocked: bool) -> None:
         ids.discard(user_id)
 
 
+_disabled_actions: dict[int, set[str]] = {}
+
+
+def prime_actions(chat_id: int, keys: set[str]) -> None:
+    _disabled_actions[chat_id] = set(keys)
+
+
+def is_action_disabled(chat_id: int | None, key: str) -> bool:
+    if chat_id is None or chat_id >= 0:
+        return False
+    return key in _disabled_actions.get(chat_id, ())
+
+
+def set_action_disabled(chat_id: int, key: str, disabled: bool) -> None:
+    keys = _disabled_actions.setdefault(chat_id, set())
+    (keys.add if disabled else keys.discard)(key)
+
+
 def forget(chat_id: int) -> None:
     _cache.pop(chat_id, None)
+
+
+
+# ---------------------------------------------------------
+# Часовой пояс группы
+# ---------------------------------------------------------
+
+def zone(chat_id: int | None):
+    """ZoneInfo группы; при любой ошибке — UTC."""
+    from datetime import timezone as _tz
+
+    try:
+        from zoneinfo import ZoneInfo
+
+        name = get_value(chat_id, "timezone") if chat_id and chat_id < 0 else "UTC"
+        return ZoneInfo(name or "UTC")
+    except Exception:
+        return _tz.utc
+
+
+def local_now(chat_id: int | None):
+    from datetime import datetime as _dt
+
+    return _dt.now(zone(chat_id))
+
+
+def utc_offset_hours(chat_id: int | None) -> int:
+    """Смещение от UTC в целых часах сейчас (для сдвига часовых графиков)."""
+    offset = local_now(chat_id).utcoffset()
+    return int(offset.total_seconds() // 3600) if offset else 0
