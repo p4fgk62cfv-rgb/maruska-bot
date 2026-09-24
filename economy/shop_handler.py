@@ -8,6 +8,8 @@
 """
 
 import logging
+
+from economy import shop_rules
 import re
 from html import escape
 
@@ -79,13 +81,21 @@ def categories_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def category_keyboard(category: str) -> InlineKeyboardMarkup:
+def _left_label(chat_id: int, item) -> str:
+    left = shop_rules.stock_left(chat_id, item)
+    return f" · осталось {left}" if left is not None else ""
+
+
+def category_keyboard(category: str, chat_id: int | None = None) -> InlineKeyboardMarkup:
     rows = []
 
     for item in by_category(category):
+        if not shop_rules.available(chat_id, item):
+            continue
+
         rows.append([
             InlineKeyboardButton(
-                text=f"{item.emoji} {item.title} — {item.price} 💎",
+                text=f"{item.emoji} {item.title} — {shop_rules.price(chat_id, item)} 💎{_left_label(chat_id, item)}",
                 callback_data=f"shop:buy:{item.key}",
             )
         ])
@@ -132,17 +142,24 @@ async def shop_category(callback: CallbackQuery):
         await callback.answer()
         return
 
-    items = by_category(category)
+    chat_id = callback.message.chat.id
+    items = [i for i in by_category(category) if shop_rules.available(chat_id, i)]
 
     lines = [f"{category_title(category)}\n"]
 
+    if not items:
+        lines.append("Здесь сейчас пусто — всё разобрали или админы убрали товары.")
+
     for item in items:
         note = f" — {item.description}" if item.description else ""
-        lines.append(f"{item.emoji} <b>{item.title}</b>, {item.price} 💎{note}")
+        lines.append(
+            f"{item.emoji} <b>{item.title}</b>, {shop_rules.price(chat_id, item)} 💎"
+            f"{_left_label(chat_id, item)}{note}"
+        )
 
     await callback.message.edit_text(
         "\n".join(lines),
-        reply_markup=category_keyboard(category),
+        reply_markup=category_keyboard(category, chat_id),
     )
 
     await callback.answer()
@@ -162,6 +179,13 @@ async def purchase(
     Списывает алмазы и кладёт вещь в инвентарь.
     Возвращает (получилось, текст ответа).
     """
+    ok, reason = await reserve(chat_id, item)
+
+    if not ok:
+        return False, reason
+
+    cost = shop_rules.price(chat_id, item)
+
     await save_user(
         telegram_id=user.id,
         username=user.username,
@@ -170,7 +194,7 @@ async def purchase(
 
     ok, balance = await change_balance(
         telegram_id=user.id,
-        amount=-item.price,
+        amount=-cost,
         reason="purchase",
         note=f"Покупка: {item.title}",
         chat_id=chat_id,
@@ -178,19 +202,52 @@ async def purchase(
     )
 
     if not ok:
-        need = item.price - balance
+        await release(chat_id, item)
+
+        need = cost - balance
         return False, (
             f"Не хватает <b>{need} {plural(need)}</b>.\n"
             f"У тебя {money(balance)}, а {item.title.lower()} стоит "
-            f"{item.price} 💎.\n\n/bonus — забрать ежедневный"
+            f"{cost} 💎.\n\n/bonus — забрать ежедневный"
         )
 
     await add_inventory_item(user.id, item.key)
 
     return True, (
         f"{item.emoji} <b>{item.title}</b> — твой!\n"
-        f"Списано {item.price} 💎, осталось <b>{money(balance)}</b>"
+        f"Списано {cost} 💎, осталось <b>{money(balance)}</b>"
     )
+
+
+async def reserve(chat_id: int, item) -> tuple[bool, str]:
+    """
+    Проверяет доступность и забирает вещь со склада, если склад
+    ограничен. Склад списывается ДО оплаты и атомарно — последнюю
+    вещь не купят двое. Не хватило денег — release() вернёт.
+    """
+    if not shop_rules.available(chat_id, item):
+        if shop_rules.limited(chat_id, item) and shop_rules.rule(chat_id, item.key).enabled:
+            return False, f"{item.emoji} {item.title} закончился 😔"
+        return False, "Этот товар сейчас не продаётся."
+
+    if shop_rules.limited(chat_id, item):
+        from database.repository import take_from_stock
+
+        if not await take_from_stock(chat_id, item.key):
+            await shop_rules.reload(chat_id)
+            return False, f"{item.emoji} {item.title} закончился 😔"
+
+        shop_rules.note_sold(chat_id, item)
+
+    return True, ""
+
+
+async def release(chat_id: int, item) -> None:
+    if shop_rules.limited(chat_id, item):
+        from database.repository import return_to_stock
+
+        await return_to_stock(chat_id, item.key)
+        shop_rules.note_returned(chat_id, item)
 
 
 @router.callback_query(F.data.startswith("shop:buy:"))
@@ -286,6 +343,12 @@ async def gift_command(message: Message):
         await message.reply(f"{CURRENCY} Экономика в этой группе выключена (/settings).")
         return
 
+    from settings.store import is_enabled as _is_enabled
+
+    if not _is_enabled(message.chat.id, "gifts"):
+        await message.reply("🎁 Подарки в этой группе выключены (/settings).")
+        return
+
     user = message.from_user
 
     if user is None:
@@ -329,6 +392,14 @@ async def gift_command(message: Message):
 
     giver_name = display_name(user)
 
+    ok, reason = await reserve(message.chat.id, item)
+
+    if not ok:
+        await message.reply(reason)
+        return
+
+    cost = shop_rules.price(message.chat.id, item)
+
     await save_user(
         telegram_id=user.id,
         username=user.username,
@@ -337,7 +408,7 @@ async def gift_command(message: Message):
 
     ok, balance = await change_balance(
         telegram_id=user.id,
-        amount=-item.price,
+        amount=-cost,
         reason="gift_out",
         note=f"Подарок: {item.title} для {target_name}",
         chat_id=message.chat.id,
@@ -345,7 +416,9 @@ async def gift_command(message: Message):
     )
 
     if not ok:
-        need = item.price - balance
+        await release(message.chat.id, item)
+
+        need = cost - balance
         await message.reply(
             f"Не хватает <b>{need} {plural(need)}</b>. "
             f"У тебя {money(balance)}."
