@@ -4,7 +4,10 @@
 Запуск:  python test_extras.py
 """
 
+import pathlib
 import re
+
+ROOT = pathlib.Path(__file__).parent
 
 from games.dice_core import (
     EIGHT_BALL,
@@ -158,8 +161,15 @@ def main() -> int:
     else:
         values_seen = {option[0] for option in chattiness.options}
 
-        if values_seen != {"quiet", "normal", "active"}:
+        if values_seen != {"quiet", "normal", "active", "fun"}:
             failures.append(f"  [болтливость] неожиданные варианты: {values_seen}")
+
+        # Каждый режим должен реально обрабатываться в разговоре
+        chat_source = (ROOT / "features" / "chat.py").read_text(encoding="utf-8")
+
+        for mode in values_seen - {"normal"}:
+            if f'"{mode}"' not in chat_source:
+                failures.append(f"  [болтливость] режим {mode!r} есть в настройках, но chat.py его не обрабатывает")
 
         if chattiness.default != "normal":
             failures.append("  [болтливость] умолчание должно быть normal")

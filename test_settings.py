@@ -30,15 +30,20 @@ from settings.registry import (
 ROOT = pathlib.Path(__file__).parent
 
 # Где искать проверки is_enabled(...)
-SOURCES = [
-    ROOT / "bot.py",
-    ROOT / "actions" / "handler.py",
-    ROOT / "games" / "crocodile.py",
-    ROOT / "games" / "dice.py",
-    ROOT / "economy" / "handler.py",
-    ROOT / "economy" / "shop_handler.py",
-    ROOT / "progress" / "handler.py",
-] + sorted((ROOT / "features").glob("*.py"))
+# Весь рабочий код бота — там, где настройки ПРИМЕНЯЮТСЯ.
+#
+# Раньше здесь был ручной список файлов, и настройка, прочитанная
+# в новом месте (settings/store.py, settings/middleware.py), давала
+# ложную тревогу. Исключены: тесты, сам реестр и веб-панель — панель
+# упоминает ключи, чтобы их показать, а не чтобы применить, и иначе
+# неподключённая настройка «пряталась» бы за упоминанием в панели.
+SOURCES = sorted(
+    path for path in ROOT.rglob("*.py")
+    if "__pycache__" not in path.parts
+    and not path.name.startswith("test_")
+    and path.name != "registry.py"
+    and "webapp" not in path.parts
+)
 
 
 def collect_guarded_keys() -> set[str]:
@@ -70,7 +75,10 @@ def collect_number_keys() -> set[str]:
     """
     Какие числовые настройки реально читаются кодом.
     """
-    pattern = re.compile(r"get_number\([^)]*?[\"']([a-z_]+)[\"']")
+    # Читать можно напрямую или через pick() внутри game_rules()
+    pattern = re.compile(
+        r"(?:get_number|pick)\([^)]*?[\"']([a-z_]+)[\"']"
+    )
     found = set()
 
     extra = [
@@ -153,7 +161,7 @@ def main() -> int:
 
     # Тексты осмысленны
     for text in TEXTS:
-        if not text.default.strip():
+        if not text.default.strip() and not text.allow_empty:
             failures.append(f"  [текст] {text.key}: пустое значение по умолчанию")
 
         if len(text.default) > text.max_length:
@@ -171,6 +179,56 @@ def main() -> int:
                 f"  [текст] {text.key}: в стандартном тексте есть "
                 "неразрешённые подстановки"
             )
+
+    # 2в'. Каждый список (Choice) должен упоминаться в коде вне реестра.
+    #
+    # Раньше для списков проверки не было вовсе: правило
+    # «флуд → действие» могло никем не читаться, и тест молчал.
+    code_outside_registry = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in SOURCES
+        if path.exists() and path.name != "registry.py"
+    )
+
+    for choice in CHOICES:
+        if f'"{choice.key}"' not in code_outside_registry and f"'{choice.key}'" not in code_outside_registry:
+            failures.append(
+                f"  [подключение] список {choice.key!r} есть в реестре, "
+                "но код нигде его не читает"
+            )
+
+    # 2г. Константы наград не должны использоваться в обход настроек.
+    #
+    # Прокол, который это ловит: тест выше проверял, что настройка
+    # где-то читается, но пропустил ветку, где та же награда
+    # выплачивалась жёсткой константой. Админка показывала одно,
+    # игра платила другое.
+    guarded_constants = {
+        "REWARD_GAME_WIN", "REWARD_GAME_HOST",
+        "XP_GAME_WIN", "XP_GAME_HOST", "KARMA_FOR_WIN",
+    }
+
+    crocodile = (ROOT / "games" / "crocodile.py").read_text(encoding="utf-8")
+
+    for number, line in enumerate(crocodile.splitlines(), start=1):
+        stripped = line.strip()
+
+        for name in guarded_constants:
+            if name not in stripped:
+                continue
+
+            allowed = (
+                stripped.startswith(("from ", "import "))
+                or stripped.startswith(f"{name},")
+                or stripped.startswith(f"{name} =")
+                or "pick(" in stripped                # запасное значение в game_rules
+            )
+
+            if not allowed:
+                failures.append(
+                    f"  [константа] crocodile.py:{number} использует {name} "
+                    "напрямую — должно идти через game_rules()"
+                )
 
     # Границы чисел осмысленны
     for number in NUMBERS:

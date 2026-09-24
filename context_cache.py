@@ -41,3 +41,9 @@ def prime(chat_id: int, messages: list[str]) -> None:
 def recent(chat_id: int, limit: int) -> list[str]:
     items = list(_cache[chat_id])
     return items[-limit:] if limit > 0 else items
+
+
+def forget(chat_id: int) -> None:
+    """Очистка памяти группы из панели — сбрасываем и кэш."""
+    _cache.pop(chat_id, None)
+    _loaded.discard(chat_id)
