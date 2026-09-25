@@ -380,6 +380,11 @@ FALLBACK = (
 
 def templates_for(action) -> tuple:
     """Все встроенные фразы действия."""
+    if action.category == "library":
+        import library_core
+
+        return library_core.phrases_for(action)
+
     if action.category == "call":
         options = CALLS.get(action.key)
     elif action.category == "pair":

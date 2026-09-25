@@ -414,6 +414,21 @@ async def action_handler(message: Message):
 
     own = custom.pick_custom_image(chat_id, action.key)
 
+    # Своя коллекция владельца — после картинок группы, но до стока
+    if own is None and not custom.only_own_images(chat_id, action.key):
+        import images_library
+
+        library = await images_library.pick(chat_id, action.key)
+
+        if library is not None:
+            try:
+                await message.answer_photo(photo=library["file_id"], caption=caption)
+                custom.mark_used(chat_id, action.key)
+                await _count_action(chat_id, action.key, message.from_user.id)
+                return
+            except Exception as error:
+                logger.error("LIBRARY SEND ERROR: %s %s", type(error).__name__, error)
+
     if own is not None:
         sent = await send_custom_image(message, own, caption)
 

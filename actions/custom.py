@@ -224,7 +224,19 @@ def resolve(chat_id: int | None, text: str | None):
 
     key = get(chat_id).aliases.get(normalize_alias(text))
 
-    return ACTION_BY_KEY.get(key) if key else None
+    if key:
+        return ACTION_BY_KEY.get(key)
+
+    # Свои коллекции-действия: «#булочка» → ответ словом «булочку».
+    # Группа, выключившая свою коллекцию, их тоже не получает.
+    from settings.store import is_enabled
+
+    if not is_enabled(chat_id, "library"):
+        return None
+
+    import library_core
+
+    return library_core.find_collection_action(text)
 
 
 def pick_custom_phrase(chat_id: int, key: str, builtin_count: int = 10) -> str | None:
