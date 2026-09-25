@@ -43,6 +43,7 @@ from features.fortune import router as fortune_router
 from features.greeting import router as greeting_router
 from features.automod import router as automod_router
 from features.captcha import router as captcha_router
+from images_library import router as library_router
 from features.autoreplies import router as autoreplies_router
 from features.moderation import router as moderation_router
 from features.rating import router as rating_router
@@ -120,6 +121,9 @@ dp.include_router(greeting_router)
 # до того, как на него отреагируют действия или разговор
 dp.include_router(automod_router)
 dp.include_router(captcha_router)
+
+# Своя коллекция: фото владельца в личке с #тегом
+dp.include_router(library_router)
 
 # Команды
 dp.include_router(basic_router)
@@ -257,6 +261,15 @@ async def main():
             logger.info("История графиков восстановлена: %s дней", filled)
     except Exception as error:
         logger.warning("BACKFILL: %s %s", type(error).__name__, error)
+
+    # Привязки своей коллекции картинок к действиям
+    try:
+        import images_library
+
+        await images_library.reload_links()
+        await images_library.reload_collections()
+    except Exception as error:
+        logger.warning("LIBRARY LINKS: %s", error)
 
     # Порядок источников картинок, заданный владельцем в панели
     try:
