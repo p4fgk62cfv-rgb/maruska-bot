@@ -293,16 +293,20 @@
       var html = M.backButton("Маруська") + M.chatPicker()
         + '<div class="card"><div class="card-title">Источники</div>'
         + d.providers.map(function (p, i) {
-            return '<div class="setting" style="' + (p.active ? "" : "opacity:.5") + '"><div class="ico">' + (p.order || "—") + '</div><div class="grow"><div class="t">' + esc(p.name) + "</div>"
-              + '<div class="s">Собрано ' + num(p.total) + " · в Telegram " + num(p.cached) + " · показано " + num(p.used) + "</div></div>"
-              + '<span class="tag ' + (p.ready ? "ok" : "bad") + '">' + (p.ready ? "ключ есть" : "нет ключа") + "</span>"
-              + (d.owner ? '<div class="row-gap" style="flex:0 0 auto;margin-left:6px">'
+            var builtin = !!p.builtin;
+            var number = builtin ? 1 : (p.order ? p.order + 1 : "—");
+            var label = p.label || p.name;
+            var status = builtin ? "встроен" : (p.ready ? "ключ есть" : "нет ключа");
+            return '<div class="setting" style="' + (p.active ? "" : "opacity:.5") + '"><div class="ico">' + number + '</div><div class="grow"><div class="t">' + esc(label) + "</div>"
+              + '<div class="s">' + (builtin ? "Свои фото + сохранённые картинки Telegram" : ("Собрано " + num(p.total) + " · в Telegram " + num(p.cached) + " · показано " + num(p.used))) + "</div></div>"
+              + '<span class="tag ' + (builtin ? "ok" : (p.ready ? "ok" : "bad")) + '">' + status + "</span>"
+              + (d.owner && !builtin ? '<div class="row-gap" style="flex:0 0 auto;margin-left:6px">'
                   + (p.active && p.order > 1 ? '<button class="btn" data-up="' + p.name + '" style="padding:6px 9px">↑</button>' : "")
                   + '<div class="switch' + (p.active ? " on" : "") + '" data-src="' + p.name + '"></div></div>' : "")
               + "</div>";
           }).join("")
-        + '<div class="dim" style="margin-top:8px">Сначала опрашивается первый источник, при ошибке — следующий.'
-        + (d.owner ? " Порядок общий для всех групп." : " Менять порядок может только владелец бота.")
+        + '<div class="dim" style="margin-top:8px">Личная библиотека работает всегда. Уже сохранённые в Telegram картинки не зависят от Pixabay/Unsplash. Внешние источники используются только для пополнения библиотеки.'
+        + (d.owner ? " Порядок внешних источников общий для всех групп." : " Менять порядок может только владелец бота.")
         + " Ключи API хранятся в переменных Railway.</div></div>"
 
         + '<div class="card"><div class="card-title">Подбор</div>'
@@ -329,7 +333,7 @@
       };
 
       var activeOrder = function () {
-        return d.providers.filter(function (p) { return p.active; }).map(function (p) { return p.name; });
+        return d.providers.filter(function (p) { return p.active && !p.builtin; }).map(function (p) { return p.name; });
       };
 
       each("[data-up]", function (el) {
@@ -344,7 +348,6 @@
           var name = el.getAttribute("data-src"), order = activeOrder();
           var i = order.indexOf(name);
           if (i >= 0) order.splice(i, 1); else order.push(name);
-          if (!order.length) { M.toast("Нужен хотя бы один источник"); return; }
           saveOrder(order);
         };
       });
