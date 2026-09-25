@@ -89,6 +89,13 @@ FEATURES: tuple[Feature, ...] = (
         group="Сообщество",
     ),
     Feature(
+        key="library",
+        title="Моя коллекция картинок",
+        emoji="📚",
+        description="Сначала картинки из коллекции владельца, потом из Pixabay",
+        group="Общение",
+    ),
+    Feature(
         key="memory",
         title="Память Мары",
         emoji="🧠",
