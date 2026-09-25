@@ -252,7 +252,7 @@ async def main():
     providers = available_providers()
     logger.info(
         "Картинки: %s",
-        ", ".join(providers) if providers else "НИ ОДИН ИСТОЧНИК НЕ НАСТРОЕН",
+        ", ".join(providers) if providers else "личная библиотека / Telegram-кэш (внешние источники выключены)",
     )
 
     try:
