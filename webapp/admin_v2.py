@@ -2033,6 +2033,231 @@ async def api_punish_rule_move(request):
     return web.json_response({"ok": True})
 
 
+# ---------------------------------------------------------
+# Своя коллекция картинок (владелец)
+# ---------------------------------------------------------
+
+async def _owner(request):
+    admin, chats = await _admin(request)
+
+    if not is_owner(admin["id"]):
+        raise web.HTTPForbidden(text="owner only")
+
+    return admin, chats
+
+
+def _targets() -> list[dict]:
+    import images_library
+
+    return [{"key": images_library.CATS, "title": "🐱 Котики (мяу, покажи меня)"}] + [
+        {"key": a.key, "title": f"{a.emoji} {(a.item_acc or a.key).capitalize()}"}
+        for a in sorted(ACTIONS, key=lambda a: (a.item_acc or a.key))
+    ]
+
+
+async def api_library(request):
+    import images_library
+    from database.repository import library_summary
+
+    admin, chats = await _owner(request)
+
+    from database.repository import list_library_collections
+
+    collections = await library_summary()
+    metas = {m.tag: m for m in await list_library_collections()}
+    seen = {c["tag"] for c in collections}
+
+    # Категории, созданные в панели, но ещё без фото
+    for tag in metas:
+        if tag not in seen:
+            collections.append({"tag": tag, "count": 0, "shows": 0, "updated": None, "targets": []})
+
+    for c in collections:
+        m = metas.get(c["tag"])
+        c.update({
+            "emoji": m.emoji if m else "🖼",
+            "as_action": bool(m.as_action) if m else False,
+            "triggers": list(m.triggers or []) if m else [],
+            "phrase": m.phrase if m else None,
+        })
+
+    collections.sort(key=lambda c: c["tag"])
+    covered = {t for c in collections for t in c["targets"]}
+    usage = await action_usage_stats(None, days=30)
+
+    # Какие действия чаще всего зовут, а своих картинок у них нет
+    missing = sorted(
+        ({"key": a.key, "emoji": a.emoji, "title": (a.item_acc or a.key).capitalize(), "usage": usage.get(a.key, 0)}
+         for a in ACTIONS if a.key not in covered),
+        key=lambda x: -x["usage"],
+    )[:30]
+
+    return web.json_response({
+        "collections": collections,
+        "missing": missing,
+        "cats_covered": images_library.CATS in covered,
+        "targets": _targets(),
+    })
+
+
+async def api_library_images(request):
+    from database.repository import library_images
+
+    await _owner(request)
+    tag = (request.query.get("tag") or "")[:40]
+    limit = min(max(int(request.query.get("limit", "60") or 60), 1), 600)
+
+    return web.json_response({"tag": tag, "images": await library_images(tag, limit=limit)})
+
+
+async def api_library_image(request):
+    from database.repository import library_image
+    from webapp.admin import _cached, _download_file
+
+    await _owner(request)
+    row = await library_image(int(request.query.get("id", "0") or 0))
+
+    if row is None:
+        raise web.HTTPNotFound()
+
+    content = await _cached(f"library:{row.id}", lambda: _download_file(request.app["bot"], row.file_id))
+
+    if not content:
+        raise web.HTTPNotFound()
+
+    return web.Response(body=content, content_type="image/jpeg",
+                        headers={"Cache-Control": "private, max-age=3600"})
+
+
+async def api_library_link(request):
+    import images_library
+    from database.repository import set_library_link
+
+    admin, _chats = await _owner(request)
+    body = await request.json()
+
+    tag = images_library.normalize_tag(body.get("tag"))
+    target = body.get("target")
+
+    if not tag or target not in {t["key"] for t in _targets()}:
+        raise web.HTTPBadRequest(text="bad tag or target")
+
+    await set_library_link(tag, target, bool(body.get("linked")))
+    await images_library.reload_links()
+
+    audit.log("actions", "library_link", actor_kind="admin", actor_id=admin["id"], actor_name=_name(admin),
+              details=f"#{tag} {'→' if body.get('linked') else '✕'} {target}")
+
+    return web.json_response({"ok": True})
+
+
+async def api_library_collection(request):
+    """Создать категорию заранее или настроить её как действие."""
+    import images_library
+    from actions import custom as ac
+    from actions.catalog import find_action
+    from database.repository import ensure_library_collection, update_library_collection
+
+    admin, _chats = await _owner(request)
+    body = await request.json()
+
+    tag = images_library.normalize_tag(body.get("tag"))
+
+    if not tag or len(tag) < 2:
+        return web.json_response({"ok": False, "error": "Название — хотя бы 2 буквы"}, status=400)
+
+    if body.get("create"):
+        clash = find_action(tag)
+        created = await ensure_library_collection(tag, as_action=clash is None)
+
+        if not created:
+            return web.json_response({"ok": False, "error": "Такая коллекция уже есть"}, status=400)
+
+        if clash is not None:
+            from database.repository import set_library_link
+            await set_library_link(tag, clash.key, True)
+    else:
+        await ensure_library_collection(tag, as_action=True)
+
+    data = {}
+
+    if "emoji" in body:
+        data["emoji"] = (str(body.get("emoji") or "").strip() or "✨")[:8]
+
+    if "as_action" in body:
+        data["as_action"] = bool(body.get("as_action"))
+
+    if "triggers" in body:
+        triggers = []
+
+        for raw in (body.get("triggers") or [])[:10]:
+            word = ac.normalize_alias(str(raw))
+            problem = ac.validate_alias(word)
+
+            if problem:
+                return web.json_response({"ok": False, "error": f"«{raw}»: {problem}"}, status=400)
+
+            clash = find_action(word)
+
+            if clash is not None:
+                return web.json_response(
+                    {"ok": False, "error": f"«{word}» уже запускает встроенное действие «{clash.item_acc or clash.key}»"},
+                    status=400,
+                )
+
+            if word != tag and word not in triggers:
+                triggers.append(word)
+
+        data["triggers"] = triggers
+
+    if "phrase" in body:
+        phrase = str(body.get("phrase") or "").strip()
+
+        if phrase:
+            problem = ac.validate_phrase(phrase)
+
+            if problem:
+                return web.json_response({"ok": False, "error": problem}, status=400)
+
+        data["phrase"] = phrase or None
+
+    if data:
+        await update_library_collection(tag, data)
+
+    await images_library.reload_links()
+    await images_library.reload_collections()
+
+    audit.log("actions", "library_collection", actor_kind="admin", actor_id=admin["id"],
+              actor_name=_name(admin), details=f"#{tag}: " + ", ".join(sorted(data)) if data else f"#{tag}: создана")
+
+    return web.json_response({"ok": True, "tag": tag})
+
+
+async def api_library_delete(request):
+    import images_library
+    from database.repository import delete_library_collection, delete_library_image
+
+    admin, _chats = await _owner(request)
+    body = await request.json()
+
+    if body.get("id"):
+        ok = await delete_library_image(int(body["id"]))
+        details = f"картинка #{body['id']}"
+    else:
+        tag = images_library.normalize_tag(body.get("tag"))
+        if not tag:
+            raise web.HTTPBadRequest(text="bad tag")
+        ok = await delete_library_collection(tag) >= 0
+        await images_library.reload_links()
+        await images_library.reload_collections()
+        details = f"коллекция #{tag}"
+
+    audit.log("actions", "library_delete", actor_kind="admin", actor_id=admin["id"], actor_name=_name(admin),
+              details=details)
+
+    return web.json_response({"ok": ok})
+
+
 async def api_groups(request):
     """Группы, которыми управляет админ (синоним данных из /session)."""
     _admin_user, chats = await _admin(request)
@@ -2100,6 +2325,13 @@ def setup_v2_routes(app: web.Application) -> None:
     app.router.add_get("/api/admin/images", api_images)
     app.router.add_post("/api/admin/images/order", api_images_order)
     app.router.add_post("/api/admin/group/title", api_group_title)
+
+    app.router.add_get("/api/admin/library", api_library)
+    app.router.add_get("/api/admin/library/images", api_library_images)
+    app.router.add_get("/api/admin/library/image", api_library_image)
+    app.router.add_post("/api/admin/library/link", api_library_link)
+    app.router.add_post("/api/admin/library/delete", api_library_delete)
+    app.router.add_post("/api/admin/library/collection", api_library_collection)
 
     # Синонимы по схеме концепции
     app.router.add_get("/api/admin/groups", api_groups)
