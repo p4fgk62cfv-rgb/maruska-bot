@@ -175,23 +175,21 @@ def admin_url() -> str:
 def main_keyboard(chat_id: int) -> InlineKeyboardMarkup:
     rows = []
 
-    for name in groups():
-        rows.append([
-            InlineKeyboardButton(
-                text=f"{name} · {_section_summary(chat_id, name)}",
-                callback_data=f"set:sec:{_section_id(name)}",
-            )
-        ])
-
     url = admin_url()
 
     if url:
         rows.append([
             InlineKeyboardButton(text="🖥 Веб-панель", url=url),
         ])
+    else:
+        rows.append([
+            InlineKeyboardButton(
+                text="🖥 Веб-панель недоступна",
+                callback_data="set:noop",
+            ),
+        ])
 
     rows.append([
-        InlineKeyboardButton(text="❔ Что это", callback_data="set:help"),
         InlineKeyboardButton(text="Закрыть", callback_data="set:close"),
     ])
 
@@ -201,12 +199,10 @@ def main_keyboard(chat_id: int) -> InlineKeyboardMarkup:
 def panel_text(chat_title: str | None) -> str:
     where = f" — <b>{escape(chat_title)}</b>" if chat_title else ""
 
-    total = len(FEATURES) + len(CHOICES) + len(NUMBERS) + len(TEXTS)
-
     return (
         f"⚙️ <b>Настройки</b>{where}\n\n"
-        f"Всего параметров: {total}. Выбери раздел.\n"
-        "Менять может любой администратор группы."
+        "Все настройки группы доступны в Web-панели.\n"
+        "Открой её для полного управления Маруськой."
     )
 
 
