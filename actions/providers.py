@@ -253,18 +253,26 @@ _order_override: list[str] | None = None
 
 
 def set_provider_order(order: list[str] | None) -> None:
+    """
+    Задаёт порядок внешних провайдеров.
+
+    Пустой список — это валидная настройка: внешние провайдеры
+    выключены, а бот продолжает работать на своей библиотеке/Telegram-кэше.
+    None означает «настройка не задана — использовать IMAGE_PROVIDERS».
+    """
     global _order_override
 
-    if order:
-        clean = [name for name in order if name in KNOWN_PROVIDERS]
-        _order_override = list(dict.fromkeys(clean)) or None
-    else:
+    if order is None:
         _order_override = None
+        return
+
+    clean = [name for name in order if name in KNOWN_PROVIDERS]
+    _order_override = list(dict.fromkeys(clean))
 
 
 def provider_order() -> list[str]:
-    """Порядок опроса источников: сначала первый, при ошибке — следующий."""
-    return _order_override or IMAGE_PROVIDERS
+    """Порядок опроса внешних источников."""
+    return IMAGE_PROVIDERS if _order_override is None else list(_order_override)
 
 
 def available_providers() -> list[str]:

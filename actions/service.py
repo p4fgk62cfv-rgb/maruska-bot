@@ -258,10 +258,55 @@ async def get_image_for_action(
     2. Коллекция кончилась — идём в источник и качаем свежую.
     3. Источник молчит — прокручиваем коллекцию по кругу.
     """
+    # Уже скачанные картинки — наша локальная библиотека. Они должны
+    # продолжать работать даже если Pixabay/Unsplash выключены в панели.
+    from actions.providers import KNOWN_PROVIDERS
+    from database.repository import (
+        count_cached_action_images_from_providers,
+        get_cached_action_image_from_providers,
+        reset_cached_action_images_from_providers,
+    )
+
+    local_collections = [
+        collection_key(provider, action, pair_key)
+        for provider in KNOWN_PROVIDERS
+    ]
+
+    cached = await get_cached_action_image_from_providers(local_collections)
+    if cached is not None:
+        return Picked(
+            kind="cached",
+            collection=cached.action,
+            provider=cached.provider or "library",
+            photo_id=cached.photo_id,
+            file_id=cached.telegram_file_id,
+            image_id=cached.id,
+            photographer_name=cached.photographer_name,
+            photographer_url=cached.photographer_url,
+            source_url=cached.unsplash_url,
+        )
+
+    # Если локальный Telegram-кэш закончился, запускаем его по кругу.
+    if await count_cached_action_images_from_providers(local_collections):
+        await reset_cached_action_images_from_providers(local_collections)
+        cached = await get_cached_action_image_from_providers(local_collections)
+        if cached is not None:
+            return Picked(
+                kind="cached",
+                collection=cached.action,
+                provider=cached.provider or "library",
+                photo_id=cached.photo_id,
+                file_id=cached.telegram_file_id,
+                image_id=cached.id,
+                photographer_name=cached.photographer_name,
+                photographer_url=cached.photographer_url,
+                source_url=cached.unsplash_url,
+            )
+
     providers = available_providers()
 
     if not providers:
-        logger.error("IMAGE PROVIDERS: ни один источник не настроен")
+        logger.info("IMAGE PROVIDERS: внешние источники выключены, работаем на локальной библиотеке")
         return None
 
     for provider in providers:
