@@ -33,6 +33,18 @@ async def send_cat(message: Message, caption: str):
     except Exception:
         pass
 
+    # Сначала котики из своей коллекции
+    import images_library
+
+    library = await images_library.pick(message.chat.id, images_library.CATS)
+
+    if library is not None:
+        try:
+            await message.answer_photo(photo=library["file_id"], caption=caption)
+            return
+        except Exception as error:
+            logger.error("LIBRARY CAT: %s %s", type(error).__name__, error)
+
     mood = pick_mood()
 
     try:
