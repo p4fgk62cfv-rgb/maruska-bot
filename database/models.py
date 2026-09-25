@@ -1062,3 +1062,73 @@ class PunishRule(Base):
     duration_minutes: Mapped[int] = mapped_column(default=60)
 
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class LibraryImage(Base):
+    """
+    Своя коллекция картинок владельца. Фото хранятся в самом Telegram:
+    здесь только file_id. tag — название коллекции: «пиво», «кошки».
+    """
+
+    __tablename__ = "library_images"
+
+    __table_args__ = (
+        UniqueConstraint("tag", "file_unique_id", name="uq_library_image"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    tag: Mapped[str] = mapped_column(String(40), index=True)
+
+    file_id: Mapped[str] = mapped_column(String(255))
+
+    file_unique_id: Mapped[str] = mapped_column(String(64))
+
+    author_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+    used: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    shows: Mapped[int] = mapped_column(default=0)
+
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class LibraryLink(Base):
+    """К какому действию (или «cats» — котики) привязана коллекция."""
+
+    __tablename__ = "library_links"
+
+    __table_args__ = (
+        UniqueConstraint("tag", "target", name="uq_library_link"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    tag: Mapped[str] = mapped_column(String(40), index=True)
+
+    target: Mapped[str] = mapped_column(String(40), index=True)
+
+
+class LibraryCollection(Base):
+    """
+    Коллекция как категория. Если as_action — она сама работает как
+    действие: ответ человеку словом-триггером присылает фото из неё.
+    """
+
+    __tablename__ = "library_collections"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    tag: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+
+    emoji: Mapped[str] = mapped_column(String(16), default="✨")
+
+    as_action: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    triggers: Mapped[list] = mapped_column(JSON, default=list)
+
+    phrase: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

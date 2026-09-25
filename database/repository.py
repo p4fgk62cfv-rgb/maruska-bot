@@ -10,6 +10,9 @@ from sqlalchemy import (
 from database.database import session_scope, utcnow
 
 from database.models import (
+    LibraryCollection,
+    LibraryImage,
+    LibraryLink,
     PunishRule,
     AutoReply,
     ShopOverride,
@@ -3985,3 +3988,183 @@ async def dm_audience(chat_ids: list[int], segment: dict) -> list[int]:
             )
 
         return sorted(set((await session.execute(stmt)).scalars().all()))
+
+
+# =========================================================
+# СВОЯ КОЛЛЕКЦИЯ КАРТИНОК
+# =========================================================
+
+async def add_library_images(tag: str, photos: list[tuple[str, str]], author_id: int | None) -> tuple[int, int]:
+    """Добавляет фото в коллекцию. Возвращает (добавлено, уже были)."""
+    added = duplicates = 0
+
+    async with session_scope() as session:
+        known = set(
+            (await session.execute(
+                select(LibraryImage.file_unique_id).where(LibraryImage.tag == tag)
+            )).scalars().all()
+        )
+
+        for file_id, unique_id in photos:
+            if unique_id in known:
+                duplicates += 1
+                continue
+
+            known.add(unique_id)
+            session.add(LibraryImage(tag=tag, file_id=file_id, file_unique_id=unique_id, author_id=author_id))
+            added += 1
+
+        await session.commit()
+
+    return added, duplicates
+
+
+async def library_summary() -> list[dict]:
+    async with session_scope() as session:
+        rows = (await session.execute(
+            select(LibraryImage.tag, func.count(LibraryImage.id), func.coalesce(func.sum(LibraryImage.shows), 0),
+                   func.max(LibraryImage.created_at))
+            .group_by(LibraryImage.tag).order_by(LibraryImage.tag)
+        )).all()
+
+        links = (await session.execute(select(LibraryLink.tag, LibraryLink.target))).all()
+
+    targets: dict[str, list] = {}
+
+    for tag, target in links:
+        targets.setdefault(tag, []).append(target)
+
+    return [
+        {"tag": tag, "count": int(n), "shows": int(shows), "updated": last.isoformat() if last else None,
+         "targets": sorted(targets.get(tag, []))}
+        for tag, n, shows, last in rows
+    ]
+
+
+async def library_images(tag: str, limit: int = 60, offset: int = 0) -> list[dict]:
+    async with session_scope() as session:
+        rows = (await session.execute(
+            select(LibraryImage).where(LibraryImage.tag == tag)
+            .order_by(LibraryImage.created_at.desc(), LibraryImage.id.desc())
+            .offset(offset).limit(limit)
+        )).scalars().all()
+
+    return [
+        {"id": r.id, "shows": r.shows, "used": r.used,
+         "last_used": r.last_used_at.isoformat() if r.last_used_at else None}
+        for r in rows
+    ]
+
+
+async def library_image(image_id: int):
+    async with session_scope() as session:
+        return (await session.execute(select(LibraryImage).where(LibraryImage.id == image_id))).scalar_one_or_none()
+
+
+async def delete_library_image(image_id: int) -> bool:
+    async with session_scope() as session:
+        result = await session.execute(LibraryImage.__table__.delete().where(LibraryImage.id == image_id))
+        await session.commit()
+        return (result.rowcount or 0) > 0
+
+
+async def delete_library_collection(tag: str) -> int:
+    async with session_scope() as session:
+        result = await session.execute(LibraryImage.__table__.delete().where(LibraryImage.tag == tag))
+        await session.execute(LibraryLink.__table__.delete().where(LibraryLink.tag == tag))
+        await session.execute(LibraryCollection.__table__.delete().where(LibraryCollection.tag == tag))
+        await session.commit()
+        return result.rowcount or 0
+
+
+async def all_library_links() -> list[tuple[str, str]]:
+    async with session_scope() as session:
+        return [(t, g) for t, g in (await session.execute(select(LibraryLink.tag, LibraryLink.target))).all()]
+
+
+async def set_library_link(tag: str, target: str, linked: bool) -> None:
+    async with session_scope() as session:
+        await session.execute(
+            LibraryLink.__table__.delete().where(LibraryLink.tag == tag, LibraryLink.target == target)
+        )
+
+        if linked:
+            session.add(LibraryLink(tag=tag, target=target))
+
+        await session.commit()
+
+
+async def pick_library_image(tags: list[str]):
+    """
+    Картинка из коллекций по кругу: сначала непоказанные; когда
+    показаны все — круг начинается заново.
+    """
+    if not tags:
+        return None
+
+    async with session_scope() as session:
+        fresh = (await session.execute(
+            select(LibraryImage).where(LibraryImage.tag.in_(tags), LibraryImage.used.is_(False))
+            .order_by(func.random()).limit(1)
+        )).scalar_one_or_none()
+
+        if fresh is None:
+            await session.execute(
+                update(LibraryImage).where(LibraryImage.tag.in_(tags)).values(used=False)
+            )
+
+            fresh = (await session.execute(
+                select(LibraryImage).where(LibraryImage.tag.in_(tags)).order_by(func.random()).limit(1)
+            )).scalar_one_or_none()
+
+        if fresh is None:
+            await session.commit()
+            return None
+
+        fresh.used = True
+        fresh.shows += 1
+        fresh.last_used_at = utcnow()
+
+        result = {"id": fresh.id, "file_id": fresh.file_id, "tag": fresh.tag}
+
+        await session.commit()
+
+    return result
+
+
+
+async def list_library_collections() -> list:
+    async with session_scope() as session:
+        return list((await session.execute(select(LibraryCollection).order_by(LibraryCollection.tag))).scalars().all())
+
+
+async def ensure_library_collection(tag: str, as_action: bool) -> bool:
+    """Создаёт запись коллекции, если её ещё нет. True — создана сейчас."""
+    async with session_scope() as session:
+        exists = (await session.execute(
+            select(LibraryCollection.id).where(LibraryCollection.tag == tag)
+        )).scalar_one_or_none()
+
+        if exists is not None:
+            return False
+
+        session.add(LibraryCollection(tag=tag, as_action=as_action, triggers=[]))
+        await session.commit()
+        return True
+
+
+async def update_library_collection(tag: str, data: dict) -> bool:
+    async with session_scope() as session:
+        item = (await session.execute(
+            select(LibraryCollection).where(LibraryCollection.tag == tag)
+        )).scalar_one_or_none()
+
+        if item is None:
+            return False
+
+        for field in ("emoji", "as_action", "triggers", "phrase"):
+            if field in data:
+                setattr(item, field, data[field])
+
+        await session.commit()
+        return True
