@@ -582,6 +582,71 @@ async def get_facts(telegram_id: int, limit: int = 20) -> list[str]:
 # ACTION IMAGES
 # =========================================================
 
+async def get_cached_action_image_from_providers(actions: list[str]) -> ActionImage | None:
+    """
+    Берёт готовую картинку из локального Telegram-кэша независимо от
+    того, включён ли сейчас исходный внешний провайдер. Это делает уже
+    скачанные картинки нашей собственной библиотекой.
+    """
+    actions = [a for a in actions if a]
+    if not actions:
+        return None
+
+    async with session_scope() as session:
+        result = await session.execute(
+            select(ActionImage)
+            .where(
+                ActionImage.action.in_(actions),
+                ActionImage.used.is_(False),
+                ActionImage.telegram_file_id.is_not(None),
+            )
+            .order_by(func.random())
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+
+        image = result.scalar_one_or_none()
+        if image is None:
+            return None
+
+        image.used = True
+        image.used_at = utcnow()
+        await session.commit()
+        return image
+
+
+async def count_cached_action_images_from_providers(actions: list[str]) -> int:
+    actions = [a for a in actions if a]
+    if not actions:
+        return 0
+
+    async with session_scope() as session:
+        result = await session.execute(
+            select(func.count(ActionImage.id)).where(
+                ActionImage.action.in_(actions),
+                ActionImage.telegram_file_id.is_not(None),
+            )
+        )
+        return int(result.scalar() or 0)
+
+
+async def reset_cached_action_images_from_providers(actions: list[str]) -> None:
+    actions = [a for a in actions if a]
+    if not actions:
+        return
+
+    async with session_scope() as session:
+        await session.execute(
+            update(ActionImage)
+            .where(
+                ActionImage.action.in_(actions),
+                ActionImage.telegram_file_id.is_not(None),
+            )
+            .values(used=False, used_at=None)
+        )
+        await session.commit()
+
+
 async def get_cached_action_image(action: str) -> ActionImage | None:
     """
     Неиспользованная картинка с готовым telegram_file_id.
