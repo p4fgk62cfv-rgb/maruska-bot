@@ -6,6 +6,7 @@ from sqlalchemy import (
     func,
     update,
 )
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from database.database import session_scope, utcnow
 
@@ -2640,25 +2641,27 @@ async def action_usage_stats(chat_id: int | None, days: int = 7) -> dict[str, in
 # =========================================================
 
 async def bump_hourly(chat_id: int) -> None:
+    """Atomically increment the per-group hourly message counter.
+
+    The unique key (chat_id, day, hour) is intentionally handled with a
+    PostgreSQL UPSERT.  A SELECT-then-INSERT sequence is race-prone when two
+    messages arrive concurrently and can raise uq_hourly_stat.
+    """
     now = utcnow()
     day, hour = now.strftime("%Y-%m-%d"), now.hour
 
     async with session_scope() as session:
-        item = (
-            await session.execute(
-                select(HourlyStat).where(
-                    HourlyStat.chat_id == chat_id,
-                    HourlyStat.day == day,
-                    HourlyStat.hour == hour,
-                )
-            )
-        ).scalar_one_or_none()
-
-        if item is None:
-            session.add(HourlyStat(chat_id=chat_id, day=day, hour=hour, messages=1))
-        else:
-            item.messages += 1
-
+        stmt = pg_insert(HourlyStat).values(
+            chat_id=chat_id,
+            day=day,
+            hour=hour,
+            messages=1,
+        )
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_hourly_stat",
+            set_={"messages": HourlyStat.messages + 1},
+        )
+        await session.execute(stmt)
         await session.commit()
 
 
