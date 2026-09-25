@@ -47,6 +47,7 @@
         + row("🧠", "Память и контекст", needChat ? "Что Мара помнит" : (v("memory") ? "Помнит " + label("context_messages") + " · хранит " + label("memory_days") : "Выключена"), "memory")
         + row("⚡", "Actions", "Настройка действий", "actions")
         + row("🖼", "Изображения", "Источники и подбор", "images")
+        + (M.state.session.user.owner ? row("📚", "Моя коллекция", "Свои картинки: #пиво в личку Маре", "library") : "")
         + row("🎮", "Игры", "Крокодил, кубики, награды", "games")
         + row("🔥", "Интенсивность AI", needChat ? "Режим и лимиты" : label("chattiness") + (v("ai_daily_limit") ? " · до " + v("ai_daily_limit") + " в сутки" : ""), "ai")
         + row("🎭", "Личность Маруськи", needChat ? "Характер" : label("persona"), "ai")
@@ -361,6 +362,193 @@
             });
         };
       });
+    }).catch(M.fail);
+  });
+
+  // =========================================================
+  // МОЯ КОЛЛЕКЦИЯ (владелец)
+  // =========================================================
+
+  M.screen("library", function () {
+    M.api("/api/admin/library").then(function (d) {
+      var html = '<div class="card glow"><div class="card-title">Как пополнять</div>'
+        + '<div style="font-size:14px;line-height:1.5">Отправь Маре <b>в личку</b> фото или альбом с подписью <code>#пиво</code> — '
+        + "всё улетит в коллекцию «пиво». Бот сам привяжет её к действию, если поймёт по названию.</div>"
+        + '<div class="dim" style="margin-top:6px">Список коллекций в личке — команда /collections</div></div>';
+
+      html += '<div class="card"><div class="card-title">Коллекции <span class="dim">' + d.collections.length + "</span></div>"
+        + (d.collections.length ? d.collections.map(function (c) {
+            var status = c.targets.length ? "" : c.as_action
+              ? ' · <span style="color:var(--green)">своё действие</span>'
+              : ' · <span style="color:var(--gold)">не привязана</span>';
+            return '<div class="list-item tap" data-open="library_tag" data-arg="' + esc(c.tag) + '">'
+              + '<span style="font-size:24px;width:38px;text-align:center">' + esc(c.emoji || "🖼") + "</span>"
+              + '<div class="grow"><div class="t">#' + esc(c.tag.replace(/ /g, "_")) + "</div>"
+              + '<div class="s">' + c.count + " фото · показано " + c.shows + status + "</div></div>"
+              + '<span class="chev">›</span></div>';
+          }).join("") : '<div class="dim">Пока пусто — пришли первый альбом</div>')
+        + '<div class="row-gap" style="margin-top:10px"><input data-new-emoji value="✨" style="width:60px;text-align:center">'
+        + '<input data-new-tag placeholder="Новая категория, например булочка"><button class="btn" data-new-col>+</button></div>'
+        + '<div class="dim" style="margin-top:6px">Можно создать заранее, а фото догрузить потом с тем же #хэштегом.</div>'
+        + "</div>";
+
+      if (d.missing.length) {
+        html += '<div class="card"><div class="card-title">Что догрузить</div>'
+          + '<div class="dim" style="margin-bottom:8px">Популярные действия без своих картинок — сейчас для них берётся Pixabay</div>'
+          + d.missing.slice(0, 15).map(function (m) {
+              return '<div class="kv"><span class="k">' + m.emoji + " " + esc(m.title) + ' <span class="dim">#' + esc(m.title.toLowerCase().replace(/ /g, "_")) + "</span></span>"
+                + "<span>" + (m.usage ? m.usage + " за месяц" : "—") + "</span></div>";
+            }).join("")
+          + (d.cats_covered ? "" : '<div class="kv"><span class="k">🐱 Котики <span class="dim">#кошки</span></span><span>—</span></div>')
+          + "</div>";
+      }
+
+      M.app.innerHTML = M.backButton("Маруська") + html;
+      M.bind();
+
+      M.app.querySelector("[data-new-col]").onclick = function () {
+        var tag = M.app.querySelector("[data-new-tag]").value.trim();
+        if (!tag) { M.toast("Напиши название"); return; }
+
+        M.post("/api/admin/library/collection", { tag: tag, emoji: M.app.querySelector("[data-new-emoji]").value, create: true })
+          .then(function (r) { M.toast("Категория создана"); M.open("library_tag", r.tag); })
+          .catch(function (e) { M.toast(e.message); });
+      };
+    }).catch(M.fail);
+  });
+
+  // ---------- коллекция как своё действие ----------
+
+  function actionCard(tag, col) {
+    var on = !!col.as_action;
+    var triggers = [tag].concat(col.triggers || []);
+
+    return '<div class="card glow"><div class="setting" style="border:0;padding:0">'
+      + '<input data-c-emoji value="' + esc(col.emoji || "✨") + '" style="width:54px;text-align:center;font-size:20px;padding:6px">'
+      + '<div class="grow"><div class="t">Своё действие</div><div class="s">'
+      + (on ? "Ответь кому-нибудь в группе словом «" + esc(tag) + "» — придёт фото отсюда" : "Выключено: фото только для привязанных действий")
+      + "</div></div>"
+      + '<div class="switch' + (on ? " on" : "") + '" data-c-action></div></div>'
+
+      + (on ? '<div class="dim" style="margin:12px 0 6px">Слова-триггеры (в любой форме: «' + esc(tag) + "», «" + esc(tag.slice(0, -1)) + "у»…)</div>"
+          + triggers.map(function (w, i) {
+              return '<span class="tag" style="margin:0 4px 6px 0">' + esc(w) + (i ? ' <b data-c-untrig="' + esc(w) + '" style="cursor:pointer">×</b>' : "") + "</span>";
+            }).join("")
+          + '<div class="row-gap" style="margin-top:6px"><input data-c-trig placeholder="Ещё слово, например плюшка"><button class="btn" data-c-addtrig>+</button></div>'
+          + '<div class="dim" style="margin:12px 0 6px">Фраза (пусто — одна из стандартных)</div>'
+          + '<textarea data-c-phrase rows="2" placeholder="{emoji} {actor} <угостил|угостила> {target_acc}: <b>{item}</b>">' + esc(col.phrase || "") + "</textarea>"
+          + '<div class="dim" style="margin-top:4px">{actor} — кто, {target_acc} / {target_dat} — кому, {item} — «' + esc(tag) + "», &lt;угостил|угостила&gt; — род</div>"
+          + '<button class="btn block" data-c-save style="margin-top:8px">💾 Сохранить</button>'
+        : "")
+      + "</div>";
+  }
+
+  function bindActionCard(tag, col) {
+    var save = function (data, ok) {
+      return M.post("/api/admin/library/collection", Object.assign({ tag: tag }, data))
+        .then(function () { M.toast(ok || "Сохранено"); M.render(); })
+        .catch(function (e) { M.toast(e.message); });
+    };
+
+    var sw = M.app.querySelector("[data-c-action]");
+    if (sw) sw.onclick = function () { save({ as_action: !col.as_action }, col.as_action ? "Действие выключено" : "Теперь это действие"); };
+
+    var add = M.app.querySelector("[data-c-addtrig]");
+    if (add) add.onclick = function () {
+      var word = M.app.querySelector("[data-c-trig]").value.trim();
+      if (!word) return;
+      save({ triggers: (col.triggers || []).concat([word]) }, "Слово добавлено");
+    };
+
+    M.each("[data-c-untrig]", function (el) {
+      el.onclick = function () {
+        var word = el.getAttribute("data-c-untrig");
+        save({ triggers: (col.triggers || []).filter(function (w) { return w !== word; }) }, "Слово убрано");
+      };
+    });
+
+    var btn = M.app.querySelector("[data-c-save]");
+    if (btn) btn.onclick = function () {
+      save({ emoji: M.app.querySelector("[data-c-emoji]").value, phrase: M.app.querySelector("[data-c-phrase]").value });
+    };
+
+    var emoji = M.app.querySelector("[data-c-emoji]");
+    if (emoji && !btn) emoji.onchange = function () { save({ emoji: emoji.value }); };
+  }
+
+  M.screen("library_tag", function (tag) {
+    var limits = M.state.cache.libLimit || (M.state.cache.libLimit = {});
+    var limit = limits[tag] || 60;
+
+    Promise.all([
+      M.api("/api/admin/library/images?tag=" + encodeURIComponent(tag) + "&limit=" + limit),
+      M.api("/api/admin/library")
+    ]).then(function (res) {
+      var images = res[0].images, meta = res[1];
+      var col = meta.collections.filter(function (c) { return c.tag === tag; })[0]
+        || { tag: tag, targets: [], count: 0, shows: 0, emoji: "✨", as_action: false, triggers: [], phrase: null };
+
+      var titles = {};
+      meta.targets.forEach(function (t) { titles[t.key] = t.title; });
+
+      var html = M.backButton("Моя коллекция")
+        + '<div class="screen-head">' + M.tile("image", "green", 22) + '<div class="grow"><h1>#' + esc(tag.replace(/ /g, "_")) + "</h1>"
+        + '<div class="sub">' + col.count + " фото · показано " + col.shows + "</div></div></div>"
+
+        + actionCard(tag, col)
+
+        + '<div class="card"><div class="card-title">Привязана к встроенным действиям</div>'
+        + (col.targets.length ? col.targets.map(function (t) {
+            return '<span class="tag" style="margin:0 6px 6px 0">' + esc(titles[t] || t) + ' <b data-unlink="' + esc(t) + '" style="cursor:pointer">×</b></span>';
+          }).join("") : '<div class="dim" style="margin-bottom:6px">Ни к чему — картинки пока не используются</div>')
+        + '<select data-link style="margin-top:6px"><option value="">+ Привязать к действию…</option>'
+        + meta.targets.filter(function (t) { return col.targets.indexOf(t.key) < 0; }).map(function (t) {
+            return '<option value="' + t.key + '">' + esc(t.title) + "</option>";
+          }).join("") + "</select>"
+        + '<div class="dim" style="margin-top:6px">Одну коллекцию можно привязать к нескольким действиям: «алкоголь» — к пиву, вину и коктейлю.</div></div>'
+
+        + '<div class="card"><div class="card-title">Фото</div><div class="action-grid">'
+        + images.map(function (im) {
+            return '<div class="action-card" style="cursor:default"><div class="img" style="height:100px" data-img="/api/admin/library/image?id=' + im.id + '">🖼</div>'
+              + '<div class="b"><div class="s">показано ' + im.shows + (im.last_used ? " · " + M.ago(im.last_used) : "") + "</div>"
+              + '<button class="btn danger block" data-del-img="' + im.id + '" style="margin-top:6px;padding:6px">Удалить</button></div></div>';
+          }).join("") + "</div>"
+        + (images.length ? "" : '<div class="dim">Фото нет</div>')
+        + (col.count > images.length ? '<button class="btn block" data-lib-more style="margin-top:10px">Показать ещё (' + (col.count - images.length) + ")</button>" : "")
+        + "</div>"
+
+        + '<button class="btn danger block" data-del-col>🗑 Удалить всю коллекцию</button>';
+
+      M.app.innerHTML = html;
+      M.bind();
+
+      var fail = function (e) { M.toast(e.message); };
+      var link = function (target, linked) {
+        M.post("/api/admin/library/link", { tag: tag, target: target, linked: linked })
+          .then(function () { M.toast(linked ? "Привязано" : "Отвязано"); M.render(); }).catch(fail);
+      };
+
+      M.app.querySelector("[data-link]").onchange = function (e) { if (e.target.value) link(e.target.value, true); };
+      bindActionCard(tag, col);
+
+      var more = M.app.querySelector("[data-lib-more]");
+      if (more) more.onclick = function () { limits[tag] = limit + 60; M.render(); };
+      M.each("[data-unlink]", function (el) { el.onclick = function () { link(el.getAttribute("data-unlink"), false); }; });
+
+      M.each("[data-del-img]", function (el) {
+        el.onclick = function () {
+          M.post("/api/admin/library/delete", { id: parseInt(el.getAttribute("data-del-img"), 10) })
+            .then(function () { M.toast("Удалено"); M.render(); }).catch(fail);
+        };
+      });
+
+      M.app.querySelector("[data-del-col]").onclick = function () {
+        M.confirm("Удалить коллекцию #" + tag + "?", "Все " + col.count + " фото пропадут из коллекции. Действия снова будут брать картинки из Pixabay.", "Удалить", true)
+          .then(function (yes) {
+            if (!yes) return;
+            M.post("/api/admin/library/delete", { tag: tag }).then(function () { M.toast("Коллекция удалена"); M.back(); }).catch(fail);
+          });
+      };
     }).catch(M.fail);
   });
 })();
