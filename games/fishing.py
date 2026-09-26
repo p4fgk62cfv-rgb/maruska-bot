@@ -23,11 +23,10 @@ async def fishing_command(message: Message):
             web_app=WebAppInfo(url=f"{base}/fishing"),
         )
     else:
-        # Telegram запрещает web_app-кнопки в групповых сообщениях.
-        # Для группы используется Main Mini App deep link.
+        # Telegram Direct Link Mini App — открывает отдельный app fishing.
         button = InlineKeyboardButton(
             text="🎣 Открыть рыбалку",
-            url=f"https://t.me/{BOT_USERNAME}?startapp=fishing",
+            url=f"https://t.me/{BOT_USERNAME}/fishing",
         )
 
     kb = InlineKeyboardMarkup(inline_keyboard=[[button]])
