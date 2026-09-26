@@ -34,7 +34,6 @@ from database.repository import (
     list_broadcasts,
     list_roles,
     media_stats,
-    library_summary,
     recent_violators,
     search_people,
     set_action_enabled,
@@ -240,17 +239,12 @@ async def system_status(bot) -> dict:
     ai_key = bool(os.getenv("GEMINI_API_KEY"))
     ai_errors = errors.get("ai", (0, 0))[0]
 
-    local_library = await library_summary()
-    has_local_library = any(int(row.get("count") or 0) > 0 for row in local_library)
-    external_providers = available_providers()
-    images_configured = bool(external_providers) or has_local_library
-
     status = {
         "database": await timed(db_ping()),
         "telegram": await timed(bot.get_me()),
         "ai": {"ok": ai_key and not ai_errors, "configured": ai_key, "errors": ai_errors},
-        "images": {"ok": images_configured and not errors.get("images", (0, 0))[0],
-                   "configured": images_configured, "errors": errors.get("images", (0, 0))[0]},
+        "images": {"ok": bool(available_providers()) and not errors.get("images", (0, 0))[0],
+                   "configured": bool(available_providers()), "errors": errors.get("images", (0, 0))[0]},
         "actions": {"ok": len(ACTIONS) > 0, "count": len(ACTIONS)},
     }
 
@@ -315,11 +309,11 @@ async def build_attention(bot, chat_id, chats, owner: bool) -> list[dict]:
 
         from actions.providers import available_providers
 
-        if not available_providers() and not any(int(row.get("count") or 0) > 0 for row in await library_summary()):
+        if not available_providers():
             items.append({
                 "level": "danger",
                 "icon": "🖼",
-                "text": "Нет доступных картинок в библиотеке и внешних источниках",
+                "text": "Не настроен ни один источник картинок",
                 "go": "system",
             })
 
@@ -1777,6 +1771,63 @@ async def api_autoreply_delete(request):
 # Источники картинок, категории действий
 # ---------------------------------------------------------
 
+
+async def api_pixabay_search(request):
+    """Предпросмотр Pixabay для владельца: только фото, без автопубликации."""
+    admin, _chats = await _admin(request)
+    if not is_owner(admin["id"]):
+        raise web.HTTPForbidden(text="owner only")
+    from actions.providers import search_pixabay
+    from actions.catalog import ACTION_BY_KEY
+    from actions.service import pixabay_profile
+    action_key = (request.query.get("action") or "").strip()
+    action = ACTION_BY_KEY.get(action_key)
+    if action is None:
+        raise web.HTTPBadRequest(text="action required")
+    try:
+        page = max(1, int(request.query.get("page", "1")))
+    except ValueError:
+        page = 1
+    query, required, excluded, filters = pixabay_profile(action, "neutral")
+    try:
+        photos = await search_pixabay(query, page, required, excluded, filters)
+    except Exception as error:
+        logger.exception("PIXABAY PREVIEW ERROR")
+        raise web.HTTPBadGateway(text=f"Pixabay: {type(error).__name__}: {error}")
+    return web.json_response({"action": action.key, "query": query, "page": page, "photos": [{"id": p.photo_id, "url": p.image_url, "fallback_url": p.fallback_url, "tags": p.tags, "provider": p.provider} for p in photos]})
+
+
+async def api_pixabay_import(request):
+    """Импорт выбранных Pixabay-фото в личную библиотеку Telegram."""
+    admin, _chats = await _admin(request)
+    if not is_owner(admin["id"]):
+        raise web.HTTPForbidden(text="owner only")
+    body = await request.json(); tag = str(body.get("tag") or "").strip(); photos = body.get("photos") or []
+    if not tag: raise web.HTTPBadRequest(text="tag required")
+    if not isinstance(photos, list) or not photos: raise web.HTTPBadRequest(text="photos required")
+    if len(photos) > 50: raise web.HTTPBadRequest(text="max 50 photos per import")
+    from database.repository import add_library_images, ensure_library_collection
+    from actions.providers import download_photo
+    tag = tag.lstrip("#").strip().lower().replace(" ", "_")[:64]
+    await ensure_library_collection(tag, as_action=False)
+    bot = request.app["bot"]; prepared=[]; failed=0
+    for item in photos:
+        url=str(item.get("url") or "").strip() if isinstance(item,dict) else ""; fallback=str(item.get("fallback_url") or "").strip() if isinstance(item,dict) else ""
+        if not url: failed+=1; continue
+        content=await download_photo(url,fallback or None)
+        if not content: failed+=1; continue
+        try:
+            from aiogram.types import BufferedInputFile
+            msg=await bot.send_photo(chat_id=admin["id"],photo=BufferedInputFile(content,filename=f"pixabay_{item.get('id','image')}.jpg")); photo=msg.photo[-1]; prepared.append((photo.file_id,photo.file_unique_id))
+            try: await bot.delete_message(admin["id"],msg.message_id)
+            except Exception: pass
+        except Exception:
+            failed+=1; logger.exception("PIXABAY IMPORT TELEGRAM ERROR")
+    imported=duplicates=0
+    if prepared: imported,duplicates=await add_library_images(tag,prepared,admin["id"])
+    audit.log("actions","pixabay_import",actor_kind="admin",actor_id=admin["id"],actor_name=_name(admin),details=f"#{tag}: +{imported}, duplicates={duplicates}, failed={failed}")
+    return web.json_response({"ok":True,"tag":tag,"imported":imported,"duplicates":duplicates,"failed":failed})
+
 async def api_images(request):
     from actions.providers import KNOWN_PROVIDERS, available_providers, provider_order
 
@@ -1792,43 +1843,26 @@ async def api_images(request):
         item["cached"] += row["cached"]
         item["used"] += row["used"]
 
-    # Личная библиотека — встроенный источник. Она не зависит от
-    # Pixabay/Unsplash и всегда остаётся доступной для бота.
-    own_library = await library_summary()
-    library_total = sum(int(row.get("count") or 0) for row in own_library)
-    library_used = sum(int(row.get("shows") or 0) for row in own_library)
-    cached_local_total = sum(int(row.get("cached") or 0) for row in totals.values())
-    cached_local_used = sum(int(row.get("used") or 0) for row in totals.values())
-
     order = provider_order()
     listed = order + [name for name in KNOWN_PROVIDERS if name not in order]
 
+    from database.repository import library_summary
+    library_total = sum(int(row.get("count") or 0) for row in await library_summary())
+
     providers = [{
-        "name": "library",
-        "label": "Личная библиотека",
-        "builtin": True,
-        "ready": True,
-        "active": True,
-        "order": 1,
-        "total": library_total + cached_local_total,
-        "cached": library_total + cached_local_total,
-        "used": library_used + cached_local_used,
+        "name": "library", "label": "Личная библиотека", "builtin": True,
+        "ready": True, "active": True, "order": 0,
+        "total": library_total, "cached": library_total, "used": 0,
     }]
+    providers.extend([
+        {"name": name, "label": name, "builtin": False, "ready": name in ready,
+         "active": name in order,
+         "order": (order.index(name) + 1) if name in order else None,
+         **totals.get(name, {"total": 0, "cached": 0, "used": 0})}
+        for name in listed
+    ])
 
-    providers.extend({
-        "name": name,
-        "label": name,
-        "builtin": False,
-        "ready": name in ready,
-        "active": name in order,
-        "order": (order.index(name) + 1) if name in order else None,
-        **totals.get(name, {"total": 0, "cached": 0, "used": 0})
-    } for name in listed)
-
-    return web.json_response({
-        "providers": providers,
-        "owner": is_owner(admin["id"]),
-    })
+    return web.json_response({"providers": providers, "owner": is_owner(admin["id"])})
 
 
 async def api_images_order(request):
@@ -1844,8 +1878,9 @@ async def api_images_order(request):
     body = await request.json()
     order = [name for name in (body.get("order") or []) if name in KNOWN_PROVIDERS]
 
-    # Пустой order разрешён: личная библиотека остаётся встроенным
-    # источником и может работать без Pixabay/Unsplash.
+    # Личная библиотека встроена в runtime и не входит в список внешних
+    # провайдеров. Поэтому отсутствие Pixabay/Unsplash допустимо: бот
+    # продолжает работать на уже сохранённых Telegram file_id.
 
     # Настройки всего бота хранятся в строке с chat_id = 0
     await set_group_setting(chat_id=0, key="provider_order", value=order)
@@ -2353,6 +2388,8 @@ def setup_v2_routes(app: web.Application) -> None:
     app.router.add_get("/api/admin/autoreplies", api_autoreplies)
     app.router.add_post("/api/admin/autoreplies", api_autoreplies)
     app.router.add_post("/api/admin/autoreplies/delete", api_autoreply_delete)
+    app.router.add_get("/api/admin/pixabay/search", api_pixabay_search)
+    app.router.add_post("/api/admin/pixabay/import", api_pixabay_import)
     app.router.add_get("/api/admin/images", api_images)
     app.router.add_post("/api/admin/images/order", api_images_order)
     app.router.add_post("/api/admin/group/title", api_group_title)
