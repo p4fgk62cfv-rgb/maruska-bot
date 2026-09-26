@@ -231,7 +231,8 @@ ACTIONS = [
     # СЛАДКОЕ
     # =====================================================
     A("cake", "🍰", "cake beautiful", "торт|тортик", "sweet",
-      "торт", "тортом", "cake"),
+      "торт", "тортом", "cake",
+      exclude="muffin|cupcake|muffins|cupcakes|cookie|bread|scone"),
     A("cheesecake", "🍰", "cheesecake dessert slice", "чизкейк", "sweet",
       "чизкейк", "чизкейком", "cheesecake|cake"),
     A("tiramisu", "🍮", "tiramisu dessert", "тирамису", "sweet",

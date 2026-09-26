@@ -446,7 +446,51 @@ PIXABAY_CATEGORY_BY_ACTION = {
 }
 
 
+# ---------------------------------------------------------
+# Ручная настройка поиска владельцем из панели.
+#
+# {ключ действия: {"query": "...", "required": [[...], ...], "excluded": [...]}}
+# Хранится в настройках всего бота (chat_id = 0). Любое изменение
+# меняет отпечаток профиля — бот сам начинает новую коллекцию,
+# и старые неподходящие картинки перестают показываться.
+# ---------------------------------------------------------
+
+_OVERRIDES: dict[str, dict] = {}
+
+
+def set_pixabay_overrides(data: dict | None) -> None:
+    _OVERRIDES.clear()
+    _OVERRIDES.update(data or {})
+
+
+def pixabay_override(key: str) -> dict:
+    return _OVERRIDES.get(key) or {}
+
+
+def parse_words(text: str) -> list[str]:
+    """«cake, layer cake» → ["cake", "layer cake"] (английские слова и фразы)."""
+    return [w.strip().lower() for w in (text or "").replace(";", ",").split(",") if w.strip()][:30]
+
+
+def parse_groups(text: str) -> list[list[str]]:
+    """
+    Обязательные слова: внутри группы — «любое из» через запятую,
+    группы через «;» — «и то, и другое».
+    «cake, cakes; slice, dessert» → нужно (cake ИЛИ cakes) И (slice ИЛИ dessert).
+    """
+    groups = []
+    for part in (text or "").split(";"):
+        words = [w.strip().lower() for w in part.split(",") if w.strip()]
+        if words:
+            groups.append(words[:20])
+    return groups[:5]
+
+
 def get_search_query(action: Action, pair_key: str) -> str:
+    own = pixabay_override(action.key).get("query")
+    if own:
+        return own
+
     """Только внутренний английский Pixabay query, привязанный к Action."""
     if action.category == "pair":
         return PAIR_SEARCHES.get(pair_key, PAIR_SEARCHES["neutral"]).get(
@@ -457,6 +501,10 @@ def get_search_query(action: Action, pair_key: str) -> str:
 
 
 def pixabay_required_groups(action: Action, pair_key: str) -> tuple[tuple[str, ...], ...]:
+    own = pixabay_override(action.key).get("required")
+    if own:
+        return tuple(tuple(group) for group in own if group)
+
     groups = list(PIXABAY_REQUIRED_OVERRIDES.get(action.key, ()))
     if action.category == "pair":
         groups.append(("people", "person", "man", "woman", "couple", "friends", "friend"))
@@ -580,6 +628,7 @@ def pixabay_profile(action: Action, pair_key: str) -> tuple[str, tuple[str, ...]
     required = tuple(required_tags(action))
     excluded = tuple(dict.fromkeys(
         tuple(excluded_tags(action))
+        + tuple(pixabay_override(action.key).get("excluded") or ())
         + PIXABAY_GENERIC_EXCLUDE
         + PIXABAY_CATEGORY_EXCLUDE.get(action.category, ())
     ))
@@ -622,6 +671,7 @@ def rules_version(action: Action, pair_key: str = "neutral") -> str:
         tuple(required_tags(action)),
         tuple(excluded_tags(action)),
         tuple(PIXABAY_CATEGORY_EXCLUDE.get(action.category, ())),
+        repr(sorted(pixabay_override(action.key).items())),
     ))
     digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()
     return digest[:10]
