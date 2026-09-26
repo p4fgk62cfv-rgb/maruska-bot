@@ -239,12 +239,20 @@ async def system_status(bot) -> dict:
     ai_key = bool(os.getenv("GEMINI_API_KEY"))
     ai_errors = errors.get("ai", (0, 0))[0]
 
+    # Своя коллекция — тоже источник картинок: без Pixabay бот работает на ней
+    try:
+        from database.repository import library_summary
+
+        library_ok = any(int(row.get("count") or 0) for row in await library_summary())
+    except Exception:
+        library_ok = False
+
     status = {
         "database": await timed(db_ping()),
         "telegram": await timed(bot.get_me()),
         "ai": {"ok": ai_key and not ai_errors, "configured": ai_key, "errors": ai_errors},
-        "images": {"ok": bool(available_providers()) and not errors.get("images", (0, 0))[0],
-                   "configured": bool(available_providers()), "errors": errors.get("images", (0, 0))[0]},
+        "images": {"ok": (bool(available_providers()) or library_ok) and not errors.get("images", (0, 0))[0],
+                   "configured": bool(available_providers()) or library_ok, "errors": errors.get("images", (0, 0))[0]},
         "actions": {"ok": len(ACTIONS) > 0, "count": len(ACTIONS)},
     }
 
@@ -308,8 +316,13 @@ async def build_attention(bot, chat_id, chats, owner: bool) -> list[dict]:
             })
 
         from actions.providers import available_providers
+        from database.repository import library_summary
 
-        if not available_providers():
+        library_has_images = any(int(row.get("count") or 0) for row in await library_summary())
+
+        # Тревога, только если картинок нет совсем: ни внешних источников,
+        # ни своей коллекции. Работа только на своей коллекции — норма.
+        if not available_providers() and not library_has_images:
             items.append({
                 "level": "danger",
                 "icon": "🖼",
@@ -1806,10 +1819,24 @@ async def api_pixabay_import(request):
     if not tag: raise web.HTTPBadRequest(text="tag required")
     if not isinstance(photos, list) or not photos: raise web.HTTPBadRequest(text="photos required")
     if len(photos) > 50: raise web.HTTPBadRequest(text="max 50 photos per import")
-    from database.repository import add_library_images, ensure_library_collection
+    import library_core
+    from actions.catalog import ACTION_BY_KEY
+    from database.repository import add_library_images, ensure_library_collection, set_library_link
     from actions.providers import download_photo
-    tag = tag.lstrip("#").strip().lower().replace(" ", "_")[:64]
-    await ensure_library_collection(tag, as_action=False)
+
+    # Тот же формат, что у загрузки через личку: иначе «мои котики» и
+    # «мои_котики» стали бы разными коллекциями, а длинный тег не влез бы
+    # в колонку базы (40 символов)
+    tag = library_core.normalize_tag(tag)
+    if not tag:
+        raise web.HTTPBadRequest(text="bad tag")
+
+    # Фото искались под конкретное действие — к нему и привязываем,
+    # иначе коллекция нигде не показывалась бы
+    action = ACTION_BY_KEY.get(str(body.get("action") or ""))
+    await ensure_library_collection(tag, as_action=action is None)
+    if action is not None:
+        await set_library_link(tag, action.key, True)
     bot = request.app["bot"]; prepared=[]; failed=0
     for item in photos:
         url=str(item.get("url") or "").strip() if isinstance(item,dict) else ""; fallback=str(item.get("fallback_url") or "").strip() if isinstance(item,dict) else ""
@@ -1825,6 +1852,8 @@ async def api_pixabay_import(request):
             failed+=1; logger.exception("PIXABAY IMPORT TELEGRAM ERROR")
     imported=duplicates=0
     if prepared: imported,duplicates=await add_library_images(tag,prepared,admin["id"])
+    await library_core.reload_links()
+    await library_core.reload_collections()
     audit.log("actions","pixabay_import",actor_kind="admin",actor_id=admin["id"],actor_name=_name(admin),details=f"#{tag}: +{imported}, duplicates={duplicates}, failed={failed}")
     return web.json_response({"ok":True,"tag":tag,"imported":imported,"duplicates":duplicates,"failed":failed})
 
