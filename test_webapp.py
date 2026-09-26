@@ -188,6 +188,7 @@ def main() -> int:
         ("broadcasts", "data-bc-test", "тест себе"),
         ("broadcasts", 'data-tab-bc', "вкладки новое/запланированные/история"),
         ("analytics", "hourBars(", "активность по часам"),
+        ("analytics", "/api/admin/chatters", "топ болтунов за сегодня"),
         ("analytics", "delta(", "сравнение с прошлым периодом"),
         ("analytics", "returning", "возвращающиеся"),
         ("journal", "data-jwho", "фильтр по администратору"),
@@ -231,6 +232,7 @@ def main() -> int:
         ("action", "data-hide=", "скрытие картинки из коллекции"),
         ("action", "data-cooldown", "cooldown действия"),
         ("action", "data-test", "кнопка «Протестировать»"),
+        ("action", "data-px-card", "настройка поиска Pixabay для владельца"),
         ("action", "esc(p.male)", "превью фразы экранируется"),
         ("roles", "/api/admin/roles", "экран ролей"),
         ("mara", '"autoreplies")', "автоответы в хабе Маруськи"),
@@ -245,6 +247,7 @@ def main() -> int:
         ("images", "data-cat-toggle", "вкл/выкл категории целиком"),
         ("games", "game_crocodile", "переключатель крокодила"),
         ("games", "game_dice", "переключатель мини-игр"),
+        ("games", "/api/admin/social", "пара дня и браки в панели"),
     ]
 
     for screen, marker, why in placements:

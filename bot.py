@@ -46,6 +46,8 @@ from features.captcha import router as captcha_router
 from images_library import router as library_router
 from features.autoreplies import router as autoreplies_router
 from features.moderation import router as moderation_router
+from features.chatters import router as chatters_router
+from features.social import router as social_router
 from features.rating import router as rating_router
 from features.weather import router as weather_router
 
@@ -127,6 +129,8 @@ dp.include_router(library_router)
 
 # Команды
 dp.include_router(basic_router)
+dp.include_router(chatters_router)
+dp.include_router(social_router)
 dp.include_router(moderation_router)
 dp.include_router(economy_router)
 dp.include_router(shop_router)
@@ -270,6 +274,15 @@ async def main():
         await images_library.reload_collections()
     except Exception as error:
         logger.warning("LIBRARY LINKS: %s", error)
+
+    # Ручные профили поиска Pixabay, заданные владельцем в панели
+    try:
+        from actions.service import set_pixabay_overrides
+        from database.repository import get_group_settings
+
+        set_pixabay_overrides((await get_group_settings(0)).get("pixabay_overrides"))
+    except Exception as error:
+        logger.warning("PIXABAY OVERRIDES: %s", error)
 
     # Порядок источников картинок, заданный владельцем в панели
     try:

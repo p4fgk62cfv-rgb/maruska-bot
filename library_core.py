@@ -17,6 +17,9 @@ logger = logging.getLogger("maruska.library")
 
 
 CATS = "cats"
+PAIR = "pair_of_day"
+PAIR_WORDS = {"пара дня", "парадня", "пара", "пары", "влюбленные", "любовь"}
+
 CAT_WORDS = {"кошки", "кошка", "котики", "котик", "коты", "кот", "котята", "cats", "cat", "мяу"}
 
 ALBUM_WAIT = 2.0        # секунд: Telegram присылает альбом отдельными сообщениями
@@ -100,6 +103,9 @@ def guess_target(tag: str) -> str | None:
     """К чему привязать коллекцию автоматически."""
     if tag in CAT_WORDS:
         return CATS
+
+    if tag in PAIR_WORDS:
+        return PAIR
 
     from actions.catalog import find_action
 

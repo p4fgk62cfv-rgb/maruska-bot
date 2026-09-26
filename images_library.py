@@ -30,6 +30,7 @@ from settings.handler import is_owner
 from library_core import (  # noqa: F401 — часть имён нужна другим модулям через images_library
     ALBUM_WAIT,
     CATS,
+    PAIR,
     REPORT_WAIT,
     LIBRARY_PHRASES,
     _collections,
@@ -197,6 +198,8 @@ async def _send_report(user_id: int) -> None:
         for target in links:
             if target == CATS:
                 names.append("🐱 котики")
+            elif target == PAIR:
+                names.append("💞 пара дня")
             elif target in by_key:
                 names.append(f"{by_key[target].emoji} {by_key[target].item_acc or target}")
         linked_text = "\nПривязана к: " + ", ".join(names)

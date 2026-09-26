@@ -77,7 +77,7 @@ def collect_number_keys() -> set[str]:
     """
     # Читать можно напрямую или через pick() внутри game_rules()
     pattern = re.compile(
-        r"(?:get_number|pick)\([^)]*?[\"']([a-z_]+)[\"']"
+        r"(?:get_number|(?<!\w)pick)\([^)]*?[\"']([a-z_]+)[\"']"
     )
     found = set()
 
