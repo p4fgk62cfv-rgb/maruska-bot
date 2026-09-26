@@ -34,6 +34,7 @@ from games.crocodile import drawing_keyboard, ensure_hint_message
 
 from webapp.admin import setup_admin_routes
 from webapp.admin_v2 import setup_v2_routes
+from webapp.fishing_api import setup_fishing_routes
 from games.words import LEVEL_NAMES
 
 
@@ -172,6 +173,21 @@ def _page_with_version(page) -> web.Response:
 ASSET_TYPES = {".css": "text/css", ".js": "application/javascript"}
 
 
+async def fishing_asset(request: web.Request):
+    name = request.match_info["path"]
+    if not name or ".." in Path(name).parts:
+        raise web.HTTPNotFound()
+    root = STATIC_DIR / "fishing" / "assets" / "fishing"
+    path = root / name
+    try:
+        path.resolve().relative_to(root.resolve())
+    except ValueError:
+        raise web.HTTPNotFound()
+    if not path.is_file():
+        raise web.HTTPNotFound()
+    return web.FileResponse(path, headers=NO_CACHE)
+
+
 async def admin_asset(request: web.Request):
     """
     Модули админки. Отдаются только файлы из webapp/static/admin
@@ -194,6 +210,13 @@ async def admin_asset(request: web.Request):
         charset="utf-8",
         headers=NO_CACHE,
     )
+
+
+async def fishing_page(request: web.Request):
+    page = STATIC_DIR / "fishing" / "index.html"
+    if not page.exists():
+        raise web.HTTPNotFound(text="fishing page missing")
+    return _page_with_version(page)
 
 
 async def admin_page(request: web.Request):
@@ -375,6 +398,7 @@ def create_app(bot, bot_token: str) -> web.Application:
 
     app.router.add_get("/", health)
     app.router.add_get("/draw", draw_page)
+    app.router.add_get("/fishing", fishing_page)
     app.router.add_get("/admin", admin_page)
     app.router.add_get("/api/round", api_round)
     app.router.add_get("/api/drawing", api_drawing)
@@ -382,9 +406,11 @@ def create_app(bot, bot_token: str) -> web.Application:
 
     setup_admin_routes(app)
     setup_v2_routes(app)
+    setup_fishing_routes(app)
 
     # Модули новой админки: стили и скрипты отдельными файлами
     app.router.add_get("/admin-assets/{name}", admin_asset)
+    app.router.add_get("/fishing-assets/{path:.*}", fishing_asset)
 
     return app
 
