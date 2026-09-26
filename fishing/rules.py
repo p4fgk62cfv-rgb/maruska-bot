@@ -1,0 +1,323 @@
+"""
+Рыбалка — правила игры без базы и без Telegram.
+
+Здесь решается всё, что влияет на награду: какая рыба клюнула,
+сколько весит, трофей ли это, сколько алмазов и опыта. Сервер —
+единственный, кто это считает: телефон игрока только показывает.
+
+Ключи, названия и картинки совпадают с клиентом (webapp/static/fishing).
+
+Что исправлено по сравнению с автономной версией:
+  • рыба выбирается с учётом редкости, а не равновероятно из списка
+    водоёма (раньше легендарный таймень попадался в 33% забросов);
+  • наживка влияет на то, кто клюёт (раньше только тратилась);
+  • ночной улов засчитывается при поимке ночью, а не случайно при забросе;
+  • одна таблица цен на наживку вместо двух разных;
+  • награды масштабируются под экономику Мары (настройка владельца).
+"""
+
+import random
+from dataclasses import dataclass
+
+
+# ---------------------------------------------------------
+# Редкость: относительный вес в розыгрыше внутри водоёма
+# ---------------------------------------------------------
+
+RARITY_WEIGHT = {
+    "Обычная": 50.0,
+    "Необычная": 26.0,
+    "Редкая": 12.0,
+    "Эпическая": 5.5,
+    "Легендарная": 2.0,
+    "Мифическая": 0.5,
+}
+
+RARE_RANKS = ("Редкая", "Эпическая", "Легендарная", "Мифическая")
+LEGEND_RANKS = ("Легендарная", "Мифическая")
+
+
+@dataclass(frozen=True)
+class Fish:
+    key: str
+    name: str
+    rarity: str
+    min_w: float
+    max_w: float
+    power: int
+    value: int
+    xp: int
+    trophy: bool = False
+
+
+FISH = {f.key: f for f in (
+    Fish("pike", "Щука", "Редкая", .8, 8.8, 78, 320, 55, True),
+    Fish("perch", "Окунь", "Обычная", .15, 2.1, 35, 90, 24),
+    Fish("crucian", "Карась", "Обычная", .12, 1.8, 28, 70, 22),
+    Fish("roach", "Плотва", "Обычная", .08, 1.3, 22, 55, 18),
+    Fish("carp", "Карп", "Эпическая", 1.5, 12, 82, 620, 95, True),
+    Fish("tench", "Линь", "Необычная", .3, 3.4, 48, 180, 42),
+    Fish("bream", "Лещ", "Необычная", .4, 4.8, 55, 210, 46),
+    Fish("zander", "Судак", "Редкая", .7, 6.2, 68, 390, 62),
+    Fish("asp", "Жерех", "Редкая", .8, 5.6, 64, 360, 58),
+    Fish("catfish", "Сом", "Легендарная", 3, 25, 96, 1250, 170, True),
+    Fish("chub", "Голавль", "Необычная", .4, 3.5, 51, 200, 44),
+    Fish("burbo", "Налим", "Редкая", .6, 5.8, 62, 410, 68),
+    Fish("trout", "Форель", "Эпическая", .5, 6, 73, 700, 105, True),
+    Fish("taimen", "Таймень", "Легендарная", 2, 18, 91, 1600, 220, True),
+    Fish("beluga", "Белуга", "Мифическая", 8, 35, 100, 3000, 350),
+)}
+
+
+@dataclass(frozen=True)
+class Location:
+    key: str
+    name: str
+    level: int
+    fish: tuple[str, ...]
+    night: bool = False
+
+
+LOCATIONS = (
+    Location("quiet", "Тихая заводь", 1, ("pike", "perch", "crucian", "roach", "carp")),
+    Location("forest", "Лесное озеро", 2, ("pike", "perch", "carp", "tench", "bream")),
+    Location("river", "Большая река", 4, ("zander", "asp", "catfish", "bream", "chub")),
+    Location("mountain", "Горное озеро", 6, ("trout", "taimen", "perch")),
+    Location("deep", "Глубокая вода", 8, ("catfish", "taimen", "beluga", "burbo"), night=True),
+)
+
+
+@dataclass(frozen=True)
+class Rod:
+    key: str
+    name: str
+    price: int
+    control: int
+    power: int
+    level: int
+
+
+RODS = {r.key: r for r in (
+    Rod("starter", "Простая удочка", 0, 8, 0, 0),
+    Rod("float", "Поплавочная", 250, 16, 5, 2),
+    Rod("spin", "Спиннинг", 600, 12, 20, 3),
+    Rod("feeder", "Фидер", 950, 24, 14, 4),
+    Rod("carp", "Карповик", 1500, 18, 35, 6),
+    Rod("premium", "Таймень Pro", 3000, 28, 48, 9),
+)}
+
+MAX_ROD_LEVEL = 8
+
+
+def upgrade_cost(current_level: int) -> int:
+    return 180 * current_level
+
+
+@dataclass(frozen=True)
+class Boat:
+    key: str
+    name: str
+    price: int
+    control: int
+    reward: float
+    level: int
+
+
+BOATS = {b.key: b for b in (
+    Boat("shore", "Береговая ловля", 0, 0, 0.0, 1),
+    Boat("boat", "Лодка «Ветер»", 1200, 8, .08, 4),
+    Boat("speedboat", "Катер «Шторм»", 3500, 15, .16, 7),
+    Boat("legend", "Лодка «Таймень»", 7000, 24, .28, 10),
+)}
+
+
+# Наживка: цена за 1 шт. и кому она нравится (множитель веса в розыгрыше)
+PREDATORS = ("pike", "zander", "perch", "asp", "catfish", "taimen", "trout", "chub", "burbo")
+PEACEFUL = ("crucian", "roach", "carp", "tench", "bream")
+
+
+@dataclass(frozen=True)
+class Bait:
+    key: str
+    name: str
+    price: int
+    likes: tuple[str, ...]
+    boost: float = 2.5
+    free: bool = False
+
+
+BAITS = {b.key: b for b in (
+    Bait("worm", "Червь", 0, PEACEFUL + ("perch", "burbo"), 1.5, free=True),
+    Bait("maggots", "Опарыш", 18, PEACEFUL),
+    Bait("corn", "Кукуруза", 14, ("carp", "crucian", "bream", "tench")),
+    Bait("bread", "Хлеб", 10, ("crucian", "roach", "carp")),
+    Bait("livebait", "Живец", 45, ("pike", "zander", "catfish", "burbo", "taimen")),
+    Bait("fly", "Мушка", 50, ("trout", "chub", "asp")),
+    Bait("wobbler", "Воблер", 65, ("pike", "asp", "zander", "taimen")),
+    Bait("spinner", "Блесна", 60, ("perch", "pike", "asp", "trout")),
+    Bait("softbait", "Силикон", 55, ("zander", "perch", "pike", "catfish")),
+)}
+
+BAIT_PACK = 5
+
+
+# ---------------------------------------------------------
+# Розыгрыш
+# ---------------------------------------------------------
+
+def fish_weights(location: Location, rod: Rod, bait: Bait) -> dict[str, float]:
+    """
+    Шанс каждой рыбы в водоёме. Редкость задаёт основу, наживка
+    усиливает «своих» рыб, мощная удочка чуть поднимает крупных.
+    """
+    weights = {}
+
+    for key in location.fish:
+        fish = FISH[key]
+        weight = RARITY_WEIGHT[fish.rarity]
+
+        if key in bait.likes:
+            weight *= bait.boost
+
+        # Сильная удочка помогает с крупной рыбой, но не делает её частой
+        if fish.rarity in RARE_RANKS:
+            weight *= 1 + rod.power / 200
+
+        weights[key] = weight
+
+    return weights
+
+
+def chances(location: Location, rod: Rod, bait: Bait) -> dict[str, float]:
+    """Проценты — для панели и для тестов."""
+    weights = fish_weights(location, rod, bait)
+    total = sum(weights.values()) or 1
+    return {key: round(value * 100 / total, 2) for key, value in weights.items()}
+
+
+def choose_fish(location: Location, rod: Rod, bait: Bait, rng=random) -> Fish:
+    weights = fish_weights(location, rod, bait)
+    keys = list(weights)
+    return FISH[rng.choices(keys, weights=[weights[k] for k in keys], k=1)[0]]
+
+
+def roll_catch(fish: Fish, rng=random, trophy_chance: float = 0.07) -> tuple[float, bool, int]:
+    """Вес, трофей ли, длина в сантиметрах."""
+    weight = fish.min_w + rng.random() * (fish.max_w - fish.min_w)
+    trophy = fish.trophy and rng.random() < trophy_chance
+
+    if trophy:
+        weight = min(fish.max_w, weight * 1.2)
+
+    weight = round(weight, 2)
+    length = round(22 + weight * 8 + rng.random() * 14)
+
+    return weight, trophy, length
+
+
+def catch_reward(fish: Fish, trophy: bool, location_index: int, boat: Boat, reward_percent: int) -> int:
+    """
+    Алмазы за улов. Базовые цены рассчитаны на отдельную экономику
+    игры (до 3000 за рыбу), поэтому владелец масштабирует их процентом.
+    """
+    base = fish.value * (2.4 if trophy else 1) * (1 + location_index * .08) * (1 + boat.reward)
+    return max(0, round(base * reward_percent / 100))
+
+
+def catch_xp(fish: Fish, trophy: bool, xp_percent: int) -> int:
+    base = fish.xp * (1.7 if trophy else 1)
+    return max(0, round(base * xp_percent / 100))
+
+
+def streak_bonus(streak: int, reward_percent: int) -> int:
+    """Бонус за серию дней: растёт до недели, дальше не больше."""
+    return round(min(streak, 7) * 150 * reward_percent / 100)
+
+
+# ---------------------------------------------------------
+# Задания дня и достижения
+# ---------------------------------------------------------
+
+QUESTS = (
+    {"id": "q_catch", "title": "Первый улов", "desc": "Поймай 5 рыб", "target": 5, "reward": 180, "type": "catch"},
+    {"id": "q_weight", "title": "Тяжёлый трофей", "desc": "Поймай рыбу тяжелее 4 кг", "target": 1, "reward": 260, "type": "weight"},
+    {"id": "q_night", "title": "Ночная охота", "desc": "Поймай 2 рыбы ночью", "target": 2, "reward": 320, "type": "night"},
+    {"id": "q_river", "title": "Речная экспедиция", "desc": "Поймай 3 рыбы на Большой реке", "target": 3, "reward": 300, "type": "river"},
+    {"id": "q_rare", "title": "Редкая добыча", "desc": "Поймай 2 редкие или ещё реже", "target": 2, "reward": 420, "type": "rare"},
+)
+
+QUESTS_PER_DAY = 3
+
+
+def daily_quests(day: str, user_id: int) -> list[dict]:
+    """Три задания на день — у каждого игрока свои, но стабильные в течение дня."""
+    rng = random.Random(f"{day}:{user_id}")
+    chosen = rng.sample(QUESTS, QUESTS_PER_DAY)
+    return [{**q, "progress": 0, "done": False} for q in chosen]
+
+
+def quest_step(quest: dict, fish: Fish, weight: float, night: bool, location: Location) -> int:
+    """На сколько продвинулось задание этим уловом."""
+    kind = quest["type"]
+
+    if kind == "catch":
+        return 1
+    if kind == "weight":
+        return 1 if weight >= 4 else 0
+    if kind == "night":
+        return 1 if night else 0
+    if kind == "river":
+        return 1 if location.key == "river" else 0
+    if kind == "rare":
+        return 1 if fish.rarity in RARE_RANKS else 0
+    return 0
+
+
+ACHIEVEMENTS = (
+    {"id": "first", "icon": "🐟", "name": "Первая рыба", "desc": "Поймать первую рыбу", "reward": 100},
+    {"id": "ten", "icon": "🎣", "name": "Рыбак", "desc": "Поймать 10 рыб", "reward": 250},
+    {"id": "collector", "icon": "🗃️", "name": "Коллекционер", "desc": "Открыть 10 видов", "reward": 500},
+    {"id": "big", "icon": "⚖️", "name": "Тяжеловес", "desc": "Поймать рыбу 10+ кг", "reward": 700},
+    {"id": "legend", "icon": "👑", "name": "Легенда", "desc": "Поймать легендарную рыбу", "reward": 1000},
+    {"id": "night", "icon": "🌙", "name": "Ночной охотник", "desc": "Поймать рыбу ночью", "reward": 400},
+)
+
+
+def unlocked_achievements(stats: dict, already: list[str]) -> list[dict]:
+    checks = {
+        "first": stats.get("caught", 0) >= 1,
+        "ten": stats.get("caught", 0) >= 10,
+        "collector": len(stats.get("species", {})) >= 10,
+        "big": stats.get("best", 0) >= 10,
+        "legend": stats.get("legendary", 0) >= 1,
+        "night": stats.get("night", 0) >= 1,
+    }
+    return [a for a in ACHIEVEMENTS if checks.get(a["id"]) and a["id"] not in already]
+
+
+# ---------------------------------------------------------
+# Сундук рыбака
+# ---------------------------------------------------------
+
+CHEST_CHANCE = 0.12
+
+
+def open_chest(rng, reward_percent: int, xp_percent: int) -> dict:
+    kind = rng.choice(("coins", "bait", "xp"))
+
+    if kind == "coins":
+        return {"kind": "coins", "amount": round((200 + rng.randint(0, 600)) * reward_percent / 100)}
+
+    if kind == "bait":
+        bait = rng.choice(("maggots", "corn", "bread", "livebait"))
+        return {"kind": "bait", "bait": bait, "amount": 2 + rng.randint(0, 4)}
+
+    return {"kind": "xp", "amount": round((80 + rng.randint(0, 120)) * xp_percent / 100)}
+
+
+def location_by_key(key: str) -> Location | None:
+    return next((loc for loc in LOCATIONS if loc.key == key), None)
+
+
+def location_index(key: str) -> int:
+    return next((i for i, loc in enumerate(LOCATIONS) if loc.key == key), 0)
