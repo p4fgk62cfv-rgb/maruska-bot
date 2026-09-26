@@ -9,9 +9,6 @@ Endpoints:
     GET  /draw        — страница холста
     GET  /api/round   — слово для ведущего (по подписи Telegram)
     POST /api/draw    — приём рисунка и отправка его в чат
-
-Доверять данным из браузера нельзя, поэтому каждый запрос несёт
-initData от Telegram, а сервер проверяет его подпись ключом бота.
 """
 
 import base64
@@ -42,9 +39,7 @@ logger = logging.getLogger("maruska.webapp")
 
 STATIC_DIR = Path(__file__).parent / "static"
 
-# Подпись Telegram живёт сутки — дольше не принимаем
 MAX_AUTH_AGE = 24 * 60 * 60
-
 MAX_IMAGE_BYTES = 6 * 1024 * 1024
 
 
@@ -57,10 +52,6 @@ def _secret_key(bot_token: str) -> bytes:
 
 
 def verify_init_data(init_data: str, bot_token: str) -> dict | None:
-    """
-    Проверяет подпись initData и возвращает разобранные поля.
-    None — подпись не сошлась или данные протухли.
-    """
     if not init_data:
         return None
 
@@ -104,9 +95,6 @@ def verify_init_data(init_data: str, bot_token: str) -> dict | None:
 
 
 async def _authorize(request: web.Request, init_data: str):
-    """
-    Возвращает (раунд, пользователь) или поднимает HTTP-ошибку.
-    """
     parsed = verify_init_data(init_data, request.app["bot_token"])
 
     if parsed is None:
@@ -134,29 +122,20 @@ async def _authorize(request: web.Request, init_data: str):
     return item, user
 
 
-# ---------------------------------------------------------
-# Хендлеры
-# ---------------------------------------------------------
-
 async def health(request: web.Request):
     return web.json_response({"ok": True, "service": "maruska"})
 
 
-# Telegram кэширует страницы мини-приложений и может неделями
-# показывать старую версию после деплоя. Запрещаем кэш явно.
 NO_CACHE = {
     "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
     "Pragma": "no-cache",
     "Expires": "0",
 }
 
+ASSET_TYPES = {".css": "text/css", ".js": "application/javascript"}
+
 
 def _page_with_version(page) -> web.Response:
-    """
-    Отдаёт страницу, вшивая в неё текущую версию бота. Так по шапке
-    панели сразу видно, какая версия реально открылась: если там
-    старый номер — открыт устаревший файл.
-    """
     import changelog
 
     html = page.read_text(encoding="utf-8")
@@ -170,29 +149,43 @@ def _page_with_version(page) -> web.Response:
     )
 
 
-ASSET_TYPES = {".css": "text/css", ".js": "application/javascript"}
-
-
 async def fishing_asset(request: web.Request):
+    """
+    Static assets for Fishing.
+
+    /fishing-assets/app.js
+    /fishing-assets/styles.css
+        -> webapp/static/fishing/
+
+    /fishing-assets/<asset>
+        -> webapp/static/fishing/assets/fishing/
+    """
     name = request.match_info["path"]
+
     if not name or ".." in Path(name).parts:
         raise web.HTTPNotFound()
-    root = STATIC_DIR / "fishing" / "assets" / "fishing"
+
+    # The HTML loads these two files directly from /fishing-assets/.
+    # Fish/location/bait/gear images live under /fishing-assets/<folder>/.
+    if name in {"app.js", "styles.css"}:
+        root = STATIC_DIR / "fishing"
+    else:
+        root = STATIC_DIR / "fishing" / "assets" / "fishing"
+
     path = root / name
+
     try:
         path.resolve().relative_to(root.resolve())
     except ValueError:
         raise web.HTTPNotFound()
+
     if not path.is_file():
         raise web.HTTPNotFound()
+
     return web.FileResponse(path, headers=NO_CACHE)
 
 
 async def admin_asset(request: web.Request):
-    """
-    Модули админки. Отдаются только файлы из webapp/static/admin
-    с известным расширением — никаких путей наружу.
-    """
     name = request.match_info["name"]
 
     if "/" in name or ".." in name:
@@ -247,17 +240,11 @@ async def api_round(request: web.Request):
         "word": item.word or "",
         "level": LEVEL_NAMES.get(item.level or "", ""),
         "status": item.status,
-        # Если рисунок уже отправляли, холст подгрузит его
-        # и можно будет дорисовать поверх.
         "has_drawing": item.id in drawings,
     })
 
 
 async def api_drawing(request: web.Request):
-    """
-    Отдаёт последний рисунок раунда, чтобы «Дорисовать»
-    открывало холст не пустым.
-    """
     init_data = request.headers.get("X-Init-Data", "")
     item, _user = await _authorize(request, init_data)
 
@@ -270,13 +257,6 @@ async def api_drawing(request: web.Request):
 
 
 async def api_draw(request: web.Request):
-    """
-    Приём рисунка.
-
-    preview=true — промежуточный кадр: сообщение в чате
-    обновляется на месте, чтобы зрители видели, как рисунок
-    рождается. Без него — финальная отправка.
-    """
     try:
         payload = await request.json()
     except Exception:
@@ -305,7 +285,6 @@ async def api_draw(request: web.Request):
 
     name = user.get("first_name") or user.get("username") or "Ведущий"
 
-    # Запоминаем рисунок, чтобы работала кнопка «Дорисовать»
     request.app["drawings"][item.id] = content
 
     preview = bool(payload.get("preview"))
@@ -326,7 +305,6 @@ async def api_draw(request: web.Request):
 
     try:
         if message_id:
-            # Обновляем уже отправленный кадр на месте
             await bot.edit_message_media(
                 chat_id=item.chat_id,
                 message_id=message_id,
@@ -347,7 +325,6 @@ async def api_draw(request: web.Request):
     except Exception as error:
         logger.error("DRAW SEND: %s %s", type(error).__name__, error)
 
-        # Кадр мог устареть — пробуем отправить заново
         if message_id:
             live.pop(item.id, None)
             try:
@@ -364,10 +341,7 @@ async def api_draw(request: web.Request):
             raise web.HTTPBadGateway(text="send failed")
 
     if not preview:
-        # Рисунок закончен: следующий кадр начнёт новое сообщение
         live.pop(item.id, None)
-
-        # И вешаем табло с ячейками под рисунком
         await ensure_hint_message(bot, state.get(item.chat_id))
 
     await update_round(item.id, status="playing")
@@ -388,12 +362,7 @@ def create_app(bot, bot_token: str) -> web.Application:
     app["bot"] = bot
     app["bot_token"] = bot_token
     app["started_at"] = _time.time()
-
-    # Последние рисунки раундов: нужны только для «Дорисовать»,
-    # переживать перезапуск им незачем.
     app["drawings"] = {}
-
-    # id сообщения с текущим кадром: пока рисуют, оно обновляется
     app["live_messages"] = {}
 
     app.router.add_get("/", health)
@@ -408,7 +377,6 @@ def create_app(bot, bot_token: str) -> web.Application:
     setup_v2_routes(app)
     setup_fishing_routes(app)
 
-    # Модули новой админки: стили и скрипты отдельными файлами
     app.router.add_get("/admin-assets/{name}", admin_asset)
     app.router.add_get("/fishing-assets/{path:.*}", fishing_asset)
 
@@ -430,10 +398,6 @@ async def start_web_server(bot, bot_token: str, port: int):
 
 
 def public_url() -> str:
-    """
-    Публичный адрес сервиса. Railway отдаёт его в RAILWAY_PUBLIC_DOMAIN,
-    но его можно задать и вручную через PUBLIC_URL.
-    """
     explicit = os.getenv("PUBLIC_URL", "").strip().rstrip("/")
 
     if explicit:
