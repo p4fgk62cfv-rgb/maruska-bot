@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     UniqueConstraint,
     Boolean,
+    Float,
 )
 
 from sqlalchemy.orm import Mapped, mapped_column
@@ -1196,3 +1197,119 @@ class DailyPick(Base):
     user2: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
     phrase: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+# Рыбалка. Старые таблицы fishing_players / fishing_catches от первой
+# интеграции не трогаем: там алмазы, которые записывал сам клиент.
+
+class FishingPlayer(Base):
+    """Профиль рыбака. Алмазы и опыт — общие с Марой (user_profiles), здесь только снаряжение и улов."""
+
+    __tablename__ = "fishing_profiles"
+
+    telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+
+    location: Mapped[str] = mapped_column(String(20), default="quiet")
+
+    rod: Mapped[str] = mapped_column(String(20), default="starter")
+
+    rod_levels: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    owned_rods: Mapped[list] = mapped_column(JSON, default=list)
+
+    boat: Mapped[str] = mapped_column(String(20), default="shore")
+
+    owned_boats: Mapped[list] = mapped_column(JSON, default=list)
+
+    bait: Mapped[str] = mapped_column(String(20), default="worm")
+
+    bait_stock: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    caught: Mapped[int] = mapped_column(default=0)
+
+    best: Mapped[float] = mapped_column(Float, default=0.0)
+
+    legendary: Mapped[int] = mapped_column(default=0)
+
+    night: Mapped[int] = mapped_column(default=0)
+
+    species: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    lifetime_weight: Mapped[float] = mapped_column(Float, default=0.0)
+
+    streak: Mapped[int] = mapped_column(default=0)
+
+    last_day: Mapped[str] = mapped_column(String(10), default="")
+
+    quests_day: Mapped[str] = mapped_column(String(10), default="")
+
+    quests: Mapped[list] = mapped_column(JSON, default=list)
+
+    chests: Mapped[int] = mapped_column(default=0)
+
+    opened_chests: Mapped[int] = mapped_column(default=0)
+
+    achievements: Mapped[list] = mapped_column(JSON, default=list)
+
+    last_cast_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class FishingCast(Base):
+    """
+    Заброс. Рыбу и вес выбирает сервер в момент заброса — телефон
+    игрока их не придумывает. resolved: заброс уже засчитан.
+    """
+
+    __tablename__ = "fishing_casts"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+
+    telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+    fish_key: Mapped[str] = mapped_column(String(20))
+
+    weight: Mapped[float] = mapped_column(Float)
+
+    length: Mapped[int] = mapped_column(default=0)
+
+    trophy: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    location: Mapped[str] = mapped_column(String(20))
+
+    bait: Mapped[str] = mapped_column(String(20))
+
+    bite_delay: Mapped[float] = mapped_column(Float, default=1.0)
+
+    resolved: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class FishingCatch(Base):
+    """Засчитанный улов — для рекордов, топов и статистики."""
+
+    __tablename__ = "fishing_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+
+    fish_key: Mapped[str] = mapped_column(String(20), index=True)
+
+    weight: Mapped[float] = mapped_column(Float)
+
+    trophy: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    reward: Mapped[int] = mapped_column(default=0)
+
+    xp: Mapped[int] = mapped_column(default=0)
+
+    location: Mapped[str] = mapped_column(String(20))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
