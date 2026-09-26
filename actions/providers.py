@@ -79,17 +79,27 @@ def matches_tags(
     tags: str,
     required: tuple[str, ...],
     excluded: tuple[str, ...] = (),
+    required_groups: tuple[tuple[str, ...], ...] = (),
 ) -> bool:
-    """
-    Картинка подходит, если хотя бы один обязательный фрагмент
-    есть в её тегах. Теги приходят от источника; привязка идёт
-    к самому действию, а не к первому слову запроса — иначе по
-    "couple kissing" засчитывается свадебный пейзаж без поцелуя.
+    """Жёсткая проверка семантических тегов Pixabay.
+
+    ``required`` сохраняет старую совместимость: достаточно одного
+    совпадения. ``required_groups`` — новый строгий режим: для каждой
+    группы должен совпасть хотя бы один термин. Это позволяет требовать,
+    например, одновременно *hug* И *couple/friends/people*, а не принимать
+    любую фотографию, где встречается слово ``people``.
     """
     haystack = tags.lower()
 
     if any(fragment.lower() in haystack for fragment in excluded):
         return False
+
+    if required_groups:
+        return all(
+            any(fragment.lower() in haystack for fragment in group)
+            for group in required_groups
+            if group
+        )
 
     if not required:
         return True
@@ -150,7 +160,12 @@ async def search_pixabay(
         if not photo_id or not (large or web):
             continue
 
-        if not matches_tags(tags, required, excluded):
+        required_groups = tuple(
+            tuple(group) for group in (filters.get("required_groups") or ())
+            if group
+        )
+
+        if not matches_tags(tags, required, excluded, required_groups):
             continue
 
         photos.append(
