@@ -165,6 +165,8 @@ class StatsMiddleware(BaseMiddleware):
             # В фоне: запись в базу не должна тормозить ответ
             asyncio.create_task(_count(event.chat.id))
 
+            asyncio.create_task(_bump_user(event.chat.id, event.from_user.id))
+
             if _first_today(event.chat.id, event.from_user.id):
                 asyncio.create_task(_bump(event.chat.id, "active_users"))
 
@@ -196,6 +198,16 @@ def _first_today(chat_id: int, user_id: int) -> bool:
     _seen_today[chat_id] = (day, users)
 
     return True
+
+
+async def _bump_user(chat_id: int, user_id: int) -> None:
+    """Сообщения человека за сегодня — для «топа болтунов». День — местный."""
+    try:
+        from database.repository import bump_user_daily
+
+        await bump_user_daily(chat_id, store.local_now(chat_id).strftime("%Y-%m-%d"), user_id)
+    except Exception as error:
+        logger.warning("STATS USER: %s", error)
 
 
 async def _bump(chat_id: int, field: str) -> None:
