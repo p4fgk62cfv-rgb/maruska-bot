@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1800" preserveAspectRatio="xMidYMid slice">
+<defs>
+ <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#243b55"/><stop offset="1" stop-color="#d99b67"/></linearGradient>
+ <linearGradient id="water" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#315d66"/><stop offset="1" stop-color="#102a38"/></linearGradient>
+ <linearGradient id="mount" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#334e4f"/><stop offset="1" stop-color="#1d3036"/></linearGradient>
+ <linearGradient id="fog" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#d7eee7" stop-opacity=".05"/><stop offset=".5" stop-color="#d7eee7" stop-opacity=".30"/><stop offset="1" stop-color="#d7eee7" stop-opacity=".05"/></linearGradient>
+ <radialGradient id="sun"><stop stop-color="#ffd38a" stop-opacity=".9"/><stop offset=".35" stop-color="#ffd38a" stop-opacity=".28"/><stop offset="1" stop-color="#ffd38a" stop-opacity="0"/></radialGradient>
+ <filter id="blur"><feGaussianBlur stdDeviation="28"/></filter>
+ <filter id="soft"><feGaussianBlur stdDeviation="7"/></filter>
+</defs>
+<rect width="1440" height="1800" fill="url(#sky)"/>
+<circle cx="1110" cy="330" r="270" fill="url(#sun)"/>
+<circle cx="1110" cy="330" r="48" fill="#ffd38a" opacity=".88"/>
+<path d="M0 780 L170 650 310 740 480 560 650 720 820 500 1000 690 1180 540 1440 720 V980 H0Z" fill="url(#mount)"/>
+<path d="M0 820 L180 710 340 800 510 650 690 790 860 620 1040 800 1210 650 1440 790 V1010 H0Z" fill="#1d3036" opacity=".72"/>
+<g fill="#182b2e">
+ <path d="M80 900 l55-150 55 150z"/><path d="M165 920 l65-190 65 190z"/><path d="M280 910 l50-145 50 145z"/>
+ <path d="M380 930 l70-210 70 210z"/><path d="M500 920 l52-165 52 165z"/><path d="M610 930 l68-200 68 200z"/>
+ <path d="M730 920 l55-170 55 170z"/><path d="M845 930 l70-220 70 220z"/><path d="M980 915 l54-165 54 165z"/>
+ <path d="M1090 930 l70-210 70 210z"/><path d="M1220 920 l55-170 55 170z"/><path d="M1320 930 l60-185 60 185z"/>
+</g>
+<rect y="900" width="1440" height="900" fill="url(#water)"/>
+<g opacity=".35" stroke="#d7eee7" stroke-width="8">
+ <path d="M0 1030 Q240 990 480 1030 T960 1030 T1440 1030"/><path d="M0 1160 Q220 1120 440 1160 T880 1160 T1320 1160 T1440 1160"/>
+ <path d="M0 1300 Q260 1260 520 1300 T1040 1300 T1440 1300"/>
+</g>
+<g opacity=".22" stroke="#fff" stroke-width="3">
+ <path d="M0 1080 Q180 1050 360 1080 T720 1080 T1080 1080 T1440 1080"/>
+ <path d="M0 1230 Q180 1200 360 1230 T720 1230 T1080 1230 T1440 1230"/>
+ <path d="M0 1410 Q180 1380 360 1410 T720 1410 T1080 1410 T1440 1410"/>
+</g>
+<ellipse cx="720" cy="980" rx="520" ry="75" fill="url(#fog)" filter="url(#soft)"/>
+<g fill="#392d26" opacity=".96">
+ <path d="M0 1580 L640 1480 L720 1515 L250 1680 L0 1720Z"/>
+ <rect x="180" y="1500" width="46" height="280" rx="8" transform="rotate(8 180 1500)"/>
+ <rect x="1010" y="1510" width="46" height="290" rx="8" transform="rotate(-7 1010 1510)"/>
+</g>
+<g opacity=".13" fill="#fff"><circle cx="260" cy="360" r="3"/><circle cx="410" cy="280" r="2"/><circle cx="570" cy="410" r="3"/><circle cx="820" cy="300" r="2"/><circle cx="1280" cy="420" r="3"/></g>
+</svg>
