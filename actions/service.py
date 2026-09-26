@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from actions.catalog import ACTIONS, Action, excluded_tags, required_tags
 from actions.providers import (
+    TAG_MATCHER_VERSION,
     available_providers,
     download_photo,
     search_photos,
@@ -672,6 +673,7 @@ def rules_version(action: Action, pair_key: str = "neutral") -> str:
         tuple(excluded_tags(action)),
         tuple(PIXABAY_CATEGORY_EXCLUDE.get(action.category, ())),
         repr(sorted(pixabay_override(action.key).items())),
+        f"matcher:{TAG_MATCHER_VERSION}",
     ))
     digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()
     return digest[:10]

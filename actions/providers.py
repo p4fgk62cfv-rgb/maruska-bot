@@ -17,6 +17,8 @@ import os
 from dataclasses import dataclass
 from urllib.parse import urlencode
 
+import re
+
 import httpx
 
 
@@ -75,6 +77,27 @@ def _with_utm(url: str) -> str:
 # Pixabay
 # ---------------------------------------------------------
 
+# Версия правил сравнения тегов. Входит в отпечаток профиля: когда
+# правила меняются, бот собирает коллекции заново, а не крутит старые
+# картинки, отобранные по прежним (неправильным) правилам.
+TAG_MATCHER_VERSION = 2
+
+
+def tag_has_word(haystack: str, term: str) -> bool:
+    """
+    Слово или фраза целиком, с допуском множественного числа:
+    «cake» находит «cake», «cakes», «birthday cake»,
+    но НЕ «pancake», «cupcake», «cheesecake».
+    """
+    term = term.lower().strip()
+
+    if not term:
+        return False
+
+    pattern = r"(?<![a-z])" + re.escape(term) + r"(?:s|es)?(?![a-z])"
+    return re.search(pattern, haystack) is not None
+
+
 def matches_tags(
     tags: str,
     required: tuple[str, ...],
@@ -94,9 +117,11 @@ def matches_tags(
     if any(fragment.lower() in haystack for fragment in excluded):
         return False
 
+    # Обязательные слова — только целиком. Раньше искался кусок текста,
+    # и «cake» находился внутри «pancake»: торт показывал панкейки.
     if required_groups:
         return all(
-            any(fragment.lower() in haystack for fragment in group)
+            any(tag_has_word(haystack, fragment) for fragment in group)
             for group in required_groups
             if group
         )
@@ -104,7 +129,7 @@ def matches_tags(
     if not required:
         return True
 
-    return any(fragment.lower() in haystack for fragment in required)
+    return any(tag_has_word(haystack, fragment) for fragment in required)
 
 
 async def search_pixabay(
