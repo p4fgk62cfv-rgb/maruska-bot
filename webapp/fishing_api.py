@@ -1,85 +1,236 @@
-"""Fishing Mini App API, served by Maruska's existing aiohttp server."""
-import json, secrets
+"""
+API мини-приложения «Рыбалка» на сервере Мары.
+
+Сервер главный: рыбу, вес, трофей, алмазы и опыт решает он.
+Телефон игрока просит «заброс» и сообщает, вытащил ли рыбу в
+мини-игре. Записать себе состояние, алмазы или улов клиент не может.
+
+Игрок:
+  GET  /api/fishing/profile      — снаряжение, улов, задания; алмазы и уровень — общие с Марой
+  POST /api/fishing/cast         — заброс (сервер выбирает рыбу)
+  POST /api/fishing/land         — {cast_id, success} — итог вываживания
+  POST /api/fishing/select       — водоём, удочка, лодка, наживка
+  POST /api/fishing/buy          — {kind: rod|upgrade|boat|bait, key}
+  POST /api/fishing/chest        — открыть сундук рыбака
+  GET  /api/fishing/leaderboard  — топ (группы, если игра открыта из группы)
+
+Админка:
+  GET  /api/admin/fishing        — статистика, рекорды, шансы, настройки
+  POST /api/admin/fishing        — настройки (только владелец)
+
+Группа: игру открывают по ссылке t.me/<бот>/fishing?startapp=g<id группы>.
+Telegram подписывает start_param вместе с initData, а сервер ещё и
+проверяет, что игрок состоит в этой группе, — только тогда крупный
+улов объявляется в чате.
+"""
+
+import logging
+import time
+
 from aiohttp import web
-from sqlalchemy import text
-from database.database import session_scope
-from webapp.telegram_auth import verify_init_data
 
-DEFAULT_STATE = {
-    'diamonds': 1250, 'xp': 0, 'level': 1, 'caught': 0, 'best': 0,
-    'inventory': {}, 'legendary': 0, 'nightCatches': 0, 'unlockedAchievements': [],
-    'baitStock': {'worm':12,'maggots':5,'corn':5,'bread':5,'livebait':3,'fly':3,'wobbler':2,'spinner':2,'softbait':2},
-    'boat':'shore', 'ownedBoats':['shore'], 'streak':0, 'lastFishDay':'', 'questsDay':'',
-    'quests':[], 'chests':0, 'openedChests':0, 'lifetimeWeight':0,
-}
-FISH = {
-    'pike':(.8,8.8,320),'perch':(.15,2.1,90),'crucian':(.12,1.8,70),'roach':(.08,1.3,55),
-    'carp':(1.5,12,620),'tench':(.3,3.4,180),'bream':(.4,4.8,210),'zander':(.7,6.2,390),
-    'asp':(.8,5.6,360),'catfish':(3,25,1250),'chub':(.4,3.5,200),'burbo':(.6,5.8,410),
-    'trout':(.5,6,700),'taimen':(2,18,1600),'beluga':(8,35,3000),
-}
+import audit
 
-def _auth(request):
-    parsed = verify_init_data(request.headers.get('X-Telegram-Init-Data',''), request.app['bot_token'])
+
+logger = logging.getLogger("maruska.fishing.api")
+
+# Не чаще одного запроса в 0.3 с от игрока — защита от автокликеров
+_last_hit: dict[int, float] = {}
+
+
+def _json_error(text: str, status: int = 400) -> web.Response:
+    return web.json_response({"ok": False, "error": text}, status=status)
+
+
+def parse_start_param(value: str | None) -> int | None:
+    """«g1001234567890» → -1001234567890. Любой другой формат — None."""
+    if not value or not value.startswith("g") or not value[1:].isdigit():
+        return None
+    return -int(value[1:])
+
+
+def _player(request) -> tuple[int, str, int | None]:
+    """(id, имя, группа из start_param) по подписанным данным Telegram."""
+    from webapp.server import verify_init_data
+
+    parsed = verify_init_data(request.headers.get("X-Telegram-Init-Data", ""), request.app["bot_token"])
+
     if parsed is None:
-        raise web.HTTPUnauthorized(text='bad Telegram initData')
-    uid = (parsed.get('user') or {}).get('id')
+        raise web.HTTPUnauthorized(text="bad Telegram initData")
+
+    user = parsed.get("user") or {}
+    uid = user.get("id")
+
     if not uid:
-        raise web.HTTPUnauthorized(text='no Telegram user')
-    return int(uid)
+        raise web.HTTPUnauthorized(text="no Telegram user")
 
-async def profile(request):
-    uid=_auth(request)
-    async with session_scope() as session:
-        row=(await session.execute(text('SELECT state_json FROM fishing_players WHERE user_id=:uid'),{'uid':uid})).first()
-        if row is None:
-            state=dict(DEFAULT_STATE)
-            await session.execute(text("INSERT INTO fishing_players(user_id,state_json) VALUES(:uid,CAST(:state AS jsonb))"),{'uid':uid,'state':json.dumps(state)})
-            await session.commit()
-        else:
-            state=dict(row[0] or {})
-    return web.json_response(state)
+    name = " ".join(filter(None, [user.get("first_name"), user.get("last_name")])) or user.get("username") or "Рыбак"
 
-async def save_profile(request):
-    uid=_auth(request)
-    try: state=await request.json()
-    except Exception: raise web.HTTPBadRequest(text='bad json')
-    if not isinstance(state,dict): raise web.HTTPBadRequest(text='state must be object')
-    async with session_scope() as session:
-        await session.execute(text('''INSERT INTO fishing_players(user_id,state_json) VALUES(:uid,CAST(:state AS jsonb))
-            ON CONFLICT(user_id) DO UPDATE SET state_json=EXCLUDED.state_json,updated_at=CURRENT_TIMESTAMP'''),{'uid':uid,'state':json.dumps(state)})
-        await session.commit()
-    return web.json_response({'ok':True})
+    return int(uid), name, parse_start_param(parsed.get("start_param"))
 
-async def record_catch(request):
-    uid=_auth(request)
-    try: data=await request.json()
-    except Exception: raise web.HTTPBadRequest(text='bad json')
-    key=str(data.get('fish_key',''))
-    try: weight=float(data.get('weight'))
-    except (TypeError,ValueError): raise web.HTTPBadRequest(text='bad weight')
-    if key not in FISH: raise web.HTTPBadRequest(text='unknown fish')
-    lo,hi,base=FISH[key]
-    if not lo<=weight<=hi: raise web.HTTPBadRequest(text='weight outside fish range')
-    rid=str(data.get('request_id') or secrets.token_hex(16))[:128]
-    reward=max(1,round(base*(0.65+0.35*(weight-lo)/max(hi-lo,0.001))))
-    async with session_scope() as session:
-        old=(await session.execute(text('SELECT id,reward FROM fishing_catches WHERE request_id=:rid'),{'rid':rid})).first()
-        if old: return web.json_response({'ok':True,'idempotent':True,'reward':int(old[1]),'id':int(old[0])})
-        row=(await session.execute(text('''INSERT INTO fishing_catches(user_id,fish_key,weight,reward,request_id)
-            VALUES(:uid,:key,:weight,:reward,:rid) RETURNING id'''),{'uid':uid,'key':key,'weight':weight,'reward':reward,'rid':rid})).first()
-        await session.commit()
-    return web.json_response({'ok':True,'idempotent':False,'reward':reward,'id':int(row[0])})
 
-async def leaderboard(request):
-    _auth(request)
+def _throttle(uid: int) -> None:
+    now = time.monotonic()
+    if now - _last_hit.get(uid, 0) < 0.3:
+        raise web.HTTPTooManyRequests(text="slow down")
+    _last_hit[uid] = now
+
+
+async def _group_for(uid: int, chat_id: int | None) -> int | None:
+    """Группа засчитывается, только если игрок в ней состоит и рыбалка там включена."""
+    if chat_id is None:
+        return None
+
+    from settings.store import is_enabled
+    from sqlalchemy import select
+
+    from database.database import session_scope
+    from database.models import GroupMember
+
+    if not is_enabled(chat_id, "fishing"):
+        return None
+
     async with session_scope() as session:
-        rows=(await session.execute(text('''SELECT user_id,COUNT(*) AS catches,MAX(weight) AS best_weight
-            FROM fishing_catches GROUP BY user_id ORDER BY best_weight DESC LIMIT 50'''))).mappings().all()
-    return web.json_response([dict(r) for r in rows])
+        member = (await session.execute(
+            select(GroupMember.id).where(GroupMember.chat_id == chat_id, GroupMember.telegram_id == uid,
+                                         GroupMember.left_at.is_(None))
+        )).scalar_one_or_none()
+
+    return chat_id if member else None
+
+
+# ---------------------------------------------------------
+# Игрок
+# ---------------------------------------------------------
+
+async def api_profile(request):
+    from fishing import service as fs
+
+    uid, _name, chat = _player(request)
+    data = await fs.profile(uid)
+    data["group"] = await _group_for(uid, chat)
+    return web.json_response(data)
+
+
+async def api_cast(request):
+    from fishing import service as fs
+
+    uid, _name, chat = _player(request)
+    _throttle(uid)
+
+    try:
+        return web.json_response({"ok": True, **await fs.cast(uid, await _group_for(uid, chat))})
+    except fs.FishingError as error:
+        return _json_error(str(error))
+
+
+async def api_land(request):
+    from fishing import service as fs
+
+    uid, name, _chat = _player(request)
+    body = await request.json()
+
+    try:
+        result = await fs.land(uid, str(body.get("cast_id") or ""), bool(body.get("success")), display_name=name)
+    except fs.FishingError as error:
+        return _json_error(str(error))
+
+    # Крупный улов — в группу, из которой открыли игру
+    text = fs.announcement(result, name)
+
+    if text:
+        try:
+            await request.app["bot"].send_message(result["chat_id"], text)
+        except Exception as error:
+            logger.warning("FISHING ANNOUNCE: %s", error)
+
+    result["profile"] = await fs.profile(uid)
+    return web.json_response({"ok": True, **result})
+
+
+async def api_select(request):
+    from fishing import service as fs
+
+    uid, _name, _chat = _player(request)
+    body = await request.json()
+
+    try:
+        data = await fs.choose_gear(uid, location=body.get("location"), rod=body.get("rod"),
+                                    boat=body.get("boat"), bait=body.get("bait"))
+    except fs.FishingError as error:
+        return _json_error(str(error))
+
+    return web.json_response({"ok": True, "profile": data})
+
+
+async def api_buy(request):
+    from fishing import service as fs
+
+    uid, _name, _chat = _player(request)
+    _throttle(uid)
+    body = await request.json()
+
+    try:
+        data = await fs.buy(uid, str(body.get("kind") or ""), str(body.get("key") or ""))
+    except fs.FishingError as error:
+        return _json_error(str(error))
+
+    return web.json_response({"ok": True, "profile": data})
+
+
+async def api_chest(request):
+    from fishing import service as fs
+
+    uid, _name, _chat = _player(request)
+    _throttle(uid)
+
+    try:
+        return web.json_response({"ok": True, **await fs.open_chest(uid)})
+    except fs.FishingError as error:
+        return _json_error(str(error))
+
+
+async def api_leaderboard(request):
+    from fishing import service as fs
+
+    uid, _name, chat = _player(request)
+    group = await _group_for(uid, chat)
+
+    return web.json_response({"group": group, "top": await fs.leaderboard(group, 20)})
+
+
+# ---------------------------------------------------------
+# Админка
+# ---------------------------------------------------------
+
+async def api_admin_fishing(request):
+    from fishing import service as fs
+    from settings.handler import is_owner
+    from webapp.admin_v2 import _admin, _name
+
+    admin, _chats = await _admin(request)
+
+    if request.method == "POST":
+        if not is_owner(admin["id"]):
+            raise web.HTTPForbidden(text="owner only")
+
+        saved = await fs.save_settings(await request.json())
+        audit.log("games", "fishing_settings", actor_kind="admin", actor_id=admin["id"],
+                  actor_name=_name(admin), details=", ".join(f"{k}={v}" for k, v in saved.items()))
+
+    data = await fs.admin_stats()
+    data["owner"] = is_owner(admin["id"])
+    return web.json_response(data)
+
 
 def setup_fishing_routes(app):
-    app.router.add_get('/api/fishing/profile', profile)
-    app.router.add_put('/api/fishing/profile', save_profile)
-    app.router.add_post('/api/fishing/catch', record_catch)
-    app.router.add_get('/api/fishing/leaderboard', leaderboard)
+    app.router.add_get("/api/fishing/profile", api_profile)
+    app.router.add_post("/api/fishing/cast", api_cast)
+    app.router.add_post("/api/fishing/land", api_land)
+    app.router.add_post("/api/fishing/select", api_select)
+    app.router.add_post("/api/fishing/buy", api_buy)
+    app.router.add_post("/api/fishing/chest", api_chest)
+    app.router.add_get("/api/fishing/leaderboard", api_leaderboard)
+
+    app.router.add_get("/api/admin/fishing", api_admin_fishing)
+    app.router.add_post("/api/admin/fishing", api_admin_fishing)

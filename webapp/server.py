@@ -167,7 +167,7 @@ async def fishing_asset(request: web.Request):
 
     # The HTML loads these two files directly from /fishing-assets/.
     # Fish/location/bait/gear images live under /fishing-assets/<folder>/.
-    if name in {"app.js", "styles.css"}:
+    if name in {"app.js", "styles.css", "server.js"}:
         root = STATIC_DIR / "fishing"
     else:
         root = STATIC_DIR / "fishing" / "assets" / "fishing"
@@ -182,7 +182,13 @@ async def fishing_asset(request: web.Request):
     if not path.is_file():
         raise web.HTTPNotFound()
 
-    return web.FileResponse(path, headers=NO_CACHE)
+    # Картинки игры (10+ МБ) кэшируются на неделю — иначе телефон скачивает
+    # их заново при каждом открытии. Код и стили — без кэша, чтобы
+    # обновления доходили сразу.
+    if name in {"app.js", "styles.css", "server.js"}:
+        return web.FileResponse(path, headers=NO_CACHE)
+
+    return web.FileResponse(path, headers={"Cache-Control": "public, max-age=604800"})
 
 
 async def admin_asset(request: web.Request):
