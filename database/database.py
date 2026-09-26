@@ -243,9 +243,8 @@ async def init_db():
 
             "CREATE TABLE IF NOT EXISTS fishing_players ("
             "user_id BIGINT PRIMARY KEY, "
-            "state_json JSONB NOT NULL DEFAULT '{}'::jsonb, "
-            "updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
-            ")",
+            "state_json JSONB NOT NULL DEFAULT CAST('{}' AS JSONB), "
+            "updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
 
             "CREATE TABLE IF NOT EXISTS fishing_catches ("
             "id BIGSERIAL PRIMARY KEY, "
@@ -254,8 +253,7 @@ async def init_db():
             "weight NUMERIC(10,3) NOT NULL, "
             "reward INTEGER NOT NULL DEFAULT 0, "
             "request_id VARCHAR(128) NOT NULL UNIQUE, "
-            "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
-            ")",
+            "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
 
             "CREATE INDEX IF NOT EXISTS ix_fishing_catches_user "
             "ON fishing_catches (user_id, created_at DESC)",
