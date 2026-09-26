@@ -11,6 +11,9 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from database.database import session_scope, utcnow
 
 from database.models import (
+    DailyPick,
+    Marriage,
+    DailyUserStat,
     LibraryCollection,
     LibraryImage,
     LibraryLink,
@@ -581,71 +584,6 @@ async def get_facts(telegram_id: int, limit: int = 20) -> list[str]:
 # =========================================================
 # ACTION IMAGES
 # =========================================================
-
-async def get_cached_action_image_from_providers(actions: list[str]) -> ActionImage | None:
-    """
-    Берёт готовую картинку из локального Telegram-кэша независимо от
-    того, включён ли сейчас исходный внешний провайдер. Это делает уже
-    скачанные картинки нашей собственной библиотекой.
-    """
-    actions = [a for a in actions if a]
-    if not actions:
-        return None
-
-    async with session_scope() as session:
-        result = await session.execute(
-            select(ActionImage)
-            .where(
-                ActionImage.action.in_(actions),
-                ActionImage.used.is_(False),
-                ActionImage.telegram_file_id.is_not(None),
-            )
-            .order_by(func.random())
-            .limit(1)
-            .with_for_update(skip_locked=True)
-        )
-
-        image = result.scalar_one_or_none()
-        if image is None:
-            return None
-
-        image.used = True
-        image.used_at = utcnow()
-        await session.commit()
-        return image
-
-
-async def count_cached_action_images_from_providers(actions: list[str]) -> int:
-    actions = [a for a in actions if a]
-    if not actions:
-        return 0
-
-    async with session_scope() as session:
-        result = await session.execute(
-            select(func.count(ActionImage.id)).where(
-                ActionImage.action.in_(actions),
-                ActionImage.telegram_file_id.is_not(None),
-            )
-        )
-        return int(result.scalar() or 0)
-
-
-async def reset_cached_action_images_from_providers(actions: list[str]) -> None:
-    actions = [a for a in actions if a]
-    if not actions:
-        return
-
-    async with session_scope() as session:
-        await session.execute(
-            update(ActionImage)
-            .where(
-                ActionImage.action.in_(actions),
-                ActionImage.telegram_file_id.is_not(None),
-            )
-            .values(used=False, used_at=None)
-        )
-        await session.commit()
-
 
 async def get_cached_action_image(action: str) -> ActionImage | None:
     """
@@ -4236,3 +4174,180 @@ async def update_library_collection(tag: str, data: dict) -> bool:
 
         await session.commit()
         return True
+
+
+# =========================================================
+# ТОП БОЛТУНОВ
+# =========================================================
+
+async def bump_user_daily(chat_id: int, day: str, telegram_id: int) -> None:
+    """Атомарно +1 сообщение человеку за день (без гонок при одновременных сообщениях)."""
+    async with session_scope() as session:
+        stmt = pg_insert(DailyUserStat).values(chat_id=chat_id, day=day, telegram_id=telegram_id, messages=1)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_daily_user_stat",
+            set_={"messages": DailyUserStat.messages + 1},
+        )
+        await session.execute(stmt)
+        await session.commit()
+
+
+async def top_chatters(chat_id: int, day: str, limit: int = 10) -> dict:
+    """Самые активные за день: [(имя, id, сообщений)] и общее число сообщений."""
+    async with session_scope() as session:
+        rows = (await session.execute(
+            select(DailyUserStat.telegram_id, DailyUserStat.messages)
+            .where(DailyUserStat.chat_id == chat_id, DailyUserStat.day == day)
+            .order_by(desc(DailyUserStat.messages))
+            .limit(limit)
+        )).all()
+
+        total = (await session.execute(
+            select(func.coalesce(func.sum(DailyUserStat.messages), 0), func.count(DailyUserStat.id))
+            .where(DailyUserStat.chat_id == chat_id, DailyUserStat.day == day)
+        )).one()
+
+        names = {}
+
+        if rows:
+            names = dict((await session.execute(
+                select(GroupMember.telegram_id, GroupMember.display_name).where(
+                    GroupMember.chat_id == chat_id,
+                    GroupMember.telegram_id.in_([r[0] for r in rows]),
+                )
+            )).all())
+
+    return {
+        "people": [{"telegram_id": uid, "name": names.get(uid) or "Игрок", "messages": int(n)} for uid, n in rows],
+        "total": int(total[0] or 0),
+        "speakers": int(total[1] or 0),
+    }
+
+
+# =========================================================
+# БРАКИ
+# =========================================================
+
+async def active_marriage(chat_id: int, telegram_id: int):
+    async with session_scope() as session:
+        return (await session.execute(
+            select(Marriage).where(
+                Marriage.chat_id == chat_id, Marriage.active.is_(True),
+                (Marriage.user1 == telegram_id) | (Marriage.user2 == telegram_id),
+            )
+        )).scalar_one_or_none()
+
+
+async def create_marriage(chat_id: int, user1: int, user2: int) -> bool:
+    """Заключает брак, если оба свободны. Проверка и запись — в одной сессии."""
+    async with session_scope() as session:
+        busy = (await session.execute(
+            select(func.count(Marriage.id)).where(
+                Marriage.chat_id == chat_id, Marriage.active.is_(True),
+                Marriage.user1.in_([user1, user2]) | Marriage.user2.in_([user1, user2]),
+            )
+        )).scalar() or 0
+
+        if busy:
+            return False
+
+        session.add(Marriage(chat_id=chat_id, user1=user1, user2=user2))
+        await session.commit()
+        return True
+
+
+async def end_marriage(chat_id: int, telegram_id: int) -> tuple[int, int] | None:
+    """Развод. Возвращает пару или None, если брака не было."""
+    async with session_scope() as session:
+        item = (await session.execute(
+            select(Marriage).where(
+                Marriage.chat_id == chat_id, Marriage.active.is_(True),
+                (Marriage.user1 == telegram_id) | (Marriage.user2 == telegram_id),
+            )
+        )).scalar_one_or_none()
+
+        if item is None:
+            return None
+
+        item.active = False
+        item.ended_at = utcnow()
+        pair = (item.user1, item.user2)
+        await session.commit()
+        return pair
+
+
+async def list_marriages(chat_id: int) -> list[dict]:
+    async with session_scope() as session:
+        rows = (await session.execute(
+            select(Marriage).where(Marriage.chat_id == chat_id, Marriage.active.is_(True))
+            .order_by(Marriage.since)
+        )).scalars().all()
+
+        ids = {r.user1 for r in rows} | {r.user2 for r in rows}
+        names = dict((await session.execute(
+            select(GroupMember.telegram_id, GroupMember.display_name).where(
+                GroupMember.chat_id == chat_id, GroupMember.telegram_id.in_(ids))
+        )).all()) if ids else {}
+
+    return [
+        {"id": r.id, "user1": r.user1, "user2": r.user2,
+         "name1": names.get(r.user1) or "Игрок", "name2": names.get(r.user2) or "Игрок",
+         "since": r.since.isoformat()}
+        for r in rows
+    ]
+
+
+async def has_item(telegram_id: int, item_key: str) -> bool:
+    async with session_scope() as session:
+        count = (await session.execute(
+            select(func.coalesce(func.sum(InventoryItem.qty), 0)).where(
+                InventoryItem.telegram_id == telegram_id, InventoryItem.item_key == item_key)
+        )).scalar() or 0
+    return count > 0
+
+
+# =========================================================
+# ПАРА ДНЯ
+# =========================================================
+
+async def get_daily_pick(chat_id: int, day: str, kind: str):
+    async with session_scope() as session:
+        return (await session.execute(
+            select(DailyPick).where(DailyPick.chat_id == chat_id, DailyPick.day == day, DailyPick.kind == kind)
+        )).scalar_one_or_none()
+
+
+async def save_daily_pick(chat_id: int, day: str, kind: str, user1: int, user2: int | None, phrase: str) -> bool:
+    """Сохраняет выбор дня. False — кто-то успел выбрать раньше (двойной запрос)."""
+    async with session_scope() as session:
+        stmt = pg_insert(DailyPick).values(
+            chat_id=chat_id, day=day, kind=kind, user1=user1, user2=user2, phrase=phrase,
+        ).on_conflict_do_nothing(constraint="uq_daily_pick")
+        result = await session.execute(stmt)
+        await session.commit()
+        return (result.rowcount or 0) > 0
+
+
+async def pick_candidates(chat_id: int, days: int) -> list[dict]:
+    """Кто писал в группе за последние N дней и не вышел из неё."""
+    since = utcnow() - timedelta(days=days)
+
+    async with session_scope() as session:
+        rows = (await session.execute(
+            select(GroupMember.telegram_id, GroupMember.display_name).where(
+                GroupMember.chat_id == chat_id,
+                GroupMember.updated_at >= since,
+                GroupMember.left_at.is_(None),
+            )
+        )).all()
+
+    return [{"telegram_id": uid, "name": name or "Игрок"} for uid, name in rows]
+
+
+async def member_name(chat_id: int, telegram_id: int) -> str:
+    async with session_scope() as session:
+        name = (await session.execute(
+            select(GroupMember.display_name).where(
+                GroupMember.chat_id == chat_id, GroupMember.telegram_id == telegram_id)
+        )).scalar_one_or_none()
+    return name or "Игрок"

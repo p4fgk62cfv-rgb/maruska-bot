@@ -1132,3 +1132,67 @@ class LibraryCollection(Base):
     phrase: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class DailyUserStat(Base):
+    """Сколько сообщений человек написал в группе за день (по местному времени группы)."""
+
+    __tablename__ = "daily_user_stats"
+
+    __table_args__ = (
+        UniqueConstraint("chat_id", "day", "telegram_id", name="uq_daily_user_stat"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    day: Mapped[str] = mapped_column(String(10), index=True)
+
+    telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    messages: Mapped[int] = mapped_column(default=0)
+
+
+class Marriage(Base):
+    """Брак в группе. active=False — развелись (история остаётся)."""
+
+    __tablename__ = "marriages"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    user1: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    user2: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    since: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class DailyPick(Base):
+    """Выбор дня (пара дня): один раз в сутки по местному времени группы."""
+
+    __tablename__ = "daily_picks"
+
+    __table_args__ = (
+        UniqueConstraint("chat_id", "day", "kind", name="uq_daily_pick"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    day: Mapped[str] = mapped_column(String(10))
+
+    kind: Mapped[str] = mapped_column(String(20))
+
+    user1: Mapped[int] = mapped_column(BigInteger)
+
+    user2: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+    phrase: Mapped[str | None] = mapped_column(Text, nullable=True)
