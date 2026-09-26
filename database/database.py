@@ -243,7 +243,7 @@ async def init_db():
 
             "CREATE TABLE IF NOT EXISTS fishing_players ("
             "user_id BIGINT PRIMARY KEY, "
-            "state_json JSONB NOT NULL DEFAULT '{}'::jsonb, "
+            "state_json JSONB NOT NULL DEFAULT CAST('{}' AS JSONB), "
             "updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
             ")",
 
