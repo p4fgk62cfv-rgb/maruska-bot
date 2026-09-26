@@ -248,6 +248,9 @@ def main() -> int:
         ("games", "game_crocodile", "переключатель крокодила"),
         ("games", "game_dice", "переключатель мини-игр"),
         ("games", "/api/admin/social", "пара дня и браки в панели"),
+        ("games", 'data-open="fishing"', "переход к настройкам рыбалки"),
+        ("fishing", "data-fs-save", "настройки рыбалки для владельца"),
+        ("fishing", "Шансы рыб", "таблица шансов по водоёмам"),
     ]
 
     for screen, marker, why in placements:
@@ -270,7 +273,7 @@ def main() -> int:
     # 6. Все вызываемые адреса существуют на сервере
     server = "".join(
         (ROOT / "webapp" / f).read_text(encoding="utf-8")
-        for f in ("admin.py", "admin_v2.py", "server.py")
+        for f in ("admin.py", "admin_v2.py", "server.py", "fishing_api.py")
     )
     registered = set(re.findall(r'add_(?:get|post)\("([^"]+)"', server))
 

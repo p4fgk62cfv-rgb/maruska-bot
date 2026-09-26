@@ -277,6 +277,14 @@ async def main():
     except Exception as error:
         logger.warning("LIBRARY LINKS: %s", error)
 
+    # Настройки рыбалки (награды, лимиты) — общие для бота
+    try:
+        from fishing.service import reload_settings as reload_fishing
+
+        await reload_fishing()
+    except Exception as error:
+        logger.warning("FISHING SETTINGS: %s", error)
+
     # Ручные профили поиска Pixabay, заданные владельцем в панели
     try:
         from actions.service import set_pixabay_overrides

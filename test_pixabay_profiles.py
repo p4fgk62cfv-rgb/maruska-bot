@@ -45,6 +45,24 @@ def main() -> int:
     expect("капкейк", passes("cupcake, cake, sweet"), False)
     expect("печенье", passes("cookie, cake, sweet"), False)
 
+    # --- слово целиком, а не кусок текста ---
+    expect("панкейк не торт", passes("pancake, breakfast, raspberry"), False)
+    expect("блины не торт", passes("pancakes, crepes, breakfast"), False)
+    expect("чизкейк не торт", passes("cheesecake, dessert"), False)
+    expect("торт во множественном", passes("cakes, dessert, sweet"), True)
+    expect("торт во фразе", passes("birthday cake, candles"), True)
+
+    from actions.providers import tag_has_word
+
+    for tags, term, want in [
+        ("woman, portrait", "man", False), ("mango, fruit", "man", False), ("man, beard", "man", True),
+        ("catering, food", "cat", False), ("education", "cat", False), ("cat, kitten", "cat", True),
+        ("steak, grill", "tea", False), ("green tea, cup", "tea", True), ("ginger, root", "gin", False),
+        ("piece, puzzle", "pie", False), ("apple pie", "pie", True), ("dogs, park", "dog", True),
+        ("glasses, wine", "glass", True), ("season, autumn", "sea", False), ("sea, waves", "sea", True),
+    ]:
+        expect(f"«{term}» в «{tags}»", tag_has_word(tags, term), want)
+
     before = svc.rules_version(cake, "neutral")
 
     # --- разбор полей из панели ---
