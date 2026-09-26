@@ -64,6 +64,7 @@ HELP_TEXT = (
     "/digest — итоги недели\n"
     "/mydays — сколько ты здесь\n\n"
 
+    "🎣 <b>Рыбалка</b> — /fishing открыть игру, /fishtop лучшие рыбаки группы\n"
     "💞 <b>Пара дня</b> — «пара дня» или /pair\n"
     "💍 <b>Браки</b> — /marry в ответ на сообщение, /marriage, /marriages, /divorce\n\n"
 
