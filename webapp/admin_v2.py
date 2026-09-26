@@ -1785,6 +1785,76 @@ async def api_autoreply_delete(request):
 # ---------------------------------------------------------
 
 
+async def api_pixabay_profile(request):
+    """
+    Английский поиск Pixabay для действия: посмотреть и настроить.
+    Только владелец — профиль общий для всех групп.
+    """
+    import re as _re
+
+    from actions.catalog import ACTION_BY_KEY
+    from actions import service as svc
+    from database.repository import get_group_settings, set_group_setting
+
+    admin, _chats = await _admin(request)
+
+    if not is_owner(admin["id"]):
+        raise web.HTTPForbidden(text="owner only")
+
+    if request.method == "GET":
+        action = ACTION_BY_KEY.get(request.query.get("action") or "")
+    else:
+        body = await request.json()
+        action = ACTION_BY_KEY.get(body.get("action") or "")
+
+    if action is None:
+        raise web.HTTPBadRequest(text="action required")
+
+    if request.method == "POST":
+        stored = dict((await get_group_settings(0)).get("pixabay_overrides") or {})
+
+        if body.get("reset"):
+            stored.pop(action.key, None)
+        else:
+            query = " ".join(str(body.get("query") or "").split())[:120]
+
+            # Pixabay ищет по-английски: русские буквы в запросе дают ноль результатов
+            if _re.search(r"[а-яё]", query + str(body.get("required") or "") + str(body.get("excluded") or ""), _re.I):
+                return web.json_response({"ok": False, "error": "Только английские слова — Pixabay ищет по-английски"}, status=400)
+
+            entry = {
+                "query": query or None,
+                "required": svc.parse_groups(str(body.get("required") or "")) or None,
+                "excluded": svc.parse_words(str(body.get("excluded") or "")) or None,
+            }
+            entry = {k: v for k, v in entry.items() if v}
+
+            if entry:
+                stored[action.key] = entry
+            else:
+                stored.pop(action.key, None)
+
+        await set_group_setting(chat_id=0, key="pixabay_overrides", value=stored)
+        svc.set_pixabay_overrides(stored)
+
+        audit.log("actions", "pixabay_profile", actor_kind="admin", actor_id=admin["id"],
+                  actor_name=_name(admin), details=f"{action.key}: " + ("сброшен" if body.get("reset") else str(stored.get(action.key))))
+
+    query, _required, excluded, filters = svc.pixabay_profile(action, "neutral")
+    own = svc.pixabay_override(action.key)
+
+    return web.json_response({
+        "ok": True,
+        "action": action.key,
+        "query": query,
+        "required": ["; ".join(", ".join(g) for g in (filters.get("required_groups") or ()))][0],
+        "excluded_own": ", ".join(own.get("excluded") or ()),
+        "excluded_builtin": ", ".join(e for e in excluded if e not in (own.get("excluded") or ()))[:600],
+        "custom": bool(own),
+        "fingerprint": svc.rules_version(action, "neutral"),
+    })
+
+
 async def api_pixabay_search(request):
     """Предпросмотр Pixabay для владельца: только фото, без автопубликации."""
     admin, _chats = await _admin(request)
@@ -2144,7 +2214,8 @@ async def _owner(request):
 def _targets() -> list[dict]:
     import images_library
 
-    return [{"key": images_library.CATS, "title": "🐱 Котики (мяу, покажи меня)"}] + [
+    return [{"key": images_library.CATS, "title": "🐱 Котики (мяу, покажи меня)"},
+            {"key": images_library.PAIR, "title": "💞 Пара дня"}] + [
         {"key": a.key, "title": f"{a.emoji} {(a.item_acc or a.key).capitalize()}"}
         for a in sorted(ACTIONS, key=lambda a: (a.item_acc or a.key))
     ]
@@ -2353,6 +2424,51 @@ async def api_library_delete(request):
     return web.json_response({"ok": ok})
 
 
+async def api_chatters(request):
+    """Топ болтунов группы за сегодня (по её часовому поясу)."""
+    from database.repository import top_chatters
+
+    admin, chats = await _admin(request)
+    chat_id = _chat_param(request, chats, required=True)
+
+    day = store.local_now(chat_id).strftime("%Y-%m-%d")
+    data = await top_chatters(chat_id, day, limit=store.get_number(chat_id, "top_chatters_size") or 10)
+    data["day"] = day
+
+    return web.json_response(data)
+
+
+async def api_social(request):
+    """Пара дня и браки группы. POST — развести пару (модерация)."""
+    from database.repository import end_marriage, get_daily_pick, list_marriages, member_name
+
+    if request.method == "GET":
+        admin, chats = await _admin(request)
+        chat_id = _chat_param(request, chats, required=True)
+
+        day = store.local_now(chat_id).strftime("%Y-%m-%d")
+        pick = await get_daily_pick(chat_id, day, "pair")
+
+        return web.json_response({
+            "pair": {"a": await member_name(chat_id, pick.user1), "b": await member_name(chat_id, pick.user2)} if pick else None,
+            "marriages": await list_marriages(chat_id),
+        })
+
+    body = await request.json()
+    chat_id = int(body.get("chat_id"))
+    admin, _chats, _role = await require_perm(request, chat_id, "moderation")
+
+    pair = await end_marriage(chat_id, int(body.get("user_id")))
+
+    if pair is None:
+        raise web.HTTPNotFound(text="no marriage")
+
+    audit.log("member", "divorce", chat_id=chat_id, actor_kind="admin", actor_id=admin["id"],
+              actor_name=_name(admin), target_id=int(body.get("user_id")), details="развод администратором")
+
+    return web.json_response({"ok": True})
+
+
 async def api_groups(request):
     """Группы, которыми управляет админ (синоним данных из /session)."""
     _admin_user, chats = await _admin(request)
@@ -2418,6 +2534,8 @@ def setup_v2_routes(app: web.Application) -> None:
     app.router.add_post("/api/admin/autoreplies", api_autoreplies)
     app.router.add_post("/api/admin/autoreplies/delete", api_autoreply_delete)
     app.router.add_get("/api/admin/pixabay/search", api_pixabay_search)
+    app.router.add_get("/api/admin/pixabay/profile", api_pixabay_profile)
+    app.router.add_post("/api/admin/pixabay/profile", api_pixabay_profile)
     app.router.add_post("/api/admin/pixabay/import", api_pixabay_import)
     app.router.add_get("/api/admin/images", api_images)
     app.router.add_post("/api/admin/images/order", api_images_order)
@@ -2432,6 +2550,9 @@ def setup_v2_routes(app: web.Application) -> None:
 
     # Синонимы по схеме концепции
     app.router.add_get("/api/admin/groups", api_groups)
+    app.router.add_get("/api/admin/chatters", api_chatters)
+    app.router.add_get("/api/admin/social", api_social)
+    app.router.add_post("/api/admin/social", api_social)
     app.router.add_get("/api/admin/moderation", api_moderation)
     app.router.add_get("/api/admin/admins", api_roles)
     app.router.add_post("/api/admin/admins", api_roles)
