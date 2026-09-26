@@ -45,10 +45,40 @@
             return '<div class="kv"><span class="k">' + x.emoji + " " + esc(x.title) + ' <span class="dim">' + esc(x.example) + "</span></span><span>" + x.week + " за неделю · " + x.month + " за месяц</span></div>";
           }).join("") + "</div>"
 
-        + '<button class="btn primary" data-open="settings" data-arg="Развлечения">⚙️ Награды, паузы и лимиты</button>';
+        + (M.state.chat ? '<div class="card" data-social><div class="card-title">💞 Пара дня и браки</div><div class="dim">Загружаю…</div></div>' : "")
+        + '<button class="btn primary" data-open="settings" data-arg="Развлечения">⚙️ Награды, паузы и лимиты</button>'
+        + '<button class="btn block" data-open="settings" data-arg="Сообщество" style="margin-top:8px">💍 Настройки пары дня и браков</button>';
 
       M.app.innerHTML = html;
       M.bind();
+
+      var social = M.app.querySelector("[data-social]");
+      if (social) {
+        var drawSocial = function () {
+          M.api("/api/admin/social" + M.chatQuery()).then(function (d) {
+            var now = Date.now();
+            social.innerHTML = '<div class="card-title">💞 Пара дня и браки</div>'
+              + '<div class="kv"><span class="k">Пара дня сегодня</span><span>' + (d.pair ? esc(d.pair.a) + " 💞 " + esc(d.pair.b) : "ещё не выбрана") + "</span></div>"
+              + '<div class="dim" style="margin:10px 0 6px">Браки: ' + d.marriages.length + "</div>"
+              + (d.marriages.length ? d.marriages.map(function (m) {
+                  var days = Math.max(1, Math.floor((now - new Date(m.since + "Z").getTime()) / 86400000) + 1);
+                  return '<div class="list-item"><div class="grow"><div class="t">' + esc(m.name1) + " 💞 " + esc(m.name2) + '</div><div class="s">вместе ' + days + " дн.</div></div>"
+                    + (M.can("moderation") ? '<button class="btn danger" data-unmarry="' + m.user1 + '" data-names="' + esc(m.name1 + " и " + m.name2) + '">Развести</button>' : "") + "</div>";
+                }).join("") : '<div class="dim">Пар пока нет</div>');
+
+            M.each("[data-unmarry]", function (b) {
+              b.onclick = function () {
+                M.confirm("Развести " + b.getAttribute("data-names") + "?", "Брак будет расторгнут без согласия пары.", "Развести", true).then(function (yes) {
+                  if (!yes) return;
+                  M.post("/api/admin/social", { chat_id: M.state.chat, user_id: parseInt(b.getAttribute("data-unmarry"), 10) })
+                    .then(function () { M.toast("Разведены"); drawSocial(); }).catch(function (e) { M.toast(e.message); });
+                });
+              };
+            });
+          }).catch(function () { social.remove(); });
+        };
+        drawSocial();
+      }
 
       each("[data-g]", function (el) {
         if (!canEdit) return;

@@ -110,6 +110,21 @@
         + '<div class="dim">Проценты — сравнение с таким же периодом до этого.</div>';
 
       M.bind();
+
+      // Топ болтунов за сегодня — отдельным запросом, только для одной группы
+      if (M.state.chat) {
+        var holder = document.createElement("div");
+        holder.className = "card";
+        holder.innerHTML = '<div class="card-title">🗣 Болтуны сегодня</div><div class="dim">Считаю…</div>';
+        var first = M.app.querySelector(".card.glow");
+        if (first) first.insertAdjacentElement("afterend", holder); else M.app.appendChild(holder);
+
+        M.api("/api/admin/chatters" + M.chatQuery()).then(function (t) {
+          holder.innerHTML = '<div class="card-title">🗣 Болтуны сегодня <span class="dim">' + t.total + " сообщ. · " + t.speakers + " чел.</span></div>"
+            + (t.people.length ? M.bars(t.people.map(function (p) { return { name: p.name, value: p.messages }; })) : '<div class="dim">Сегодня ещё тихо</div>');
+        }).catch(function () { holder.remove(); });
+      }
+
       each("[data-days]", function (el) { el.onclick = function () { M.state.cache.days = parseInt(el.getAttribute("data-days"), 10); M.render(); }; });
     }).catch(M.fail);
   });

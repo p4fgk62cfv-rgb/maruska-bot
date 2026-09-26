@@ -171,6 +171,9 @@
         + '<div class="setting"><div class="ico">🎯</div><div class="grow"><div class="t">Цель</div><div class="s">' + esc(a.target_logic) + "</div></div></div>"
         + "</div>"
 
+        + (M.state.session.user.owner && a.category !== "library" ? '<div class="card" data-px-card><div class="card-title">🔎 Поиск картинок (Pixabay)</div>'
+            + '<div class="dim">Загружаю профиль…</div></div>' : "")
+
         + '<button class="btn primary" data-test>🧪 Протестировать Action</button>';
 
       M.app.innerHTML = html;
@@ -178,6 +181,56 @@
       bindActionEditor(a, canEdit);
     }).catch(M.fail);
   });
+
+  // ---------- английский поиск Pixabay для действия (владелец) ----------
+
+  function loadPixabayCard(a) {
+    var card = M.app.querySelector("[data-px-card]");
+    if (!card) return;
+
+    var draw = function (p) {
+      card.innerHTML = '<div class="card-title">🔎 Поиск картинок (Pixabay)' + (p.custom ? ' <span class="tag coins">настроен вручную</span>' : "") + "</div>"
+        + '<div class="dim" style="margin-bottom:8px">Pixabay ищет по-английски. После сохранения бот начнёт собирать картинки заново, старые неподходящие перестанут показываться.</div>'
+        + '<div class="dim">Запрос</div><input data-px-q value="' + esc(p.query) + '" placeholder="layered birthday cake slice" style="margin:4px 0 8px">'
+        + '<div class="dim">Обязательные слова в тегах картинки</div><input data-px-req value="' + esc(p.required) + '" placeholder="cake, cakes; slice, dessert" style="margin:4px 0 2px">'
+        + '<div class="dim" style="margin-bottom:8px;font-size:11px">Через запятую — «любое из». Через «;» — «и то, и другое».</div>'
+        + '<div class="dim">Запрещённые слова (свои)</div><input data-px-ex value="' + esc(p.excluded_own) + '" placeholder="muffin, cupcake, cookie" style="margin:4px 0 2px">'
+        + (p.excluded_builtin ? '<details style="margin:4px 0 8px"><summary class="dim" style="cursor:pointer">Уже запрещены по умолчанию</summary><div class="dim" style="font-size:11px">' + esc(p.excluded_builtin) + "</div></details>" : "")
+        + '<div class="btns" style="margin-top:8px"><button class="btn" data-px-check>👀 Проверить</button><button class="btn primary" data-px-save style="margin:0">💾 Сохранить</button></div>'
+        + (p.custom ? '<button class="btn block" data-px-reset style="margin-top:8px">↺ Вернуть стандартный</button>' : "")
+        + '<div data-px-preview style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px"></div>';
+
+      var val = function (sel) { return card.querySelector(sel).value; };
+      var fail = function (e) { M.toast(e.message); };
+
+      var save = function (body, ok) {
+        return M.post("/api/admin/pixabay/profile", Object.assign({ action: a.key }, body))
+          .then(function (np) { M.toast(ok); draw(np); }).catch(fail);
+      };
+
+      card.querySelector("[data-px-save]").onclick = function () {
+        save({ query: val("[data-px-q]"), required: val("[data-px-req]"), excluded: val("[data-px-ex]") }, "Сохранено — картинки соберутся заново");
+      };
+
+      var reset = card.querySelector("[data-px-reset]");
+      if (reset) reset.onclick = function () { save({ reset: true }, "Стандартный профиль"); };
+
+      // «Проверить» показывает, что найдётся по СОХРАНЁННОМУ профилю
+      card.querySelector("[data-px-check]").onclick = function () {
+        var box = card.querySelector("[data-px-preview]");
+        box.innerHTML = '<div class="dim" style="grid-column:1/-1">Ищу…</div>';
+
+        M.api("/api/admin/pixabay/search?action=" + encodeURIComponent(a.key) + "&page=1").then(function (r) {
+          box.innerHTML = (r.photos || []).slice(0, 12).map(function (ph) {
+            return '<img src="' + esc(ph.url) + '" title="' + esc(ph.tags) + '" style="width:100%;height:90px;object-fit:cover;border-radius:8px">';
+          }).join("") || '<div class="dim" style="grid-column:1/-1">Ничего не найдено — ослабь обязательные слова</div>';
+        }).catch(function (e) { box.innerHTML = '<div class="dim" style="grid-column:1/-1">' + esc(e.message) + "</div>"; });
+      };
+    };
+
+    M.api("/api/admin/pixabay/profile?action=" + encodeURIComponent(a.key)).then(draw)
+      .catch(function (e) { card.innerHTML = '<div class="dim">' + esc(e.message) + "</div>"; });
+  }
 
   function bindActionEditor(a, canEdit) {
     var reload = function (msg) { if (msg) M.toast(msg); M.state.cache.actions = null; M.render(); };
@@ -284,6 +337,8 @@
       M.post("/api/admin/action/option", { chat_id: M.state.chat, key: a.key, kind: "cooldown", value: parseInt(cd.value, 10) })
         .then(function () { M.toast("Сохранено"); M.state.cache.actions = null; }).catch(fail);
     };
+
+    loadPixabayCard(a);
 
     M.app.querySelector("[data-test]").onclick = function () {
       M.api("/api/admin/action/preview?key=" + a.key + (M.state.chat ? "&chat_id=" + M.state.chat : "")).then(function (p) {
