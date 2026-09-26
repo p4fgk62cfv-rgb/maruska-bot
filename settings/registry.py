@@ -89,6 +89,20 @@ FEATURES: tuple[Feature, ...] = (
         group="Сообщество",
     ),
     Feature(
+        key="fishing",
+        title="Рыбалка",
+        emoji="🎣",
+        description="/fishing — мини-игра; /fishtop — лучшие рыбаки группы",
+        group="Развлечения",
+    ),
+    Feature(
+        key="fishing_announce",
+        title="Рыбалка: объявлять крупный улов",
+        emoji="📣",
+        description="Трофейная, легендарная и мифическая рыба объявляется в чате",
+        group="Развлечения",
+    ),
+    Feature(
         key="pair_of_day",
         title="Пара дня",
         emoji="💞",
