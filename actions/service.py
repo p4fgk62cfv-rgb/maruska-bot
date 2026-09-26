@@ -95,12 +95,56 @@ PAIR_SEARCHES = {
 
 
 def get_search_query(action: Action, pair_key: str) -> str:
+    """Внутренний англоязычный запрос Pixabay.
+
+    Пользовательские фразы сюда никогда не попадают: они сначала
+    распознаются как Action (например, «Мара мяу» -> cat).
+    """
+    if action.key == "cat":
+        return "funny cats"
     if action.category == "pair":
         return PAIR_SEARCHES.get(pair_key, PAIR_SEARCHES["neutral"]).get(
             action.key,
             action.search,
         )
     return action.search
+
+
+PIXABAY_GENERIC_EXCLUDE = (
+    "illustration", "drawing", "vector", "cartoon", "anime",
+    "logo", "icon", "clipart", "sketch", "3d render",
+)
+
+
+def pixabay_profile(action: Action, pair_key: str) -> tuple[str, tuple[str, ...], tuple[str, ...], dict]:
+    """Жёсткий внутренний профиль поиска для пополнения библиотеки.
+
+    Это не пользовательский ввод. Профиль определяется самим Action.
+    """
+    query = get_search_query(action, pair_key)
+    required = tuple(required_tags(action))
+    excluded = tuple(dict.fromkeys(tuple(excluded_tags(action)) + PIXABAY_GENERIC_EXCLUDE))
+
+    category = None
+    if action.category == "pair":
+        category = "people"
+    elif action.category == "pet":
+        category = "animals"
+    elif action.category == "flower":
+        category = "nature"
+    elif action.category in {"food", "sweet", "fruit", "drink", "alcohol"}:
+        category = "food"
+
+    filters = {
+        "category": category,
+        "orientation": "horizontal",
+        "order": "popular",
+        "editors_choice": True,
+        "safesearch": True,
+        "min_width": 800,
+        "min_height": 600,
+    }
+    return query, required, excluded, filters
 
 
 def query_variants(query: str) -> list[str]:
@@ -190,9 +234,7 @@ async def fetch_fresh(
     Ссылки Pixabay живут около суток, поэтому между поиском и
     отправкой не должно проходить времени.
     """
-    tags = required_tags(action)
-    banned = excluded_tags(action)
-    query = get_search_query(action, pair_key)
+    query, tags, banned, filters = pixabay_profile(action, pair_key)
 
     seen = await known_photo_ids(collection)
 
@@ -212,6 +254,7 @@ async def fetch_fresh(
                 page,
                 required=tags,
                 excluded=banned,
+                filters=filters,
             )
         except Exception as error:
             logger.error("IMAGE %s SEARCH ERROR: %s %s", provider.upper(), type(error).__name__, error)
@@ -258,55 +301,10 @@ async def get_image_for_action(
     2. Коллекция кончилась — идём в источник и качаем свежую.
     3. Источник молчит — прокручиваем коллекцию по кругу.
     """
-    # Уже скачанные картинки — наша локальная библиотека. Они должны
-    # продолжать работать даже если Pixabay/Unsplash выключены в панели.
-    from actions.providers import KNOWN_PROVIDERS
-    from database.repository import (
-        count_cached_action_images_from_providers,
-        get_cached_action_image_from_providers,
-        reset_cached_action_images_from_providers,
-    )
-
-    local_collections = [
-        collection_key(provider, action, pair_key)
-        for provider in KNOWN_PROVIDERS
-    ]
-
-    cached = await get_cached_action_image_from_providers(local_collections)
-    if cached is not None:
-        return Picked(
-            kind="cached",
-            collection=cached.action,
-            provider=cached.provider or "library",
-            photo_id=cached.photo_id,
-            file_id=cached.telegram_file_id,
-            image_id=cached.id,
-            photographer_name=cached.photographer_name,
-            photographer_url=cached.photographer_url,
-            source_url=cached.unsplash_url,
-        )
-
-    # Если локальный Telegram-кэш закончился, запускаем его по кругу.
-    if await count_cached_action_images_from_providers(local_collections):
-        await reset_cached_action_images_from_providers(local_collections)
-        cached = await get_cached_action_image_from_providers(local_collections)
-        if cached is not None:
-            return Picked(
-                kind="cached",
-                collection=cached.action,
-                provider=cached.provider or "library",
-                photo_id=cached.photo_id,
-                file_id=cached.telegram_file_id,
-                image_id=cached.id,
-                photographer_name=cached.photographer_name,
-                photographer_url=cached.photographer_url,
-                source_url=cached.unsplash_url,
-            )
-
     providers = available_providers()
 
     if not providers:
-        logger.info("IMAGE PROVIDERS: внешние источники выключены, работаем на локальной библиотеке")
+        logger.error("IMAGE PROVIDERS: ни один источник не настроен")
         return None
 
     for provider in providers:

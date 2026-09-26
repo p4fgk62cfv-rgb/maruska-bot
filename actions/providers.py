@@ -102,6 +102,7 @@ async def search_pixabay(
     page: int,
     required: tuple[str, ...] = (),
     excluded: tuple[str, ...] = (),
+    filters: dict | None = None,
 ) -> list[RemotePhoto]:
     if not PIXABAY_API_KEY:
         raise RuntimeError("PIXABAY_API_KEY is not set")
@@ -116,6 +117,22 @@ async def search_pixabay(
         "per_page": PER_PAGE,
         "page": page,
     }
+
+    filters = filters or {}
+    for key in ("category", "orientation", "order", "colors"):
+        value = filters.get(key)
+        if value:
+            params[key] = str(value)
+    for key in ("editors_choice", "safesearch"):
+        if key in filters and filters[key] is not None:
+            params[key] = "true" if bool(filters[key]) else "false"
+    for key in ("min_width", "min_height"):
+        value = filters.get(key)
+        if value:
+            try:
+                params[key] = max(1, int(value))
+            except (TypeError, ValueError):
+                pass
 
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
         response = await client.get(PIXABAY_API_URL, params=params)
@@ -248,18 +265,16 @@ SEARCH_FUNCTIONS = {
 
 KNOWN_PROVIDERS = ("pixabay", "unsplash")
 
+# Встроенная личная библиотека не является внешним API-провайдером.
+# Она всегда доступна как базовый источник; этот список используется
+# только для внешних провайдеров и их порядка.
+BUILTIN_PROVIDER = "library"
+
 # Порядок из панели владельца. None — берём из IMAGE_PROVIDERS.
 _order_override: list[str] | None = None
 
 
 def set_provider_order(order: list[str] | None) -> None:
-    """
-    Задаёт порядок внешних провайдеров.
-
-    Пустой список — это валидная настройка: внешние провайдеры
-    выключены, а бот продолжает работать на своей библиотеке/Telegram-кэше.
-    None означает «настройка не задана — использовать IMAGE_PROVIDERS».
-    """
     global _order_override
 
     if order is None:
@@ -267,12 +282,13 @@ def set_provider_order(order: list[str] | None) -> None:
         return
 
     clean = [name for name in order if name in KNOWN_PROVIDERS]
+    # Пустой список означает: все внешние провайдеры выключены.
     _order_override = list(dict.fromkeys(clean))
 
 
 def provider_order() -> list[str]:
-    """Порядок опроса внешних источников."""
-    return IMAGE_PROVIDERS if _order_override is None else list(_order_override)
+    """Порядок опроса источников: сначала первый, при ошибке — следующий."""
+    return _order_override if _order_override is not None else IMAGE_PROVIDERS
 
 
 def available_providers() -> list[str]:
@@ -293,12 +309,15 @@ async def search_photos(
     page: int,
     required: tuple[str, ...] = (),
     excluded: tuple[str, ...] = (),
+    filters: dict | None = None,
 ) -> list[RemotePhoto]:
     search = SEARCH_FUNCTIONS.get(provider)
 
     if search is None:
         return []
 
+    if provider == "pixabay":
+        return await search(query, page, required, excluded, filters)
     return await search(query, page, required, excluded)
 
 
