@@ -293,22 +293,28 @@
       var html = M.backButton("Маруська") + M.chatPicker()
         + '<div class="card"><div class="card-title">Источники</div>'
         + d.providers.map(function (p, i) {
-            var builtin = !!p.builtin;
-            var number = builtin ? 1 : (p.order ? p.order + 1 : "—");
-            var label = p.label || p.name;
-            var status = builtin ? "встроен" : (p.ready ? "ключ есть" : "нет ключа");
-            return '<div class="setting" style="' + (p.active ? "" : "opacity:.5") + '"><div class="ico">' + number + '</div><div class="grow"><div class="t">' + esc(label) + "</div>"
-              + '<div class="s">' + (builtin ? "Свои фото + сохранённые картинки Telegram" : ("Собрано " + num(p.total) + " · в Telegram " + num(p.cached) + " · показано " + num(p.used))) + "</div></div>"
-              + '<span class="tag ' + (builtin ? "ok" : (p.ready ? "ok" : "bad")) + '">' + status + "</span>"
-              + (d.owner && !builtin ? '<div class="row-gap" style="flex:0 0 auto;margin-left:6px">'
+            return '<div class="setting" style="' + (p.active ? "" : "opacity:.5") + '"><div class="ico">' + (p.builtin ? "∞" : (p.order || "—")) + '</div><div class="grow"><div class="t">' + esc(p.label || p.name) + "</div>"
+              + '<div class="s">' + (p.builtin ? "Встроенный источник · " : "Собрано ") + num(p.total) + " · в Telegram " + num(p.cached) + " · показано " + num(p.used) + "</div></div>"
+              + '<span class="tag ' + (p.ready ? "ok" : "bad") + '">' + (p.ready ? "ключ есть" : "нет ключа") + "</span>"
+              + (d.owner && !p.builtin ? '<div class="row-gap" style="flex:0 0 auto;margin-left:6px">'
                   + (p.active && p.order > 1 ? '<button class="btn" data-up="' + p.name + '" style="padding:6px 9px">↑</button>' : "")
                   + '<div class="switch' + (p.active ? " on" : "") + '" data-src="' + p.name + '"></div></div>' : "")
               + "</div>";
           }).join("")
-        + '<div class="dim" style="margin-top:8px">Личная библиотека работает всегда. Уже сохранённые в Telegram картинки не зависят от Pixabay/Unsplash. Внешние источники используются только для пополнения библиотеки.'
-        + (d.owner ? " Порядок внешних источников общий для всех групп." : " Менять порядок может только владелец бота.")
+        + '<div class="dim" style="margin-top:8px">Личная библиотека — встроенный основной источник. Pixabay/Unsplash используются только как внешние источники пополнения/резерва.'
+        + (d.owner ? " Порядок общий для всех групп." : " Менять порядок может только владелец бота.")
         + " Ключи API хранятся в переменных Railway.</div></div>"
 
+        + (d.owner ? '<div class="card"><div class="card-title">🔎 Пополнение библиотеки через Pixabay</div>'
+        + '<div class="dim" style="margin-bottom:8px">Пользовательские фразы сюда не попадают. Для каждого Action используется внутренний английский запрос и жёсткий фильтр: только фото, SafeSearch, размер от 800×600, популярные и исключение иллюстраций/векторов/логотипов.</div>'
+        + '<select data-px-action style="width:100%;margin-bottom:7px"><option value="">Выбери Action</option>'
+        + actions.filter(function(a){return a.enabled;}).map(function(a){return '<option value="'+esc(a.key)+'">'+esc((a.emoji||'')+' '+(a.title||a.key))+'</option>';}).join('')
+        + '</select>'
+        + '<div data-px-profile class="dim" style="margin-bottom:7px">После выбора Action здесь появится внутренний Pixabay-профиль.</div>'
+        + '<div class="row-gap" style="margin-top:7px"><input data-px-tag placeholder="Категория библиотеки: кошки" style="flex:1"><button class="btn" data-px-search>🔍 Найти</button></div>'
+        + '<div data-px-results style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px"></div>'
+        + '<button class="btn block" data-px-import style="margin-top:8px;display:none">📥 Импортировать выбранные</button>'
+        + '</div>' : "")
         + '<div class="card"><div class="card-title">Подбор</div>'
         + '<div class="setting"><div class="ico">🔁</div><div class="grow"><div class="t">Защита от повторов</div><div class="s">Картинка не повторится, пока не покажут всю коллекцию</div></div><span class="tag ok">всегда</span></div>'
         + (m ? '<div class="setting"><div class="ico">⏱</div><div class="grow"><div class="t">Лимит в час</div><div class="s">Сверх лимита действие уходит текстом</div></div><span class="tag">' + (m.image_limit_hour.value || "∞") + "</span></div>"
@@ -333,7 +339,7 @@
       };
 
       var activeOrder = function () {
-        return d.providers.filter(function (p) { return p.active && !p.builtin; }).map(function (p) { return p.name; });
+        return d.providers.filter(function (p) { return p.active; }).map(function (p) { return p.name; });
       };
 
       each("[data-up]", function (el) {
@@ -348,11 +354,24 @@
           var name = el.getAttribute("data-src"), order = activeOrder();
           var i = order.indexOf(name);
           if (i >= 0) order.splice(i, 1); else order.push(name);
+          if (!order.length) { M.toast("Нужен хотя бы один источник"); return; }
           saveOrder(order);
         };
       });
 
-      each("[data-cat-toggle]", function (el) {
+             var pxSelected = {};
+       var pxSearch = M.app.querySelector("[data-px-search]");
+       var pxResults = M.app.querySelector("[data-px-results]");
+       var pxImport = M.app.querySelector("[data-px-import]");
+       var pxAction = M.app.querySelector("[data-px-action]");
+       var pxProfile = M.app.querySelector("[data-px-profile]");
+       function renderPxSelected() { if (!pxImport) return; var n=Object.keys(pxSelected).length; pxImport.style.display=n?"block":"none"; pxImport.textContent="📥 Импортировать выбранные ("+n+")"; }
+       function showProfile(a){ if(!pxProfile)return; if(!a){pxProfile.textContent="После выбора Action здесь появится внутренний Pixabay-профиль.";return;} var q=(a.search||""); var cat=(a.category||""); pxProfile.innerHTML="<b>Внутренний запрос:</b> "+esc(q)+"<br><b>Категория:</b> "+esc(cat||"авто")+"<br><b>Фильтр:</b> только фото · SafeSearch · ≥800×600 · popular · без illustration/vector/cartoon/logo"; }
+       if (pxAction) pxAction.onchange=function(){var a=(actions||[]).find(function(x){return String(x.key)===String(pxAction.value);});showProfile(a);pxSelected={};renderPxSelected();if(pxResults)pxResults.innerHTML="";};
+       if (pxSearch) pxSearch.onclick=function(){ var key=(pxAction&&pxAction.value)||""; if(!key){M.toast("Выбери Action");return;} var tag=(M.app.querySelector("[data-px-tag]").value||"").trim(); if(!tag){M.toast("Укажи категорию библиотеки");return;} var params=new URLSearchParams({action:key,page:"1"}); pxSearch.disabled=true; M.api("/api/admin/pixabay/search?"+params.toString()).then(function(r){ pxResults.innerHTML=(r.photos||[]).map(function(p){var on=!!pxSelected[p.id];return '<div data-px-id="'+esc(p.id)+'" style="position:relative;border:2px solid '+(on?'var(--accent-2)':'var(--line)')+';border-radius:10px;overflow:hidden;cursor:pointer;background:var(--card)" title="'+esc(p.tags)+'"><img src="'+esc(p.url)+'" style="width:100%;height:110px;object-fit:cover;display:block"><div style="position:absolute;right:5px;top:5px;background:rgba(0,0,0,.65);border-radius:99px;padding:2px 6px">'+(on?'✓':'＋')+'</div></div>';}).join("")||'<div class="dim" style="grid-column:1/-1">Ничего не найдено.</div>'; each("[data-px-id]",function(el){el.onclick=function(){var id=el.getAttribute("data-px-id"),photo=(r.photos||[]).find(function(x){return String(x.id)===String(id);});if(!photo)return;if(pxSelected[id])delete pxSelected[id];else pxSelected[id]=photo;el.style.borderColor=pxSelected[id]?"var(--accent-2)":"var(--line)";el.querySelector("div").textContent=pxSelected[id]?"✓":"＋";renderPxSelected();};}); }).catch(function(e){M.toast(e.message);}).finally(function(){pxSearch.disabled=false;}); };
+       if (pxImport) pxImport.onclick=function(){var tag=(M.app.querySelector("[data-px-tag]").value||"").trim(),chosen=Object.keys(pxSelected).map(function(k){return pxSelected[k];});if(!tag){M.toast("Укажи категорию библиотеки");return;}if(!chosen.length){M.toast("Выбери картинки");return;}pxImport.disabled=true;M.post("/api/admin/pixabay/import",{tag:tag,photos:chosen}).then(function(r){M.toast("Импортировано: "+r.imported+(r.duplicates?", дублей: "+r.duplicates:""));pxSelected={};renderPxSelected();M.render();}).catch(function(e){M.toast(e.message);}).finally(function(){pxImport.disabled=false;});}; renderPxSelected();
+
+       each("[data-cat-toggle]", function (el) {
         el.onclick = function () {
           var next = !el.classList.contains("on");
           var c = el.getAttribute("data-cat-toggle");
