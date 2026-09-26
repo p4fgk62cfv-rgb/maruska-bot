@@ -270,7 +270,8 @@
     autoreplies: ["message", "blue", "Автоответы", "Ключевые слова и ответы"],
     images: ["image", "green", "Изображения", "Источники и подбор"],
     library: ["image", "green", "Моя коллекция", "Свои картинки для действий"],
-    games: ["game", "green", "Игры", "Крокодил и мини-игры"]
+    games: ["game", "green", "Игры", "Крокодил и мини-игры"],
+    fishing: ["game", "blue", "Рыбалка", "Награды, лимиты, улов"]
   };
 
   function addScreenHead() {

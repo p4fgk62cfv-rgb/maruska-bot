@@ -29,6 +29,12 @@
         html += '<div class="card glow">' + toggle("games", "Игры в группе", m.games.value ? "Включены" : "Выключены — ни одна игра не работает") + "</div>";
       }
 
+      html += '<div class="list-item tap card" data-open="fishing" style="margin-bottom:12px">'
+        + '<span style="font-size:26px;width:38px;text-align:center">🎣</span><div class="grow"><div class="t">Рыбалка</div>'
+        + '<div class="s">Мини-приложение: награды, лимиты, рекорды, шансы рыб</div></div><span class="chev">›</span></div>'
+        + (m ? '<div class="card">' + toggle("fishing", "Рыбалка в группе", "/fishing — игра, /fishtop — топ рыбаков")
+          + toggle("fishing_announce", "Объявлять крупный улов", "Трофейная, легендарная и мифическая рыба — в чат") + "</div>" : "");
+
       html += '<div class="card"><div class="card-title">🐊 Крокодил</div>'
         + toggle("game_crocodile", "Включён", "/croc — объясняй или рисуй, остальные угадывают")
         + '<div class="metrics three" style="margin-top:10px">' + M.metric("🎮", num(st.rounds), "Раундов за 30 дн") + M.metric("🏁", num(st.finished), "Доиграно") + M.metric("👍", num(st.likes), "Лайков") + "</div>"
@@ -89,6 +95,79 @@
             .catch(function () { el.classList.toggle("on", !next); });
         };
       });
+    }).catch(M.fail);
+  });
+
+  // =========================================================
+  // РЫБАЛКА
+  // =========================================================
+
+  M.screen("fishing", function () {
+    M.api("/api/admin/fishing").then(function (d) {
+      var s = d.settings, t = d.today;
+
+      var field = function (key, title, sub, unit) {
+        return '<div class="setting"><div class="grow"><div class="t">' + title + '</div><div class="s">' + sub + "</div></div>"
+          + (d.owner ? '<input data-fs="' + key + '" type="number" value="' + s[key] + '" style="width:90px;text-align:right">'
+                     : "<b>" + s[key] + "</b>") + '<span class="dim" style="margin-left:6px">' + (unit || "") + "</span></div>";
+      };
+
+      var html = '<div class="metrics three">'
+        + M.metric("🎣", num(t.catches), "Улов сегодня") + M.metric("💎", num(t.diamonds), "Алмазов сегодня")
+        + M.metric("👥", num(t.anglers), "Рыбаков сегодня") + "</div>"
+        + '<div class="dim" style="margin:6px 0 12px">Всего игроков: ' + num(d.players) + " · поймано рыб: " + num(d.total_catches) + "</div>"
+
+        + '<div class="card"><div class="card-title">⚙️ Награды и защита экономики</div>'
+        + '<div class="setting"><div class="grow"><div class="t">Рыбалка включена</div><div class="s">Для всех групп и лички</div></div>'
+        + '<div class="switch' + (s.enabled ? " on" : "") + (d.owner ? "" : " locked") + '" data-fs-on></div></div>'
+        + field("reward_percent", "Алмазы за рыбу", "Процент от цен игры (там до 3000 за рыбу)", "%")
+        + field("xp_percent", "Опыт за рыбу", "Процент от опыта игры", "%")
+        + field("daily_cap", "Потолок в сутки", "Сколько алмазов с рыбалки можно получить за день. 0 — без потолка", "💎")
+        + field("cooldown", "Пауза между забросами", "Защита от автокликеров", "сек")
+        + field("min_fight", "Минимум вываживания", "Быстрее рыбу не вытащить", "сек")
+        + (d.owner ? '<button class="btn primary block" data-fs-save style="margin-top:10px">💾 Сохранить</button>'
+                   : '<div class="dim" style="margin-top:8px">Меняет только владелец бота</div>')
+        + "</div>";
+
+      html += '<div class="card"><div class="card-title">🏆 Лучшие рыбаки</div>'
+        + (d.top.length ? d.top.map(function (p, i) {
+            return '<div class="kv"><span class="k">' + (i + 1) + ". " + esc(p.name) + "</span><span>" + p.best + " кг · " + p.catches + " рыб</span></div>";
+          }).join("") : '<div class="dim">Пока никто не рыбачил</div>') + "</div>";
+
+      html += '<div class="card"><div class="card-title">📏 Рекорды по видам</div>'
+        + (d.records.length ? d.records.map(function (r) {
+            return '<div class="kv"><span class="k">' + esc(r.name) + ' <span class="dim">' + esc(r.rarity) + "</span></span><span>" + r.best + " кг · " + r.count + " шт</span></div>";
+          }).join("") : '<div class="dim">Рекордов пока нет</div>') + "</div>";
+
+      html += '<div class="card"><div class="card-title">🕐 Последний улов</div>'
+        + (d.recent.length ? d.recent.map(function (r) {
+            return '<div class="kv"><span class="k">' + esc(r.name) + " · " + esc(r.fish) + (r.trophy ? " 👑" : "") + '</span><span>' + r.weight + " кг · +" + r.reward + " 💎 · " + M.ago(r.at) + "</span></div>";
+          }).join("") : '<div class="dim">Улова пока нет</div>') + "</div>";
+
+      html += '<div class="card"><div class="card-title">🎲 Шансы рыб (червь, простая удочка)</div>'
+        + '<div class="dim" style="margin-bottom:8px">Наживка поднимает шанс «своих» рыб, сильная удочка — чуть поднимает редких.</div>'
+        + Object.keys(d.chances).map(function (k) {
+            var loc = d.chances[k];
+            return '<div style="margin-bottom:10px"><b>' + esc(loc.name) + '</b> <span class="dim">с ' + loc.level + " ур.</span>"
+              + loc.fish.map(function (f) { return '<div class="kv"><span class="k">' + esc(f.name) + ' <span class="dim">' + esc(f.rarity) + "</span></span><span>" + f.chance + "%</span></div>"; }).join("")
+              + "</div>";
+          }).join("") + "</div>";
+
+      M.app.innerHTML = M.backButton("Игры") + html;
+      M.bind();
+
+      if (!d.owner) return;
+
+      var enabled = !!s.enabled;
+      var sw = M.app.querySelector("[data-fs-on]");
+      sw.onclick = function () { enabled = !enabled; sw.classList.toggle("on", enabled); };
+
+      M.app.querySelector("[data-fs-save]").onclick = function () {
+        var body = { enabled: enabled };
+        M.each("[data-fs]", function (el) { body[el.getAttribute("data-fs")] = parseInt(el.value, 10) || 0; });
+        M.post("/api/admin/fishing", body).then(function () { M.toast("Сохранено"); M.render(); })
+          .catch(function (e) { M.toast(e.message); });
+      };
     }).catch(M.fail);
   });
 })();

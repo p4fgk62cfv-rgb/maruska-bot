@@ -13,7 +13,7 @@
   var REASONS = {
     daily_bonus: "Ежедневный бонус", game_win: "Победы в играх", game_host: "Ведущий в игре",
     purchase: "Покупки", gift_out: "Подарки", admin: "Правки админов", achievement: "Достижения",
-    like: "Лайки рисункам", jackpot: "Джекпот"
+    like: "Лайки рисункам", jackpot: "Джекпот", fishing: "Рыбалка", fishing_shop: "Магазин рыбалки"
   };
 
   function short(n) {
