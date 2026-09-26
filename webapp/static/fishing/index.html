@@ -1,1 +1,51 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#06131b"><title>Maruska Fishing v4</title><link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app" id="app">
+  <div class="scene" id="scene">
+    <div class="sky-stars"></div><div class="scene-shade"></div><div class="sun-glow"></div>
+    <div class="cloud cloud-a"></div><div class="cloud cloud-b"></div><div class="mist mist-a"></div><div class="mist mist-b"></div>
+    <div class="water-ripples"></div><div class="water-shimmer"></div><div class="rain" id="rain"></div>
+    <div class="cast-line" id="castLine"></div><div class="bobber" id="bobber"><span></span></div>
+    <div class="splash" id="splash"></div><div class="fish-jump" id="fishJump"></div>
 
+    <header class="topbar">
+      <div><div class="eyebrow">MARUSKA FISHING</div><h1 id="locationName">Тихая заводь</h1><div class="meta"><span id="weather">🌤 Ясно</span><span>•</span><span id="time">🌅 Рассвет</span></div></div>
+      <button class="wallet" id="walletBtn">💎 <b id="diamonds">1 250</b></button>
+    </header>
+
+    <div class="status-pill" id="statusPill">Готов к забросу</div>
+    <button class="weather-chip" id="weatherBtn">🌤</button>
+
+    <section class="bite-card hidden" id="biteCard"><div class="bite-icon">⚡</div><div class="bite-copy"><b id="biteTitle">Есть поклёвка!</b><span id="biteSub">Подсекай сейчас</span></div><button class="primary small" id="hookBtn">🪝 ПОДСЕЧЬ</button></section>
+
+    <section class="fight-card hidden" id="fightCard">
+      <div class="fight-head"><div><span class="label">УЛОВ НА КРЮЧКЕ</span><h2 id="fishName">Щука</h2></div><div class="rarity" id="rarity">Редкая</div></div>
+      <div class="fish-stage"><img id="fightFishImage" alt="Рыба"><div class="tension-wave" id="tensionWave"></div></div>
+      <div class="meter"><div class="meter-label"><span>Сила рыбы</span><b id="fishPowerText">72%</b></div><div class="track"><i id="fishPower"></i></div></div>
+      <div class="meter danger"><div class="meter-label"><span>Натяжение лески</span><b id="lineText">42%</b></div><div class="track"><i id="linePower"></i></div></div>
+      <div class="fight-tip" id="fightTip">Следи за натяжением — резкий рывок может порвать леску.</div>
+      <div class="fight-actions"><button class="action-btn" id="pullBtn">🎣<span>Подтянуть</span></button><button class="action-btn safe" id="relaxBtn">🧘<span>Ослабить</span></button><button class="action-btn" id="reelBtn">🔄<span>Подмотать</span></button></div>
+    </section>
+
+    <section class="catch-card hidden" id="catchCard"><div class="catch-burst">✦</div><div class="trophy-glow"></div><img id="catchImage" alt="Пойманная рыба"><div class="catch-copy"><div class="label">УЛОВ • ТРОФЕЙ</div><h2 id="catchName">Щука</h2><div class="catch-rarity" id="catchRarity">Редкая</div><div class="catch-stats"><span>⚖️ <b id="catchWeight">4.73 кг</b></span><span>📏 <b id="catchLength">78 см</b></span><span>💎 <b id="catchReward">+320</b></span></div></div><button class="primary" id="continueBtn">🎣 ЕЩЁ ЗАБРОС</button></section>
+
+    <div class="location-dots" id="locationDots"></div>
+    <button class="cast-fab" id="castBtn"><span>🎣</span><b>ЗАБРОСИТЬ</b></button>
+
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-tab="fish"><span>🎣</span><small>Рыбалка</small></button><button class="nav-item" data-tab="gear"><span>🎒</span><small>Снасти</small></button><button class="nav-item" data-tab="collection"><span>🐟</span><small>Улов</small></button><button class="nav-item" data-tab="spots"><span>🌊</span><small>Места</small></button>
+    </nav>
+  </div>
+  <div class="panel hidden" id="panel"><div class="panel-sheet"><div class="panel-handle"></div><div class="panel-header"><h2 id="panelTitle">Снасти</h2><button id="panelClose">✕</button></div><div id="panelContent"></div></div></div>
+  <div class="modal hidden" id="modal"><div class="modal-card"><button class="modal-close" id="modalClose">✕</button><div id="modalContent"></div></div></div>
+  <div class="toast" id="toast"></div>
+</div>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>window.MARUSKA_FISHING_BACKEND = window.location.origin;</script>
+<script src="app.js"></script>
+</body></html>
