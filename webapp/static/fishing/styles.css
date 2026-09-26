@@ -46,3 +46,6 @@
 }
 .scene.is-broken .rod-visual{opacity:.5;transform:rotate(-14deg)}
 .scene > *{touch-action:manipulation}
+
+/* v7 touch hardening */
+.bottom-nav{pointer-events:auto;touch-action:manipulation}.bottom-nav .nav-item{position:relative;z-index:11;pointer-events:auto;touch-action:manipulation}.panel-sheet{position:relative;z-index:21}.panel{touch-action:auto}.panel.hidden{pointer-events:none}
