@@ -49,3 +49,125 @@
 
 /* v7 touch hardening */
 .bottom-nav{pointer-events:auto;touch-action:manipulation}.bottom-nav .nav-item{position:relative;z-index:11;pointer-events:auto;touch-action:manipulation}.panel-sheet{position:relative;z-index:21}.panel{touch-action:auto}.panel.hidden{pointer-events:none}
+
+/* ===== FISHING V8 — premium game UI ===== */
+:root{
+  --glass2:rgba(3,13,20,.74);
+  --glass3:rgba(7,22,31,.88);
+  --stroke2:rgba(255,255,255,.18);
+  --cyan2:#75e9f7;
+  --gold2:#ffd76a;
+}
+html,body{overscroll-behavior:none}
+.app{height:100dvh;min-height:600px;max-width:760px;background:#031018}
+.scene{
+  background-position:center center!important;
+  background-size:cover!important;
+  isolation:isolate;
+}
+.scene:after{
+  content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:
+    linear-gradient(180deg,rgba(0,5,9,.52) 0%,transparent 24%,transparent 55%,rgba(0,5,9,.28) 72%,rgba(0,5,9,.92) 100%),
+    radial-gradient(circle at 72% 30%,transparent 0 22%,rgba(0,0,0,.14) 58%,rgba(0,0,0,.42) 100%);
+}
+.topbar{z-index:12;top:max(14px,env(safe-area-inset-top));left:16px;right:16px}
+.eyebrow{font-size:9px;letter-spacing:.28em;text-shadow:0 2px 12px #000}
+.topbar h1{font-size:30px;font-weight:900;letter-spacing:-.04em;margin:3px 0 5px}
+.meta{font-size:12px;text-shadow:0 2px 10px #000}
+.wallet{
+  min-width:104px;justify-content:center;border-radius:18px;padding:10px 13px;
+  background:rgba(2,12,18,.68);border-color:rgba(255,255,255,.22);
+  box-shadow:0 10px 35px rgba(0,0,0,.32),inset 0 1px rgba(255,255,255,.08);
+}
+.status-pill{
+  top:145px;z-index:13;padding:9px 17px;font-size:11px;font-weight:800;
+  background:rgba(2,12,18,.68);border-color:rgba(255,255,255,.2);
+  box-shadow:0 12px 35px rgba(0,0,0,.28);
+}
+.level-badge,.event-chip{top:105px;z-index:13;padding:7px 11px;font-size:10px}
+.weather-chip{top:145px;right:16px;z-index:13}
+.v4-tools{top:198px;z-index:31}
+.v4-tools button{background:rgba(2,12,18,.72);border-color:rgba(255,255,255,.18);box-shadow:0 10px 28px rgba(0,0,0,.3)}
+.rod-visual{z-index:7;width:245px;height:245px;left:-25px;bottom:74px}
+.cast-line,.bobber,.splash,.fish-jump{z-index:8}
+.cast-fab{
+  bottom:96px;z-index:16;min-width:184px;height:48px;border-radius:17px;
+  border:1px solid rgba(255,255,255,.52);
+  background:linear-gradient(135deg,#f8ffff,#83e6f3 55%,#4abbd0);
+  box-shadow:0 15px 45px rgba(0,0,0,.46),0 0 28px rgba(84,218,238,.16);
+  transition:transform .16s ease,filter .16s ease;
+}
+.cast-fab:active{transform:translateX(-50%) scale(.96);filter:brightness(.94)}
+.cast-fab b{font-size:11px;letter-spacing:.13em}
+.bite-card,.fight-card,.catch-card{
+  z-index:15;left:12px;right:12px;
+  background:linear-gradient(150deg,rgba(5,18,27,.94),rgba(3,11,18,.82));
+  border-color:rgba(255,255,255,.2);
+  box-shadow:0 25px 70px rgba(0,0,0,.62),inset 0 1px rgba(255,255,255,.08);
+}
+.bite-card{bottom:153px;padding:12px;border-radius:22px}
+.fight-card{bottom:125px;padding:15px;border-radius:24px}
+.catch-card{bottom:124px;border-radius:26px}
+.fight-head h2{font-size:26px;letter-spacing:-.03em}
+.fish-stage{height:105px;margin:2px 0}
+.fish-stage img{height:100px;max-width:86%;filter:drop-shadow(0 14px 18px rgba(0,0,0,.7))}
+.meter{margin:8px 0}
+.track{height:9px;background:rgba(255,255,255,.1);box-shadow:inset 0 1px rgba(0,0,0,.25)}
+.fight-actions{gap:9px;margin-top:12px}
+.action-btn{
+  min-height:58px;border-radius:17px;background:linear-gradient(145deg,rgba(255,255,255,.09),rgba(255,255,255,.035));
+  border-color:rgba(255,255,255,.13);box-shadow:inset 0 1px rgba(255,255,255,.06);
+}
+.action-btn:active{transform:scale(.95);background:rgba(117,233,247,.12)}
+.action-btn span{font-size:10px;font-weight:700}
+.bottom-nav{
+  left:10px;right:10px;bottom:max(8px,env(safe-area-inset-bottom));
+  height:72px;padding-bottom:0;z-index:40;border-radius:22px;
+  background:rgba(2,11,17,.84);border-color:rgba(255,255,255,.16);
+  box-shadow:0 18px 55px rgba(0,0,0,.55),inset 0 1px rgba(255,255,255,.06);
+  pointer-events:auto!important;
+}
+.bottom-nav .nav-item{
+  min-width:0;z-index:41!important;border-radius:18px;margin:6px;
+  color:#8da8b1;pointer-events:auto!important;touch-action:manipulation!important;
+  transition:background .18s ease,transform .18s ease,color .18s ease;
+}
+.bottom-nav .nav-item.active{
+  color:#ecffff;background:linear-gradient(180deg,rgba(109,226,244,.17),rgba(109,226,244,.055));
+  box-shadow:inset 0 1px rgba(255,255,255,.08);
+}
+.bottom-nav .nav-item span{font-size:22px}
+.bottom-nav .nav-item small{font-size:9px;font-weight:800;letter-spacing:.02em}
+.panel{z-index:50!important;background:rgba(0,5,9,.72);backdrop-filter:blur(5px);pointer-events:auto}
+.panel.hidden{display:none!important;pointer-events:none!important}
+.panel-sheet{
+  max-height:91%;padding:8px 15px calc(22px + env(safe-area-inset-bottom));
+  border-radius:28px 28px 0 0;background:linear-gradient(180deg,#081923,#06131b);
+  border-color:rgba(255,255,255,.16);z-index:51!important;
+}
+.panel-header h2{font-size:23px}
+.panel-header button{width:38px;height:38px}
+.item{
+  background:linear-gradient(145deg,rgba(255,255,255,.065),rgba(255,255,255,.025));
+  border-color:rgba(255,255,255,.1);box-shadow:inset 0 1px rgba(255,255,255,.035);
+}
+.item:active,.v4-wide-btn:active,.v4-stock:active,.v4-boat:active{transform:scale(.985)}
+.item.spot img{height:125px}
+.item h3{font-size:14px}
+.modal{z-index:60!important;background:rgba(0,4,8,.76);backdrop-filter:blur(8px)}
+.modal-card{background:linear-gradient(160deg,#0a1d27,#06131b);border-color:rgba(255,255,255,.18)}
+.toast{z-index:100;top:max(18px,env(safe-area-inset-top));font-weight:700}
+@media(max-height:700px){
+  .topbar h1{font-size:25px}.status-pill{top:136px}.weather-chip{top:136px}
+  .level-badge,.event-chip{top:98px}.v4-tools{top:186px}
+  .fight-card{bottom:115px}.fish-stage{height:82px}.fish-stage img{height:80px}
+  .cast-fab{bottom:89px}.bottom-nav{height:66px}
+}
+@media(max-width:390px){
+  .topbar h1{font-size:25px}.wallet{min-width:96px;padding:9px 10px}
+  .level-badge,.event-chip{font-size:9px;padding:6px 9px}
+  .v4-tools{right:10px}.v4-tools button{width:38px;height:38px}
+  .fight-actions{gap:6px}.action-btn{min-height:54px}
+  .cast-fab{min-width:165px}
+}
