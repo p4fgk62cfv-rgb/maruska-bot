@@ -206,6 +206,7 @@ async def ai_handler(message: Message):
     audit.count(message.chat.id, "ai_requests")
 
     if message.from_user and message.chat.id < 0:
+        import asyncio
 
         from database.repository import bump_member_counter
 
