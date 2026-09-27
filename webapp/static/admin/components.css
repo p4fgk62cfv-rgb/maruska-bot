@@ -462,3 +462,90 @@ svg.i { display: block; flex: 0 0 auto; }
 .screen-head .sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
 .screen-head .ic-tile { width: 44px; height: 44px; border-radius: 14px; }
 .back + .screen-head { margin-top: -2px; }
+
+
+/* ===========================================================
+   Анимации
+   =========================================================== */
+
+@keyframes maraFadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes maraShimmer {
+  from { background-position: -200% 0; }
+  to   { background-position:  200% 0; }
+}
+
+@keyframes maraPulse {
+  0%, 100% { opacity: 1;  transform: scale(1); }
+  50%       { opacity: .6; transform: scale(1.3); }
+}
+
+@keyframes maraBarFill {
+  from { width: 0 !important; }
+}
+
+@keyframes maraSlideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes maraFadeOverlay {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes maraBreathe {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(139,92,246,.3); }
+  50%       { box-shadow: 0 0 18px 5px rgba(192,132,252,.55); }
+}
+
+/* Появление содержимого при каждом рендере */
+#app > * {
+  animation: maraFadeUp .3s ease both;
+}
+#app > *:nth-child(2) { animation-delay: .04s; }
+#app > *:nth-child(3) { animation-delay: .08s; }
+#app > *:nth-child(4) { animation-delay: .12s; }
+#app > *:nth-child(5) { animation-delay: .16s; }
+#app > *:nth-child(6) { animation-delay: .20s; }
+#app > *:nth-child(7) { animation-delay: .24s; }
+
+/* Скелетон загрузки */
+.skel {
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--card) 25%, var(--card-2) 50%, var(--card) 75%);
+  background-size: 200% 100%;
+  animation: maraShimmer 1.4s infinite;
+}
+.skel-h      { height: 18px; margin-bottom: 8px; }
+.skel-sm     { height: 12px; width: 60%; }
+.skel-card   { height: 72px; border-radius: var(--radius-sm); margin-bottom: 10px; }
+.skel-metric { height: 68px; border-radius: var(--radius-sm); flex: 1; }
+
+/* Онлайн-точка */
+.status .dot { animation: maraPulse 2.2s ease-in-out infinite; }
+
+/* Полосы прогресса */
+.bar span { animation: maraBarFill .55s cubic-bezier(.4,0,.2,1) both; }
+
+/* Шторка */
+.sheet-bg { animation: maraFadeOverlay .22s ease; }
+.sheet    { animation: maraSlideUp .28s cubic-bezier(.4,0,.2,1); }
+
+/* Аватарка бота в шапке */
+.topbar .avatar { animation: maraBreathe 3s ease-in-out infinite; }
+
+/* Нажатия */
+.btn, .menu-tile, .list-item { transition: transform .15s, background .15s; }
+.btn:active       { transform: scale(.95); }
+.menu-tile:active { transform: scale(.94); }
+.list-item:active { transform: scale(.985); }
+
+.icon-btn { transition: opacity .15s, transform .15s; }
+.icon-btn:active { opacity: .55; transform: scale(.86); }
+
+/* Карточки */
+.card { transition: box-shadow .2s; }

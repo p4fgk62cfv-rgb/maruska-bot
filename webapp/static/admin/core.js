@@ -234,7 +234,16 @@
   };
 
   Mara.loading = function () {
-    app.innerHTML = '<div class="center muted">Загружаю…</div>';
+    app.innerHTML = '<div class="skel skel-h" style="width:55%;margin-top:4px"></div>'
+      + '<div class="skel skel-sm"></div>'
+      + '<div style="display:flex;gap:8px;margin:16px 0">'
+      + '<div class="skel skel-metric"></div>'
+      + '<div class="skel skel-metric"></div>'
+      + '<div class="skel skel-metric"></div>'
+      + '</div>'
+      + '<div class="skel skel-card"></div>'
+      + '<div class="skel skel-card"></div>'
+      + '<div class="skel skel-card"></div>';
   };
 
   Mara.fail = function (error) {
@@ -308,6 +317,20 @@
     Mara.loadImages();
 
     if (Mara.fillIcons) Mara.fillIcons(app);
+
+    Array.prototype.forEach.call(app.querySelectorAll("[data-count]"), function (el) {
+      var target = parseInt(el.getAttribute("data-count"), 10) || 0;
+      if (!target) return;
+      el.textContent = "0";
+      var start = performance.now();
+      var dur = Math.min(900, 350 + target * 0.25);
+      requestAnimationFrame(function tick(now) {
+        var t = Math.min(1, (now - start) / dur);
+        var ease = 1 - Math.pow(1 - t, 3);
+        el.textContent = Mara.num(Math.round(target * ease));
+        if (t < 1) requestAnimationFrame(tick);
+      });
+    });
   };
 
   Mara.render = function () {
