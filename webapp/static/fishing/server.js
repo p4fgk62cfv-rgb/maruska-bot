@@ -64,6 +64,11 @@
     state.owned = p.owned_rods;
     state.rod = p.rod;
     state.rodLevels = p.rod_levels;
+    state.reel = p.reel;
+    state.ownedReels = p.owned_reels;
+    state.bobber = p.bobber;
+    state.ownedBobbers = p.owned_bobbers;
+    if (p.catalog) tackle = p.catalog;
     state.boat = p.boat;
     state.ownedBoats = p.owned_boats;
     // Червь бесплатный и бесконечный
@@ -226,6 +231,8 @@
 
   buyRod = function (id) { shop("rod", id, "🎣 Удочка готова"); };
   upgradeRod = function () { shop("upgrade", "", "⬆️ Удочка улучшена"); };
+  buyReel = function (id) { shop("reel", id, "🎣 Катушка готова"); };
+  buyBobber = function (id) { shop("bobber", id, "🎈 Поплавок готов"); };
   buyBait = function (id) { shop("bait", id, "🪱 +5 наживки"); };
   buyBoat = function (id) {
     api("/api/fishing/buy", { kind: "boat", key: id }).then(function (r) {

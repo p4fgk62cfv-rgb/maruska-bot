@@ -235,6 +235,11 @@ async def init_db():
             "ALTER TABLE action_custom ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMP",
 
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS dm_ok BOOLEAN DEFAULT FALSE",
+
+            "ALTER TABLE fishing_profiles ADD COLUMN IF NOT EXISTS reel VARCHAR(20) DEFAULT 'basic'",
+            "ALTER TABLE fishing_profiles ADD COLUMN IF NOT EXISTS owned_reels JSON",
+            "ALTER TABLE fishing_profiles ADD COLUMN IF NOT EXISTS bobber VARCHAR(20) DEFAULT 'wood'",
+            "ALTER TABLE fishing_profiles ADD COLUMN IF NOT EXISTS owned_bobbers JSON",
             "ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS mode VARCHAR(8) DEFAULT 'groups'",
             "ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS segment JSON",
 

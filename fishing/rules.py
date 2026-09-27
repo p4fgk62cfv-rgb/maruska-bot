@@ -109,6 +109,78 @@ RODS = {r.key: r for r in (
 MAX_ROD_LEVEL = 8
 
 
+# Катушка: добавляет контроль и силу к удочке
+@dataclass(frozen=True)
+class Reel:
+    key: str
+    name: str
+    price: int
+    control: int
+    power: int
+    level: int
+
+
+REELS = {r.key: r for r in (
+    Reel("basic", "Катушка «Старт»", 0, 0, 0, 0),
+    Reel("bronze", "Бронза", 180, 3, 2, 1),
+    Reel("forest", "Лесная", 350, 5, 4, 2),
+    Reel("aqua", "Аква", 600, 7, 7, 3),
+    Reel("flame", "Пламя", 900, 9, 10, 4),
+    Reel("amber", "Янтарь", 1400, 12, 14, 6),
+    Reel("gold", "Золотая", 2200, 15, 18, 8),
+    Reel("amethyst", "Аметист", 3500, 18, 24, 10),
+    Reel("crystal", "Кристалл", 5000, 22, 30, 12),
+)}
+
+
+# Поплавок: чувствительность — поклёвка приходит быстрее (sense, доля
+# ожидания) и чаще замечается трофей (trophy, прибавка к шансу)
+@dataclass(frozen=True)
+class Bobber:
+    key: str
+    name: str
+    price: int
+    sense: float
+    trophy: float
+    level: int
+
+
+BOBBERS = {b.key: b for b in (
+    Bobber("wood", "Деревянный", 0, 0.0, 0.0, 0),
+    Bobber("classic", "Классика", 80, .05, .005, 1),
+    Bobber("reed", "Камыш", 200, .10, .01, 2),
+    Bobber("azure", "Лазурь", 400, .15, .015, 3),
+    Bobber("night", "Ночной", 700, .20, .02, 5),
+    Bobber("royal", "Королевский", 1100, .25, .025, 6),
+    Bobber("gold", "Золотой", 1800, .30, .03, 8),
+    Bobber("amethyst", "Аметист", 3000, .35, .04, 10),
+    Bobber("crystal", "Кристалл", 4500, .40, .05, 12),
+)}
+
+BASE_TROPHY = 0.07
+
+
+def with_reel(rod: "Rod", rod_level: int, reel: Reel) -> "Rod":
+    """Удочка с учётом прокачки и катушки — ею считаются шансы и вываживание."""
+    return Rod(rod.key, rod.name, rod.price,
+               rod.control + (rod_level - 1) * 3 + reel.control,
+               rod.power + (rod_level - 1) * 4 + reel.power, rod.level)
+
+
+def bite_delay(bobber: Bobber, rng=random) -> float:
+    return round((0.9 + rng.random() * 2.3) * (1 - bobber.sense), 2)
+
+
+def catalog() -> dict:
+    """Катушки и поплавки для магазина мини-приложения."""
+    return {
+        "reels": [{"key": r.key, "name": r.name, "price": r.price, "control": r.control,
+                   "power": r.power, "level": r.level} for r in REELS.values()],
+        "bobbers": [{"key": b.key, "name": b.name, "price": b.price, "sense": round(b.sense * 100),
+                     "trophy": round(b.trophy * 100, 1), "level": b.level} for b in BOBBERS.values()],
+    }
+
+
 def upgrade_cost(current_level: int) -> int:
     return 180 * current_level
 

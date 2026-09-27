@@ -114,7 +114,7 @@ def _today() -> str:
 def _new_player(telegram_id: int) -> FishingPlayer:
     return FishingPlayer(
         telegram_id=telegram_id, rod_levels={"starter": 1}, owned_rods=["starter"],
-        owned_boats=["shore"], bait_stock=dict(START_BAIT), species={}, quests=[], achievements=[],
+        owned_reels=["basic"], owned_bobbers=["wood"], owned_boats=["shore"], bait_stock=dict(START_BAIT), species={}, quests=[], achievements=[],
     )
 
 
@@ -178,10 +178,19 @@ async def profile(telegram_id: int) -> dict:
     return data
 
 
+def _owned(items: list | None, free: str) -> list:
+    """Бесплатная катушка и поплавок есть у всех, даже у старых профилей."""
+    items = list(items or [])
+    return items if free in items else [free] + items
+
+
 def _player_dict(p: FishingPlayer) -> dict:
     return {
         "location": p.location, "rod": p.rod, "rod_levels": p.rod_levels or {"starter": 1},
-        "owned_rods": p.owned_rods or ["starter"], "boat": p.boat, "owned_boats": p.owned_boats or ["shore"],
+        "owned_rods": p.owned_rods or ["starter"],
+        "reel": p.reel if p.reel in R.REELS else "basic", "owned_reels": _owned(p.owned_reels, "basic"),
+        "bobber": p.bobber if p.bobber in R.BOBBERS else "wood", "owned_bobbers": _owned(p.owned_bobbers, "wood"),
+        "catalog": R.catalog(), "boat": p.boat, "owned_boats": p.owned_boats or ["shore"],
         "bait": p.bait, "bait_stock": p.bait_stock or {}, "caught": p.caught, "best": p.best,
         "legendary": p.legendary, "night": p.night, "species": p.species or {},
         "lifetime_weight": round(p.lifetime_weight or 0, 2), "streak": p.streak, "last_day": p.last_day,
@@ -195,7 +204,8 @@ def _player_dict(p: FishingPlayer) -> dict:
 # ---------------------------------------------------------
 
 async def choose_gear(telegram_id: int, location: str | None = None, rod: str | None = None,
-                 boat: str | None = None, bait: str | None = None) -> dict:
+                 boat: str | None = None, bait: str | None = None,
+                 reel: str | None = None, bobber: str | None = None) -> dict:
     level, _xp, _coins = await _mara_profile(telegram_id)
 
     async with session_scope() as session:
@@ -213,6 +223,16 @@ async def choose_gear(telegram_id: int, location: str | None = None, rod: str | 
             if rod not in (player.owned_rods or []):
                 raise FishingError("Эта удочка не куплена")
             player.rod = rod
+
+        if reel is not None:
+            if reel not in _owned(player.owned_reels, "basic"):
+                raise FishingError("Эта катушка не куплена")
+            player.reel = reel
+
+        if bobber is not None:
+            if bobber not in _owned(player.owned_bobbers, "wood"):
+                raise FishingError("Этот поплавок не куплен")
+            player.bobber = bobber
 
         if boat is not None:
             if boat not in (player.owned_boats or []):
@@ -267,12 +287,13 @@ async def cast(telegram_id: int, chat_id: int | None = None, rng=random) -> dict
 
         rod = R.RODS.get(player.rod) or R.RODS["starter"]
         rod_level = int((player.rod_levels or {}).get(rod.key, 1))
-        effective = R.Rod(rod.key, rod.name, rod.price, rod.control + (rod_level - 1) * 3,
-                          rod.power + (rod_level - 1) * 4, rod.level)
+        reel = R.REELS.get(player.reel) or R.REELS["basic"]
+        bobber = R.BOBBERS.get(player.bobber) or R.BOBBERS["wood"]
+        effective = R.with_reel(rod, rod_level, reel)
 
         fish = R.choose_fish(location, effective, bait, rng)
-        weight, trophy, length = R.roll_catch(fish, rng)
-        bite_delay = round(0.9 + rng.random() * 2.3, 2)
+        weight, trophy, length = R.roll_catch(fish, rng, R.BASE_TROPHY + bobber.trophy)
+        bite_delay = R.bite_delay(bobber, rng)
 
         cast_id = secrets.token_hex(12)
         session.add(FishingCast(
@@ -461,6 +482,19 @@ async def buy(telegram_id: int, kind: str, key: str) -> dict:
                 raise FishingError(f"🔒 Нужен {rod.level} уровень")
             cost, note = rod.price, f"Удочка «{rod.name}»"
 
+        elif kind in ("reel", "bobber"):
+            table, owned_attr, free = (R.REELS, "owned_reels", "basic") if kind == "reel" else (R.BOBBERS, "owned_bobbers", "wood")
+            item = table.get(key)
+            if item is None:
+                raise FishingError("Такой катушки нет" if kind == "reel" else "Такого поплавка нет")
+            if key in _owned(getattr(player, owned_attr), free):
+                setattr(player, kind, key)
+                await session.commit()
+                return await profile(telegram_id)
+            if level < item.level:
+                raise FishingError(f"🔒 Нужен {item.level} уровень")
+            cost, note = item.price, ("Катушка «" if kind == "reel" else "Поплавок «") + item.name + "»"
+
         elif kind == "upgrade":
             current = int((player.rod_levels or {}).get(player.rod, 1))
             if current >= R.MAX_ROD_LEVEL:
@@ -497,6 +531,10 @@ async def buy(telegram_id: int, kind: str, key: str) -> dict:
                 levels.setdefault(key, 1)
                 player.rod_levels = levels
                 player.rod = key
+            elif kind in ("reel", "bobber"):
+                attr = "owned_reels" if kind == "reel" else "owned_bobbers"
+                setattr(player, attr, _owned(getattr(player, attr), "basic" if kind == "reel" else "wood") + [key])
+                setattr(player, kind, key)
             elif kind == "upgrade":
                 levels = dict(player.rod_levels or {})
                 levels[player.rod] = int(levels.get(player.rod, 1)) + 1

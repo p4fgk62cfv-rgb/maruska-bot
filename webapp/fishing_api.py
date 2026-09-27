@@ -9,8 +9,8 @@ API мини-приложения «Рыбалка» на сервере Мар�
   GET  /api/fishing/profile      — снаряжение, улов, задания; алмазы и уровень — общие с Марой
   POST /api/fishing/cast         — заброс (сервер выбирает рыбу)
   POST /api/fishing/land         — {cast_id, success} — итог вываживания
-  POST /api/fishing/select       — водоём, удочка, лодка, наживка
-  POST /api/fishing/buy          — {kind: rod|upgrade|boat|bait, key}
+  POST /api/fishing/select       — водоём, удочка, катушка, поплавок, лодка, наживка
+  POST /api/fishing/buy          — {kind: rod|upgrade|reel|bobber|boat|bait, key}
   POST /api/fishing/chest        — открыть сундук рыбака
   GET  /api/fishing/leaderboard  — топ (группы, если игра открыта из группы)
 
@@ -156,7 +156,8 @@ async def api_select(request):
 
     try:
         data = await fs.choose_gear(uid, location=body.get("location"), rod=body.get("rod"),
-                                    boat=body.get("boat"), bait=body.get("bait"))
+                                    boat=body.get("boat"), bait=body.get("bait"),
+                                    reel=body.get("reel"), bobber=body.get("bobber"))
     except fs.FishingError as error:
         return _json_error(str(error))
 

@@ -103,6 +103,43 @@ def main() -> int:
     for bad in ("_marа_profile", "async def select("):
         expect(f"в сервисе нет «{bad}»", bad in src, False)
 
+    # --- катушки и поплавки ---
+    expect("стартовая катушка бесплатная и без бонуса",
+           (R.REELS["basic"].price, R.REELS["basic"].control, R.REELS["basic"].power), (0, 0, 0))
+    expect("деревянный поплавок бесплатный", (R.BOBBERS["wood"].price, R.BOBBERS["wood"].sense), (0, 0.0))
+    reels, bobbers = list(R.REELS.values()), list(R.BOBBERS.values())
+    expect("катушки дорожают и усиливаются",
+           all(b.price > a.price and b.control >= a.control and b.power >= a.power for a, b in zip(reels, reels[1:])), True)
+    expect("поплавки дорожают и чувствительнее",
+           all(b.price > a.price and b.sense > a.sense for a, b in zip(bobbers, bobbers[1:])), True)
+    expect("поклёвка не мгновенная даже с лучшим поплавком", max(b.sense for b in bobbers) < .5, True)
+
+    carp = R.RODS["carp"]
+    boosted = R.with_reel(carp, 2, R.REELS["gold"])
+    expect("катушка и прокачка складываются с удочкой",
+           (boosted.control, boosted.power), (carp.control + 3 + 15, carp.power + 4 + 18))
+    expect("стартовая катушка удочку не меняет", R.with_reel(carp, 1, R.REELS["basic"]), carp)
+
+    river = R.location_by_key("river")
+    expect("сильная катушка поднимает шанс сома",
+           R.chances(river, boosted, worm)["catfish"] > R.chances(river, carp, worm)["catfish"], True)
+
+    slow = [R.bite_delay(R.BOBBERS["wood"], random.Random(i)) for i in range(50)]
+    fast = [R.bite_delay(R.BOBBERS["crystal"], random.Random(i)) for i in range(50)]
+    expect("кристальный поплавок быстрее деревянного", all(f < s for f, s in zip(fast, slow)), True)
+    expect("задержка поклёвки положительная", min(fast) > 0, True)
+
+    cat = R.catalog()
+    expect("в каталоге все катушки", [r["key"] for r in cat["reels"]], list(R.REELS))
+    expect("в каталоге все поплавки", [b["key"] for b in cat["bobbers"]], list(R.BOBBERS))
+    for k in R.REELS:
+        expect(f"есть картинка катушки {k}", (ROOT / f"webapp/static/fishing/assets/fishing/gear/reel_{k}.png").exists(), True)
+    for k in R.BOBBERS:
+        expect(f"есть картинка поплавка {k}", (ROOT / f"webapp/static/fishing/assets/fishing/gear/float_{k}.png").exists(), True)
+
+    expect("сервис учитывает катушку при забросе", "R.with_reel(rod, rod_level, reel)" in src, True)
+    expect("сервис продаёт катушки и поплавки", 'kind in ("reel", "bobber")' in src, True)
+
     # --- ссылка из группы ---
     api = (ROOT / "webapp" / "fishing_api.py").read_text(encoding="utf-8")
     ns2 = {}

@@ -1217,6 +1217,14 @@ class FishingPlayer(Base):
 
     owned_rods: Mapped[list] = mapped_column(JSON, default=list)
 
+    reel: Mapped[str] = mapped_column(String(20), default="basic")
+
+    owned_reels: Mapped[list] = mapped_column(JSON, default=list)
+
+    bobber: Mapped[str] = mapped_column(String(20), default="wood")
+
+    owned_bobbers: Mapped[list] = mapped_column(JSON, default=list)
+
     boat: Mapped[str] = mapped_column(String(20), default="shore")
 
     owned_boats: Mapped[list] = mapped_column(JSON, default=list)
