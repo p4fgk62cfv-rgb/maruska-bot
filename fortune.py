@@ -198,6 +198,10 @@ def predict(user_id: int, name: str, mode: str = "roast", category: str = "more"
 
     if isinstance(selected, dict):
         pool = selected.get(mode, selected["roast"])
+
+        # Режим с подъёбом разбавляется серьёзными — доля FUNNY_RATIO
+        if pool is FUNNY and random.random() >= FUNNY_RATIO:
+            pool = SERIOUS
     else:
         pool = selected
 
