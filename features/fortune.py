@@ -47,6 +47,16 @@ async def fortune_handler(message: Message):
     await send_fortune(message)
 
 
+_MODE_FLAGS = {"sarcasm": "fortune_sarcasm", "vulgar": "fortune_vulgar", "brutal": "fortune_brutal"}
+
+
+def _sanitize_mode(chat_id: int, mode: str) -> str:
+    flag = _MODE_FLAGS.get(mode)
+    if flag and not is_enabled(chat_id, flag):
+        return "roast"
+    return mode
+
+
 async def send_fortune(message: Message):
     user = message.from_user
 
@@ -54,7 +64,7 @@ async def send_fortune(message: Message):
         return
 
     chat_id = message.chat.id
-    mode = get_value(chat_id, "fortune_mode") or "roast"
+    mode = _sanitize_mode(chat_id, get_value(chat_id, "fortune_mode") or "roast")
 
     await message.reply(
         fortune.predict(
