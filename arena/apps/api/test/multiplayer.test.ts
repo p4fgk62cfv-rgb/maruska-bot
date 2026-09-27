@@ -9,12 +9,13 @@ import { RedisStore, type SnapshotStore } from '../src/realtime/store.js';
 import { seedCatalog } from '../src/services/catalog.js';
 import { signInitData } from '../src/telegram/initData.js';
 import { Bot } from './bots.js';
+import type { RoomSettings } from '@arena/shared';
 
 const url = process.env.TEST_DATABASE_URL;
 const redisUrl = process.env.TEST_REDIS_URL;
 const BOT_TOKEN = '123456:TEST-token-for-multiplayer';
 
-const SETTINGS = {
+const SETTINGS: Omit<RoomSettings, 'password'> = {
   stake: 100,
   players: 2,
   deckSize: 36,
@@ -25,7 +26,7 @@ const SETTINGS = {
   ending: 'classic',
   server: 'almaz',
   isPrivate: false,
-} as const;
+};
 
 describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
   let db: Db;
