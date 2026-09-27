@@ -20,6 +20,9 @@ export type AppErrorCode =
   | 'DECK_NOT_SUPPORTED'
   | 'PLAYER_DISCONNECTED'
   | 'NO_CONNECTION'
+  | 'BANNED'
+  | 'DAILY_CREDITS_NOT_READY'
+  | 'DAILY_CREDITS_BALANCE_TOO_HIGH'
   | 'SERVER_ERROR'
   | EngineErrorCode;
 
@@ -48,6 +51,11 @@ export const ERROR_TEXT_RU: Partial<Record<AppErrorCode, string>> = {
   PLAYER_DISCONNECTED: 'Игрок отключился.',
   NO_CONNECTION: 'Нет соединения.',
   SERVER_ERROR: 'Ошибка сервера. Попробуйте ещё раз.',
+  BANNED: 'Учётная запись заблокирована.',
+  DAILY_CREDITS_NOT_READY: 'Бесплатные кредиты можно получать раз в сутки.',
+  DAILY_CREDITS_BALANCE_TOO_HIGH: 'Бесплатные кредиты выдаются, только если на счету меньше 1450.',
+  NOT_ILLEGAL: 'Эта карта сыграна честно.',
+  CANNOT_UNDO: 'Вернуть карту уже нельзя.',
   NOT_YOUR_TURN: 'Сейчас не ваш ход.',
   CARD_DOES_NOT_BEAT: 'Этой картой не побить.',
   RANK_NOT_ON_TABLE: 'Подкинуть можно только карту того же достоинства.',

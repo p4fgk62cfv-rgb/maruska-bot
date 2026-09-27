@@ -13,7 +13,7 @@ export interface RoomSeatDto {
   userId: string;
   name: string;
   photoUrl: string | null;
-  level: number;
+  rating: number;
   ready: boolean;
   connected: boolean;
 }

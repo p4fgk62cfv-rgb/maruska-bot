@@ -6,6 +6,7 @@ import { getPlayer, nextActive, ruleBoutLimit, setTurn } from './TurnManager.js'
 /**
  * Переводной: before beating anything, the defender may add a card of the same rank
  * and pass the whole attack to the next player, who must be able to answer every card.
+ * Transfers are always checked strictly, even in «С шулерами».
  */
 export function transferOptions(state: GameState, playerId: PlayerId): CardId[] {
   if (!canTransferNow(state, playerId)) return [];
@@ -32,7 +33,7 @@ export function playTransfer(state: GameState, playerId: PlayerId, card: CardId,
   const defender = getPlayer(state, playerId);
   const next = nextActive(state, playerId)!;
   defender.hand.splice(defender.hand.indexOf(card), 1);
-  state.table.push({ attack: card, defense: null, by: playerId });
+  state.table.push({ attack: card, by: playerId, attackSeq: ++state.moveSeq, defense: null, defenseBy: null, defenseSeq: null });
 
   state.attacker = playerId;
   state.defender = next.id;

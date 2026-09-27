@@ -1,5 +1,6 @@
 import type { TransactionDto } from '@arena/shared';
-import { Avatar, Badge, Balance, Panel, ProgressBar, formatAmount } from '@arena/ui';
+import { ratingBadge, RATING } from '@arena/shared';
+import { Avatar, Badge, Balance, Panel, ProgressBar, RatingBadge, formatAmount, formatCompact } from '@arena/ui';
 import { useQuery } from '../lib/useQuery.js';
 import { useNav } from '../navigation.js';
 import { useMe } from '../session.js';
@@ -25,11 +26,12 @@ export default function ProfileScreen() {
   const s = me.stats;
   const history = useQuery<TransactionDto[]>('/wallet/transactions?limit=20');
 
+  const badge = ratingBadge(s.rating);
   const stats = [
     { label: 'Игр', value: formatAmount(s.gamesPlayed) },
     { label: 'Побед', value: formatAmount(s.gamesWon) },
     { label: 'Процент побед', value: `${s.winRate}%` },
-    { label: 'Рейтинг', value: formatAmount(s.rating) },
+    { label: 'Выиграно', value: formatCompact(s.totalWinnings) },
     { label: 'Серия', value: String(s.winStreak) },
     { label: 'Лучшая серия', value: String(s.bestStreak) },
   ];
@@ -41,15 +43,32 @@ export default function ProfileScreen() {
         <Avatar id={me.id} name={me.name} photoUrl={me.photoUrl} size={84} ring="gold" />
         <h2>{me.name}</h2>
         {me.username && <span className="app-muted">@{me.username}</span>}
-        <Badge tone="violet">Уровень {s.level}</Badge>
-        <div className="profile-card__xp">
-          <ProgressBar value={s.xp} max={s.xp + s.xpToNext} />
-          <span className="app-muted">ещё {formatAmount(s.xpToNext)} XP до следующего уровня</span>
-        </div>
+        <RatingBadge rating={s.rating} streak={me.bonus.streak} />
+        {me.premiumUntil && new Date(me.premiumUntil) > new Date() && (
+          <Badge tone="gold">Премиум до {new Date(me.premiumUntil).toLocaleDateString('ru-RU')}</Badge>
+        )}
         <div className="profile-card__wallet">
-          <Balance kind="chips" value={me.wallet.chips} />
+          <Balance kind="credits" value={me.wallet.credits} />
           <Balance kind="coins" value={me.wallet.coins} />
           <Balance kind="diamonds" value={me.wallet.diamonds} />
+        </div>
+      </Panel>
+
+      <Panel className="league-card">
+        <div className="league-card__row">
+          <strong style={{ color: badge.league.color }}>{badge.league.name} лига</strong>
+          <span className="app-muted">{'★'.repeat(badge.stars)}{'|'.repeat(badge.bars)}</span>
+        </div>
+        <ProgressBar value={badge.percent} max={100} tone="gold" />
+        <span className="app-muted">
+          Уровень {badge.level} из {RATING.levelsPerLeague} · {badge.percent}% до следующего
+        </span>
+        <div className="league-card__row">
+          <span className="app-muted">Бонус постоянного игрока</span>
+          <Badge tone={me.bonus.availableAt ? 'muted' : 'gold'}>
+            ×{me.bonus.multiplier}
+            {me.bonus.availableAt ? ` с ${new Date(me.bonus.availableAt).toLocaleTimeString('ru-RU', { timeStyle: 'short' })}` : ' за следующую победу'}
+          </Badge>
         </div>
       </Panel>
 

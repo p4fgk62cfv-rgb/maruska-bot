@@ -7,8 +7,10 @@ import { errorText, type ApiErrorBody } from '@arena/shared';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import type { Context } from './context.js';
+import { bearerToken } from './auth/plugin.js';
 import { AppError } from './lib/errors.js';
 import { authRoutes } from './routes/auth.js';
+import { boardRoutes } from './routes/board.js';
 import { profileRoutes } from './routes/profile.js';
 
 export async function buildApp(ctx: Context): Promise<FastifyInstance> {
@@ -27,6 +29,8 @@ export async function buildApp(ctx: Context): Promise<FastifyInstance> {
   await app.register(rateLimit, {
     max: 300,
     timeWindow: '1 minute',
+    // Mobile carriers put many players behind one IP, so signed-in requests are limited per session.
+    keyGenerator: (request) => bearerToken(request) ?? request.ip,
     errorResponseBuilder: (): ApiErrorBody & { statusCode: number } => ({
       statusCode: 429,
       error: 'RATE_LIMITED',
@@ -56,6 +60,7 @@ export async function buildApp(ctx: Context): Promise<FastifyInstance> {
     async (api) => {
       await authRoutes(api, ctx);
       await profileRoutes(api, ctx);
+      await boardRoutes(api, ctx);
     },
     { prefix: '/api' },
   );

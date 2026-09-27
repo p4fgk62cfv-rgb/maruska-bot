@@ -1,35 +1,32 @@
--- CreateSchema
-CREATE SCHEMA IF NOT EXISTS "arena";
+-- CreateEnum
+CREATE TYPE "Currency" AS ENUM ('CREDITS', 'COINS', 'DIAMONDS');
 
 -- CreateEnum
-CREATE TYPE "arena"."Currency" AS ENUM ('CHIPS', 'COINS', 'DIAMONDS');
+CREATE TYPE "TransactionType" AS ENUM ('SIGNUP_BONUS', 'DAILY_BONUS', 'GAME_STAKE', 'GAME_PAYOUT', 'GAME_REFUND', 'PURCHASE', 'TOURNAMENT_FEE', 'TOURNAMENT_PRIZE', 'ACHIEVEMENT_REWARD', 'EXCHANGE', 'ADMIN', 'MODERATION');
 
 -- CreateEnum
-CREATE TYPE "arena"."TransactionType" AS ENUM ('SIGNUP_BONUS', 'DAILY_BONUS', 'GAME_STAKE', 'GAME_PAYOUT', 'GAME_REFUND', 'PURCHASE', 'TOURNAMENT_FEE', 'TOURNAMENT_PRIZE', 'ACHIEVEMENT_REWARD', 'EXCHANGE', 'ADMIN');
+CREATE TYPE "RoomStatus" AS ENUM ('WAITING', 'PLAYING', 'FINISHED', 'CLOSED');
 
 -- CreateEnum
-CREATE TYPE "arena"."RoomStatus" AS ENUM ('WAITING', 'PLAYING', 'FINISHED', 'CLOSED');
+CREATE TYPE "GameStatus" AS ENUM ('PLAYING', 'FINISHED', 'ABORTED');
 
 -- CreateEnum
-CREATE TYPE "arena"."GameStatus" AS ENUM ('PLAYING', 'FINISHED', 'ABORTED');
+CREATE TYPE "GameOutcome" AS ENUM ('WIN', 'LOSS', 'DRAW', 'LEFT');
 
 -- CreateEnum
-CREATE TYPE "arena"."GameOutcome" AS ENUM ('WIN', 'LOSS', 'DRAW', 'LEFT');
+CREATE TYPE "FriendRequestStatus" AS ENUM ('PENDING', 'ACCEPTED', 'DECLINED', 'CANCELLED');
 
 -- CreateEnum
-CREATE TYPE "arena"."FriendRequestStatus" AS ENUM ('PENDING', 'ACCEPTED', 'DECLINED', 'CANCELLED');
+CREATE TYPE "ItemKind" AS ENUM ('CARD_BACK', 'AVATAR', 'FRAME', 'TABLE', 'EFFECT', 'EMOJI', 'CROWN');
 
 -- CreateEnum
-CREATE TYPE "arena"."ItemKind" AS ENUM ('CARD_BACK', 'AVATAR', 'FRAME', 'TABLE', 'EFFECT', 'EMOJI', 'CROWN');
+CREATE TYPE "Rarity" AS ENUM ('COMMON', 'RARE', 'EPIC', 'LEGENDARY');
 
 -- CreateEnum
-CREATE TYPE "arena"."Rarity" AS ENUM ('COMMON', 'RARE', 'EPIC', 'LEGENDARY');
-
--- CreateEnum
-CREATE TYPE "arena"."TournamentStatus" AS ENUM ('ANNOUNCED', 'REGISTRATION', 'RUNNING', 'FINISHED', 'CANCELLED');
+CREATE TYPE "TournamentStatus" AS ENUM ('ANNOUNCED', 'REGISTRATION', 'RUNNING', 'FINISHED', 'CANCELLED');
 
 -- CreateTable
-CREATE TABLE "arena"."users" (
+CREATE TABLE "users" (
     "id" UUID NOT NULL,
     "telegram_id" BIGINT NOT NULL,
     "username" VARCHAR(64),
@@ -39,6 +36,8 @@ CREATE TABLE "arena"."users" (
     "language_code" VARCHAR(16),
     "is_premium" BOOLEAN NOT NULL DEFAULT false,
     "banned_at" TIMESTAMP(3),
+    "banned_until" TIMESTAMP(3),
+    "ban_reason" VARCHAR(255),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "last_seen_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -46,27 +45,32 @@ CREATE TABLE "arena"."users" (
 );
 
 -- CreateTable
-CREATE TABLE "arena"."profiles" (
+CREATE TABLE "profiles" (
     "user_id" UUID NOT NULL,
-    "level" INTEGER NOT NULL DEFAULT 1,
-    "xp" INTEGER NOT NULL DEFAULT 0,
-    "rating" INTEGER NOT NULL DEFAULT 1000,
+    "rating" INTEGER NOT NULL DEFAULT 0,
+    "total_winnings" BIGINT NOT NULL DEFAULT 0,
     "games_played" INTEGER NOT NULL DEFAULT 0,
     "games_won" INTEGER NOT NULL DEFAULT 0,
     "games_lost" INTEGER NOT NULL DEFAULT 0,
     "games_draw" INTEGER NOT NULL DEFAULT 0,
     "win_streak" INTEGER NOT NULL DEFAULT 0,
     "best_streak" INTEGER NOT NULL DEFAULT 0,
+    "premium_until" TIMESTAMP(3),
+    "bonus_multiplier" INTEGER NOT NULL DEFAULT 2,
+    "bonus_last_at" TIMESTAMP(3),
+    "bonus_streak" INTEGER NOT NULL DEFAULT 0,
+    "last_played_at" TIMESTAMP(3),
+    "caught_cheating" INTEGER NOT NULL DEFAULT 0,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "profiles_pkey" PRIMARY KEY ("user_id")
 );
 
 -- CreateTable
-CREATE TABLE "arena"."wallets" (
+CREATE TABLE "wallets" (
     "id" UUID NOT NULL,
     "user_id" UUID NOT NULL,
-    "currency" "arena"."Currency" NOT NULL,
+    "currency" "Currency" NOT NULL,
     "balance" BIGINT NOT NULL DEFAULT 0,
     "version" INTEGER NOT NULL DEFAULT 0,
     "updated_at" TIMESTAMP(3) NOT NULL,
@@ -75,15 +79,15 @@ CREATE TABLE "arena"."wallets" (
 );
 
 -- CreateTable
-CREATE TABLE "arena"."transactions" (
+CREATE TABLE "transactions" (
     "id" UUID NOT NULL,
     "wallet_id" UUID NOT NULL,
     "user_id" UUID NOT NULL,
-    "currency" "arena"."Currency" NOT NULL,
+    "currency" "Currency" NOT NULL,
     "amount" BIGINT NOT NULL,
     "balance_before" BIGINT NOT NULL,
     "balance_after" BIGINT NOT NULL,
-    "type" "arena"."TransactionType" NOT NULL,
+    "type" "TransactionType" NOT NULL,
     "source" VARCHAR(128) NOT NULL,
     "idempotency_key" VARCHAR(160) NOT NULL,
     "meta" JSONB,
@@ -93,15 +97,15 @@ CREATE TABLE "arena"."transactions" (
 );
 
 -- CreateTable
-CREATE TABLE "arena"."rooms" (
+CREATE TABLE "rooms" (
     "id" VARCHAR(16) NOT NULL,
     "server" VARCHAR(32) NOT NULL,
     "owner_id" UUID NOT NULL,
-    "status" "arena"."RoomStatus" NOT NULL DEFAULT 'WAITING',
+    "status" "RoomStatus" NOT NULL DEFAULT 'WAITING',
     "is_private" BOOLEAN NOT NULL DEFAULT false,
     "password_hash" TEXT,
     "stake" BIGINT NOT NULL,
-    "currency" "arena"."Currency" NOT NULL DEFAULT 'CHIPS',
+    "currency" "Currency" NOT NULL DEFAULT 'CREDITS',
     "max_players" INTEGER NOT NULL,
     "deck_size" INTEGER NOT NULL,
     "speed" VARCHAR(16) NOT NULL,
@@ -116,12 +120,12 @@ CREATE TABLE "arena"."rooms" (
 );
 
 -- CreateTable
-CREATE TABLE "arena"."games" (
+CREATE TABLE "games" (
     "id" UUID NOT NULL,
     "room_id" VARCHAR(16) NOT NULL,
-    "status" "arena"."GameStatus" NOT NULL DEFAULT 'PLAYING',
+    "status" "GameStatus" NOT NULL DEFAULT 'PLAYING',
     "stake" BIGINT NOT NULL,
-    "currency" "arena"."Currency" NOT NULL DEFAULT 'CHIPS',
+    "currency" "Currency" NOT NULL DEFAULT 'CREDITS',
     "settings" JSONB NOT NULL,
     "trump_card" VARCHAR(3) NOT NULL,
     "initial_deck" TEXT[],
@@ -132,12 +136,12 @@ CREATE TABLE "arena"."games" (
 );
 
 -- CreateTable
-CREATE TABLE "arena"."game_players" (
+CREATE TABLE "game_players" (
     "game_id" UUID NOT NULL,
     "user_id" UUID NOT NULL,
     "seat" INTEGER NOT NULL,
     "place" INTEGER,
-    "outcome" "arena"."GameOutcome",
+    "outcome" "GameOutcome",
     "payout" BIGINT,
     "net" BIGINT,
 
@@ -145,7 +149,7 @@ CREATE TABLE "arena"."game_players" (
 );
 
 -- CreateTable
-CREATE TABLE "arena"."game_moves" (
+CREATE TABLE "game_moves" (
     "id" BIGSERIAL NOT NULL,
     "game_id" UUID NOT NULL,
     "seq" INTEGER NOT NULL,
@@ -157,7 +161,7 @@ CREATE TABLE "arena"."game_moves" (
 );
 
 -- CreateTable
-CREATE TABLE "arena"."game_results" (
+CREATE TABLE "game_results" (
     "game_id" UUID NOT NULL,
     "kind" VARCHAR(16) NOT NULL,
     "reason" VARCHAR(32),
@@ -172,7 +176,7 @@ CREATE TABLE "arena"."game_results" (
 );
 
 -- CreateTable
-CREATE TABLE "arena"."friends" (
+CREATE TABLE "friends" (
     "user_id" UUID NOT NULL,
     "friend_id" UUID NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -181,11 +185,11 @@ CREATE TABLE "arena"."friends" (
 );
 
 -- CreateTable
-CREATE TABLE "arena"."friend_requests" (
+CREATE TABLE "friend_requests" (
     "id" UUID NOT NULL,
     "from_id" UUID NOT NULL,
     "to_id" UUID NOT NULL,
-    "status" "arena"."FriendRequestStatus" NOT NULL DEFAULT 'PENDING',
+    "status" "FriendRequestStatus" NOT NULL DEFAULT 'PENDING',
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "responded_at" TIMESTAMP(3),
 
@@ -193,14 +197,14 @@ CREATE TABLE "arena"."friend_requests" (
 );
 
 -- CreateTable
-CREATE TABLE "arena"."items" (
+CREATE TABLE "items" (
     "id" UUID NOT NULL,
     "key" VARCHAR(64) NOT NULL,
-    "kind" "arena"."ItemKind" NOT NULL,
+    "kind" "ItemKind" NOT NULL,
     "name" VARCHAR(128) NOT NULL,
-    "rarity" "arena"."Rarity" NOT NULL DEFAULT 'COMMON',
+    "rarity" "Rarity" NOT NULL DEFAULT 'COMMON',
     "price" BIGINT NOT NULL DEFAULT 0,
-    "currency" "arena"."Currency" NOT NULL DEFAULT 'COINS',
+    "currency" "Currency" NOT NULL DEFAULT 'COINS',
     "asset_url" TEXT,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "sort_order" INTEGER NOT NULL DEFAULT 0,
@@ -209,7 +213,7 @@ CREATE TABLE "arena"."items" (
 );
 
 -- CreateTable
-CREATE TABLE "arena"."user_items" (
+CREATE TABLE "user_items" (
     "user_id" UUID NOT NULL,
     "item_id" UUID NOT NULL,
     "equipped" BOOLEAN NOT NULL DEFAULT false,
@@ -220,7 +224,7 @@ CREATE TABLE "arena"."user_items" (
 );
 
 -- CreateTable
-CREATE TABLE "arena"."achievements" (
+CREATE TABLE "achievements" (
     "id" UUID NOT NULL,
     "key" VARCHAR(64) NOT NULL,
     "title" VARCHAR(128) NOT NULL,
@@ -228,14 +232,14 @@ CREATE TABLE "arena"."achievements" (
     "icon" VARCHAR(32) NOT NULL,
     "goal" INTEGER NOT NULL DEFAULT 1,
     "reward" BIGINT NOT NULL DEFAULT 0,
-    "currency" "arena"."Currency" NOT NULL DEFAULT 'COINS',
+    "currency" "Currency" NOT NULL DEFAULT 'COINS',
     "sort_order" INTEGER NOT NULL DEFAULT 0,
 
     CONSTRAINT "achievements_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "arena"."user_achievements" (
+CREATE TABLE "user_achievements" (
     "user_id" UUID NOT NULL,
     "achievement_id" UUID NOT NULL,
     "progress" INTEGER NOT NULL DEFAULT 0,
@@ -245,13 +249,13 @@ CREATE TABLE "arena"."user_achievements" (
 );
 
 -- CreateTable
-CREATE TABLE "arena"."tournaments" (
+CREATE TABLE "tournaments" (
     "id" UUID NOT NULL,
     "title" VARCHAR(128) NOT NULL,
-    "status" "arena"."TournamentStatus" NOT NULL DEFAULT 'ANNOUNCED',
+    "status" "TournamentStatus" NOT NULL DEFAULT 'ANNOUNCED',
     "entry_fee" BIGINT NOT NULL DEFAULT 0,
     "prize_pool" BIGINT NOT NULL DEFAULT 0,
-    "currency" "arena"."Currency" NOT NULL DEFAULT 'CHIPS',
+    "currency" "Currency" NOT NULL DEFAULT 'CREDITS',
     "max_players" INTEGER NOT NULL,
     "settings" JSONB NOT NULL,
     "starts_at" TIMESTAMP(3) NOT NULL,
@@ -262,7 +266,7 @@ CREATE TABLE "arena"."tournaments" (
 );
 
 -- CreateTable
-CREATE TABLE "arena"."tournament_players" (
+CREATE TABLE "tournament_players" (
     "tournament_id" UUID NOT NULL,
     "user_id" UUID NOT NULL,
     "place" INTEGER,
@@ -273,7 +277,7 @@ CREATE TABLE "arena"."tournament_players" (
 );
 
 -- CreateTable
-CREATE TABLE "arena"."notifications" (
+CREATE TABLE "notifications" (
     "id" UUID NOT NULL,
     "user_id" UUID NOT NULL,
     "kind" VARCHAR(32) NOT NULL,
@@ -285,128 +289,162 @@ CREATE TABLE "arena"."notifications" (
     CONSTRAINT "notifications_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
-CREATE UNIQUE INDEX "users_telegram_id_key" ON "arena"."users"("telegram_id");
+-- CreateTable
+CREATE TABLE "seasons" (
+    "id" UUID NOT NULL,
+    "title" VARCHAR(128) NOT NULL,
+    "starts_at" TIMESTAMP(3) NOT NULL,
+    "ends_at" TIMESTAMP(3) NOT NULL,
+    "rewarded" BOOLEAN NOT NULL DEFAULT false,
+
+    CONSTRAINT "seasons_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "season_ratings" (
+    "season_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "rating" INTEGER NOT NULL DEFAULT 0,
+    "wins" INTEGER NOT NULL DEFAULT 0,
+    "winnings" BIGINT NOT NULL DEFAULT 0,
+
+    CONSTRAINT "season_ratings_pkey" PRIMARY KEY ("season_id","user_id")
+);
 
 -- CreateIndex
-CREATE INDEX "profiles_rating_idx" ON "arena"."profiles"("rating" DESC);
+CREATE UNIQUE INDEX "users_telegram_id_key" ON "users"("telegram_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "wallets_user_id_currency_key" ON "arena"."wallets"("user_id", "currency");
+CREATE INDEX "profiles_rating_total_winnings_games_won_idx" ON "profiles"("rating" DESC, "total_winnings" DESC, "games_won" DESC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX "transactions_idempotency_key_key" ON "arena"."transactions"("idempotency_key");
+CREATE UNIQUE INDEX "wallets_user_id_currency_key" ON "wallets"("user_id", "currency");
 
 -- CreateIndex
-CREATE INDEX "transactions_user_id_created_at_idx" ON "arena"."transactions"("user_id", "created_at" DESC);
+CREATE UNIQUE INDEX "transactions_idempotency_key_key" ON "transactions"("idempotency_key");
 
 -- CreateIndex
-CREATE INDEX "transactions_source_idx" ON "arena"."transactions"("source");
+CREATE INDEX "transactions_user_id_created_at_idx" ON "transactions"("user_id", "created_at" DESC);
 
 -- CreateIndex
-CREATE INDEX "rooms_status_is_private_server_idx" ON "arena"."rooms"("status", "is_private", "server");
+CREATE INDEX "transactions_source_idx" ON "transactions"("source");
 
 -- CreateIndex
-CREATE INDEX "games_room_id_idx" ON "arena"."games"("room_id");
+CREATE INDEX "rooms_status_is_private_server_idx" ON "rooms"("status", "is_private", "server");
 
 -- CreateIndex
-CREATE INDEX "games_status_idx" ON "arena"."games"("status");
+CREATE INDEX "games_room_id_idx" ON "games"("room_id");
 
 -- CreateIndex
-CREATE INDEX "game_players_user_id_idx" ON "arena"."game_players"("user_id");
+CREATE INDEX "games_status_idx" ON "games"("status");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "game_players_game_id_seat_key" ON "arena"."game_players"("game_id", "seat");
+CREATE INDEX "game_players_user_id_idx" ON "game_players"("user_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "game_moves_game_id_seq_key" ON "arena"."game_moves"("game_id", "seq");
+CREATE UNIQUE INDEX "game_players_game_id_seat_key" ON "game_players"("game_id", "seat");
 
 -- CreateIndex
-CREATE INDEX "friend_requests_to_id_status_idx" ON "arena"."friend_requests"("to_id", "status");
+CREATE UNIQUE INDEX "game_moves_game_id_seq_key" ON "game_moves"("game_id", "seq");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "friend_requests_from_id_to_id_key" ON "arena"."friend_requests"("from_id", "to_id");
+CREATE INDEX "friend_requests_to_id_status_idx" ON "friend_requests"("to_id", "status");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "items_key_key" ON "arena"."items"("key");
+CREATE UNIQUE INDEX "friend_requests_from_id_to_id_key" ON "friend_requests"("from_id", "to_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "achievements_key_key" ON "arena"."achievements"("key");
+CREATE UNIQUE INDEX "items_key_key" ON "items"("key");
 
 -- CreateIndex
-CREATE INDEX "tournaments_status_starts_at_idx" ON "arena"."tournaments"("status", "starts_at");
+CREATE UNIQUE INDEX "achievements_key_key" ON "achievements"("key");
 
 -- CreateIndex
-CREATE INDEX "notifications_sent_at_created_at_idx" ON "arena"."notifications"("sent_at", "created_at");
+CREATE INDEX "tournaments_status_starts_at_idx" ON "tournaments"("status", "starts_at");
 
 -- CreateIndex
-CREATE INDEX "notifications_user_id_created_at_idx" ON "arena"."notifications"("user_id", "created_at" DESC);
+CREATE INDEX "notifications_sent_at_created_at_idx" ON "notifications"("sent_at", "created_at");
+
+-- CreateIndex
+CREATE INDEX "notifications_user_id_created_at_idx" ON "notifications"("user_id", "created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "seasons_starts_at_ends_at_idx" ON "seasons"("starts_at", "ends_at");
+
+-- CreateIndex
+CREATE INDEX "season_ratings_season_id_rating_idx" ON "season_ratings"("season_id", "rating" DESC);
 
 -- AddForeignKey
-ALTER TABLE "arena"."profiles" ADD CONSTRAINT "profiles_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "arena"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "profiles" ADD CONSTRAINT "profiles_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."wallets" ADD CONSTRAINT "wallets_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "arena"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "wallets" ADD CONSTRAINT "wallets_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."transactions" ADD CONSTRAINT "transactions_wallet_id_fkey" FOREIGN KEY ("wallet_id") REFERENCES "arena"."wallets"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_wallet_id_fkey" FOREIGN KEY ("wallet_id") REFERENCES "wallets"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."transactions" ADD CONSTRAINT "transactions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "arena"."users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."rooms" ADD CONSTRAINT "rooms_owner_id_fkey" FOREIGN KEY ("owner_id") REFERENCES "arena"."users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "rooms" ADD CONSTRAINT "rooms_owner_id_fkey" FOREIGN KEY ("owner_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."games" ADD CONSTRAINT "games_room_id_fkey" FOREIGN KEY ("room_id") REFERENCES "arena"."rooms"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "games" ADD CONSTRAINT "games_room_id_fkey" FOREIGN KEY ("room_id") REFERENCES "rooms"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."game_players" ADD CONSTRAINT "game_players_game_id_fkey" FOREIGN KEY ("game_id") REFERENCES "arena"."games"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "game_players" ADD CONSTRAINT "game_players_game_id_fkey" FOREIGN KEY ("game_id") REFERENCES "games"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."game_players" ADD CONSTRAINT "game_players_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "arena"."users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "game_players" ADD CONSTRAINT "game_players_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."game_moves" ADD CONSTRAINT "game_moves_game_id_fkey" FOREIGN KEY ("game_id") REFERENCES "arena"."games"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "game_moves" ADD CONSTRAINT "game_moves_game_id_fkey" FOREIGN KEY ("game_id") REFERENCES "games"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."game_moves" ADD CONSTRAINT "game_moves_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "arena"."users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "game_moves" ADD CONSTRAINT "game_moves_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."game_results" ADD CONSTRAINT "game_results_game_id_fkey" FOREIGN KEY ("game_id") REFERENCES "arena"."games"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "game_results" ADD CONSTRAINT "game_results_game_id_fkey" FOREIGN KEY ("game_id") REFERENCES "games"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."friends" ADD CONSTRAINT "friends_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "arena"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "friends" ADD CONSTRAINT "friends_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."friends" ADD CONSTRAINT "friends_friend_id_fkey" FOREIGN KEY ("friend_id") REFERENCES "arena"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "friends" ADD CONSTRAINT "friends_friend_id_fkey" FOREIGN KEY ("friend_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."friend_requests" ADD CONSTRAINT "friend_requests_from_id_fkey" FOREIGN KEY ("from_id") REFERENCES "arena"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "friend_requests" ADD CONSTRAINT "friend_requests_from_id_fkey" FOREIGN KEY ("from_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."friend_requests" ADD CONSTRAINT "friend_requests_to_id_fkey" FOREIGN KEY ("to_id") REFERENCES "arena"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "friend_requests" ADD CONSTRAINT "friend_requests_to_id_fkey" FOREIGN KEY ("to_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."user_items" ADD CONSTRAINT "user_items_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "arena"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "user_items" ADD CONSTRAINT "user_items_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."user_items" ADD CONSTRAINT "user_items_item_id_fkey" FOREIGN KEY ("item_id") REFERENCES "arena"."items"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "user_items" ADD CONSTRAINT "user_items_item_id_fkey" FOREIGN KEY ("item_id") REFERENCES "items"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."user_achievements" ADD CONSTRAINT "user_achievements_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "arena"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "user_achievements" ADD CONSTRAINT "user_achievements_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."user_achievements" ADD CONSTRAINT "user_achievements_achievement_id_fkey" FOREIGN KEY ("achievement_id") REFERENCES "arena"."achievements"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "user_achievements" ADD CONSTRAINT "user_achievements_achievement_id_fkey" FOREIGN KEY ("achievement_id") REFERENCES "achievements"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."tournament_players" ADD CONSTRAINT "tournament_players_tournament_id_fkey" FOREIGN KEY ("tournament_id") REFERENCES "arena"."tournaments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "tournament_players" ADD CONSTRAINT "tournament_players_tournament_id_fkey" FOREIGN KEY ("tournament_id") REFERENCES "tournaments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."tournament_players" ADD CONSTRAINT "tournament_players_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "arena"."users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "tournament_players" ADD CONSTRAINT "tournament_players_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arena"."notifications" ADD CONSTRAINT "notifications_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "arena"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "season_ratings" ADD CONSTRAINT "season_ratings_season_id_fkey" FOREIGN KEY ("season_id") REFERENCES "seasons"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "season_ratings" ADD CONSTRAINT "season_ratings_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- Money invariants the ORM cannot express.
 ALTER TABLE "arena"."wallets" ADD CONSTRAINT "wallets_balance_non_negative" CHECK ("balance" >= 0);
@@ -414,3 +452,4 @@ ALTER TABLE "arena"."transactions" ADD CONSTRAINT "transactions_balance_consiste
 ALTER TABLE "arena"."rooms" ADD CONSTRAINT "rooms_stake_positive" CHECK ("stake" > 0);
 ALTER TABLE "arena"."friends" ADD CONSTRAINT "friends_not_self" CHECK ("user_id" <> "friend_id");
 ALTER TABLE "arena"."friend_requests" ADD CONSTRAINT "friend_requests_not_self" CHECK ("from_id" <> "to_id");
+ALTER TABLE "arena"."profiles" ADD CONSTRAINT "profiles_bonus_range" CHECK ("bonus_multiplier" BETWEEN 1 AND 30);

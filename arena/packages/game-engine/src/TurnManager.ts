@@ -39,14 +39,27 @@ export function prevActive(state: GameState, id: PlayerId): PlayerState | undefi
   return undefined;
 }
 
-/** Players allowed to throw cards at the current defender, per the throw-in policy. */
-export function throwers(state: GameState): PlayerId[] {
+/** Everyone who may throw at the current defender this bout, per the throw-in policy. */
+export function throwInPool(state: GameState): PlayerId[] {
   const others = activePlayers(state).filter((p) => p.id !== state.defender);
   if (state.rules.throwIn === 'all') return others.map((p) => p.id);
   const allowed = new Set<PlayerId>([state.attacker]);
   const otherNeighbour = nextActive(state, state.defender);
   if (otherNeighbour) allowed.add(otherNeighbour.id);
   return others.filter((p) => allowed.has(p.id)).map((p) => p.id);
+}
+
+/**
+ * Who holds the right to throw in right now. The attacker goes first; only after the
+ * attacker says «бито» (or runs out of cards) does the right pass to the rest of the pool.
+ * A new rank from the defender clears the passes, so the right returns to the attacker.
+ */
+export function throwers(state: GameState): PlayerId[] {
+  const pool = throwInPool(state);
+  const attacker = findPlayer(state, state.attacker);
+  const attackerHolds =
+    pool.includes(state.attacker) && !state.passed.includes(state.attacker) && (attacker?.hand.length ?? 0) > 0;
+  return attackerHolds ? [state.attacker] : pool.filter((id) => id !== state.attacker);
 }
 
 export function ranksOnTable(state: GameState): Set<Rank> {

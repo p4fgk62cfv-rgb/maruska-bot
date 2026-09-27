@@ -4,7 +4,7 @@ import type { DeckSize } from './Deck.js';
  * The eight lobby "modes" are really four independent pairs of switches:
  *
  *   variant   Подкидной | Переводной
- *   throwIn   Все       | Соседи
+ *   throwIn   Все       | Соседи      (who gets the right to throw in after the attacker says «бито»)
  *   fairness  Честная   | С шулерами
  *   ending    Классика  | Ничья
  *
@@ -37,10 +37,7 @@ export interface RuleSet extends GameSettings {
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 6;
 
-/** Decks the engine can already deal. 24 and 52 are wired but not yet enabled in the lobby. */
-export const SUPPORTED_DECKS: readonly DeckSize[] = [36];
-/** Switch values that exist in the data model but have no gameplay yet. */
-export const UNSUPPORTED_FAIRNESS: readonly Fairness[] = ['cheaters'];
+export const SUPPORTED_DECKS: readonly DeckSize[] = [24, 36, 52];
 
 export const TURN_MS: Record<Speed, number> = { normal: 30_000, fast: 15_000 };
 
@@ -70,7 +67,6 @@ export function validateSettings(settings: GameSettings): string | null {
     return 'PLAYERS_OUT_OF_RANGE';
   }
   if (!SUPPORTED_DECKS.includes(settings.deckSize)) return 'DECK_NOT_SUPPORTED';
-  if (UNSUPPORTED_FAIRNESS.includes(settings.fairness)) return 'MODE_NOT_SUPPORTED';
   if (settings.players * 6 > settings.deckSize) return 'DECK_TOO_SMALL';
   return null;
 }

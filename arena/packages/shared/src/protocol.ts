@@ -17,7 +17,8 @@ export interface PlayerInfo {
   userId: string;
   name: string;
   photoUrl: string | null;
-  level: number;
+  rating: number;
+  premium: boolean;
   connected: boolean;
 }
 
@@ -33,19 +34,22 @@ export type ServerMessage =
   | { type: 'ROOM_LEFT'; room: RoomDto; userId: string }
   | { type: 'GAME_STARTED'; roomId: string; gameId: string; players: PlayerInfo[] }
   /** Full personalised snapshot; sent on start, on reconnect and after every accepted action. */
-  | { type: 'GAME_STATE'; state: PlayerView; players: PlayerInfo[] }
+  | { type: 'GAME_STATE'; state: PlayerView; players: PlayerInfo[]; features: { hints: boolean; discardReminder: boolean; canUndo: boolean } }
   /** Engine events for animations. Already filtered: no hidden cards inside. */
   | { type: 'GAME_EVENTS'; gameId: string; version: number; events: GameEvent[] }
   | { type: 'GAME_FINISHED'; gameId: string; result: GameResultDto }
+  | { type: 'EMOJI'; gameId: string; userId: string; emoji: string }
   | { type: 'PLAYER_CONNECTED'; roomId: string; userId: string }
   | { type: 'PLAYER_DISCONNECTED'; roomId: string; userId: string; graceUntil: number }
   | { type: 'PLAYER_RECONNECTED'; roomId: string; userId: string };
 
 export interface GameResultDto {
   kind: 'loser' | 'draw';
+  /** Why the fool lost: last with cards, gave up, ran out of time, or threw the last card («Классика»). */
+  reason: 'cards' | 'surrender' | 'timeout' | 'last_attack' | null;
   loserId: string | null;
   winnerId: string | null;
-  payouts: { userId: string; net: number; place: number | null }[];
+  payouts: { userId: string; net: number; place: number | null; ratingGain: number; bonusMultiplier: number }[];
   stake: number;
 }
 

@@ -16,9 +16,20 @@ export interface PlayerState {
 
 export interface TablePair {
   attack: CardId;
-  defense: CardId | null;
-  /** Who put the attacking card down (needed for "last attacker" rules and replays). */
+  /** Who put the attacking card down. */
   by: PlayerId;
+  /** Order in which cards hit the table; "С шулерами" rolls back everything from a caught card on. */
+  attackSeq: number;
+  defense: CardId | null;
+  defenseBy: PlayerId | null;
+  defenseSeq: number | null;
+}
+
+export interface LastMove {
+  playerId: PlayerId;
+  /** Version produced by the move; undo is only possible while nothing happened after it. */
+  version: number;
+  boutNumber: number;
 }
 
 /**
@@ -30,7 +41,7 @@ export interface TablePair {
 export type Phase = 'attack' | 'defense' | 'taking' | 'finished';
 
 export type GameResult =
-  | { kind: 'loser'; loser: PlayerId; reason: 'cards' | 'left' | 'last_attack' }
+  | { kind: 'loser'; loser: PlayerId; reason: 'cards' | 'surrender' | 'timeout' | 'last_attack' }
   | { kind: 'draw' };
 
 export interface GameState {
@@ -56,6 +67,13 @@ export interface GameState {
   /** Throwers who declared "Пас/Бито" since the last time a new rank appeared on the table. */
   passed: PlayerId[];
   turnDeadline: number | null;
+  /** Counter for TablePair seq numbers. */
+  moveSeq: number;
+  /** Seq numbers of illegal cards on the table ("С шулерами"). Server-only: never sent to clients. */
+  illegal: number[];
+  /** Players caught cheating; they must play by the rules until the end of the game. */
+  cheaters: PlayerId[];
+  lastMove: LastMove | null;
   finishOrder: PlayerId[];
   winner: PlayerId | null;
   loser: PlayerId | null;

@@ -3,3 +3,5 @@ export * from './errors.js';
 export * from './lobby.js';
 export * from './protocol.js';
 export * from './servers.js';
+export * from './rating.js';
+export * from './economy.js';

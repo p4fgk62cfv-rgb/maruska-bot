@@ -35,9 +35,9 @@ export default function TournamentsScreen() {
                     </div>
                     <div className="tour-card__grid">
                       <span>Призовой фонд</span>
-                      <Balance kind="chips" value={t.prizePool} compact />
+                      <Balance kind="credits" value={t.prizePool} compact />
                       <span>Взнос</span>
-                      <Balance kind="chips" value={t.entryFee} compact />
+                      <Balance kind="credits" value={t.entryFee} compact />
                       <span>Участники</span>
                       <strong>{t.players}/{t.maxPlayers}</strong>
                       <span>Начало</span>

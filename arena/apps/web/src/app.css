@@ -36,6 +36,9 @@
 .home-profile__name strong { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-profile__meta { display: flex; gap: 12px; color: var(--text-2); font-size: 13px; font-weight: 600; }
 .home-profile__meta span { display: inline-flex; align-items: center; gap: 4px; }
+.home-profile__bonus { color: var(--gold); }
+.home-profile__main .ui-rank { align-self: flex-start; }
+.home-wallet__main .ui-btn { margin-top: 6px; align-self: flex-start; }
 
 .home-wallet { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 10px; }
 .home-wallet__main, .home-wallet__side { padding: 12px 14px; display: flex; flex-direction: column; justify-content: center; gap: 4px; border-radius: 18px; }
@@ -74,7 +77,6 @@
 /* Profile */
 .profile-card { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding-top: 22px; }
 .profile-card h2 { font-size: 22px; font-weight: 900; margin-top: 6px; }
-.profile-card__xp { width: 100%; display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .profile-card__wallet { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
 .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .stat-grid__cell { display: flex; flex-direction: column; gap: 2px; padding: 12px 10px; border-radius: 16px; }
@@ -111,3 +113,14 @@
 .rules h3 { font-size: 16px; margin-bottom: 8px; color: var(--violet-hi); }
 .rules p { color: var(--text-2); font-size: 14px; }
 .rules p + p { margin-top: 8px; }
+
+/* Leaderboard */
+.board-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
+.board-row__place { width: 28px; text-align: center; font-weight: 900; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.board-row__place--top { color: var(--gold); }
+.board-row__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.board-row__body strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.board-row__value { font-weight: 800; font-variant-numeric: tabular-nums; }
+.league-card { display: flex; flex-direction: column; gap: 10px; }
+.league-card__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.board-row__body .ui-rank { align-self: flex-start; }

@@ -1,6 +1,6 @@
 import type { CardId, Suit } from './Card.js';
 import type { GameResult, GameState, Phase, PlayerId, PlayerStatus, TablePair } from './GameState.js';
-import type { Speed, Variant, ThrowInPolicy, Ending } from './Rules.js';
+import type { Ending, Fairness, Speed, ThrowInPolicy, Variant } from './Rules.js';
 import { legalActions, NO_ACTIONS, type AvailableActions } from './GameEngine.js';
 
 export interface PublicPlayer {
@@ -20,7 +20,7 @@ export interface PlayerView {
   version: number;
   status: GameState['status'];
   phase: Phase;
-  rules: { variant: Variant; throwIn: ThrowInPolicy; ending: Ending; deckSize: number; speed: Speed; turnMs: number };
+  rules: { variant: Variant; throwIn: ThrowInPolicy; fairness: Fairness; ending: Ending; deckSize: number; speed: Speed; turnMs: number };
   players: PublicPlayer[];
   you: { id: PlayerId; hand: CardId[] } | null;
   deckCount: number;
@@ -28,6 +28,9 @@ export interface PlayerView {
   trump: { suit: Suit; card: CardId | null };
   table: TablePair[];
   discardCount: number;
+  /** Only with the «напомнить отбой» option: those cards were seen by everyone, so this is fair. */
+  discard: CardId[] | null;
+  cheaters: PlayerId[];
   attacker: PlayerId;
   defender: PlayerId;
   currentPlayer: PlayerId | null;
@@ -41,7 +44,22 @@ export interface PlayerView {
   actions: AvailableActions;
 }
 
-export function toPlayerView(state: GameState, viewer: PlayerId | null): PlayerView {
+export interface ViewOptions {
+  /** «Подсветка»: include the lists of playable cards (premium or bought for coins). */
+  hints?: boolean;
+  /** «Напомнить отбой». */
+  discard?: boolean;
+}
+
+/**
+ * Without hints the player still learns *whether* they can act (buttons), just not which
+ * cards fit — a modified client could work that out from its own hand, so this is comfort, not secrecy.
+ */
+function stripHints(actions: AvailableActions): AvailableActions {
+  return { ...actions, attack: [], defend: {}, transfer: [] };
+}
+
+export function toPlayerView(state: GameState, viewer: PlayerId | null, options: ViewOptions = {}): PlayerView {
   const me = viewer ? state.players.find((p) => p.id === viewer) : undefined;
   const { rules } = state;
   return {
@@ -52,6 +70,7 @@ export function toPlayerView(state: GameState, viewer: PlayerId | null): PlayerV
     rules: {
       variant: rules.variant,
       throwIn: rules.throwIn,
+      fairness: rules.fairness,
       ending: rules.ending,
       deckSize: rules.deckSize,
       speed: rules.speed,
@@ -67,8 +86,18 @@ export function toPlayerView(state: GameState, viewer: PlayerId | null): PlayerV
     you: me ? { id: me.id, hand: [...me.hand] } : null,
     deckCount: state.deck.length,
     trump: { suit: state.trump.suit, card: state.deck.length > 0 ? state.trump.card : null },
-    table: state.table.map((pair) => ({ ...pair })),
+    // Explicit copy: server-only markers (which cards are illegal) must never leak.
+    table: state.table.map((pair) => ({
+      attack: pair.attack,
+      by: pair.by,
+      attackSeq: pair.attackSeq,
+      defense: pair.defense,
+      defenseBy: pair.defenseBy,
+      defenseSeq: pair.defenseSeq,
+    })),
     discardCount: state.discard.length,
+    discard: options.discard ? [...state.discard] : null,
+    cheaters: [...state.cheaters],
     attacker: state.attacker,
     defender: state.defender,
     currentPlayer: state.currentPlayer,
@@ -79,6 +108,6 @@ export function toPlayerView(state: GameState, viewer: PlayerId | null): PlayerV
     winner: state.winner,
     loser: state.loser,
     result: state.result,
-    actions: me ? legalActions(state, me.id) : NO_ACTIONS,
+    actions: me ? (options.hints ? legalActions(state, me.id) : stripHints(legalActions(state, me.id))) : NO_ACTIONS,
   };
 }

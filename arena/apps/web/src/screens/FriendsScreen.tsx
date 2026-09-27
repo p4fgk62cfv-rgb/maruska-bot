@@ -1,5 +1,5 @@
 import type { FriendDto } from '@arena/shared';
-import { Avatar, Badge, EmptyState, Panel, Tabs } from '@arena/ui';
+import { Avatar, Badge, EmptyState, Panel, RatingBadge, Tabs } from '@arena/ui';
 import { useState } from 'react';
 import { useQuery } from '../lib/useQuery.js';
 import { QueryView, ScreenHeader } from './common.js';
@@ -35,7 +35,7 @@ export default function FriendsScreen() {
                       <Avatar id={f.id} name={f.name} photoUrl={f.photoUrl} status={f.presence} />
                       <div className="friend-row__body">
                         <strong>{f.name}</strong>
-                        <span className="app-muted">Ур. {f.level} · {f.rating}</span>
+                        <RatingBadge rating={f.rating} />
                       </div>
                       <Badge tone={tone}>{label}</Badge>
                     </Panel>

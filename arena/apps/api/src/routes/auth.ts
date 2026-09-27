@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { issueSession } from '../auth/session.js';
 import type { Context } from '../context.js';
 import { AppError } from '../lib/errors.js';
+import { isBanned } from '../services/users.js';
 import { signInitData, verifyInitData } from '../telegram/initData.js';
 
 const bodySchema = z.object({ initData: z.string().min(1).max(8192) });
@@ -17,7 +18,7 @@ export async function authRoutes(app: FastifyInstance, ctx: Context): Promise<vo
     if (!verified.ok) throw new AppError(verified.error);
 
     const user = await ctx.users.upsertFromTelegram(verified.data.user);
-    if (user.bannedAt) throw new AppError('FORBIDDEN');
+    if (isBanned(user)) throw new AppError('BANNED');
 
     const expiresAt = Date.now() + config.SESSION_TTL_HOURS * 3600_000;
     const token = issueSession(

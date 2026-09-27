@@ -17,6 +17,9 @@ const STATUS: Partial<Record<AppErrorCode, number>> = {
   ALREADY_IN_ROOM: 409,
   MODE_NOT_SUPPORTED: 400,
   DECK_NOT_SUPPORTED: 400,
+  BANNED: 403,
+  DAILY_CREDITS_NOT_READY: 409,
+  DAILY_CREDITS_BALANCE_TOO_HIGH: 409,
 };
 
 /** An expected failure that is safe to show to the user. Anything else becomes SERVER_ERROR. */

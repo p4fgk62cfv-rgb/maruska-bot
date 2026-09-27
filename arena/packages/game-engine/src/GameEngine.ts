@@ -3,7 +3,8 @@ import { createDeck, shuffle, type Random } from './Deck.js';
 import { EngineError, type ActionResult, type GameAction, type GameEvent } from './Actions.js';
 import type { GameState, PlayerId, PlayerState } from './GameState.js';
 import { resolveRules, validateSettings, type GameSettings } from './Rules.js';
-import { attackOptions, playAttack, playPass } from './AttackManager.js';
+import { attackOptions, canAttackNow, playAttackCards, playPass } from './AttackManager.js';
+import { reportCheat } from './CheatManager.js';
 import { declareTake, defenseOptions, playDefense } from './DefenseManager.js';
 import { playTransfer, transferOptions } from './TransferManager.js';
 import { activePlayers, finishGame, findPlayer, getPlayer, pendingThrowers, setTurn, startBout, undefendedCount } from './TurnManager.js';
@@ -55,6 +56,10 @@ export function createGame(input: CreateGameInput): { state: GameState; events: 
     boutNumber: 0,
     passed: [],
     turnDeadline: null,
+    moveSeq: 0,
+    illegal: [],
+    cheaters: [],
+    lastMove: null,
     finishOrder: [],
     winner: null,
     loser: null,
@@ -96,6 +101,8 @@ export function applyAction(state: GameState, playerId: PlayerId, action: GameAc
   }
   next.version += 1;
   next.updatedAt = now;
+  const placedCard = action.type === 'PLAY_CARD' || action.type === 'PLAY_CARDS';
+  next.lastMove = placedCard && next.status === 'playing' ? { playerId, version: next.version, boutNumber: next.boutNumber } : null;
   return { ok: true, state: next, events };
 }
 
@@ -132,8 +139,14 @@ function dispatch(state: GameState, playerId: PlayerId, action: GameAction, now:
       if (playerId === state.defender && state.phase === 'defense') {
         playDefense(state, playerId, card, action.target, now, events);
       } else {
-        playAttack(state, playerId, card, now, events);
+        playAttackCards(state, playerId, [card], now, events);
       }
+      return;
+    }
+    case 'PLAY_CARDS': {
+      if (!Array.isArray(action.cards) || action.cards.length > 6) throw new EngineError('BAD_ACTION');
+      const cards = action.cards.map((card) => requireOwnCard(player, card));
+      playAttackCards(state, playerId, cards, now, events);
       return;
     }
     case 'TRANSFER':
@@ -144,6 +157,10 @@ function dispatch(state: GameState, playerId: PlayerId, action: GameAction, now:
       return;
     case 'PASS':
       playPass(state, playerId, now, events);
+      return;
+    case 'REPORT_CHEAT':
+      if (!Number.isInteger(action.seq)) throw new EngineError('BAD_ACTION');
+      reportCheat(state, playerId, action.seq, now, events);
       return;
     default:
       throw new EngineError('BAD_ACTION');
@@ -156,70 +173,130 @@ function requireOwnCard(player: PlayerState, card: unknown): CardId {
   return card;
 }
 
-/** Leaving mid-game is a forfeit: the leaver is the fool and the game ends for everyone. */
-function leave(state: GameState, player: PlayerState, now: number, events: GameEvent[]): void {
+/** «Сдаться» or running out of time: that player loses and the game ends for everyone. */
+function forfeit(state: GameState, player: PlayerState, reason: 'surrender' | 'timeout', now: number, events: GameEvent[]): void {
   // A player who already finished keeps their place and may close the game freely.
   if (player.status !== 'active') throw new EngineError('PLAYER_NOT_ACTIVE');
   player.status = 'left';
-  events.push({ type: 'PLAYER_LEFT', playerId: player.id });
-  finishGame(state, { kind: 'loser', loser: player.id, reason: 'left' }, now, events);
+  events.push({ type: 'PLAYER_LEFT', playerId: player.id, reason });
+  finishGame(state, { kind: 'loser', loser: player.id, reason }, now, events);
+}
+
+function leave(state: GameState, player: PlayerState, now: number, events: GameEvent[]): void {
+  forfeit(state, player, 'surrender', now, events);
 }
 
 /**
- * Server tick: when the turn timer runs out, make the least harmful move for whoever
- * is holding the game up. Returns null when nothing is overdue.
+ * Server tick when the turn timer runs out. A player who must move — the attacker who
+ * has to lead, or the defender facing unbeaten cards — loses by timeout. Throwers who
+ * merely haven't said «бито»/«пас» are passed automatically. Returns null when nothing is overdue.
  */
 export function applyTimeout(state: GameState, now: number): ActionResult | null {
   if (state.status !== 'playing' || state.turnDeadline === null || now < state.turnDeadline) return null;
 
-  if (state.phase === 'attack') {
-    const attacker = getPlayer(state, state.attacker);
-    const weakest = [...attacker.hand].sort(
-      (a, b) => cardStrength(a, state.trump.suit) - cardStrength(b, state.trump.suit),
-    )[0];
-    if (!weakest) return null;
-    return applyAction(state, attacker.id, { type: 'PLAY_CARD', card: weakest }, now);
+  const mustMove =
+    state.phase === 'attack' ? state.attacker : state.phase === 'defense' && undefendedCount(state) > 0 ? state.defender : null;
+
+  if (mustMove) {
+    const next = cloneState(state);
+    const events: GameEvent[] = [];
+    forfeit(next, getPlayer(next, mustMove), 'timeout', now, events);
+    next.version += 1;
+    next.lastMove = null;
+    return { ok: true, state: next, events };
   }
 
-  if (state.phase === 'defense' && undefendedCount(state) > 0) {
-    return applyAction(state, state.defender, { type: 'TAKE_CARDS' }, now);
-  }
-
-  // Throwers are stalling: pass for all of them in one step.
   let current: GameState = state;
   const events: GameEvent[] = [];
-  for (const id of pendingThrowers(state)) {
-    if (current.status !== 'playing' || current.boutNumber !== state.boutNumber) break;
-    const result = applyAction(current, id, { type: 'PASS' }, now);
-    if (!result.ok) break;
-    current = result.state;
-    events.push(...result.events);
+  // Passing hands the right to the next throwers, so keep going until the bout moves on.
+  for (let guard = 0; guard < state.players.length * 2; guard++) {
+    const pending = pendingThrowers(current);
+    if (current.status !== 'playing' || current.boutNumber !== state.boutNumber || pending.length === 0) break;
+    for (const id of pending) {
+      if (current.boutNumber !== state.boutNumber) break;
+      const result = applyAction(current, id, { type: 'PASS' }, now);
+      if (!result.ok) break;
+      current = result.state;
+      events.push(...result.events);
+    }
   }
-  return current === state ? null : { ok: true, state: current, events };
+  if (current === state) return null;
+  current.lastMove = null;
+  return { ok: true, state: current, events };
+}
+
+/**
+ * «Вернуть карту»: the last card move is taken back, as long as nobody acted after it
+ * and it did not end the bout (no cards were drawn). The server keeps `before` — the
+ * state right before that move — and charges coins for the undo.
+ */
+export function undoLastMove(before: GameState, after: GameState, playerId: PlayerId, now: number): ActionResult {
+  const move = after.lastMove;
+  if (
+    after.status !== 'playing' ||
+    !move ||
+    move.playerId !== playerId ||
+    move.version !== after.version ||
+    before.version !== after.version - 1 ||
+    move.boutNumber !== before.boutNumber
+  ) {
+    return { ok: false, error: 'CANNOT_UNDO' };
+  }
+  const restored = cloneState(before);
+  restored.version = after.version + 1;
+  restored.updatedAt = now;
+  restored.lastMove = null;
+  const events: GameEvent[] = [{ type: 'MOVE_UNDONE', playerId }];
+  setTurn(restored, now, events);
+  return { ok: true, state: restored, events };
 }
 
 export interface AvailableActions {
+  /** Card lists are the «подсветка» hints; see PlayerView options. */
   attack: CardId[];
   defend: Partial<Record<CardId, number[]>>;
   transfer: CardId[];
+  /** Whether the player may put an attack card down / defend / transfer at all. Drive the buttons. */
+  canAttack: boolean;
+  canDefend: boolean;
+  canTransfer: boolean;
   take: boolean;
   pass: boolean;
+  /** «С шулерами»: pointing at table cards is possible. */
+  canReport: boolean;
 }
 
-export const NO_ACTIONS: AvailableActions = { attack: [], defend: {}, transfer: [], take: false, pass: false };
+export const NO_ACTIONS: AvailableActions = {
+  attack: [],
+  defend: {},
+  transfer: [],
+  canAttack: false,
+  canDefend: false,
+  canTransfer: false,
+  take: false,
+  pass: false,
+  canReport: false,
+};
 
-/** What the given player may do right now. Drives the client buttons; the server re-validates anyway. */
+/** What the given player may do right now. The server re-validates every action anyway. */
 export function legalActions(state: GameState, playerId: PlayerId): AvailableActions {
   const player = findPlayer(state, playerId);
   if (!player || player.status !== 'active' || state.status !== 'playing') return NO_ACTIONS;
 
   const isDefender = playerId === state.defender;
+  const defend = defenseOptions(state, playerId);
+  const transfer = transferOptions(state, playerId);
+  const bout = state.phase === 'defense' || state.phase === 'taking';
   return {
     attack: attackOptions(state, playerId),
-    defend: defenseOptions(state, playerId),
-    transfer: transferOptions(state, playerId),
+    defend,
+    transfer,
+    canAttack: canAttackNow(state, playerId),
+    canDefend: Object.keys(defend).length > 0,
+    canTransfer: transfer.length > 0,
     take: isDefender && state.phase === 'defense' && undefendedCount(state) > 0,
-    pass: !isDefender && pendingThrowers(state).includes(playerId) && (state.phase === 'defense' || state.phase === 'taking'),
+    pass: !isDefender && bout && pendingThrowers(state).includes(playerId),
+    canReport: state.rules.fairness === 'cheaters' && bout && state.table.length > 0,
   };
 }
 

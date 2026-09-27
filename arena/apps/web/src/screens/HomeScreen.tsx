@@ -1,4 +1,10 @@
-import { Avatar, Badge, Balance, Button, Icon, Panel, PlayingCard, ProgressBar, Tile, type TileProps } from '@arena/ui';
+import { Avatar, Badge, Balance, Button, Icon, Panel, PlayingCard, RatingBadge, Tile, type TileProps } from '@arena/ui';
+import { DAILY_CREDITS } from '@arena/shared';
+import { useState } from 'react';
+import { ApiError, api } from '../lib/api.js';
+import { haptic } from '../lib/telegram.js';
+import { useSession } from '../session.js';
+import { useToast } from '../toast.js';
 import { useNav, type Page, type Tab } from '../navigation.js';
 import { useMe } from '../session.js';
 
@@ -19,8 +25,23 @@ const LINKS: Link[] = [
 
 export function HomeScreen() {
   const me = useMe();
+  const { refreshMe } = useSession();
+  const toast = useToast();
   const { setTab, push } = useNav();
+  const [claiming, setClaiming] = useState(false);
   const s = me.stats;
+
+  const claimDaily = () => {
+    setClaiming(true);
+    api('/wallet/daily-credits', { method: 'POST' })
+      .then(() => {
+        haptic.success();
+        toast(`+${DAILY_CREDITS.amount} кредитов`, 'success');
+        return refreshMe();
+      })
+      .catch((e: unknown) => toast(e instanceof ApiError ? e.message : 'Ошибка', 'error'))
+      .finally(() => setClaiming(false));
+  };
 
   return (
     <div className="app-stack">
@@ -29,21 +50,26 @@ export function HomeScreen() {
         <div className="home-profile__main">
           <div className="home-profile__name">
             <strong>{me.name}</strong>
-            <Badge tone="violet">Ур. {s.level}</Badge>
+            {me.premiumUntil && new Date(me.premiumUntil) > new Date() && <Badge tone="gold">Премиум</Badge>}
           </div>
-          <ProgressBar value={s.xp} max={s.xp + s.xpToNext} />
+          <RatingBadge rating={s.rating} streak={me.bonus.streak} />
           <div className="home-profile__meta">
-            <span><Icon name="star" size={14} /> {s.rating}</span>
             <span><Icon name="trophy" size={14} /> {s.gamesWon} побед</span>
             <span>{s.winRate}%</span>
+            {me.bonus.availableAt === null && <span className="home-profile__bonus">×{me.bonus.multiplier} к рейтингу</span>}
           </div>
         </div>
       </Panel>
 
       <div className="home-wallet">
         <Panel padded={false} className="home-wallet__main">
-          <span className="home-wallet__label">Баланс</span>
-          <Balance kind="chips" value={me.wallet.chips} />
+          <span className="home-wallet__label">Кредиты</span>
+          <Balance kind="credits" value={me.wallet.credits} />
+          {me.dailyCredits.available && (
+            <Button size="sm" variant="gold" loading={claiming} onClick={claimDaily}>
+              +{DAILY_CREDITS.amount} бесплатно
+            </Button>
+          )}
         </Panel>
         <Panel padded={false} className="home-wallet__side">
           <Balance kind="coins" value={me.wallet.coins} compact />

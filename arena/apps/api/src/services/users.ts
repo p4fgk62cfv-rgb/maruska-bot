@@ -1,12 +1,15 @@
-import type { MeDto, PublicUserDto, WalletDto } from '@arena/shared';
+import { DAILY_CREDITS, RATING, type MeDto, type PublicUserDto, type WalletDto } from '@arena/shared';
 import type { Db } from '../db.js';
 import type { Currency, Profile, User } from '../generated/prisma/client.js';
 import { toNumber } from '../lib/money.js';
 import type { TelegramUser } from '../telegram/initData.js';
 import type { Ledger } from './ledger.js';
-import { levelFromXp } from './progress.js';
 
-const CURRENCIES: Currency[] = ['CHIPS', 'COINS', 'DIAMONDS'];
+export function isBanned(user: Pick<User, 'bannedAt' | 'bannedUntil'>, now = new Date()): boolean {
+  return user.bannedAt !== null && (user.bannedUntil === null || user.bannedUntil > now);
+}
+
+const CURRENCIES: Currency[] = ['CREDITS', 'COINS', 'DIAMONDS'];
 
 export function displayName(user: Pick<User, 'firstName' | 'lastName' | 'username'>): string {
   return [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.username || 'Игрок';
@@ -39,7 +42,7 @@ export class UserService {
     if (this.signupBonus > 0) {
       await this.ledger.post({
         userId: user.id,
-        currency: 'CHIPS',
+        currency: 'CREDITS',
         amount: BigInt(this.signupBonus),
         type: 'SIGNUP_BONUS',
         source: 'signup',
@@ -56,25 +59,50 @@ export class UserService {
   async wallet(userId: string): Promise<WalletDto> {
     const rows = await this.db.wallet.findMany({ where: { userId } });
     const get = (c: Currency) => toNumber(rows.find((r) => r.currency === c)?.balance ?? 0n);
-    return { chips: get('CHIPS'), coins: get('COINS'), diamonds: get('DIAMONDS') };
+    return { credits: get('CREDITS'), coins: get('COINS'), diamonds: get('DIAMONDS') };
   }
 
   async me(userId: string): Promise<MeDto | null> {
     const user = await this.db.user.findUnique({ where: { id: userId }, include: { profile: true } });
     if (!user?.profile) return null;
-    const [wallet, unlocked, total] = await Promise.all([
+    const [wallet, unlocked, total, lastDaily] = await Promise.all([
       this.wallet(userId),
       this.db.userAchievement.count({ where: { userId, unlockedAt: { not: null } } }),
       this.db.achievement.count(),
+      this.lastDailyCredits(userId),
     ]);
+    const profile = user.profile;
+    const now = Date.now();
+    const bonusReady = profile.bonusLastAt ? profile.bonusLastAt.getTime() + RATING.bonus.cooldownMs : null;
+    const dailyReady = lastDaily ? lastDaily.getTime() + DAILY_CREDITS.cooldownMs : null;
+    const bonusReset = profile.lastPlayedAt !== null && now - profile.lastPlayedAt.getTime() > RATING.bonus.resetAfterMs;
     return {
-      ...publicUser(user, user.profile),
+      ...publicUser(user, profile),
       firstName: user.firstName,
       lastName: user.lastName,
       languageCode: user.languageCode,
       wallet,
-      stats: stats(user.profile, unlocked, total),
+      stats: stats(profile, unlocked, total),
+      premiumUntil: profile.premiumUntil?.toISOString() ?? null,
+      bonus: {
+        multiplier: bonusReset ? RATING.bonus.min : profile.bonusMultiplier,
+        availableAt: bonusReady && bonusReady > now ? new Date(bonusReady).toISOString() : null,
+        streak: bonusReset ? 0 : profile.bonusStreak,
+      },
+      dailyCredits: {
+        available: wallet.credits < DAILY_CREDITS.belowBalance && (!dailyReady || dailyReady <= now),
+        availableAt: dailyReady && dailyReady > now ? new Date(dailyReady).toISOString() : null,
+      },
     };
+  }
+
+  async lastDailyCredits(userId: string): Promise<Date | null> {
+    const row = await this.db.transaction.findFirst({
+      where: { userId, type: 'DAILY_BONUS' },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+    return row?.createdAt ?? null;
   }
 
   async publicProfile(userId: string): Promise<PublicUserDto | null> {
@@ -89,19 +117,15 @@ export function publicUser(user: User, profile: Profile): PublicUserDto {
     name: displayName(user),
     username: user.username,
     photoUrl: user.photoUrl,
-    level: levelFromXp(profile.xp).level,
     rating: profile.rating,
   };
 }
 
 function stats(profile: Profile, unlocked: number, total: number): MeDto['stats'] {
-  const progress = levelFromXp(profile.xp);
   const decided = profile.gamesWon + profile.gamesLost;
   return {
-    level: progress.level,
-    xp: profile.xp,
-    xpToNext: progress.toNext,
     rating: profile.rating,
+    totalWinnings: toNumber(profile.totalWinnings),
     gamesPlayed: profile.gamesPlayed,
     gamesWon: profile.gamesWon,
     gamesLost: profile.gamesLost,

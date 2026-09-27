@@ -14,13 +14,13 @@ export function formatCompact(value: number): string {
 }
 
 export interface BalanceProps {
-  kind: 'chips' | 'coins' | 'diamonds';
+  kind: 'credits' | 'coins' | 'diamonds';
   value: number;
   compact?: boolean;
 }
 
-const ICON = { chips: 'chip', coins: 'coin', diamonds: 'gem' } as const;
-const LABEL = { chips: 'Фишки', coins: 'Монеты', diamonds: 'Алмазы' } as const;
+const ICON = { credits: 'chip', coins: 'coin', diamonds: 'gem' } as const;
+const LABEL = { credits: 'Кредиты', coins: 'Монеты', diamonds: 'Алмазы' } as const;
 
 export function Balance({ kind, value, compact }: BalanceProps) {
   return (

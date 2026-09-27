@@ -1,18 +1,17 @@
 /** REST DTOs shared by apps/api and apps/web. Money is sent as number (all balances stay below 2^53). */
 
-export type Currency = 'CHIPS' | 'COINS' | 'DIAMONDS';
+export type Currency = 'CREDITS' | 'COINS' | 'DIAMONDS';
 
 export interface WalletDto {
-  chips: number;
+  credits: number;
   coins: number;
   diamonds: number;
 }
 
 export interface ProfileStatsDto {
-  level: number;
-  xp: number;
-  xpToNext: number;
+  /** League, level, stars and bars are derived on the client with ratingBadge(rating). */
   rating: number;
+  totalWinnings: number;
   gamesPlayed: number;
   gamesWon: number;
   gamesLost: number;
@@ -23,12 +22,18 @@ export interface ProfileStatsDto {
   achievementsTotal: number;
 }
 
+export interface BonusDto {
+  multiplier: number;
+  /** null — the bonus is ready for the next win. */
+  availableAt: string | null;
+  streak: number;
+}
+
 export interface PublicUserDto {
   id: string;
   name: string;
   username: string | null;
   photoUrl: string | null;
-  level: number;
   rating: number;
 }
 
@@ -38,6 +43,26 @@ export interface MeDto extends PublicUserDto {
   languageCode: string | null;
   wallet: WalletDto;
   stats: ProfileStatsDto;
+  premiumUntil: string | null;
+  bonus: BonusDto;
+  dailyCredits: { available: boolean; availableAt: string | null };
+}
+
+export type LeaderboardBy = 'rating' | 'winnings' | 'wins';
+
+export interface LeaderboardRowDto extends PublicUserDto {
+  place: number;
+  totalWinnings: number;
+  gamesWon: number;
+}
+
+export interface SeasonDto {
+  id: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  top: (PublicUserDto & { place: number; seasonRating: number })[];
+  me: { place: number | null; seasonRating: number };
 }
 
 export interface AuthResponse {

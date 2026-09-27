@@ -24,7 +24,10 @@ model User {
   photoUrl     String?   @map("photo_url")
   languageCode String?   @map("language_code") @db.VarChar(16)
   isPremium    Boolean   @default(false) @map("is_premium")
+  /// Moderation: bannedAt set + bannedUntil null = permanent ban (repeat offence).
   bannedAt     DateTime? @map("banned_at")
+  bannedUntil  DateTime? @map("banned_until")
+  banReason    String?   @map("ban_reason") @db.VarChar(255)
   createdAt    DateTime  @default(now()) @map("created_at")
   lastSeenAt   DateTime  @default(now()) @map("last_seen_at")
 
@@ -42,37 +45,47 @@ model User {
   achievements       UserAchievement[]
   tournamentEntries  TournamentPlayer[]
   notifications      Notification[]
+  seasonRatings      SeasonRating[]
 
   @@map("users")
   @@schema("arena")
 }
 
 model Profile {
-  userId       String   @id @map("user_id") @db.Uuid
-  level        Int      @default(1)
-  xp           Int      @default(0)
-  rating       Int      @default(1000)
-  gamesPlayed  Int      @default(0) @map("games_played")
-  gamesWon     Int      @default(0) @map("games_won")
-  gamesLost    Int      @default(0) @map("games_lost")
-  gamesDraw    Int      @default(0) @map("games_draw")
-  winStreak    Int      @default(0) @map("win_streak")
-  bestStreak   Int      @default(0) @map("best_streak")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  userId        String    @id @map("user_id") @db.Uuid
+  /// Total rating; league and level are derived from it (@arena/shared ratingBadge).
+  rating        Int       @default(0)
+  /// Credits won over all time — second key of the leaderboard.
+  totalWinnings BigInt    @default(0) @map("total_winnings")
+  gamesPlayed   Int       @default(0) @map("games_played")
+  gamesWon      Int       @default(0) @map("games_won")
+  gamesLost     Int       @default(0) @map("games_lost")
+  gamesDraw     Int       @default(0) @map("games_draw")
+  winStreak     Int       @default(0) @map("win_streak")
+  bestStreak    Int       @default(0) @map("best_streak")
+  premiumUntil  DateTime? @map("premium_until")
+  /// Regular-player bonus (@arena/shared settleBonus).
+  bonusMultiplier Int       @default(2) @map("bonus_multiplier")
+  bonusLastAt     DateTime? @map("bonus_last_at")
+  bonusStreak     Int       @default(0) @map("bonus_streak")
+  lastPlayedAt    DateTime? @map("last_played_at")
+  /// Times caught in «С шулерами» — for moderation and achievements.
+  caughtCheating  Int       @default(0) @map("caught_cheating")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([rating(sort: Desc)])
+  @@index([rating(sort: Desc), totalWinnings(sort: Desc), gamesWon(sort: Desc)])
   @@map("profiles")
   @@schema("arena")
 }
 
 // ───────────────────────── economy ─────────────────────────
 
-/// CHIPS — stake currency (the big "balance"); COINS — premium soft currency;
+/// CREDITS — stake currency («кредиты», the big balance); COINS — «монеты» for extras and cosmetics;
 /// DIAMONDS — reserved for the bridge with the bot's 💎.
 enum Currency {
-  CHIPS
+  CREDITS
   COINS
   DIAMONDS
 
@@ -91,6 +104,8 @@ enum TransactionType {
   ACHIEVEMENT_REWARD
   EXCHANGE
   ADMIN
+  /// Moderator clawback of credits/coins obtained by deliberate losing or paid transfers.
+  MODERATION
 
   @@schema("arena")
 }
@@ -158,7 +173,7 @@ model Room {
   isPrivate    Boolean    @default(false) @map("is_private")
   passwordHash String?    @map("password_hash")
   stake        BigInt
-  currency     Currency   @default(CHIPS)
+  currency     Currency   @default(CREDITS)
   maxPlayers   Int        @map("max_players")
   deckSize     Int        @map("deck_size")
   speed        String     @db.VarChar(16)
@@ -190,7 +205,7 @@ model Game {
   roomId      String     @map("room_id") @db.VarChar(16)
   status      GameStatus @default(PLAYING)
   stake       BigInt
-  currency    Currency   @default(CHIPS)
+  currency    Currency   @default(CREDITS)
   settings    Json
   trumpCard   String     @map("trump_card") @db.VarChar(3)
   /// Full shuffled deck for audits and dispute resolution. Never sent to clients.
@@ -420,7 +435,7 @@ model Tournament {
   status     TournamentStatus @default(ANNOUNCED)
   entryFee   BigInt           @default(0) @map("entry_fee")
   prizePool  BigInt           @default(0) @map("prize_pool")
-  currency   Currency         @default(CHIPS)
+  currency   Currency         @default(CREDITS)
   maxPlayers Int              @map("max_players")
   settings   Json
   startsAt   DateTime         @map("starts_at")
@@ -466,5 +481,38 @@ model Notification {
   @@index([sentAt, createdAt])
   @@index([userId, createdAt(sort: Desc)])
   @@map("notifications")
+  @@schema("arena")
+}
+
+// ───────────────────────── seasons ─────────────────────────
+
+/// Seasonal rating: everyone starts from zero; the top players are rewarded when it ends.
+model Season {
+  id       String   @id @default(uuid(7)) @db.Uuid
+  title    String   @db.VarChar(128)
+  startsAt DateTime @map("starts_at")
+  endsAt   DateTime @map("ends_at")
+  rewarded Boolean  @default(false)
+
+  ratings SeasonRating[]
+
+  @@index([startsAt, endsAt])
+  @@map("seasons")
+  @@schema("arena")
+}
+
+model SeasonRating {
+  seasonId String @map("season_id") @db.Uuid
+  userId   String @map("user_id") @db.Uuid
+  rating   Int    @default(0)
+  wins     Int    @default(0)
+  winnings BigInt @default(0)
+
+  season Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([seasonId, userId])
+  @@index([seasonId, rating(sort: Desc)])
+  @@map("season_ratings")
   @@schema("arena")
 }

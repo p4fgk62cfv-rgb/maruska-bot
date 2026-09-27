@@ -23,7 +23,7 @@ describe.skipIf(!url)('API + ledger on Postgres', () => {
       DATABASE_URL: url!,
       BOT_TOKEN,
       SESSION_SECRET: 's'.repeat(40),
-      SIGNUP_BONUS_CHIPS: '10000',
+      SIGNUP_BONUS_CREDITS: '10000',
       WEB_DIST: '/nonexistent',
     });
     db = createDb(url!);
@@ -54,12 +54,12 @@ describe.skipIf(!url)('API + ledger on Postgres', () => {
     expect(first.statusCode).toBe(200);
     const body = first.json();
     expect(body.me.name).toBe('Тест Игрок');
-    expect(body.me.wallet.chips).toBe(10_000);
+    expect(body.me.wallet.credits).toBe(10_000);
     expect(body.startParam).toBe('game_ROOM1234');
 
     const second = (await login()).json();
     expect(second.me.id).toBe(body.me.id);
-    expect(second.me.wallet.chips).toBe(10_000);
+    expect(second.me.wallet.credits).toBe(10_000);
 
     const me = await app.inject({ method: 'GET', url: '/api/me', headers: { authorization: `Bearer ${body.token}` } });
     expect(me.json().stats.achievementsTotal).toBeGreaterThan(0);
@@ -82,7 +82,7 @@ describe.skipIf(!url)('API + ledger on Postgres', () => {
       ctx.ledger
         .post({
           userId: me.id,
-          currency: 'CHIPS',
+          currency: 'CREDITS',
           amount: -1000n,
           type: 'GAME_STAKE',
           source: 'test',
@@ -96,14 +96,14 @@ describe.skipIf(!url)('API + ledger on Postgres', () => {
     const results = await Promise.all(debits);
     expect(results.filter((r) => r === 'ok')).toHaveLength(10);
     expect(results.filter((r) => r === 'INSUFFICIENT_FUNDS')).toHaveLength(15);
-    expect((await ctx.users.wallet(me.id)).chips).toBe(0);
+    expect((await ctx.users.wallet(me.id)).credits).toBe(0);
   });
 
   it('applies a repeated operation only once, even when sent concurrently', async () => {
     const { me } = (await login(tgId + 2)).json();
     const entry = {
       userId: me.id,
-      currency: 'CHIPS' as const,
+      currency: 'CREDITS' as const,
       amount: 500n,
       type: 'GAME_PAYOUT' as const,
       source: 'test',
@@ -111,9 +111,35 @@ describe.skipIf(!url)('API + ledger on Postgres', () => {
     };
     const results = await Promise.all(Array.from({ length: 8 }, () => ctx.ledger.post(entry)));
     expect(new Set(results.map((r) => r.transactionId)).size).toBe(1);
-    expect((await ctx.users.wallet(me.id)).chips).toBe(10_500);
+    expect((await ctx.users.wallet(me.id)).credits).toBe(10_500);
 
     const rows = await db.transaction.findMany({ where: { userId: me.id }, orderBy: { createdAt: 'asc' } });
     for (const row of rows) expect(row.balanceAfter).toBe(row.balanceBefore + row.amount);
+  });
+
+  it('gives 1450 free credits once a day, only below 1450, even when tapped many times at once', async () => {
+    const { me, token } = (await login(tgId + 3)).json();
+    const claim = () =>
+      app.inject({ method: 'POST', url: '/api/wallet/daily-credits', headers: { authorization: `Bearer ${token}` } });
+
+    const tooRich = await claim();
+    expect(tooRich.json()).toMatchObject({ error: 'DAILY_CREDITS_BALANCE_TOO_HIGH' });
+
+    await ctx.ledger.post({ userId: me.id, currency: 'CREDITS', amount: -10_000n, type: 'GAME_STAKE', source: 'test', idempotencyKey: `drain:${me.id}` });
+    const results = await Promise.all(Array.from({ length: 5 }, claim));
+    expect(results.filter((r) => r.statusCode === 200)).toHaveLength(1);
+    expect(results.filter((r) => r.statusCode === 409)).toHaveLength(4);
+    expect((await ctx.users.wallet(me.id)).credits).toBe(1450);
+
+    const again = await app.inject({ method: 'GET', url: '/api/me', headers: { authorization: `Bearer ${token}` } });
+    expect(again.json().dailyCredits.available).toBe(false);
+  });
+
+  it('serves the leaderboard and refuses banned players', async () => {
+    const { me, token } = (await login(tgId + 4)).json();
+    const board = await app.inject({ method: 'GET', url: '/api/leaderboard?by=winnings', headers: { authorization: `Bearer ${token}` } });
+    expect(board.statusCode).toBe(200);
+    await db.user.update({ where: { id: me.id }, data: { bannedAt: new Date() } });
+    expect((await login(tgId + 4)).json()).toMatchObject({ error: 'BANNED' });
   });
 });

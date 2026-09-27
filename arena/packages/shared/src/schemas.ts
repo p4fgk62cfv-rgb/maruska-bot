@@ -43,8 +43,17 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('READY'), rid, roomId: z.string(), ready: z.boolean() }),
   z.object({ type: z.literal('RECONNECT'), rid, roomId: z.string(), lastVersion: z.number().int().optional() }),
   z.object({ type: z.literal('PLAY_CARD'), rid, gameId: z.string(), card: cardSchema, target: z.number().int().min(0).max(5).optional() }),
+  z.object({ type: z.literal('PLAY_CARDS'), rid, gameId: z.string(), cards: z.array(cardSchema).min(1).max(6) }),
   z.object({ type: z.literal('TRANSFER'), rid, gameId: z.string(), card: cardSchema }),
   z.object({ type: z.literal('TAKE_CARDS'), rid, gameId: z.string() }),
   z.object({ type: z.literal('PASS'), rid, gameId: z.string() }),
+  /** «Сдаться». */
   z.object({ type: z.literal('LEAVE_GAME'), rid, gameId: z.string() }),
+  /** «С шулерами»: tap on a table card believed to be illegal. */
+  z.object({ type: z.literal('REPORT_CHEAT'), rid, gameId: z.string(), seq: z.number().int().positive() }),
+  /** «Вернуть карту» (coins). */
+  z.object({ type: z.literal('UNDO_MOVE'), rid, gameId: z.string() }),
+  /** «Подсветка» / «Напомнить отбой» (coins, until the end of the game). */
+  z.object({ type: z.literal('USE_FEATURE'), rid, gameId: z.string(), feature: z.enum(['hints', 'discardReminder']) }),
+  z.object({ type: z.literal('SEND_EMOJI'), rid, gameId: z.string(), emoji: z.string().min(1).max(16) }),
 ]);

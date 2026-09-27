@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyTimeout, createDeck, legalActions, rankValue, settle, suitOf, toPlayerView, validateSettings, type CardId } from '../src/index.js';
+import { applyTimeout, createDeck, legalActions, rankValue, settle, suitOf, toPlayerView, undoLastMove, validateSettings, type CardId } from '../src/index.js';
 import { act, arranged, hand, newGame, NOW, reject } from './helpers.js';
 
 describe('deck and deal', () => {
@@ -28,10 +28,19 @@ describe('deck and deal', () => {
     expect(state.attacker).toBe(lowest.id);
   });
 
-  it('rejects unsupported settings', () => {
-    expect(validateSettings({ ...newGame().rules, deckSize: 52 })).toBe('DECK_NOT_SUPPORTED');
-    expect(validateSettings({ ...newGame().rules, fairness: 'cheaters' })).toBe('MODE_NOT_SUPPORTED');
+  it('rejects impossible settings', () => {
     expect(validateSettings({ ...newGame().rules, players: 7 })).toBe('PLAYERS_OUT_OF_RANGE');
+    expect(validateSettings({ ...newGame().rules, deckSize: 24, players: 5 })).toBe('DECK_TOO_SMALL');
+    expect(validateSettings({ ...newGame().rules, deckSize: 24, players: 4 })).toBeNull();
+    expect(validateSettings({ ...newGame().rules, deckSize: 52, players: 6 })).toBeNull();
+  });
+
+  it('deals 24- and 52-card games', () => {
+    const small = newGame({ deckSize: 24, players: 4 });
+    expect(small.deck).toHaveLength(0);
+    expect(small.players.flatMap((p) => p.hand).every((c) => rankValue(c) >= 9)).toBe(true);
+    const big = newGame({ deckSize: 52, players: 3 });
+    expect(big.deck).toHaveLength(34);
   });
 });
 
@@ -120,29 +129,56 @@ describe('attack and defence', () => {
   });
 });
 
-describe('throw-in policy', () => {
-  const three = (throwIn: 'all' | 'neighbors') =>
+describe('throw-in right', () => {
+  const four = (throwIn: 'all' | 'neighbors') =>
     arranged({
       trump: '6H',
       settings: { throwIn },
       hands: [
-        ['7S', 'AS'],
-        ['KS', 'KD', 'KC'],
+        ['7S', '7H', 'AS'],
+        ['KS', 'KD', 'KC', 'QS'],
         ['7D', 'AC'],
         ['7C', 'AD'],
       ],
     });
 
-  it('"все": any non-defender can throw in', () => {
-    const state = act(three('all'), 'p1', { type: 'PLAY_CARD', card: '7S' });
-    expect(legalActions(state, 'p4').attack).toEqual(['7C']);
-    expect(legalActions(state, 'p3').attack).toEqual(['7D']);
+  it('the attacker throws in first; others wait for «бито»', () => {
+    const state = act(four('all'), 'p1', { type: 'PLAY_CARD', card: '7S' });
+    expect(legalActions(state, 'p1').canAttack).toBe(true);
+    expect(reject(state, 'p3', { type: 'PLAY_CARD', card: '7D' })).toBe('THROW_IN_NOT_ALLOWED');
+    expect(reject(state, 'p4', { type: 'PASS' })).toBe('CANNOT_PASS');
   });
 
-  it('"соседи": only the defender\'s neighbours throw in', () => {
-    const state = act(three('neighbors'), 'p1', { type: 'PLAY_CARD', card: '7S' });
-    expect(legalActions(state, 'p3').attack).toEqual(['7D']);
+  it('"все": after the attacker passes, every other player may throw in', () => {
+    let state = act(four('all'), 'p1', { type: 'PLAY_CARD', card: '7S' });
+    state = act(state, 'p1', { type: 'PASS' });
+    expect(reject(state, 'p1', { type: 'PLAY_CARD', card: '7H' })).toBe('THROW_IN_NOT_ALLOWED');
+    state = act(state, 'p3', { type: 'PLAY_CARD', card: '7D' });
+    state = act(state, 'p4', { type: 'PLAY_CARD', card: '7C' });
+    expect(state.table).toHaveLength(3);
+  });
+
+  it('"соседи": after the attacker passes, only the player after the defender may throw in', () => {
+    let state = act(four('neighbors'), 'p1', { type: 'PLAY_CARD', card: '7S' });
+    state = act(state, 'p1', { type: 'PASS' });
     expect(reject(state, 'p4', { type: 'PLAY_CARD', card: '7C' })).toBe('THROW_IN_NOT_ALLOWED');
+    state = act(state, 'p3', { type: 'PLAY_CARD', card: '7D' });
+    expect(state.table).toHaveLength(2);
+  });
+
+  it('a new rank from the defender gives the right back to the attacker', () => {
+    let state = act(four('all'), 'p1', { type: 'PLAY_CARD', card: '7S' });
+    state = act(state, 'p1', { type: 'PASS' });
+    state = act(state, 'p2', { type: 'PLAY_CARD', card: 'KS', target: 0 });
+    expect(state.passed).toEqual([]);
+    expect(legalActions(state, 'p1').pass).toBe(true);
+    expect(legalActions(state, 'p3').pass).toBe(false);
+  });
+
+  it('several cards of one rank can be led in one move', () => {
+    const state = act(four('all'), 'p1', { type: 'PLAY_CARDS', cards: ['7S', '7H'] });
+    expect(state.table.map((t) => t.attack)).toEqual(['7S', '7H']);
+    expect(reject(four('all'), 'p1', { type: 'PLAY_CARDS', cards: ['7S', 'AS'] })).toBe('RANK_NOT_ON_TABLE');
   });
 });
 
@@ -220,30 +256,106 @@ describe('end of game', () => {
     expect(state.winner).toBe('p2');
   });
 
-  it('leaving is a forfeit', () => {
+  it('«сдаться» is a loss', () => {
     const state = act(newGame({ players: 3 }), 'p3', { type: 'LEAVE_GAME' });
-    expect(state.result).toEqual({ kind: 'loser', loser: 'p3', reason: 'left' });
+    expect(state.result).toEqual({ kind: 'loser', loser: 'p3', reason: 'surrender' });
     expect(reject(state, 'p1', { type: 'PASS' })).toBe('GAME_FINISHED');
   });
 });
 
 describe('timeouts', () => {
-  it('an idle attacker leads the weakest card, an idle defender takes', () => {
-    let state = arranged({ trump: '6H', hands: [['AH', '9S', '7D'], ['8S', 'QD', 'KC']] });
+  it('an attacker who does not lead in time loses', () => {
+    const state = arranged({ trump: '6H', hands: [['AH', '9S'], ['8S', 'QD']] });
     expect(applyTimeout(state, NOW)).toBeNull();
-    const deadline = state.turnDeadline ?? NOW;
-    state.turnDeadline = NOW;
-    let result = applyTimeout(state, NOW + 1);
-    expect(result?.ok && result.state.table[0]?.attack).toBe('7D');
-    state = result!.ok ? result!.state : state;
-    state.turnDeadline = NOW;
-    result = applyTimeout(state, NOW + 1);
-    expect(result?.ok && result.state.phase).toBe('taking');
-    expect(deadline).toBeGreaterThan(0);
+    const result = applyTimeout({ ...state, turnDeadline: NOW }, NOW + 1);
+    expect(result?.ok && result.state.result).toEqual({ kind: 'loser', loser: 'p1', reason: 'timeout' });
+  });
+
+  it('a defender who neither beats nor takes in time loses', () => {
+    const state = act(arranged({ trump: '6H', hands: [['AH', '9S'], ['8S', 'QD']] }), 'p1', { type: 'PLAY_CARD', card: '9S' });
+    const result = applyTimeout({ ...state, turnDeadline: NOW }, NOW + 1);
+    expect(result?.ok && result.state.loser).toBe('p2');
+  });
+
+  it('throwers who do not say «бито» are passed automatically, attacker first then the rest', () => {
+    let state = arranged({ trump: '6H', settings: { throwIn: 'all' }, deck: ['6C', '6D', '6S', '7C', '8C', '8D'], hands: [['9S', 'AD'], ['10S', 'KC'], ['9D', 'QC']] });
+    state = act(state, 'p1', { type: 'PLAY_CARD', card: '9S' });
+    state = act(state, 'p2', { type: 'PLAY_CARD', card: '10S', target: 0 });
+    const result = applyTimeout({ ...state, turnDeadline: NOW }, NOW + 1);
+    expect(result?.ok && result.state.status).toBe('playing');
+    expect(result?.ok && result.state.discard.sort()).toEqual(['10S', '9S']);
+    expect(result?.ok && result.state.attacker).toBe('p2');
+  });
+});
+
+describe('«С шулерами»', () => {
+  const setup = () =>
+    arranged({
+      trump: '6H',
+      settings: { fairness: 'cheaters' },
+      hands: [
+        ['7S', 'QD', 'AS'],
+        ['8C', '9D', 'KC'],
+        ['10C', 'JC'],
+      ],
+    });
+
+  it('illegal cards are accepted but not revealed to anyone', () => {
+    let state = act(setup(), 'p1', { type: 'PLAY_CARD', card: '7S' });
+    state = act(state, 'p2', { type: 'PLAY_CARD', card: '8C', target: 0 });
+    expect(state.illegal).toHaveLength(1);
+    const view = toPlayerView(state, 'p3', { hints: true });
+    expect(JSON.stringify(view)).not.toContain('illegal');
+  });
+
+  it('a caught card and everything after it go back; the cheater loses the right to cheat', () => {
+    let state = act(setup(), 'p1', { type: 'PLAY_CARD', card: '7S' });
+    state = act(state, 'p2', { type: 'PLAY_CARD', card: '8C', target: 0 });
+    const cheatSeq = state.table[0]!.defenseSeq!;
+    state = act(state, 'p1', { type: 'PLAY_CARD', card: 'QD' });
+    expect(reject(state, 'p3', { type: 'REPORT_CHEAT', seq: state.table[0]!.attackSeq })).toBe('NOT_ILLEGAL');
+    state = act(state, 'p3', { type: 'REPORT_CHEAT', seq: cheatSeq });
+    expect(state.table.map((t) => [t.attack, t.defense])).toEqual([['7S', null]]);
+    expect(hand(state, 'p2')).toContain('8C');
+    expect(hand(state, 'p1')).toContain('QD');
+    expect(state.cheaters).toEqual(['p2']);
+    expect(reject(state, 'p2', { type: 'PLAY_CARD', card: '9D', target: 0 })).toBe('CARD_DOES_NOT_BEAT');
+  });
+
+  it('is off in fair games', () => {
+    const state = act(arranged({ trump: '6H', hands: [['7S'], ['8C', 'KC']] }), 'p1', { type: 'PLAY_CARD', card: '7S' });
+    expect(reject(state, 'p2', { type: 'PLAY_CARD', card: '8C', target: 0 })).toBe('CARD_DOES_NOT_BEAT');
+    expect(reject(state, 'p1', { type: 'REPORT_CHEAT', seq: 1 })).toBe('BAD_ACTION');
+  });
+});
+
+describe('undo («вернуть карту»)', () => {
+  it('takes back the last card while nobody acted after it', () => {
+    const before = arranged({ trump: '6H', hands: [['7S', 'AD'], ['8S', 'QD', 'KC']] });
+    const after = act(before, 'p1', { type: 'PLAY_CARD', card: 'AD' });
+    const undone = undoLastMove(before, after, 'p1', NOW);
+    expect(undone.ok && hand(undone.state, 'p1')).toEqual(['7S', 'AD']);
+    expect(undone.ok && undone.state.version).toBe(after.version + 1);
+    expect(undoLastMove(before, after, 'p2', NOW)).toEqual({ ok: false, error: 'CANNOT_UNDO' });
+  });
+
+  it('is impossible once the bout ended', () => {
+    const before = act(arranged({ trump: '6H', deck: ['6C', '6D'], hands: [['7S', 'AD'], ['8S', 'QD', 'KC']] }), 'p1', { type: 'PLAY_CARD', card: '7S' });
+    const beaten = act(before, 'p2', { type: 'PLAY_CARD', card: '8S', target: 0 });
+    const ended = act(beaten, 'p1', { type: 'PASS' });
+    expect(undoLastMove(beaten, ended, 'p1', NOW).ok).toBe(false);
   });
 });
 
 describe('player view', () => {
+  it('shows playable cards only with hints on, the buttons always', () => {
+    const state = act(arranged({ trump: '6H', hands: [['7S', '7D'], ['8S', 'QD']] }), 'p1', { type: 'PLAY_CARD', card: '7S' });
+    const plain = toPlayerView(state, 'p2');
+    expect(plain.actions.defend).toEqual({});
+    expect(plain.actions.canDefend && plain.actions.take).toBe(true);
+    expect(toPlayerView(state, 'p2', { hints: true }).actions.defend).toEqual({ '8S': [0] });
+  });
+
   it('hides other hands, the stock and the discard', () => {
     const state = newGame({ players: 3 });
     const view = toPlayerView(state, 'p1');

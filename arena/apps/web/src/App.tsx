@@ -17,6 +17,7 @@ const ItemsScreen = lazy(() => import('./screens/ItemsScreen.js'));
 const RulesScreen = lazy(() => import('./screens/RulesScreen.js'));
 const ServersScreen = lazy(() => import('./screens/ServersScreen.js'));
 const SoonScreen = lazy(() => import('./screens/SoonScreen.js'));
+const LeaderboardScreen = lazy(() => import('./screens/LeaderboardScreen.js'));
 
 const TABS: NavItem<Tab>[] = [
   { key: 'home', label: 'Профиль', icon: 'user' },
@@ -54,7 +55,7 @@ function PageScreen({ page }: { page: Page }) {
     case 'servers':
       return <ServersScreen />;
     case 'leaderboard':
-      return <SoonScreen title="Доска почёта" text="Лучшие игроки дня, недели и всех времён появятся вместе с первыми рейтинговыми партиями." />;
+      return <LeaderboardScreen />;
     case 'news':
       return <SoonScreen title="Новости" text="Здесь будут обновления Арены, турниры и события." />;
     case 'settings':
