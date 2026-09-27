@@ -62,6 +62,7 @@ def fortune_keyboard(user_id: int, chat_id: int) -> InlineKeyboardMarkup:
                 callback_data=f"fortune:money:{user_id}",
             ),
         ],
+    ]
 
     if is_enabled(chat_id, "fortune_vulgar"):
         rows.append([
