@@ -30,7 +30,7 @@ def is_fortune_request(message: Message) -> bool:
     return is_addressed(message)
 
 
-@router.message(Command("fortune", "predict"))
+@router.message(Command("fortune", "predict", "future"))
 async def fortune_command(message: Message):
     if not is_enabled(message.chat.id, "fortune"):
         await message.reply("🔮 Предсказания в этой группе выключены (/settings).")
