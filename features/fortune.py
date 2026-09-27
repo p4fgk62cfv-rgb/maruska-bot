@@ -145,6 +145,9 @@ async def fortune_button(callback: CallbackQuery):
     mode = get_value(chat.id, "fortune_mode") or "roast"
     user = callback.from_user
 
+    if category == "roast" and is_enabled(chat.id, "fortune_brutal"):
+        mode = "brutal"
+
     await callback.message.edit_text(
         fortune.predict(
             user.id,
