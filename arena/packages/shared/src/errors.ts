@@ -31,7 +31,7 @@ export interface ApiErrorBody {
   message: string;
 }
 
-export const ERROR_TEXT_RU: Partial<Record<AppErrorCode, string>> = {
+export const ERROR_TEXT_RU: Record<AppErrorCode, string> = {
   UNAUTHORIZED: 'Сессия истекла. Откройте игру из Telegram заново.',
   INIT_DATA_INVALID: 'Не удалось подтвердить вход через Telegram.',
   INIT_DATA_EXPIRED: 'Ссылка на игру устарела. Откройте её из бота заново.',
@@ -56,6 +56,16 @@ export const ERROR_TEXT_RU: Partial<Record<AppErrorCode, string>> = {
   DAILY_CREDITS_BALANCE_TOO_HIGH: 'Бесплатные кредиты выдаются, только если на счету меньше 1450.',
   NOT_ILLEGAL: 'Эта карта сыграна честно.',
   CANNOT_UNDO: 'Вернуть карту уже нельзя.',
+  GAME_FINISHED: 'Игра уже закончилась.',
+  NOT_A_PLAYER: 'Вы не участвуете в этой игре.',
+  PLAYER_NOT_ACTIVE: 'Вы уже вышли из игры.',
+  CARD_NOT_IN_HAND: 'Этой карты нет у вас в руке.',
+  INVALID_CARD: 'Неизвестная карта.',
+  THROW_IN_NOT_ALLOWED: 'Сейчас подкидывать нельзя.',
+  INVALID_TARGET: 'Выберите карту на столе.',
+  NOTHING_TO_TAKE: 'Брать нечего.',
+  CANNOT_PASS: 'Сейчас нельзя сказать «Бито».',
+  BAD_ACTION: 'Недопустимое действие.',
   NOT_YOUR_TURN: 'Сейчас не ваш ход.',
   CARD_DOES_NOT_BEAT: 'Этой картой не побить.',
   RANK_NOT_ON_TABLE: 'Подкинуть можно только карту того же достоинства.',

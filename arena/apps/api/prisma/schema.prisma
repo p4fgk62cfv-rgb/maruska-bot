@@ -241,6 +241,7 @@ model GamePlayer {
   outcome GameOutcome?
   payout  BigInt?
   net     BigInt?
+  ratingGain Int? @map("rating_gain")
 
   game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id])

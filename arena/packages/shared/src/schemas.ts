@@ -4,7 +4,7 @@
  */
 import { z } from 'zod';
 import { isCardId, type CardId } from '@arena/game-engine';
-import { STAKE_OPTIONS } from './lobby.js';
+import { EMOJIS, STAKE_OPTIONS } from './lobby.js';
 
 export const roomSettingsSchema = z.object({
   stake: z.number().int().refine((v) => (STAKE_OPTIONS as readonly number[]).includes(v), 'stake'),
@@ -21,6 +21,13 @@ export const roomSettingsSchema = z.object({
 });
 
 /** Lobby filter: every field is a set of accepted values; an empty set means "any". */
+export const joinRoomSchema = z.object({
+  password: z.string().max(32).optional(),
+  invite: z.string().max(24).optional(),
+});
+
+export const quickGameSchema = z.object({ stake: z.number().int().optional() });
+
 export const roomFilterSchema = z.object({
   stakes: z.array(z.number().int()).default([]),
   players: z.array(z.number().int().min(2).max(6)).default([]),
@@ -37,7 +44,7 @@ const rid = z.string().min(1).max(64).optional();
 
 export const clientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('PING'), rid }),
-  z.object({ type: z.literal('LOBBY_SUBSCRIBE'), rid, server: z.string().optional() }),
+  z.object({ type: z.literal('LOBBY_SUBSCRIBE'), rid, filter: roomFilterSchema.optional() }),
   z.object({ type: z.literal('LOBBY_UNSUBSCRIBE'), rid }),
   z.object({ type: z.literal('ROOM_WATCH'), rid, roomId: z.string() }),
   z.object({ type: z.literal('READY'), rid, roomId: z.string(), ready: z.boolean() }),
@@ -55,5 +62,5 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('UNDO_MOVE'), rid, gameId: z.string() }),
   /** «Подсветка» / «Напомнить отбой» (coins, until the end of the game). */
   z.object({ type: z.literal('USE_FEATURE'), rid, gameId: z.string(), feature: z.enum(['hints', 'discardReminder']) }),
-  z.object({ type: z.literal('SEND_EMOJI'), rid, gameId: z.string(), emoji: z.string().min(1).max(16) }),
+  z.object({ type: z.literal('SEND_EMOJI'), rid, gameId: z.string(), emoji: z.enum(EMOJIS) }),
 ]);

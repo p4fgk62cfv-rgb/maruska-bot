@@ -28,8 +28,7 @@ describe.skipIf(!url)('API + ledger on Postgres', () => {
     });
     db = createDb(url!);
     await seedCatalog(db);
-    ctx = createContext(config, db);
-    app = await buildApp(ctx);
+    ({ app, ctx } = await buildApp(createContext(config, db)));
   });
 
   afterAll(async () => {

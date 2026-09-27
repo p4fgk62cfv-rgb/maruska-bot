@@ -6,15 +6,25 @@ import fastifyStatic from '@fastify/static';
 import { errorText, type ApiErrorBody } from '@arena/shared';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
-import type { Context } from './context.js';
+import type { BaseContext, Context } from './context.js';
 import { bearerToken } from './auth/plugin.js';
 import { AppError } from './lib/errors.js';
 import { authRoutes } from './routes/auth.js';
 import { boardRoutes } from './routes/board.js';
 import { profileRoutes } from './routes/profile.js';
+import { roomRoutes } from './routes/rooms.js';
+import { Realtime } from './realtime/realtime.js';
+import { MemoryStore, type SnapshotStore } from './realtime/store.js';
+import { websocketRoutes } from './realtime/ws.js';
+import { RealtimePresence } from './services/presence.js';
 
-export async function buildApp(ctx: Context): Promise<FastifyInstance> {
-  const { config } = ctx;
+export interface AppHandle {
+  app: FastifyInstance;
+  ctx: Context;
+}
+
+export async function buildApp(base: BaseContext, store: SnapshotStore = new MemoryStore()): Promise<AppHandle> {
+  const { config } = base;
   const app = Fastify({
     logger: config.NODE_ENV === 'test' ? false : { level: config.LOG_LEVEL, redact: ['req.headers.authorization'] },
     trustProxy: true,
@@ -22,6 +32,11 @@ export async function buildApp(ctx: Context): Promise<FastifyInstance> {
   });
 
   app.decorateRequest('session', null);
+
+  const realtime = new Realtime({ ...base, store, log: app.log });
+  const ctx: Context = { ...base, realtime, presence: new RealtimePresence(realtime) };
+  await realtime.recover();
+  app.addHook('onClose', async () => realtime.shutdown());
 
   const origins = config.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean);
   if (origins.length) await app.register(cors, { origin: origins });
@@ -54,13 +69,15 @@ export async function buildApp(ctx: Context): Promise<FastifyInstance> {
     return reply.status(500).send({ error: 'SERVER_ERROR', message: errorText('SERVER_ERROR') });
   });
 
-  app.get('/health', async () => ({ ok: true, service: 'arena' }));
+  app.get('/health', async () => ({ ok: true, service: 'arena', games: realtime.games.count(), online: realtime.hub.onlineUsers().length }));
+  await websocketRoutes(app, ctx);
 
   await app.register(
     async (api) => {
       await authRoutes(api, ctx);
       await profileRoutes(api, ctx);
       await boardRoutes(api, ctx);
+      await roomRoutes(api, ctx);
     },
     { prefix: '/api' },
   );
@@ -81,5 +98,5 @@ export async function buildApp(ctx: Context): Promise<FastifyInstance> {
     });
   }
 
-  return app;
+  return { app, ctx };
 }

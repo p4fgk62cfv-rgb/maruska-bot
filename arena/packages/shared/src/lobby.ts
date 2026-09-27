@@ -14,6 +14,7 @@ export interface RoomSeatDto {
   name: string;
   photoUrl: string | null;
   rating: number;
+  premium: boolean;
   ready: boolean;
   connected: boolean;
 }
@@ -28,6 +29,21 @@ export interface RoomDto {
   seats: RoomSeatDto[];
   gameId: string | null;
   createdAt: number;
+  /** Someone at the table has premium: such rooms are listed first. */
+  premium: boolean;
+  /** When the not-ready players will be removed from a full room (epoch ms). */
+  readyDeadline: number | null;
+}
+
+/** Members only: the invite link carries a code that lets friends skip the password. */
+export interface RoomInviteDto {
+  link: string;
+  shareUrl: string;
+}
+
+export interface MyRoomDto {
+  room: RoomDto;
+  invite: RoomInviteDto;
 }
 
 export const MODE_LABEL_RU: Record<string, string> = {
@@ -50,15 +66,39 @@ export function formatStake(value: number): string {
   return String(value);
 }
 
-/** Telegram deep link that opens the Mini App straight into a room. */
-export function roomDeepLink(botUsername: string, appShortName: string | null, roomId: string): string {
-  const startapp = `game_${roomId}`;
+/**
+ * Telegram deep link that opens the Mini App straight into a room.
+ * start_param allows only [A-Za-z0-9_-], up to 64 chars: game_<roomId>[_<inviteCode>].
+ */
+export function roomDeepLink(botUsername: string, appShortName: string | null, roomId: string, invite?: string): string {
+  const startapp = invite ? `game_${roomId}_${invite}` : `game_${roomId}`;
   return appShortName
     ? `https://t.me/${botUsername}/${appShortName}?startapp=${startapp}`
     : `https://t.me/${botUsername}?startapp=${startapp}`;
 }
 
-export function parseRoomStartParam(value: string | null | undefined): string | null {
-  const match = /^game_([A-Za-z0-9]{6,16})$/.exec(value ?? '');
-  return match ? match[1]! : null;
+export function parseRoomStartParam(value: string | null | undefined): { roomId: string; invite: string | null } | null {
+  const match = /^game_([A-Z0-9]{8})(?:_([A-Za-z0-9-]{6,24}))?$/.exec(value ?? '');
+  return match ? { roomId: match[1]!, invite: match[2] ?? null } : null;
 }
+
+type FilterableRoom = Pick<RoomDto, 'settings' | 'server'>;
+
+/** Lobby filter: every non-empty group must match; empty groups mean "any". */
+export function matchesFilter(room: FilterableRoom, filter: RoomFilter): boolean {
+  const s = room.settings;
+  if (filter.stakes.length && !filter.stakes.includes(s.stake)) return false;
+  if (filter.players.length && !filter.players.includes(s.players)) return false;
+  if (filter.deckSizes.length && !filter.deckSizes.includes(s.deckSize)) return false;
+  if (filter.speeds.length && !filter.speeds.includes(s.speed)) return false;
+  if (filter.server && filter.server !== room.server) return false;
+  if (filter.modes.length) {
+    const values = [s.variant, s.throwIn, s.fairness, s.ending] as string[];
+    if (!filter.modes.every((m) => values.includes(m))) return false;
+  }
+  return true;
+}
+
+export const EMPTY_FILTER: RoomFilter = { stakes: [], players: [], deckSizes: [], speeds: [], modes: [] };
+
+export const EMOJIS = ['😀', '😂', '😎', '🤔', '😡', '😭', '👍', '👏', '🔥', '🃏', '🍀', '💀'] as const;

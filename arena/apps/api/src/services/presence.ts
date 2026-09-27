@@ -1,36 +1,24 @@
 import type { FriendDto } from '@arena/shared';
+import type { Realtime } from '../realtime/realtime.js';
 
-/**
- * Who is online and where. Stage 1 keeps it in memory for a single instance;
- * stage 2 swaps in the Redis implementation so every instance sees the same picture.
- */
+/** Who is online and where, as seen by this game server. */
 export interface Presence {
   onlineByServer(): Promise<Record<string, number>>;
   lookup(userIds: string[]): Promise<Record<string, FriendDto['presence']>>;
 }
 
-export class MemoryPresence implements Presence {
-  private readonly users = new Map<string, { server: string | null; inGame: boolean }>();
-
-  set(userId: string, server: string | null, inGame: boolean): void {
-    this.users.set(userId, { server, inGame });
-  }
-
-  remove(userId: string): void {
-    this.users.delete(userId);
-  }
+export class RealtimePresence implements Presence {
+  constructor(private readonly realtime: Realtime) {}
 
   async onlineByServer(): Promise<Record<string, number>> {
-    const counts: Record<string, number> = {};
-    for (const { server } of this.users.values()) if (server) counts[server] = (counts[server] ?? 0) + 1;
-    return counts;
+    return this.realtime.rooms.onlineByServer();
   }
 
   async lookup(userIds: string[]): Promise<Record<string, FriendDto['presence']>> {
     const result: Record<string, FriendDto['presence']> = {};
     for (const id of userIds) {
-      const entry = this.users.get(id);
-      result[id] = entry ? (entry.inGame ? 'in_game' : 'online') : 'offline';
+      if (this.realtime.games.forUser(id)) result[id] = 'in_game';
+      else result[id] = this.realtime.hub.isOnline(id) ? 'online' : 'offline';
     }
     return result;
   }
