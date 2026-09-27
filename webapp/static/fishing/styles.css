@@ -288,3 +288,8 @@ html,body{overscroll-behavior:none}
 /* Fleet: boat pictures instead of emoji */
 .v4-boat{grid-template-columns:112px 1fr!important;align-items:center}
 .v4-boat-img{grid-row:1/5;width:112px;height:74px;object-fit:contain;align-self:center;filter:drop-shadow(0 6px 8px rgba(0,0,0,.45))}
+
+/* Modal content scrolls inside the card: the page itself never scrolls */
+.modal-card{max-height:calc(100dvh - 40px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y}
+.modal-close{position:sticky!important;top:0;float:right;margin:-8px -8px 0 8px;z-index:3;background:rgba(8,24,33,.92)!important}
+.panel-sheet{-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y}
