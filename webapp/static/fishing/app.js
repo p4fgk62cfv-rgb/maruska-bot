@@ -6,7 +6,7 @@ const locations=[
 {id:'mountain',name:'Горное озеро',img:'backgrounds/mountain.svg',weather:'🌫 Туман',time:'☀️ День',fish:['trout','taimen','perch'],bonus:'Горная форель'},
 {id:'deep',name:'Глубокая вода',img:'backgrounds/deep.svg',weather:'🌙 Ночь',time:'🌙 Ночь',fish:['catfish','taimen','beluga','burbo'],bonus:'Легендарный сом'}];
 const fish={
-pike:{name:'Щука',img:'fish_clean/pike.jpg',trophy:'fish_clean/pike.jpg',rarity:'Редкая',min:.8,max:8.8,power:78,value:320,xp:55},perch:{name:'Окунь',img:'fish_clean/perch.jpg',rarity:'Обычная',min:.15,max:2.1,power:35,value:90,xp:24},crucian:{name:'Карась',img:'fish_clean/crucian.jpg',rarity:'Обычная',min:.12,max:1.8,power:28,value:70,xp:22},roach:{name:'Плотва',img:'fish_clean/roach.jpg',rarity:'Обычная',min:.08,max:1.3,power:22,value:55,xp:18},carp:{name:'Карп',img:'fish_clean/carp.jpg',trophy:'fish_clean/carp.jpg',rarity:'Эпическая',min:1.5,max:12,power:82,value:620,xp:95},tench:{name:'Линь',img:'fish_clean/tench.jpg',rarity:'Необычная',min:.3,max:3.4,power:48,value:180,xp:42},bream:{name:'Лещ',img:'fish_clean/bream.jpg',rarity:'Необычная',min:.4,max:4.8,power:55,value:210,xp:46},zander:{name:'Судак',img:'fish_clean/zander.jpg',rarity:'Редкая',min:.7,max:6.2,power:68,value:390,xp:62},asp:{name:'Жерех',img:'fish_clean/asp.jpg',rarity:'Редкая',min:.8,max:5.6,power:64,value:360,xp:58},catfish:{name:'Сом',img:'fish_clean/catfish.jpg',trophy:'fish_clean/catfish.jpg',rarity:'Легендарная',min:3,max:25,power:96,value:1250,xp:170},chub:{name:'Голавль',img:'fish_clean/chub.jpg',rarity:'Необычная',min:.4,max:3.5,power:51,value:200,xp:44},burbo:{name:'Налим',img:'fish_clean/burbo.jpg',rarity:'Редкая',min:.6,max:5.8,power:62,value:410,xp:68},trout:{name:'Форель',img:'fish_clean/trout.jpg',trophy:'fish_clean/trout.jpg',rarity:'Эпическая',min:.5,max:6,power:73,value:700,xp:105},taimen:{name:'Таймень',img:'fish_clean/taimen.jpg',trophy:'fish_clean/taimen.jpg',rarity:'Легендарная',min:2,max:18,power:91,value:1600,xp:220},beluga:{name:'Белуга',img:'fish_clean/beluga.jpg',rarity:'Мифическая',min:8,max:35,power:100,value:3000,xp:350}};
+pike:{name:'Щука',img:'fish_clean/pike.jpg?v=3',trophy:'fish_clean/pike.jpg?v=3',rarity:'Редкая',min:.8,max:8.8,power:78,value:320,xp:55},perch:{name:'Окунь',img:'fish_clean/perch.jpg?v=3',rarity:'Обычная',min:.15,max:2.1,power:35,value:90,xp:24},crucian:{name:'Карась',img:'fish_clean/crucian.jpg?v=3',rarity:'Обычная',min:.12,max:1.8,power:28,value:70,xp:22},roach:{name:'Плотва',img:'fish_clean/roach.jpg?v=3',rarity:'Обычная',min:.08,max:1.3,power:22,value:55,xp:18},carp:{name:'Карп',img:'fish_clean/carp.jpg?v=3',trophy:'fish_clean/carp.jpg?v=3',rarity:'Эпическая',min:1.5,max:12,power:82,value:620,xp:95},tench:{name:'Линь',img:'fish_clean/tench.jpg?v=3',rarity:'Необычная',min:.3,max:3.4,power:48,value:180,xp:42},bream:{name:'Лещ',img:'fish_clean/bream.jpg?v=3',rarity:'Необычная',min:.4,max:4.8,power:55,value:210,xp:46},zander:{name:'Судак',img:'fish_clean/zander.jpg?v=3',rarity:'Редкая',min:.7,max:6.2,power:68,value:390,xp:62},asp:{name:'Жерех',img:'fish_clean/asp.jpg?v=3',rarity:'Редкая',min:.8,max:5.6,power:64,value:360,xp:58},catfish:{name:'Сом',img:'fish_clean/catfish.jpg?v=3',trophy:'fish_clean/catfish.jpg?v=3',rarity:'Легендарная',min:3,max:25,power:96,value:1250,xp:170},chub:{name:'Голавль',img:'fish_clean/chub.jpg?v=3',rarity:'Необычная',min:.4,max:3.5,power:51,value:200,xp:44},burbo:{name:'Налим',img:'fish_clean/burbo.jpg?v=3',rarity:'Редкая',min:.6,max:5.8,power:62,value:410,xp:68},trout:{name:'Форель',img:'fish_clean/trout.jpg?v=3',trophy:'fish_clean/trout.jpg?v=3',rarity:'Эпическая',min:.5,max:6,power:73,value:700,xp:105},taimen:{name:'Таймень',img:'fish_clean/taimen.jpg?v=3',trophy:'fish_clean/taimen.jpg?v=3',rarity:'Легендарная',min:2,max:18,power:91,value:1600,xp:220},beluga:{name:'Белуга',img:'fish_clean/beluga.jpg?v=3',rarity:'Мифическая',min:8,max:35,power:100,value:3000,xp:350}};
 const gear=[
 {id:'starter',img:'gear/rod_starter.png',name:'Простая удочка',price:0,control:8,power:0,level:0},
 {id:'float',img:'gear/rod_float.png',name:'Поплавочная',price:250,control:16,power:5,level:2},
@@ -43,19 +43,16 @@ function setLocation(i){if(state.phase!=='idle'){toast('Сначала зако�
 locations[0].level=1;locations[1].level=2;locations[2].level=4;locations[3].level=6;locations[4].level=9;
 function chooseFish(){const l=locations[state.loc];let pool=[...l.fish];const night=state.loc===4||l.time.includes('Ночь');const ev=currentEvent();if(night&&Math.random()<.08)pool=['beluga'];if(Math.random()<.1&&pool.includes('carp'))pool.push('carp');if(ev&&ev.name.includes('Таинственный')&&Math.random()<.18)pool=pool.filter(k=>fish[k].rarity!=='Обычная').length?pool.filter(k=>fish[k].rarity!=='Обычная'):pool;if(night&&Math.random()<.25)state.nightCatches++;return pool[Math.floor(Math.random()*pool.length)]}
 function getRod(){const g=gear.find(g=>g.id===state.rod)||gear[0];const lv=state.rodLevels[state.rod]||1;return {...g,control:g.control+(lv-1)*3,power:g.power+(lv-1)*4,upgrade:lv}}
-function continueCast(){if(state.phase!=='catch')return;state.phase='idle';state.fish=null;$('catchCard').classList.add('hidden');$('fightCard').classList.add('hidden');$('biteCard').classList.add('hidden');const bob=$('bobber');bob.style.display='none';bob.className='';$('castLine').style.height='0';$('castBtn').classList.remove('hidden');$('statusPill').textContent='Готов к забросу';scene.classList.remove('is-casting','is-fighting','is-broken');render();v4save?.();save();try{window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light')}catch{}}
-function cast(){if(state.phase!=='idle')return;if(state.level>=2&&Math.random()<.13)rollEvent();state.phase='waiting';$('castBtn').classList.add('hidden');$('statusPill').textContent='🎣 Заброс...';
-  const bob=$('bobber');bob.style.display='block';bob.className='is-flying';
-  setTimeout(()=>{bob.className='is-floating';$('splash').classList.add('show');setTimeout(()=>$('splash').classList.remove('show'),700)},650);
-  setTimeout(()=>{$('castLine').style.height='18vh'},300);
-  $('splash').classList.remove('show');
-  const ev=currentEvent();const delay=(ev&&ev.name.includes('дождь')?700:950)+Math.random()*2400;
-  setTimeout(()=>{if(state.phase!=='waiting')return;state.phase='bite';$('statusPill').textContent='⚡ ПОКЛЁВКА!';$('biteCard').classList.remove('hidden');bob.className='is-biting';$('splash').classList.add('show');setTimeout(()=>$('splash').classList.remove('show'),600)},delay)}
-function hook(){if(state.phase!=='bite')return;scene.classList.remove('is-casting');scene.classList.add('is-fighting');const key=chooseFish();state.fish=key;state.fishPower=fish[key].power;state.line=30;state.phase='fight';$('biteCard').classList.add('hidden');$('fightCard').classList.remove('hidden');$('bobber').className='';$('fightFishImage').src=AS+fish[key].img;$('fishName').textContent=fish[key].name;$('rarity').textContent=fish[key].rarity;$('statusPill').textContent='🐟 Вываживай!';updateFight()}
-function updateFight(){const p=Math.round(state.fishPower),l=Math.round(state.line);$('fishPower').style.width=p+'%';$('fishPowerText').textContent=p+'%';$('linePower').style.width=l+'%';$('lineText').textContent=l+'%';$('fightCard').style.setProperty('--strain',l+'%')}
-function fight(type){if(state.phase!=='fight')return;const rod=getRod();let damage=0,line=0;if(type==='pull'){damage=9+Math.random()*8+rod.power*.08;line=8+Math.random()*11-rod.control*.12}else if(type==='relax'){damage=1+Math.random()*3;line=-(12+Math.random()*15+rod.control*.16)}else{damage=5+Math.random()*7+rod.power*.05;line=3+Math.random()*7-rod.control*.1}const surge=Math.random()<(0.22+(state.fishPower>75?.08:0))?8+Math.random()*20:0;state.fishPower=Math.max(0,state.fishPower-damage+surge);state.line=Math.min(100,Math.max(0,state.line+line));if(surge){state.line=Math.min(100,state.line+surge*.25);toast('🐟 Резкий рывок!')}updateFight();if(state.line>=100)return fail();if(state.fishPower<=0)return catchFish();clearTimeout(window.__fightTick);window.__fightTick=setTimeout(()=>{if(state.phase!=='fight')return;state.line=Math.min(100,state.line+Math.random()*4.5);if(Math.random()<.15)state.fishPower=Math.min(100,state.fishPower+4);updateFight();if(state.line>=100)fail()},260)}
-function fail(){scene.classList.remove('is-casting','is-fighting');scene.classList.add('is-broken');state.phase='idle';$('fightCard').classList.add('hidden');const bob=$('bobber');bob.style.display='none';bob.className='';$('castLine').style.height='0';$('castBtn').classList.remove('hidden');$('statusPill').textContent='💥 Леска порвалась';toast('Рыба ушла...');setTimeout(()=>$('statusPill').textContent='Готов к забросу',1500);save()}
-function catchFish(){scene.classList.remove('is-casting','is-fighting');const key=state.fish,f=fish[key];let w=f.min+Math.random()*(f.max-f.min);const ev=currentEvent();const trophy=Math.random()<(0.07*(ev?ev.bonus:1))&&f.trophy;if(trophy)w=Math.min(f.max,w*1.2);w=+w.toFixed(2);const len=Math.round(22+w*8+Math.random()*14);const reward=Math.round(f.value*(trophy?2.4:1)*(1+state.loc*.08)*(ev?ev.bonus:1));state.caught++;state.inventory[key]=(state.inventory[key]||0)+1;state.diamonds+=reward;state.best=Math.max(state.best,w);if(f.rarity==='Легендарная'||f.rarity==='Мифическая')state.legendary++;state.lastCatch={key,w,len,reward,trophy};addXP(f.xp+(trophy?Math.round(f.xp*.7):0));checkAchievements();state.phase='catch';$('fightCard').classList.add('hidden');$('bobber').style.display='none';$('castLine').style.height='0';$('catchImage').src=AS+(trophy?f.trophy:f.img);$('catchName').textContent=f.name;$('catchRarity').textContent=trophy?'👑 ТРОФЕЙНЫЙ • '+f.rarity:f.rarity;$('catchWeight').textContent=w.toFixed(2)+' кг';$('catchLength').textContent=len+' см';$('catchReward').textContent='+'+reward;$('catchCard').classList.remove('hidden');$('catchCard').classList.toggle('trophy',!!trophy);$('statusPill').textContent=trophy?'👑 ТРОФЕЙНЫЙ УЛОВ!':'🎉 Рыба поймана!';$('fishJump').style.backgroundImage=`url('${AS+f.img}')`;$('fishJump').style.display='block';$('fishJump').animate([{transform:'translate(-50%,0) scale(.6)',opacity:0},{transform:'translate(-50%,-100px) rotate(-12deg) scale(1)',opacity:1},{transform:'translate(-50%,20px) rotate(14deg) scale(.75)',opacity:0}],{duration:900,easing:'cubic-bezier(.2,.8,.2,1)'}).finished.then(()=>{$('fishJump').style.display='none'});render();save();
+function continueCast(){if(state.phase!=='catch')return;state.phase='idle';state.fish=null;$('catchCard').classList.add('hidden');$('fightCard').classList.add('hidden');$('biteCard').classList.add('hidden');FX.reset();$('castBtn').classList.remove('hidden');$('statusPill').textContent='Готов к забросу';scene.classList.remove('is-casting','is-fighting','is-broken');render();v4save?.();save();try{window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light')}catch{}}
+function cast(){if(state.phase!=='idle')return;if(state.level>=2&&Math.random()<.13)rollEvent();state.phase='waiting';$('castBtn').classList.add('hidden');$('statusPill').textContent='🎣 Заброс...';scene.classList.add('is-casting');
+  FX.cast().then(()=>{if(state.phase==='waiting')$('statusPill').textContent='👀 Ждём поклёвку...'});
+  const ev=currentEvent();const delay=1000+(ev&&ev.name.includes('дождь')?700:1200)+Math.random()*2600;
+  setTimeout(()=>{if(state.phase!=='waiting')return;state.phase='bite';$('statusPill').textContent='⚡ ПОКЛЁВКА!';$('biteCard').classList.remove('hidden');FX.bite();try{window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('heavy')}catch{}},delay)}
+function hook(){if(state.phase!=='bite')return;scene.classList.remove('is-casting');scene.classList.add('is-fighting');const key=chooseFish();state.fish=key;state.fishPower=fish[key].power;state.line=30;state.phase='fight';$('biteCard').classList.add('hidden');$('fightCard').classList.remove('hidden');FX.hook();$('fightFishImage').src=AS+fish[key].img;$('fishName').textContent=fish[key].name;$('rarity').textContent=fish[key].rarity;$('statusPill').textContent='🐟 Вываживай!';updateFight()}
+function updateFight(){const p=Math.round(state.fishPower),l=Math.round(state.line);$('fishPower').style.width=p+'%';$('fishPowerText').textContent=p+'%';$('linePower').style.width=l+'%';$('lineText').textContent=l+'%';$('fightCard').style.setProperty('--strain',l+'%');FX.tension(l)}
+function fight(type){if(state.phase!=='fight')return;const rod=getRod();let damage=0,line=0;if(type==='pull'){damage=9+Math.random()*8+rod.power*.08;line=8+Math.random()*11-rod.control*.12}else if(type==='relax'){damage=1+Math.random()*3;line=-(12+Math.random()*15+rod.control*.16)}else{damage=5+Math.random()*7+rod.power*.05;line=3+Math.random()*7-rod.control*.1}const surge=Math.random()<(0.22+(state.fishPower>75?.08:0))?8+Math.random()*20:0;state.fishPower=Math.max(0,state.fishPower-damage+surge);state.line=Math.min(100,Math.max(0,state.line+line));if(type==='pull')FX.jerk();if(surge){state.line=Math.min(100,state.line+surge*.25);FX.jerk();toast('🐟 Резкий рывок!')}updateFight();if(state.line>=100)return fail();if(state.fishPower<=0)return catchFish();clearTimeout(window.__fightTick);window.__fightTick=setTimeout(()=>{if(state.phase!=='fight')return;state.line=Math.min(100,state.line+Math.random()*4.5);if(Math.random()<.15)state.fishPower=Math.min(100,state.fishPower+4);updateFight();if(state.line>=100)fail()},260)}
+function fail(){scene.classList.remove('is-casting','is-fighting');scene.classList.add('is-broken');state.phase='idle';$('fightCard').classList.add('hidden');FX.snap();$('castBtn').classList.remove('hidden');$('statusPill').textContent='💥 Леска порвалась';toast('Рыба ушла...');setTimeout(()=>$('statusPill').textContent='Готов к забросу',1500);save()}
+function catchFish(){scene.classList.remove('is-casting','is-fighting');const key=state.fish,f=fish[key];let w=f.min+Math.random()*(f.max-f.min);const ev=currentEvent();const trophy=Math.random()<(0.07*(ev?ev.bonus:1))&&f.trophy;if(trophy)w=Math.min(f.max,w*1.2);w=+w.toFixed(2);const len=Math.round(22+w*8+Math.random()*14);const reward=Math.round(f.value*(trophy?2.4:1)*(1+state.loc*.08)*(ev?ev.bonus:1));state.caught++;state.inventory[key]=(state.inventory[key]||0)+1;state.diamonds+=reward;state.best=Math.max(state.best,w);if(f.rarity==='Легендарная'||f.rarity==='Мифическая')state.legendary++;state.lastCatch={key,w,len,reward,trophy};addXP(f.xp+(trophy?Math.round(f.xp*.7):0));checkAchievements();state.phase='catch';$('fightCard').classList.add('hidden');FX.reset();$('catchImage').src=AS+(trophy?f.trophy:f.img);$('catchName').textContent=f.name;$('catchRarity').textContent=trophy?'👑 ТРОФЕЙНЫЙ • '+f.rarity:f.rarity;$('catchWeight').textContent=w.toFixed(2)+' кг';$('catchLength').textContent=len+' см';$('catchReward').textContent='+'+reward;$('catchCard').classList.remove('hidden');$('catchCard').classList.toggle('trophy',!!trophy);$('statusPill').textContent=trophy?'👑 ТРОФЕЙНЫЙ УЛОВ!':'🎉 Рыба поймана!';$('fishJump').style.backgroundImage=`url('${AS+f.img}')`;$('fishJump').style.display='block';$('fishJump').animate([{transform:'translate(-50%,0) scale(.6)',opacity:0},{transform:'translate(-50%,-100px) rotate(-12deg) scale(1)',opacity:1},{transform:'translate(-50%,20px) rotate(14deg) scale(.75)',opacity:0}],{duration:900,easing:'cubic-bezier(.2,.8,.2,1)'}).finished.then(()=>{$('fishJump').style.display='none'});render();save();
   if(window.FishingSecure){ const requestId=(crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random()); window.FishingSecure.catch({fish_key:key,weight:w,request_id:requestId}).catch(()=>{}); }
   FishingBackend.save().catch(()=>{});
 }
@@ -336,3 +333,109 @@ window.FishingSecure={
 
 
 setTimeout(async()=>{ try { if(window.Telegram?.WebApp?.initData && window.FishingSecure){ const p=await window.FishingSecure.profile(); if(p&&typeof p==='object'){ state={...state,...p}; v4save(); save(); render(); } } } catch(e) {} }, 300);
+/* ===== FX: rod, line and bobber drawn in SVG ===== */
+const FX=(()=>{
+  const NS='http://www.w3.org/2000/svg';
+  const sc=document.getElementById('scene');
+  const svg=document.createElementNS(NS,'svg');
+  svg.id='fxLayer';
+  svg.innerHTML=
+    '<g id="fxRings"></g>'+
+    '<path id="fxLine" fill="none" stroke="rgba(232,246,250,.9)" stroke-width="1.3" stroke-linecap="round"/>'+
+    '<g id="fxBob"><ellipse id="fxBobShadow" cx="0" cy="1" rx="9" ry="2.6" fill="rgba(0,0,0,.28)"/>'+
+      '<g id="fxBobBody"><line x1="0" y1="-19" x2="0" y2="-9" stroke="#ffd23f" stroke-width="2.2" stroke-linecap="round"/>'+
+      '<ellipse cx="0" cy="-3" rx="5.6" ry="7.6" fill="#f3f6f6"/><path d="M-5.6 -3 A5.6 7.6 0 0 1 5.6 -3 Z" fill="#ff3434"/>'+
+      '<ellipse cx="-1.8" cy="-6" rx="1.4" ry="2.4" fill="rgba(255,255,255,.55)"/></g></g>'+
+    '<g id="fxDrops"></g>'+
+    '<g id="fxRod"><path id="fxBlank" fill="none" stroke-linecap="round"/><path id="fxBlankHi" fill="none" stroke-linecap="round" stroke="rgba(255,255,255,.22)" stroke-width="1"/>'+
+      '<g id="fxGuides"></g><path id="fxGrip" fill="none" stroke-linecap="round" stroke-width="10"/>'+
+      '<circle id="fxReel" r="9" fill="#1b2327" stroke="#9fb3ba" stroke-width="2"/><circle id="fxReelHub" r="3" fill="#cfd8dc"/></g>';
+  sc.appendChild(svg);
+  const q=id=>svg.querySelector('#'+id);
+  const E={line:q('fxLine'),bob:q('fxBob'),body:q('fxBobBody'),shadow:q('fxBobShadow'),rings:q('fxRings'),drops:q('fxDrops'),
+    blank:q('fxBlank'),hi:q('fxBlankHi'),grip:q('fxGrip'),reel:q('fxReel'),hub:q('fxReelHub'),guides:q('fxGuides')};
+  for(let i=0;i<4;i++){const c=document.createElementNS(NS,'circle');c.setAttribute('r','1.8');c.setAttribute('fill','none');c.setAttribute('stroke','#c9d6da');c.setAttribute('stroke-width','1');E.guides.appendChild(c)}
+  const COLORS={starter:'#7a5230',float:'#2f7a58',spinning:'#28476e',feeder:'#23252b',carp:'#35603a',premium:'#c99a2e'};
+  const S={mode:'idle',ang:50,bend:0,tension:0,fly:0,sub:0,biting:false,scale:1,tx:.62,ty:.5,jerk:0,lineOn:true};
+  let tweens=[],drops=[],rings=[],nextRing=0,nibbleUntil=0,t0=performance.now();
+  const ease=t=>1-Math.pow(1-t,3);
+  function tween(key,to,dur,fn){tweens=tweens.filter(w=>w.key!==key);tweens.push({key,from:S[key],to,t:performance.now(),dur,fn})}
+  function wait(ms){return new Promise(r=>setTimeout(r,ms))}
+  function geo(){
+    const W=sc.clientWidth,H=sc.clientHeight,L=Math.min(W*.64,270);
+    const bx=W*.03,by=H-100,a=S.ang*Math.PI/180;
+    const dx=Math.cos(a),dy=-Math.sin(a),nx=-dy,ny=dx;
+    const tip={x:bx+dx*L,y:by+dy*L};
+    // bend pulls the tip toward the line (forward/down)
+    const b=S.bend+S.jerk;
+    tip.x+=dx*-b*.15+b*.55;tip.y+=b*.9;
+    const mid={x:bx+dx*L*.5+nx*b*.35,y:by+dy*L*.5+ny*b*.35};
+    return {W,H,L,bx,by,dx,dy,tip,mid,target:{x:W*S.tx,y:H*S.ty}};
+  }
+  function ring(x,y,big){const e=document.createElementNS(NS,'ellipse');e.setAttribute('fill','none');e.setAttribute('stroke','rgba(210,245,252,.7)');e.setAttribute('stroke-width',big?'1.6':'1.1');E.rings.appendChild(e);rings.push({e,x,y,t:performance.now(),dur:big?1100:1500,max:big?34:20})}
+  function splash(x,y){ring(x,y,true);setTimeout(()=>ring(x,y,true),140);for(let i=0;i<9;i++){const c=document.createElementNS(NS,'circle');c.setAttribute('r',String(1+Math.random()*1.6));c.setAttribute('fill','rgba(225,250,255,.9)');E.drops.appendChild(c);drops.push({c,x,y,vx:(Math.random()-.5)*110,vy:-60-Math.random()*90,t:performance.now()})}}
+  function frame(now){
+    const time=(now-t0)/1000;
+    tweens=tweens.filter(w=>{const p=Math.min(1,(now-w.t)/w.dur);S[w.key]=w.from+(w.to-w.from)*(w.fn||ease)(p);return p<1});
+    S.jerk*=.88;
+    const g=geo(),tip=g.tip,T=g.target;
+    let bx,by,sag=0,showBob=true;
+    if(S.mode==='idle'){
+      const sw=Math.sin(time*1.6)*3;bx=tip.x+4+sw;by=tip.y+30;S.scale=1;
+    }else if(S.mode==='fly'){
+      const p=S.fly,sx=S.fx0,sy=S.fy0;bx=sx+(T.x-sx)*p;by=sy+(T.y-sy)*p-Math.sin(p*Math.PI)*Math.max(90,(sy-T.y)*.9);S.scale=1-.22*p;sag=-10*Math.sin(p*Math.PI);
+    }else if(S.mode==='water'){
+      bx=T.x;by=T.y+Math.sin(time*2.1)*1.4;S.scale=.78;sag=16;
+      if(S.biting){const d=Math.abs(Math.sin(time*9));by+=d*9;S.sub=.25+d*.55;sag=6;S.bend=4+d*10;if(now>nextRing){ring(T.x,T.y,false);nextRing=now+260}}
+      else{S.sub=0;if(now<nibbleUntil)by+=5;else if(Math.random()<.004)nibbleUntil=now+170;if(now>nextRing){ring(T.x,T.y,false);nextRing=now+1700}}
+    }else{ // fight: fish pulls the line; keep it above the fight card so it stays visible
+      const card=document.getElementById('fightCard'),top=card&&!card.classList.contains('hidden')?card.getBoundingClientRect().top-sc.getBoundingClientRect().top-30:T.y;
+      const fy=Math.min(T.y,top),k=.5+S.tension/140;bx=T.x+Math.sin(time*1.7)*38*k+Math.sin(time*4.3)*6;by=fy+Math.cos(time*1.1)*6;showBob=false;sag=0;
+      S.bend=10+S.tension*.42+Math.sin(time*11)*S.tension*.04;
+      if(now>nextRing){ring(bx,by-6,false);nextRing=now+420-S.tension*2}
+    }
+    // rod
+    const col=COLORS[(typeof getRod==='function'&&getRod().id)||'starter']||COLORS.starter;
+    const gx=g.bx+g.dx*g.L*.3,gy=g.by+g.dy*g.L*.3;
+    E.blank.setAttribute('d',`M${g.bx},${g.by} Q${g.mid.x},${g.mid.y} ${tip.x},${tip.y}`);E.blank.setAttribute('stroke',col);E.blank.setAttribute('stroke-width','4.2');
+    E.hi.setAttribute('d',`M${gx},${gy} Q${g.mid.x},${g.mid.y} ${tip.x},${tip.y}`);
+    E.grip.setAttribute('d',`M${g.bx},${g.by} L${gx},${gy}`);E.grip.setAttribute('stroke','#a8733f');
+    const rx=g.bx+g.dx*g.L*.2+g.dy*-11,ry=g.by+g.dy*g.L*.2+g.dx*11;
+    E.reel.setAttribute('cx',rx);E.reel.setAttribute('cy',ry);E.hub.setAttribute('cx',rx);E.hub.setAttribute('cy',ry);
+    [...E.guides.children].forEach((c,i)=>{const u=.45+i*.17,v=1-u;c.setAttribute('cx',v*v*g.bx+2*v*u*g.mid.x+u*u*tip.x);c.setAttribute('cy',v*v*g.by+2*v*u*g.mid.y+u*u*tip.y)});
+    // line
+    const mx=(tip.x+bx)/2,my=(tip.y+by)/2+sag;
+    E.line.setAttribute('d',`M${tip.x},${tip.y} Q${mx},${my} ${bx},${by}`);
+    E.line.style.opacity=S.lineOn?1:0;
+    // bobber
+    E.bob.style.display=showBob&&S.lineOn?'':'none';
+    E.bob.setAttribute('transform',`translate(${bx},${by}) scale(${S.scale})`);
+    E.body.setAttribute('transform',`translate(0,${S.sub*9})`);
+    E.body.style.opacity=1-S.sub*.55;
+    E.shadow.style.display=S.mode==='water'?'':'none';
+    // rings & drops
+    rings=rings.filter(r=>{const p=(now-r.t)/r.dur;if(p>=1){r.e.remove();return false}r.e.setAttribute('cx',r.x);r.e.setAttribute('cy',r.y+2);r.e.setAttribute('rx',4+r.max*p);r.e.setAttribute('ry',(4+r.max*p)*.32);r.e.style.opacity=1-p;return true});
+    drops=drops.filter(d=>{const s=(now-d.t)/1000;if(s>.7){d.c.remove();return false}d.c.setAttribute('cx',d.x+d.vx*s);d.c.setAttribute('cy',d.y+d.vy*s+260*s*s);d.c.style.opacity=1-s/.7;return true});
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  return {
+    async cast(){
+      S.mode='idle';S.biting=false;S.sub=0;S.lineOn=true;S.tension=0;
+      S.tx=.5+Math.random()*.24;S.ty=.47+Math.random()*.06;
+      tween('bend',0,150);tween('ang',80,240);await wait(240);
+      tween('ang',34,170);tween('bend',26,170);await wait(120);
+      const g=geo();S.fx0=g.tip.x;S.fy0=g.tip.y;S.fly=0;S.mode='fly';
+      tween('fly',1,720,t=>t);tween('bend',0,420);setTimeout(()=>tween('ang',46,500),170);
+      await wait(720);
+      S.mode='water';const T=geo().target;splash(T.x,T.y);nextRing=performance.now()+500;
+    },
+    bite(){S.biting=true;S.mode='water'},
+    hook(){S.biting=false;S.mode='fight';S.jerk=18;tween('ang',66,220);const T=geo().target;splash(T.x,T.y)},
+    tension(v){S.tension=v},
+    jerk(){S.jerk=14},
+    reset(){S.mode='idle';S.biting=false;S.sub=0;S.tension=0;S.lineOn=true;tween('ang',50,450);tween('bend',0,450)},
+    snap(){S.lineOn=false;S.mode='idle';S.biting=false;S.tension=0;S.jerk=0;tween('ang',30,160);tween('bend',0,300);setTimeout(()=>{tween('ang',50,600);S.lineOn=true},900)}
+  };
+})();
+window.FX=FX;

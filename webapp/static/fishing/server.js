@@ -172,8 +172,7 @@
     landLater(true).then(function (r) {
       var f = fish[r.fish];
       state.phase = "catch";
-      $("bobber").style.display = "none";
-      $("castLine").style.height = "0";
+      FX.reset();
       $("catchImage").src = AS + (r.trophy && f.trophy ? f.trophy : f.img);
       $("catchName").textContent = f.name;
       $("catchRarity").textContent = r.trophy ? "👑 ТРОФЕЙНЫЙ • " + f.rarity : f.rarity;
@@ -198,8 +197,7 @@
       apply(r.profile);
     }).catch(function (error) {
       state.phase = "idle";
-      $("bobber").style.display = "none";
-      $("castLine").style.height = "0";
+      FX.reset();
       $("castBtn").classList.remove("hidden");
       $("statusPill").textContent = "Готов к забросу";
       fail_toast(error);
