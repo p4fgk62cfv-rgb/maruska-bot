@@ -1225,6 +1225,16 @@ class FishingPlayer(Base):
 
     owned_bobbers: Mapped[list] = mapped_column(JSON, default=list)
 
+    # Энергия хранится снимком: значение и момент, от которого идёт
+    # восстановление. None — ещё не считали (запас полный).
+    energy: Mapped[int | None] = mapped_column(nullable=True)
+
+    energy_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    refills: Mapped[int] = mapped_column(default=0)
+
+    refills_day: Mapped[str] = mapped_column(String(10), default="")
+
     boat: Mapped[str] = mapped_column(String(20), default="shore")
 
     owned_boats: Mapped[list] = mapped_column(JSON, default=list)

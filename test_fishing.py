@@ -150,6 +150,24 @@ def main() -> int:
     expect("дракон даёт больше награды, чем берег",
            R.catch_reward(R.FISH["carp"], False, 0, R.BOATS["dragon"], 100) > R.catch_reward(R.FISH["carp"], False, 0, R.BOATS["shore"], 100), True)
 
+    # --- энергия ---
+    from datetime import datetime, timedelta
+    t0 = datetime(2026, 1, 1, 12, 0, 0)
+    expect("запас на 1 уровне равен базе", R.energy_cap(1, 100), 100)
+    expect("запас растёт с уровнем", R.energy_cap(11, 100), 120)
+    expect("запас не больше полутора баз", R.energy_cap(99, 100), 150)
+    expect("цена заброса растёт с водоёмом", [R.cast_cost(i, 5) for i in range(5)], [5, 6, 7, 8, 9])
+    expect("за 10 минут +5 при 2 мин/ед.", R.energy_now(10, t0, t0 + timedelta(minutes=10), 100, 120)[0], 15)
+    expect("неполная минута не теряется",
+           R.energy_now(10, t0, t0 + timedelta(minutes=3), 100, 120)[1], t0 + timedelta(minutes=2))
+    expect("выше запаса не восстанавливается", R.energy_now(95, t0, t0 + timedelta(hours=5), 100, 120)[0], 100)
+    expect("термос над запасом не срезается", R.energy_now(130, t0, t0 + timedelta(hours=5), 100, 120)[0], 130)
+    expect("энергия выключается нулём", clean({"energy_max": 0})["energy_max"], 0)
+    expect("регенерация не быстрее минуты", clean({"energy_regen": 0})["energy_regen"], 1)
+    expect("сервис проверяет энергию до наживки", src.index("Нет сил на заброс") < src.index("Кончилась наживка"), True)
+    expect("термос продаётся", 'kind == "energy"' in src, True)
+    expect("сундук может дать энергию", "energy" in R.open_chest.__code__.co_consts, True)
+
     expect("сервис учитывает катушку при забросе", "R.with_reel(rod, rod_level, reel)" in src, True)
     expect("сервис продаёт катушки и поплавки", 'kind in ("reel", "bobber")' in src, True)
 

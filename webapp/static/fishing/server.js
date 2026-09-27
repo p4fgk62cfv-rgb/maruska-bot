@@ -93,6 +93,7 @@
     achievements.forEach(function (a, i) { a.reward = scaled(BASE_ACH[i]); });
 
     render();
+    setEnergy(p.energy);
     var cc = document.getElementById("chestCount");
     if (cc) cc.textContent = state.chests;
   }
@@ -139,6 +140,14 @@
 
   cast = function () {
     if (state.phase !== "idle" || server.busy) return;
+
+    var e = energyNow();
+    if (e && e.value < e.cost) {
+      toast("⚡ Нет сил: нужно " + e.cost + ", есть " + e.value);
+      showEnergy();
+      return;
+    }
+
     server.busy = true;
 
     api("/api/fishing/cast", {}).then(function (r) {
@@ -146,6 +155,7 @@
       server.castAt = Date.now();
       server.biteDelay = r.bite_delay;
       server.fish = r.fish;
+      setEnergy(r.energy);
 
       var stock = state.baitStock || {};
       if (r.bait !== "worm" && stock[r.bait]) stock[r.bait] -= 1;
@@ -249,7 +259,7 @@
   openChest = function () {
     api("/api/fishing/chest", {}).then(function (r) {
       var p = r.prize;
-      var text = p.kind === "coins" ? "+" + p.amount + " 💎" : p.kind === "bait" ? "+" + p.amount + " " + p.name : "+" + p.amount + " XP";
+      var text = p.kind === "coins" ? "+" + p.amount + " 💎" : p.kind === "bait" ? "+" + p.amount + " " + p.name : p.kind === "energy" ? "+" + p.amount + " ⚡" : "+" + p.amount + " XP";
       apply(r.profile);
       toast("🎁 Сундук открыт: " + text);
     }).catch(fail_toast);
@@ -282,6 +292,101 @@
   };
 
   // ---------- старт ----------
+
+  // ---------- энергия: считает сервер, телефон только ведёт таймер ----------
+
+  var energy = { enabled: false }, energyAt = 0;
+
+  function setEnergy(e) {
+    if (e) { energy = e; energyAt = Date.now(); }
+    drawEnergy();
+  }
+
+  function energyNow() {
+    if (!energy.enabled) return null;
+    var t = (Date.now() - energyAt) / 1000, v = energy.value, next = 0;
+    if (v < energy.max) {
+      if (t >= energy.next_in) {
+        v = Math.min(energy.max, v + 1 + Math.floor((t - energy.next_in) / energy.regen));
+        next = v >= energy.max ? 0 : energy.regen - ((t - energy.next_in) % energy.regen);
+      } else {
+        next = energy.next_in - t;
+      }
+    }
+    var cost = (energy.costs && energy.costs[LOC_KEYS[state.loc]]) || energy.cost;
+    var full = v >= energy.max ? 0 : next + (energy.max - v - 1) * energy.regen;
+    return { value: v, max: energy.max, next: Math.ceil(next), full: Math.ceil(full), cost: cost };
+  }
+
+  function clock(sec) {
+    var m = Math.floor(sec / 60), s = sec % 60;
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function longTime(sec) {
+    var h = Math.floor(sec / 3600), m = Math.ceil((sec % 3600) / 60);
+    if (m === 60) { h += 1; m = 0; }
+    return (h ? h + " ч " : "") + (m || !h ? m + " мин" : "");
+  }
+
+  function drawEnergy() {
+    var chip = document.getElementById("energyChip");
+    if (!energy.enabled) { if (chip) chip.remove(); return; }
+    if (!chip) {
+      chip = document.createElement("button");
+      chip.id = "energyChip";
+      chip.className = "energy-chip";
+      chip.onclick = showEnergy;
+      document.getElementById("scene").appendChild(chip);
+    }
+    var e = energyNow(), pct = Math.min(100, Math.round(e.value * 100 / e.max));
+    chip.classList.toggle("low", e.value < e.cost);
+    chip.innerHTML = '<b>⚡ ' + e.value + "<small>/" + e.max + "</small></b>"
+      + '<i><s style="width:' + pct + '%"></s></i>'
+      + (e.value < e.max ? "<em>+1 через " + clock(e.next) + "</em>" : "<em>" + (e.value > e.max ? "сверх запаса" : "полная") + "</em>");
+
+    var val = document.getElementById("enVal");
+    if (val) {
+      val.innerHTML = e.value + "<small>/" + e.max + "</small>";
+      document.getElementById("enBar").style.width = pct + "%";
+      document.getElementById("enNext").textContent = e.value < e.max
+        ? "+1 через " + clock(e.next) + " · полная через " + longTime(e.full)
+        : (e.value > e.max ? "Бодрость сверх запаса — восстановление начнётся ниже " + e.max : "Силы полные");
+    }
+  }
+
+  setInterval(drawEnergy, 1000);
+
+  function showEnergy() {
+    if (!energy.enabled) return;
+    var m = $("modal"), c = $("modalContent"), e = energyNow();
+    var costs = locations.map(function (l, i) {
+      var cost = energy.costs ? energy.costs[LOC_KEYS[i]] : energy.cost;
+      return '<div class="energy-cost' + (i === state.loc ? " here" : "") + '"><span>' + l.name + "</span><b>−" + cost + " ⚡</b></div>";
+    }).join("");
+    var left = energy.refills_left, can = left > 0 && e.value < e.max;
+    c.innerHTML = '<div class="level-hero energy-hero"><span>⚡ ЭНЕРГИЯ</span><b id="enVal"></b>'
+      + '<div class="track"><i id="enBar"></i></div><small id="enNext"></small></div>'
+      + "<h2>Силы рыбака</h2><p class=\"muted\">Каждый заброс тратит энергию, дальние водоёмы — больше. "
+      + "Силы возвращаются сами: +1 каждые " + Math.round(energy.regen / 60) + " мин, даже когда игра закрыта. "
+      + "С каждым уровнем запас больше.</p>"
+      + '<div class="energy-costs">' + costs + "</div>"
+      + '<button class="primary full" id="teaBtn"' + (can ? "" : " disabled") + ">☕ Термос чая +" + energy.refill_amount + " ⚡ · "
+      + energy.refill_price.toLocaleString("ru-RU") + " 💎</button>"
+      + '<p class="muted energy-note">' + (left > 0 ? "Сегодня осталось термосов: " + left : "Термос на сегодня выпит — завтра снова") + "</p>";
+    m.classList.remove("hidden");
+    drawEnergy();
+    var tea = document.getElementById("teaBtn");
+    if (tea && can) tea.onclick = buyEnergy;
+  }
+
+  function buyEnergy() {
+    api("/api/fishing/buy", { kind: "energy", key: "" }).then(function (r) {
+      apply(r.profile);
+      toast("☕ +" + energy.refill_amount + " ⚡ — силы вернулись");
+      showEnergy();
+    }).catch(fail_toast);
+  }
 
   function bind() {
     $("castBtn").onclick = cast;

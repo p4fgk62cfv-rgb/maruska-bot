@@ -280,6 +280,7 @@ openPanel=function(tab){
       host.insertAdjacentHTML('afterend',`<div class="section-title">🪱 Запас наживки</div>
       <div class="v4-bait-stock">${Object.keys(v4defaults.baitStock).map(id=>{
         const idx=['worm','maggots','corn','bread','livebait','fly','wobbler','spinner','softbait'].indexOf(id);
+        if(id==='worm')return `<div class="v4-stock free"><img src="${AS+'baits/'+baits[idx][0]}"><b>${baits[idx][1]}</b><span>∞</span><small>Бесплатно</small></div>`;
         return `<button class="v4-stock" data-buybait="${id}"><img src="${AS+'baits/'+baits[idx][0]}"><b>${baits[idx][1]}</b><span>×${state.baitStock[id]||0}</span><small>Купить +5</small></button>`
       }).join('')}</div><div class="v4-mini-note">Каждый заброс расходует 1 выбранную наживку.</div>`);
       host.querySelectorAll('[data-buybait]').forEach(x=>x.onclick=()=>buyBait(x.dataset.buybait));

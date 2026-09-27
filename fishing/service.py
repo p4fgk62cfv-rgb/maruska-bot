@@ -39,6 +39,12 @@ DEFAULT_SETTINGS = {
     "cooldown": 8,
     "daily_cap": 800,
     "min_fight": 2,
+    "energy_max": 100,       # запас на 1 уровне; 0 — энергия выключена
+    "energy_regen": 2,       # минут на 1 единицу
+    "energy_cost": 5,        # цена заброса в Тихой заводи; дальше +1 за водоём
+    "refill_price": 120,     # термос чая, алмазов
+    "refill_amount": 50,
+    "refill_per_day": 3,
 }
 
 LIMITS = {
@@ -47,6 +53,12 @@ LIMITS = {
     "cooldown": (0, 300),
     "daily_cap": (0, 100000),
     "min_fight": (0, 30),
+    "energy_max": (0, 1000),
+    "energy_regen": (1, 60),
+    "energy_cost": (1, 100),
+    "refill_price": (0, 100000),
+    "refill_amount": (1, 1000),
+    "refill_per_day": (0, 20),
 }
 
 CAST_TTL = 180          # секунд: дольше заброс не живёт
@@ -139,6 +151,41 @@ def _ensure_quests(player: FishingPlayer) -> None:
         player.quests = R.daily_quests(day, player.telegram_id)
 
 
+def _energy(player: FishingPlayer, level: int, now, s: dict) -> tuple[int, int]:
+    """Пересчитать энергию на сейчас и сохранить снимок в профиле."""
+    cap = R.energy_cap(level, s["energy_max"])
+
+    if player.energy is None or player.energy_at is None:
+        player.energy, player.energy_at = cap, now
+
+    player.energy, player.energy_at = R.energy_now(player.energy, player.energy_at, now, cap, s["energy_regen"] * 60)
+    return player.energy, cap
+
+
+def _refills_left(player: FishingPlayer, s: dict) -> int:
+    used = (player.refills or 0) if player.refills_day == _today() else 0
+    return max(0, s["refill_per_day"] - used)
+
+
+def _energy_info(player: FishingPlayer, level: int, now, s: dict) -> dict:
+    enabled = s["energy_max"] > 0
+    if not enabled:
+        return {"enabled": False}
+
+    value, cap = _energy(player, level, now, s)
+    regen = s["energy_regen"] * 60
+    next_in = 0 if value >= cap else max(0, round(regen - (now - player.energy_at).total_seconds()))
+    full_in = 0 if value >= cap else next_in + (cap - value - 1) * regen
+
+    return {
+        "enabled": True, "value": value, "max": cap, "regen": regen, "next_in": next_in, "full_in": full_in,
+        "cost": R.cast_cost(R.location_index(player.location), s["energy_cost"]),
+        "costs": {loc.key: R.cast_cost(i, s["energy_cost"]) for i, loc in enumerate(R.LOCATIONS)},
+        "refill_price": s["refill_price"], "refill_amount": s["refill_amount"],
+        "refills_left": _refills_left(player, s),
+    }
+
+
 async def _mara_profile(telegram_id: int) -> tuple[int, int, int]:
     """Уровень, опыт и алмазы из общего профиля Мары."""
     async with session_scope() as session:
@@ -158,13 +205,16 @@ async def fished_today(telegram_id: int) -> int:
 
 
 async def profile(telegram_id: int) -> dict:
+    level, xp, coins = await _mara_profile(telegram_id)
+
     async with session_scope() as session:
         player = await _locked_player(session, telegram_id)
         _ensure_quests(player)
+        energy = _energy_info(player, level, utcnow(), settings())
         await session.commit()
         data = _player_dict(player)
 
-    level, xp, coins = await _mara_profile(telegram_id)
+    data["energy"] = energy
     from progress.xp import progress as xp_progress
 
     data.update({
@@ -275,6 +325,15 @@ async def cast(telegram_id: int, chat_id: int | None = None, rng=random) -> dict
             location = R.LOCATIONS[0]
             player.location = location.key
 
+        # Энергия — до наживки: без сил наживка не тратится
+        if s["energy_max"] > 0:
+            value, _cap = _energy(player, level, now, s)
+            cost = R.cast_cost(R.location_index(location.key), s["energy_cost"])
+            if value < cost:
+                raise FishingError(f"⚡ Нет сил на заброс: нужно {cost}, есть {value}. "
+                                   f"+1 каждые {s['energy_regen']} мин или выпей чаю из термоса")
+            player.energy = value - cost
+
         bait = R.BAITS.get(player.bait) or R.BAITS["worm"]
 
         # Червь бесплатный и бесконечный — без наживки никто не застрянет
@@ -301,11 +360,12 @@ async def cast(telegram_id: int, chat_id: int | None = None, rng=random) -> dict
             length=length, trophy=trophy, location=location.key, bait=bait.key, bite_delay=bite_delay,
         ))
         player.last_cast_at = now
+        energy = _energy_info(player, level, now, s)
         await session.commit()
 
     # Игроку заранее видны только вид рыбы и её сила — вес и награда после поимки
     return {"cast_id": cast_id, "fish": fish.key, "power": fish.power, "rarity": fish.rarity,
-            "bite_delay": bite_delay, "bait": bait.key}
+            "bite_delay": bite_delay, "bait": bait.key, "energy": energy}
 
 
 async def land(telegram_id: int, cast_id: str, success: bool, display_name: str | None = None, rng=random) -> dict:
@@ -495,6 +555,17 @@ async def buy(telegram_id: int, kind: str, key: str) -> dict:
                 raise FishingError(f"🔒 Нужен {item.level} уровень")
             cost, note = item.price, ("Катушка «" if kind == "reel" else "Поплавок «") + item.name + "»"
 
+        elif kind == "energy":
+            s = settings()
+            if s["energy_max"] <= 0:
+                raise FishingError("Энергия выключена — пить чай незачем")
+            value, cap = _energy(player, level, utcnow(), s)
+            if value >= cap:
+                raise FishingError("⚡ Сил и так полно")
+            if _refills_left(player, s) <= 0:
+                raise FishingError(f"☕ Термос пуст: не больше {s['refill_per_day']} раз в день")
+            cost, note = s["refill_price"], f"Термос чая +{s['refill_amount']} ⚡"
+
         elif kind == "upgrade":
             current = int((player.rod_levels or {}).get(player.rod, 1))
             if current >= R.MAX_ROD_LEVEL:
@@ -531,6 +602,11 @@ async def buy(telegram_id: int, kind: str, key: str) -> dict:
                 levels.setdefault(key, 1)
                 player.rod_levels = levels
                 player.rod = key
+            elif kind == "energy":
+                s = settings()
+                player.energy = (player.energy or 0) + s["refill_amount"]
+                player.refills = (player.refills or 0) + 1 if player.refills_day == _today() else 1
+                player.refills_day = _today()
             elif kind in ("reel", "bobber"):
                 attr = "owned_reels" if kind == "reel" else "owned_bobbers"
                 setattr(player, attr, _owned(getattr(player, attr), "basic" if kind == "reel" else "wood") + [key])
@@ -567,6 +643,13 @@ async def open_chest(telegram_id: int, rng=random) -> dict:
         player.chests -= 1
         player.opened_chests = (player.opened_chests or 0) + 1
         prize = R.open_chest(rng, s["reward_percent"], s["xp_percent"])
+
+        if prize["kind"] == "energy" and s["energy_max"] > 0:
+            level, _xp, _coins = await _mara_profile(telegram_id)
+            _energy(player, level, utcnow(), s)
+            player.energy += prize["amount"]
+        elif prize["kind"] == "energy":
+            prize = {"kind": "xp", "amount": round(80 * s["xp_percent"] / 100)}
 
         if prize["kind"] == "bait":
             stock = dict(player.bait_stock or {})

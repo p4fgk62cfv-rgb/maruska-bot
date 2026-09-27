@@ -293,3 +293,32 @@ html,body{overscroll-behavior:none}
 .modal-card{max-height:calc(100dvh - 40px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y}
 .modal-close{position:sticky!important;top:0;float:right;margin:-8px -8px 0 8px;z-index:3;background:rgba(8,24,33,.92)!important}
 .panel-sheet{-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y}
+
+/* Bait icons: breathing room inside the cards */
+.v4-stock{padding:12px 8px 9px}
+.v4-stock img{width:64px;height:46px;margin-bottom:4px}
+.v4-stock.free{border-style:dashed;opacity:.92}
+.v4-stock.free span{color:#8ff0c6}
+.bait{padding:10px 7px 7px}
+.bait img{height:44px;margin-bottom:4px}
+
+/* Energy */
+.energy-chip{position:absolute;top:158px;left:16px;z-index:8;min-width:112px;padding:7px 11px 6px;border-radius:14px;border:1px solid rgba(255,255,255,.18);background:rgba(6,18,28,.66);backdrop-filter:blur(12px);color:#fff;text-align:left;box-shadow:0 8px 25px #0004}
+.energy-chip b{display:block;font-size:13px;font-weight:800}
+.energy-chip b small{opacity:.6;font-weight:700}
+.energy-chip i{display:block;height:5px;margin:5px 0 3px;border-radius:9px;background:rgba(255,255,255,.12);overflow:hidden}
+.energy-chip i s{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,#ffd166,#7ee8c3);transition:width .4s ease}
+.energy-chip em{display:block;font-style:normal;font-size:10px;opacity:.65}
+.energy-chip.low{border-color:rgba(255,107,107,.6);animation:energyLow 1.4s ease-in-out infinite}
+.energy-chip.low i s{background:linear-gradient(90deg,#ff6b6b,#ffb86b)}
+@keyframes energyLow{50%{box-shadow:0 0 18px rgba(255,107,107,.45)}}
+.energy-hero b small{font-size:.45em;opacity:.6}
+.energy-costs{display:grid;gap:6px;margin:12px 0 14px}
+.energy-cost{display:flex;justify-content:space-between;padding:9px 12px;border-radius:12px;background:rgba(255,255,255,.045);font-size:13px}
+.energy-cost.here{background:rgba(126,232,195,.12);border:1px solid rgba(126,232,195,.35)}
+.energy-note{text-align:center;margin:8px 0 0;font-size:12px}
+#teaBtn[disabled]{opacity:.45}
+.energy-hero b{display:flex!important;align-items:baseline;justify-content:center;gap:4px}
+.energy-hero b small{font-size:.38em}
+.energy-chip{min-width:0;width:100px;padding:6px 9px 5px}
+.energy-chip b{font-size:12px}

@@ -240,6 +240,10 @@ async def init_db():
             "ALTER TABLE fishing_profiles ADD COLUMN IF NOT EXISTS owned_reels JSON",
             "ALTER TABLE fishing_profiles ADD COLUMN IF NOT EXISTS bobber VARCHAR(20) DEFAULT 'wood'",
             "ALTER TABLE fishing_profiles ADD COLUMN IF NOT EXISTS owned_bobbers JSON",
+            "ALTER TABLE fishing_profiles ADD COLUMN IF NOT EXISTS energy INTEGER",
+            "ALTER TABLE fishing_profiles ADD COLUMN IF NOT EXISTS energy_at TIMESTAMP",
+            "ALTER TABLE fishing_profiles ADD COLUMN IF NOT EXISTS refills INTEGER DEFAULT 0",
+            "ALTER TABLE fishing_profiles ADD COLUMN IF NOT EXISTS refills_day VARCHAR(10) DEFAULT ''",
             "ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS mode VARCHAR(8) DEFAULT 'groups'",
             "ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS segment JSON",
 

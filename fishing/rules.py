@@ -18,6 +18,7 @@
 
 import random
 from dataclasses import dataclass
+from datetime import timedelta
 
 
 # ---------------------------------------------------------
@@ -316,6 +317,41 @@ def streak_bonus(streak: int, reward_percent: int) -> int:
 
 
 # ---------------------------------------------------------
+# Энергия: каждый заброс тратит силы, они восстанавливаются со временем
+# ---------------------------------------------------------
+
+ENERGY_PER_LEVEL = 2
+
+
+def energy_cap(level: int, base: int) -> int:
+    """Запас растёт с уровнем, но не больше чем в полтора раза."""
+    return min(base + ENERGY_PER_LEVEL * max(0, level - 1), round(base * 1.5))
+
+
+def cast_cost(location_index: int, base: int) -> int:
+    """Дальние водоёмы щедрее на награду — и забирают больше сил."""
+    return base + location_index
+
+
+def energy_now(stored: int, at, now, cap: int, regen_seconds: int):
+    """
+    Текущая энергия и момент, от которого считать следующую единицу.
+    Выше запаса энергия не восстанавливается, но и не срезается:
+    термос может поднять её над максимумом.
+    """
+    if stored >= cap:
+        return stored, now
+
+    gained = int((now - at).total_seconds() // regen_seconds)
+    value = min(cap, stored + gained)
+
+    if value >= cap:
+        return cap, now
+
+    return value, at + timedelta(seconds=gained * regen_seconds)
+
+
+# ---------------------------------------------------------
 # Задания дня и достижения
 # ---------------------------------------------------------
 
@@ -381,10 +417,14 @@ def unlocked_achievements(stats: dict, already: list[str]) -> list[dict]:
 # ---------------------------------------------------------
 
 CHEST_CHANCE = 0.12
+CHEST_ENERGY = 25
 
 
 def open_chest(rng, reward_percent: int, xp_percent: int) -> dict:
-    kind = rng.choice(("coins", "bait", "xp"))
+    kind = rng.choice(("coins", "bait", "xp", "energy"))
+
+    if kind == "energy":
+        return {"kind": "energy", "amount": CHEST_ENERGY}
 
     if kind == "coins":
         return {"kind": "coins", "amount": round((200 + rng.randint(0, 600)) * reward_percent / 100)}
