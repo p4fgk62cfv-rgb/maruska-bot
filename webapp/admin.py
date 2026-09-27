@@ -10,7 +10,10 @@ API веб-панели.
 Владельцы бота из OWNER_IDS видят все.
 """
 
+import asyncio
 import logging
+import os
+import signal
 import time
 
 from aiohttp import web
@@ -890,6 +893,17 @@ async def api_logs(request: web.Request):
     })
 
 
+async def api_restart(request: web.Request):
+    await require_owner(request)
+
+    async def _do_restart():
+        await asyncio.sleep(0.3)
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    asyncio.ensure_future(_do_restart())
+    return web.json_response({"ok": True})
+
+
 async def api_system(request: web.Request):
     user, chats = await require_owner(request)
 
@@ -1320,6 +1334,7 @@ def setup_admin_routes(app: web.Application) -> None:
     app.router.add_get("/api/admin/media", api_media)
     app.router.add_get("/api/admin/logs", api_logs)
     app.router.add_get("/api/admin/system", api_system)
+    app.router.add_post("/api/admin/restart", api_restart)
     app.router.add_post("/api/admin/broadcast", api_broadcast)
     app.router.add_get("/api/admin/avatar", api_avatar)
     app.router.add_get("/api/admin/chat_photo", api_chat_photo)
