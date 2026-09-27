@@ -72,6 +72,14 @@ def fortune_keyboard(user_id: int, chat_id: int) -> InlineKeyboardMarkup:
             )
         ])
 
+    if is_enabled(chat_id, "fortune_sarcasm"):
+        rows.append([
+            InlineKeyboardButton(
+                text="😒 Сарказм",
+                callback_data=f"fortune:sarcasm:{user_id}",
+            )
+        ])
+
     if is_enabled(chat_id, "fortune_roast"):
         rows.append([
             InlineKeyboardButton(
@@ -112,7 +120,7 @@ async def fortune_button(callback: CallbackQuery):
 
     category, owner_raw = parts[1], parts[2]
 
-    if category not in {"more", "love", "money", "vulgar", "roast"}:
+    if category not in {"more", "love", "money", "vulgar", "roast", "sarcasm"}:
         await callback.answer("Неизвестный режим", show_alert=True)
         return
 
@@ -133,6 +141,10 @@ async def fortune_button(callback: CallbackQuery):
 
     if category == "vulgar" and not is_enabled(chat.id, "fortune_vulgar"):
         await callback.answer("🌶️ Этот режим выключен администратором.", show_alert=True)
+        return
+
+    if category == "sarcasm" and not is_enabled(chat.id, "fortune_sarcasm"):
+        await callback.answer("😒 Этот режим выключен администратором.", show_alert=True)
         return
 
     if category == "roast" and not is_enabled(chat.id, "fortune_roast"):
