@@ -84,6 +84,14 @@ FEATURES: tuple[Feature, ...] = (
         group="Общение",
     ),
     Feature(
+        key="fortune_sarcasm",
+        title="Предсказания: сарказм",
+        emoji="😒",
+        description="Показывать кнопку «Сарказм» с иронично-пассивно-агрессивными предсказаниями",
+        default=True,
+        group="Общение",
+    ),
+    Feature(
         key="fortune_brutal",
         title="Предсказания: жёсткий режим",
         emoji="💀",
@@ -493,7 +501,8 @@ CHOICES: tuple[Choice, ...] = (
         options=(
             ("normal", "Обычный", "🔮"),
             ("roast", "С подъёбом", "😏"),
-            ("vulgar", "Вульгарный", "🌶️"),
+            ("sarcasm", "Сарказм", "😒"),
+            ("vulgar", "С матюками", "🌶️"),
             ("brutal", "Жёсткий", "💀"),
         ),
         default="roast",
