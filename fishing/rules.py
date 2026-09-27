@@ -176,6 +176,8 @@ def catalog() -> dict:
     return {
         "reels": [{"key": r.key, "name": r.name, "price": r.price, "control": r.control,
                    "power": r.power, "level": r.level} for r in REELS.values()],
+        "boats": [{"key": b.key, "name": b.name, "price": b.price, "control": b.control,
+                   "reward": b.reward, "level": b.level} for b in BOATS.values()],
         "bobbers": [{"key": b.key, "name": b.name, "price": b.price, "sense": round(b.sense * 100),
                      "trophy": round(b.trophy * 100, 1), "level": b.level} for b in BOBBERS.values()],
     }
@@ -196,10 +198,17 @@ class Boat:
 
 
 BOATS = {b.key: b for b in (
-    Boat("shore", "Береговая ловля", 0, 0, 0.0, 1),
-    Boat("boat", "Лодка «Ветер»", 1200, 8, .08, 4),
-    Boat("speedboat", "Катер «Шторм»", 3500, 15, .16, 7),
-    Boat("legend", "Лодка «Таймень»", 7000, 24, .28, 10),
+    # Ключи shore/boat/speedboat/legend — те же, что были у старого флота:
+    # купленные лодки у игроков сохраняются.
+    Boat("shore", "Деревянная лодка", 0, 0, 0.0, 1),
+    Boat("raft", "Надувная лодка", 450, 4, .04, 2),
+    Boat("boat", "Алюминиевая лодка", 1200, 8, .08, 4),
+    Boat("blue", "Синяя скоростная", 2200, 11, .12, 5),
+    Boat("speedboat", "Спортивный катер", 3500, 15, .16, 7),
+    Boat("yacht", "Золотая яхта", 5000, 18, .20, 8),
+    Boat("airboat", "Аэролодка", 6000, 21, .24, 9),
+    Boat("legend", "RIB «Таймень»", 7000, 24, .28, 10),
+    Boat("dragon", "Золотой дракон", 12000, 30, .36, 12),
 )}
 
 

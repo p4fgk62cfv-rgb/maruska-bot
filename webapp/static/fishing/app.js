@@ -42,10 +42,21 @@ function render(){const l=locations[state.loc];scene.style.backgroundImage=`url(
 function setLocation(i){if(state.phase!=='idle'){toast('Сначала закончи текущую рыбалку');return}if(state.level<locations[i].level){toast('🔒 Нужен уровень '+locations[i].level);return}state.loc=(i+locations.length)%locations.length;render();save()}
 locations[0].level=1;locations[1].level=2;locations[2].level=4;locations[3].level=6;locations[4].level=9;
 function chooseFish(){const l=locations[state.loc];let pool=[...l.fish];const night=state.loc===4||l.time.includes('Ночь');const ev=currentEvent();if(night&&Math.random()<.08)pool=['beluga'];if(Math.random()<.1&&pool.includes('carp'))pool.push('carp');if(ev&&ev.name.includes('Таинственный')&&Math.random()<.18)pool=pool.filter(k=>fish[k].rarity!=='Обычная').length?pool.filter(k=>fish[k].rarity!=='Обычная'):pool;if(night&&Math.random()<.25)state.nightCatches++;return pool[Math.floor(Math.random()*pool.length)]}
+let boats=[
+  {id:'shore',name:'Деревянная лодка',price:0,control:0,reward:0,level:1,desc:'Старая добрая лодка на вёслах.'},
+  {id:'raft',name:'Надувная лодка',price:450,control:4,reward:.04,level:2,desc:'Лёгкая, с подсачеком и ящиком снастей.'},
+  {id:'boat',name:'Алюминиевая лодка',price:1200,control:8,reward:.08,level:4,desc:'Эхолот, мотор и удобное кресло.'},
+  {id:'blue',name:'Синяя скоростная',price:2200,control:11,reward:.12,level:5,desc:'Быстро выходит на дальние точки.'},
+  {id:'speedboat',name:'Спортивный катер',price:3500,control:15,reward:.16,level:7,desc:'Для сильной рыбы и дальних забросов.'},
+  {id:'yacht',name:'Золотая яхта',price:5000,control:18,reward:.20,level:8,desc:'Премиальная рыбалка с комфортом.'},
+  {id:'airboat',name:'Аэролодка',price:6000,control:21,reward:.24,level:9,desc:'Проходит по мелководью и болотам.'},
+  {id:'legend',name:'RIB «Таймень»',price:7000,control:24,reward:.28,level:10,desc:'Элитный катер для трофейной рыбалки.'},
+  {id:'dragon',name:'Золотой дракон',price:12000,control:30,reward:.36,level:12,desc:'Легендарный корабль. Рыба сама идёт в руки.'}
+];
 let tackle={"reels":[{"key":"basic","name":"Катушка «Старт»","price":0,"control":0,"power":0,"level":0},{"key":"bronze","name":"Бронза","price":180,"control":3,"power":2,"level":1},{"key":"forest","name":"Лесная","price":350,"control":5,"power":4,"level":2},{"key":"aqua","name":"Аква","price":600,"control":7,"power":7,"level":3},{"key":"flame","name":"Пламя","price":900,"control":9,"power":10,"level":4},{"key":"amber","name":"Янтарь","price":1400,"control":12,"power":14,"level":6},{"key":"gold","name":"Золотая","price":2200,"control":15,"power":18,"level":8},{"key":"amethyst","name":"Аметист","price":3500,"control":18,"power":24,"level":10},{"key":"crystal","name":"Кристалл","price":5000,"control":22,"power":30,"level":12}],"bobbers":[{"key":"wood","name":"Деревянный","price":0,"sense":0,"trophy":0,"level":0},{"key":"classic","name":"Классика","price":80,"sense":5,"trophy":0.5,"level":1},{"key":"reed","name":"Камыш","price":200,"sense":10,"trophy":1,"level":2},{"key":"azure","name":"Лазурь","price":400,"sense":15,"trophy":1.5,"level":3},{"key":"night","name":"Ночной","price":700,"sense":20,"trophy":2,"level":5},{"key":"royal","name":"Королевский","price":1100,"sense":25,"trophy":2.5,"level":6},{"key":"gold","name":"Золотой","price":1800,"sense":30,"trophy":3,"level":8},{"key":"amethyst","name":"Аметист","price":3000,"sense":35,"trophy":4,"level":10},{"key":"crystal","name":"Кристалл","price":4500,"sense":40,"trophy":5,"level":12}]};
 function reelOf(){return tackle.reels.find(r=>r.key===state.reel)||tackle.reels[0]}
 function bobberOf(){return tackle.bobbers.find(b=>b.key===state.bobber)||tackle.bobbers[0]}
-function getRod(){const g=gear.find(g=>g.id===state.rod)||gear[0];const lv=state.rodLevels[state.rod]||1;const r=reelOf();return {...g,control:g.control+(lv-1)*3+r.control,power:g.power+(lv-1)*4+r.power,upgrade:lv}}
+function getRod(){const g=gear.find(g=>g.id===state.rod)||gear[0];const lv=state.rodLevels[state.rod]||1;const r=reelOf(),bt=boats.find(x=>x.id===state.boat)||boats[0];return {...g,control:g.control+(lv-1)*3+r.control+bt.control,power:g.power+(lv-1)*4+r.power,upgrade:lv}}
 function tackleCard(kind,t){const owned=(kind==='reel'?state.ownedReels:state.ownedBobbers)||[kind==='reel'?'basic':'wood'];const on=(kind==='reel'?state.reel:state.bobber)===t.key;const locked=state.level<t.level&&!owned.includes(t.key);const stat=!t.price?'Без бонуса':kind==='reel'?`Контроль +${t.control} • Сила +${t.power}`:`Клёв −${t.sense}% • Трофей +${t.trophy}%`;return `<button class="item ${on?'selected':''}" data-${kind}="${t.key}" data-gear="1"><img src="${AS}gear/${kind==='reel'?'reel':'float'}_${t.key}.png?v=1"><h3>${t.name}</h3><p>${stat}</p><b>${locked?'🔒 Ур. '+t.level:owned.includes(t.key)?(on?'ЭКИПИРОВАНО':'ЭКИПИРОВАТЬ'):(t.price?t.price.toLocaleString('ru-RU')+' 💎':'БЕСПЛАТНО')}</b></button>`}
 function buyTackle(kind,key){const list=kind==='reel'?tackle.reels:tackle.bobbers,t=list.find(x=>x.key===key);if(!t)return;const ownKey=kind==='reel'?'ownedReels':'ownedBobbers';state[ownKey]=state[ownKey]||[list[0].key];if(!state[ownKey].includes(key)){if(state.level<t.level){toast('🔒 Нужен уровень '+t.level);return}if(state.diamonds<t.price){toast('💎 Недостаточно алмазов');return}state.diamonds-=t.price;state[ownKey].push(key)}state[kind]=key;render();save();openPanel('gear')}
 function buyReel(id){buyTackle('reel',id)}
@@ -84,12 +95,7 @@ init();
    Boats • bait inventory • daily quests • streaks • chests • backend bridge
    ========================= */
 const V4_KEY='maruskaFishingV4';
-const boats=[
-  {id:'shore',name:'Береговая ловля',icon:'🥾',price:0,control:0,reward:0,level:1,desc:'Надёжный старт с берега.'},
-  {id:'boat',name:'Лодка «Ветер»',icon:'🛶',price:1200,control:8,reward:.08,level:4,desc:'Выходи на глубину и получай больше добычи.'},
-  {id:'speedboat',name:'Катер «Шторм»',icon:'🚤',price:3500,control:15,reward:.16,level:7,desc:'Для сильной рыбы и дальних забросов.'},
-  {id:'legend',name:'Лодка «Таймень»',icon:'🚤',price:7000,control:24,reward:.28,level:10,desc:'Премиальная лодка для трофейной рыбалки.'}
-];
+
 const questTemplates=[
   {id:'q_catch',title:'Первый улов',desc:'Поймай 5 рыб',target:5,reward:180,type:'catch'},
   {id:'q_weight',title:'Тяжёлый трофей',desc:'Поймай рыбу тяжелее 4 кг',target:1,reward:260,type:'weight'},
@@ -190,8 +196,8 @@ function showBoats(){
   const m=$('modal'),c=$('modalContent');
   c.innerHTML=`<div class="v4-modal-title">🛶 Флот</div><p class="muted">Лодка влияет на контроль лески и награду за улов.</p>
   <div class="v4-boat-grid">${boats.map(b=>`<button class="v4-boat ${state.boat===b.id?'selected':''}" data-boat="${b.id}">
-  <span class="v4-boat-icon">${b.icon}</span><b>${b.name}</b><small>${b.desc}</small>
-  <span>Контроль +${b.control} • награда +${Math.round(b.reward*100)}%</span>
+  <img class="v4-boat-img" src="${AS}boats/${b.id}.png?v=1" alt=""><b>${b.name}</b><small>${b.desc}</small>
+  <span>${b.price?`Контроль +${b.control} • награда +${Math.round(b.reward*100)}%`:'Без бонуса'}</span>
   <strong>${state.ownedBoats.includes(b.id)?(state.boat===b.id?'ЭКИПИРОВАНО':'ЭКИПИРОВАТЬ'):(state.level<b.level?'🔒 Ур. '+b.level:b.price.toLocaleString('ru-RU')+' 💎')}</strong></button>`).join('')}</div>`;
   m.classList.remove('hidden');
   c.querySelectorAll('[data-boat]').forEach(x=>x.onclick=()=>buyBoat(x.dataset.boat));
@@ -281,7 +287,7 @@ openPanel=function(tab){
   }
   if(tab==='spots'){
     const host=$('panelContent');
-    host.insertAdjacentHTML('afterbegin',`<button class="v4-wide-btn" id="boatsBtn">🛶 ${boat().name} · Флот</button>`);
+    host.insertAdjacentHTML('afterbegin',`<button class="v4-wide-btn" id="boatsBtn">🛶 ${boat().name} · Флот (${boats.length})</button>`);
     $('boatsBtn').onclick=showBoats;
   }
 };

@@ -69,6 +69,10 @@
     state.bobber = p.bobber;
     state.ownedBobbers = p.owned_bobbers;
     if (p.catalog) tackle = p.catalog;
+    if (p.catalog && p.catalog.boats) boats = p.catalog.boats.map(function (b) {
+      var local = boats.find(function (x) { return x.id === b.key; }) || {};
+      return Object.assign({}, local, { id: b.key, name: b.name, price: b.price, control: b.control, reward: b.reward, level: b.level });
+    });
     state.boat = p.boat;
     state.ownedBoats = p.owned_boats;
     // Червь бесплатный и бесконечный

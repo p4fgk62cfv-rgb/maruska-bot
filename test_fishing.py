@@ -137,6 +137,19 @@ def main() -> int:
     for k in R.BOBBERS:
         expect(f"есть картинка поплавка {k}", (ROOT / f"webapp/static/fishing/assets/fishing/gear/float_{k}.png").exists(), True)
 
+    boats = list(R.BOATS.values())
+    expect("во флоте 9 лодок", len(boats), 9)
+    expect("старые ключи лодок сохранены (купленное не пропадает)",
+           {"shore", "boat", "speedboat", "legend"} <= set(R.BOATS), True)
+    expect("стартовая лодка бесплатная и без бонуса", (R.BOATS["shore"].price, R.BOATS["shore"].reward), (0, 0.0))
+    expect("лодки дорожают и дают больше",
+           all(b.price > a.price and b.reward > a.reward and b.control > a.control for a, b in zip(boats, boats[1:])), True)
+    expect("в каталоге все лодки", [b["key"] for b in R.catalog()["boats"]], list(R.BOATS))
+    for k in R.BOATS:
+        expect(f"есть картинка лодки {k}", (ROOT / f"webapp/static/fishing/assets/fishing/boats/{k}.png").exists(), True)
+    expect("дракон даёт больше награды, чем берег",
+           R.catch_reward(R.FISH["carp"], False, 0, R.BOATS["dragon"], 100) > R.catch_reward(R.FISH["carp"], False, 0, R.BOATS["shore"], 100), True)
+
     expect("сервис учитывает катушку при забросе", "R.with_reel(rod, rod_level, reel)" in src, True)
     expect("сервис продаёт катушки и поплавки", 'kind in ("reel", "bobber")' in src, True)
 

@@ -284,3 +284,7 @@ html,body{overscroll-behavior:none}
 /* Bait icons: trimmed images, larger boxes */
 .bait img{height:52px}
 .v4-stock img{width:72px;height:52px}
+
+/* Fleet: boat pictures instead of emoji */
+.v4-boat{grid-template-columns:112px 1fr!important;align-items:center}
+.v4-boat-img{grid-row:1/5;width:112px;height:74px;object-fit:contain;align-self:center;filter:drop-shadow(0 6px 8px rgba(0,0,0,.45))}
