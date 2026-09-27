@@ -106,7 +106,10 @@ def main() -> int:
     limit_words = ("приходи завтра", "возвращайся завтра", "завтра снова", "завтра можно",
                    "уже получал", "уже получила", "раз в день", "одно в день")
 
-    for text in tuple(fortune.FUNNY) + tuple(fortune.SERIOUS) + tuple(fortune.INTROS):
+    all_texts = (tuple(fortune.FUNNY) + tuple(fortune.SERIOUS) + tuple(fortune.INTROS)
+                 + tuple(fortune.SARCASM) + tuple(fortune.LOVE) + tuple(fortune.MONEY)
+                 + tuple(fortune.VULGAR) + tuple(fortune.ROAST) + tuple(fortune.BRUTAL))
+    for text in all_texts:
         checks += 1
         if any(word in text.lower() for word in limit_words):
             failures.append(f"  [предсказание] осталось ограничение по дням: {text[:60]}")

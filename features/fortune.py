@@ -91,6 +91,16 @@ def fortune_keyboard(user_id: int, chat_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+_MODE_FLAGS = {"sarcasm": "fortune_sarcasm", "vulgar": "fortune_vulgar", "brutal": "fortune_brutal"}
+
+
+def _sanitize_mode(chat_id: int, mode: str) -> str:
+    flag = _MODE_FLAGS.get(mode)
+    if flag and not is_enabled(chat_id, flag):
+        return "roast"
+    return mode
+
+
 async def send_fortune(message: Message, category: str = "more"):
     user = message.from_user
 
@@ -98,7 +108,7 @@ async def send_fortune(message: Message, category: str = "more"):
         return
 
     chat_id = message.chat.id
-    mode = get_value(chat_id, "fortune_mode") or "roast"
+    mode = _sanitize_mode(chat_id, get_value(chat_id, "fortune_mode") or "roast")
 
     await message.reply(
         fortune.predict(
@@ -155,11 +165,11 @@ async def fortune_button(callback: CallbackQuery):
         await callback.answer("🔮 Предсказания выключены.", show_alert=True)
         return
 
-    mode = get_value(chat.id, "fortune_mode") or "roast"
+    mode = _sanitize_mode(chat.id, get_value(chat.id, "fortune_mode") or "roast")
     user = callback.from_user
 
     if category == "roast" and is_enabled(chat.id, "fortune_brutal"):
-        mode = "brutal"
+        category = "brutal"
 
     await callback.message.edit_text(
         fortune.predict(
