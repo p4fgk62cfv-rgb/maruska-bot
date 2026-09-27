@@ -13,7 +13,6 @@ API веб-панели.
 import asyncio
 import logging
 import os
-import signal
 import time
 
 from aiohttp import web
@@ -898,7 +897,7 @@ async def api_restart(request: web.Request):
 
     async def _do_restart():
         await asyncio.sleep(0.3)
-        os.kill(os.getpid(), signal.SIGTERM)
+        os._exit(1)  # exit code 1 → Railway restarts the container
 
     asyncio.ensure_future(_do_restart())
     return web.json_response({"ok": True})
