@@ -80,8 +80,33 @@
         + '<div class="kv"><span class="k">Картинки</span><span>' + (esc(d.providers.join(", ")) || "нет") + "</span></div>"
         + '<div class="kv"><span class="k">Холст крокодила</span><span>' + (d.drawing ? "включён" : "словесный режим") + "</span></div></div>"
         + '<div class="card"><div class="card-title">В базе</div>'
-        + Object.keys(d.counts).map(function (k) { return '<div class="kv"><span class="k">' + (t[k] || k) + "</span><span>" + num(d.counts[k]) + "</span></div>"; }).join("") + "</div>";
+        + Object.keys(d.counts).map(function (k) { return '<div class="kv"><span class="k">' + (t[k] || k) + "</span><span>" + num(d.counts[k]) + "</span></div>"; }).join("") + "</div>"
+        + '<div class="card"><div class="card-title">Управление</div>'
+        + '<button class="btn block danger" id="btn-restart" style="margin-top:4px">'
+        + M.icon("zap", 16) + ' Перезапустить бота</button>'
+        + '<div class="muted" style="font-size:12px;margin-top:8px">Бот остановится и запустится заново. Займёт ~10–15 секунд.</div></div>';
+
       M.bind();
+
+      var btn = M.app.querySelector("#btn-restart");
+      btn.onclick = function () {
+        M.confirm("Перезапуск бота", "Бот перестанет отвечать на ~15 секунд. Продолжить?", "Перезапустить", true)
+          .then(function (ok) {
+            if (!ok) return;
+            btn.disabled = true;
+            btn.textContent = "Перезапускаю…";
+            M.post("/api/admin/restart", {})
+              .then(function () {
+                M.toast("Бот перезапускается, подожди ~15 сек");
+                setTimeout(function () { btn.disabled = false; btn.innerHTML = M.icon("zap", 16) + " Перезапустить бота"; }, 18000);
+              })
+              .catch(function (e) {
+                btn.disabled = false;
+                btn.innerHTML = M.icon("zap", 16) + " Перезапустить бота";
+                M.toast(e.message || "Не удалось перезапустить");
+              });
+          });
+      };
     }).catch(M.fail);
   });
 
