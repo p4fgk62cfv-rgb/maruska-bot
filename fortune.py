@@ -195,39 +195,27 @@ def _pick(pool: tuple[str, ...], seen: deque) -> str:
     return random.choice(fresh or list(pool))
 
 
-def predict(user_id: int, name: str, mode: str = "roast", category: str = "more") -> str:
+POOLS: dict[str, tuple] = {
+    "normal": SERIOUS,
+    "roast": FUNNY,
+    "sarcasm": SARCASM,
+    "vulgar": VULGAR,
+    "brutal": BRUTAL,
+}
+
+
+def predict(user_id: int, name: str, mode: str = "roast") -> str:
     """
-    Генерирует предсказание по режиму/категории.
+    Генерирует предсказание в заданном режиме.
     История общая для пользователя, чтобы не повторяться подряд.
     """
     seen = _history[user_id]
 
-    pools = {
-        "more": {
-            "normal": SERIOUS,
-            "roast": FUNNY,
-            "vulgar": VULGAR,
-            "brutal": BRUTAL,
-            "sarcasm": SARCASM,
-        },
-        "love": LOVE,
-        "money": MONEY,
-        "vulgar": VULGAR,
-        "roast": ROAST,
-        "brutal": BRUTAL,
-        "sarcasm": SARCASM,
-    }
+    pool = POOLS.get(mode, FUNNY)
 
-    selected = pools.get(category, pools["more"])
-
-    if isinstance(selected, dict):
-        pool = selected.get(mode, selected["roast"])
-
-        # Режим с подъёбом разбавляется серьёзными — доля FUNNY_RATIO
-        if pool is FUNNY and random.random() >= FUNNY_RATIO:
-            pool = SERIOUS
-    else:
-        pool = selected
+    # Режим «с подъёбом» разбавляется серьёзными — доля FUNNY_RATIO
+    if pool is FUNNY and random.random() >= FUNNY_RATIO:
+        pool = SERIOUS
 
     text = _pick(pool, seen)
     seen.append(text)
