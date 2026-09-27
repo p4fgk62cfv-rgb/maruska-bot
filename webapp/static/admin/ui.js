@@ -38,7 +38,7 @@
     var n = M.state.cache.alerts || 0;
 
     return '<div class="topbar">'
-      + (icon ? M.tile(icon, tint, 22) : '<div class="avatar" data-img="/api/admin/bot_photo">М</div>')
+      + (icon ? M.tile(icon, tint, 22) : '<div class="avatar logo"><img src="/admin-assets/logo.jpg" alt="М"></div>')
       + '<div class="brand"><h1>' + esc(title) + "</h1>"
       + '<div class="sub">' + esc(subtitle || ("Панель управления · v" + M.version)) + "</div></div>"
       + '<div class="icon-btn" data-open="search">' + M.icon("search", 19) + "</div>"

@@ -537,6 +537,8 @@ svg.i { display: block; flex: 0 0 auto; }
 
 /* Аватарка бота в шапке */
 .topbar .avatar { animation: maraBreathe 3s ease-in-out infinite; }
+.avatar.logo { background: transparent; padding: 0; overflow: hidden; }
+.avatar.logo img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block; }
 
 /* Нажатия */
 .btn, .menu-tile, .list-item { transition: transform .15s, background .15s; }
