@@ -1,5 +1,6 @@
 import { Avatar, Badge, Balance, Button, Icon, Panel, PlayingCard, RatingBadge, Tile, type TileProps } from '@arena/ui';
-import { DAILY_CREDITS } from '@arena/shared';
+import { DAILY_CREDITS, type MyRoomDto } from '@arena/shared';
+import { useRealtime } from '../realtime.js';
 import { useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
 import { haptic } from '../lib/telegram.js';
@@ -29,6 +30,16 @@ export function HomeScreen() {
   const toast = useToast();
   const { setTab, push } = useNav();
   const [claiming, setClaiming] = useState(false);
+  const [finding, setFinding] = useState(false);
+  const { enterRoom } = useRealtime();
+
+  const quickGame = () => {
+    setFinding(true);
+    api<MyRoomDto>('/rooms/quick', { method: 'POST', body: {} })
+      .then(enterRoom)
+      .catch((e: unknown) => toast(e instanceof ApiError ? e.message : 'Ошибка', 'error'))
+      .finally(() => setFinding(false));
+  };
   const s = me.stats;
 
   const claimDaily = () => {
@@ -90,7 +101,7 @@ export function HomeScreen() {
           <h2>Быстрая игра</h2>
           <p>Подберём стол по вашей ставке</p>
         </div>
-        <Button size="lg" variant="gold" icon="play" block onClick={() => setTab('games')}>
+        <Button size="lg" variant="gold" icon="play" block loading={finding} onClick={quickGame}>
           Играть
         </Button>
       </section>

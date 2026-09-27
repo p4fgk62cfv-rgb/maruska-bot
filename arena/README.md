@@ -22,13 +22,14 @@ npm run dev:web                    # :5173, /api проксируется на :
 ```bash
 npm run typecheck
 npm test                                                     # движок + unit-тесты API
-TEST_DATABASE_URL='postgresql://…/maruska?schema=arena' npm test   # + интеграция с Postgres (деньги, авторизация)
+TEST_DATABASE_URL='postgresql://…/maruska?schema=arena' TEST_REDIS_URL='redis://localhost:6379/1' npm test
+# + интеграция с Postgres и Redis: деньги, авторизация, боты по WebSocket играют полные партии
 ```
 
 ## Деплой на Railway
 
 1. Новый сервис из этого же репозитория: Root Directory `arena`, Dockerfile Path `infra/docker/arena.Dockerfile`.
-2. Переменные: `BOT_TOKEN` (тот же, что у бота), `BOT_USERNAME`, `DATABASE_URL` = URL базы бота + `?schema=arena`, `SESSION_SECRET` (`openssl rand -hex 32`), с этапа 2 — `REDIS_URL` (плагин Redis).
+2. Переменные: `BOT_TOKEN` (тот же, что у бота), `BOT_USERNAME`, `DATABASE_URL` = URL базы бота + `?schema=arena`, `SESSION_SECRET` (`openssl rand -hex 32`), `REDIS_URL` (плагин Redis на Railway; без него идущие партии после перезапуска возвращают ставки). Пока сервис работает в **одном экземпляре** (replicas = 1): комнаты живут в памяти процесса.
 3. Сгенерировать домен сервиса.
 4. BotFather → `/newapp` (или Bot Settings → Configure Mini App) → URL = домен арены. Короткое имя приложения записать в `MINI_APP_SHORT_NAME` (арена) и `ARENA_APP_NAME` (бот).
 5. У бота задать `ARENA_URL` = домен арены. После этого `/game` покажет кнопку «🎮 Играть».
