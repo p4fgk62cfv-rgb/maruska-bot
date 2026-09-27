@@ -280,3 +280,7 @@ html,body{overscroll-behavior:none}
 .tag-Легендарная{ background:rgba(251,191,36,.18);color:#fcd34d; }
 .tag-Мифическая { background:rgba(244,114,182,.22);color:#f9a8d4; }
 
+
+/* Bait icons: trimmed images, larger boxes */
+.bait img{height:52px}
+.v4-stock img{width:72px;height:52px}

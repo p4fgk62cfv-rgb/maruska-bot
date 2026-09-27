@@ -8,13 +8,13 @@ const locations=[
 const fish={
 pike:{name:'Щука',img:'fish_clean/pike.jpg?v=4',trophy:'fish_clean/pike.jpg?v=4',rarity:'Редкая',min:.8,max:8.8,power:78,value:320,xp:55},perch:{name:'Окунь',img:'fish_clean/perch.jpg?v=4',rarity:'Обычная',min:.15,max:2.1,power:35,value:90,xp:24},crucian:{name:'Карась',img:'fish_clean/crucian.jpg?v=4',rarity:'Обычная',min:.12,max:1.8,power:28,value:70,xp:22},roach:{name:'Плотва',img:'fish_clean/roach.jpg?v=4',rarity:'Обычная',min:.08,max:1.3,power:22,value:55,xp:18},carp:{name:'Карп',img:'fish_clean/carp.jpg?v=4',trophy:'fish_clean/carp.jpg?v=4',rarity:'Эпическая',min:1.5,max:12,power:82,value:620,xp:95},tench:{name:'Линь',img:'fish_clean/tench.jpg?v=4',rarity:'Необычная',min:.3,max:3.4,power:48,value:180,xp:42},bream:{name:'Лещ',img:'fish_clean/bream.jpg?v=4',rarity:'Необычная',min:.4,max:4.8,power:55,value:210,xp:46},zander:{name:'Судак',img:'fish_clean/zander.jpg?v=4',rarity:'Редкая',min:.7,max:6.2,power:68,value:390,xp:62},asp:{name:'Жерех',img:'fish_clean/asp.jpg?v=4',rarity:'Редкая',min:.8,max:5.6,power:64,value:360,xp:58},catfish:{name:'Сом',img:'fish_clean/catfish.jpg?v=4',trophy:'fish_clean/catfish.jpg?v=4',rarity:'Легендарная',min:3,max:25,power:96,value:1250,xp:170},chub:{name:'Голавль',img:'fish_clean/chub.jpg?v=4',rarity:'Необычная',min:.4,max:3.5,power:51,value:200,xp:44},burbo:{name:'Налим',img:'fish_clean/burbo.jpg?v=4',rarity:'Редкая',min:.6,max:5.8,power:62,value:410,xp:68},trout:{name:'Форель',img:'fish_clean/trout.jpg?v=4',trophy:'fish_clean/trout.jpg?v=4',rarity:'Эпическая',min:.5,max:6,power:73,value:700,xp:105},taimen:{name:'Таймень',img:'fish_clean/taimen.jpg?v=4',trophy:'fish_clean/taimen.jpg?v=4',rarity:'Легендарная',min:2,max:18,power:91,value:1600,xp:220},beluga:{name:'Белуга',img:'fish_clean/beluga.jpg?v=4',rarity:'Мифическая',min:8,max:35,power:100,value:3000,xp:350}};
 const gear=[
-{id:'starter',img:'gear/rod_starter.png?v=2',name:'Простая удочка',price:0,control:8,power:0,level:0},
-{id:'float',img:'gear/rod_float.png?v=2',name:'Поплавочная',price:250,control:16,power:5,level:2},
-{id:'spin',img:'gear/rod_spinning.png?v=2',name:'Спиннинг',price:600,control:12,power:20,level:3},
-{id:'feeder',img:'gear/rod_feeder.png?v=2',name:'Фидер',price:950,control:24,power:14,level:4},
-{id:'carp',img:'gear/rod_carp.png?v=2',name:'Карповик',price:1500,control:18,power:35,level:6},
-{id:'premium',img:'gear/rod_premium.png?v=2',name:'Таймень Pro',price:3000,control:28,power:48,level:9}];
-const baits=[['worm.png','Червь',0],['maggots.png','Опарыш',50],['corn.png','Кукуруза',70],['bread.png','Хлеб',40],['livebait.png','Живец',160],['fly.png','Мушка',180],['wobbler.png','Воблер',240],['spinner.png','Блесна',220],['softbait.png','Силикон',200]];
+{id:'starter',img:'gear/rod_starter.png?v=3',name:'Простая удочка',price:0,control:8,power:0,level:0},
+{id:'float',img:'gear/rod_float.png?v=3',name:'Поплавочная',price:250,control:16,power:5,level:2},
+{id:'spin',img:'gear/rod_spinning.png?v=3',name:'Спиннинг',price:600,control:12,power:20,level:3},
+{id:'feeder',img:'gear/rod_feeder.png?v=3',name:'Фидер',price:950,control:24,power:14,level:4},
+{id:'carp',img:'gear/rod_carp.png?v=3',name:'Карповик',price:1500,control:18,power:35,level:6},
+{id:'premium',img:'gear/rod_premium.png?v=3',name:'Таймень Pro',price:3000,control:28,power:48,level:9}];
+const baits=[['worm.png?v=3','Червь',0],['maggots.png?v=3','Опарыш',50],['corn.png?v=3','Кукуруза',70],['bread.png?v=3','Хлеб',40],['livebait.png?v=3','Живец',160],['fly.png?v=3','Мушка',180],['wobbler.png?v=3','Воблер',240],['spinner.png?v=3','Блесна',220],['softbait.png?v=3','Силикон',200]];
 const achievements=[
 {id:'first',icon:'🐟',name:'Первая рыба',desc:'Поймать первую рыбу',ok:s=>s.caught>=1,reward:100},
 {id:'ten',icon:'🎣',name:'Рыбак',desc:'Поймать 10 рыб',ok:s=>s.caught>=10,reward:250},
@@ -342,16 +342,16 @@ const FX=(()=>{
   svg.innerHTML=
     '<g id="fxRings"></g>'+
     '<path id="fxLine" fill="none" stroke="rgba(232,246,250,.9)" stroke-width="1.3" stroke-linecap="round"/>'+
+    '<clipPath id="fxBobClip"><rect id="fxBobClipR" x="-40" y="-120" width="80" height="400"/></clipPath>'+
     '<g id="fxBob"><ellipse id="fxBobShadow" cx="0" cy="1" rx="9" ry="2.6" fill="rgba(0,0,0,.28)"/>'+
-      '<g id="fxBobBody"><line x1="0" y1="-19" x2="0" y2="-9" stroke="#ffd23f" stroke-width="2.2" stroke-linecap="round"/>'+
-      '<ellipse cx="0" cy="-3" rx="5.6" ry="7.6" fill="#f3f6f6"/><path d="M-5.6 -3 A5.6 7.6 0 0 1 5.6 -3 Z" fill="#ff3434"/>'+
-      '<ellipse cx="-1.8" cy="-6" rx="1.4" ry="2.4" fill="rgba(255,255,255,.55)"/></g></g>'+
+      '<g clip-path="url(#fxBobClip)"><g id="fxBobBody"><image id="fxBobImg" preserveAspectRatio="xMidYMid meet"/></g></g></g>'+
     '<g id="fxDrops"></g>'+
     '<g id="fxRod"><image id="fxRodImg" preserveAspectRatio="none"/></g>';
   sc.appendChild(svg);
   const q=id=>svg.querySelector('#'+id);
-  const E={line:q('fxLine'),bob:q('fxBob'),body:q('fxBobBody'),shadow:q('fxBobShadow'),rings:q('fxRings'),drops:q('fxDrops'),
+  const E={line:q('fxLine'),bob:q('fxBob'),body:q('fxBobBody'),bimg:q('fxBobImg'),clipR:q('fxBobClipR'),shadow:q('fxBobShadow'),rings:q('fxRings'),drops:q('fxDrops'),
     img:q('fxRodImg')};
+  const FLOATS={"starter":[37,180],"float":[39,180],"spin":[30,180],"feeder":[31,180],"carp":[24,180],"premium":[39,180]},FH=48;
   const RODS={"starter":{"w":212,"h":720,"tip":[197.4,4.9],"butt":[28.2,713.2]},"float":{"w":212,"h":720,"tip":[177.1,4.9],"butt":[30.9,713.2]},"spin":{"w":206,"h":720,"tip":[158.5,4.2],"butt":[31.0,713.3]},"feeder":{"w":207,"h":720,"tip":[161.4,4.5],"butt":[34.5,713.0]},"carp":{"w":228,"h":720,"tip":[158.7,4.4],"butt":[40.1,713.1]},"premium":{"w":202,"h":720,"tip":[146.5,4.3],"butt":[40.4,712.8]}};
   const S={mode:'idle',ang:50,bend:0,tension:0,fly:0,sub:0,biting:false,scale:1,tx:.62,ty:.5,jerk:0,lineOn:true};
   let tweens=[],drops=[],rings=[],nextRing=0,nibbleUntil=0,t0=performance.now();
@@ -404,8 +404,12 @@ const FX=(()=>{
     // bobber
     E.bob.style.display=showBob&&S.lineOn?'':'none';
     E.bob.setAttribute('transform',`translate(${bx},${by}) scale(${S.scale})`);
-    E.body.setAttribute('transform',`translate(0,${S.sub*9})`);
-    E.body.style.opacity=1-S.sub*.55;
+    const fl=FLOATS[rid]||FLOATS.starter,fw=FH*fl[0]/fl[1],wet=S.mode==='water';
+    if(E.bimg.__id!==rid){E.bimg.setAttribute('href',AS+'gear/bob_'+(FLOATS[rid]?rid:'starter')+'.png?v=1');E.bimg.setAttribute('width',fw);E.bimg.setAttribute('height',FH);E.bimg.setAttribute('x',-fw/2);E.bimg.__id=rid}
+    E.bimg.setAttribute('y',wet?-FH*.52:-2);
+    E.clipR.setAttribute('height',wet?121:400);
+    E.body.setAttribute('transform',`translate(0,${S.sub*13})`);
+    E.body.style.opacity=1-S.sub*.3;
     E.shadow.style.display=S.mode==='water'?'':'none';
     // rings & drops
     rings=rings.filter(r=>{const p=(now-r.t)/r.dur;if(p>=1){r.e.remove();return false}r.e.setAttribute('cx',r.x);r.e.setAttribute('cy',r.y+2);r.e.setAttribute('rx',4+r.max*p);r.e.setAttribute('ry',(4+r.max*p)*.32);r.e.style.opacity=1-p;return true});
