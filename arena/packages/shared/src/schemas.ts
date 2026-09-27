@@ -1,0 +1,50 @@
+/**
+ * Runtime validators (zod). Imported by the server via `@arena/shared/schemas`;
+ * the web bundle only needs the inferred types and stays zod-free.
+ */
+import { z } from 'zod';
+import { isCardId, type CardId } from '@arena/game-engine';
+import { STAKE_OPTIONS } from './lobby.js';
+
+export const roomSettingsSchema = z.object({
+  stake: z.number().int().refine((v) => (STAKE_OPTIONS as readonly number[]).includes(v), 'stake'),
+  players: z.number().int().min(2).max(6),
+  deckSize: z.union([z.literal(24), z.literal(36), z.literal(52)]),
+  speed: z.enum(['normal', 'fast']),
+  variant: z.enum(['podkidnoy', 'perevodnoy']),
+  throwIn: z.enum(['all', 'neighbors']),
+  fairness: z.enum(['fair', 'cheaters']),
+  ending: z.enum(['classic', 'draw']),
+  server: z.string().min(1).max(32),
+  isPrivate: z.boolean(),
+  password: z.string().min(1).max(32).optional(),
+});
+
+/** Lobby filter: every field is a set of accepted values; an empty set means "any". */
+export const roomFilterSchema = z.object({
+  stakes: z.array(z.number().int()).default([]),
+  players: z.array(z.number().int().min(2).max(6)).default([]),
+  deckSizes: z.array(z.number().int()).default([]),
+  speeds: z.array(z.enum(['normal', 'fast'])).default([]),
+  modes: z
+    .array(z.enum(['podkidnoy', 'perevodnoy', 'all', 'neighbors', 'fair', 'cheaters', 'classic', 'draw']))
+    .default([]),
+  server: z.string().optional(),
+});
+
+const cardSchema = z.string().refine(isCardId, 'card') as unknown as z.ZodType<CardId>;
+const rid = z.string().min(1).max(64).optional();
+
+export const clientMessageSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('PING'), rid }),
+  z.object({ type: z.literal('LOBBY_SUBSCRIBE'), rid, server: z.string().optional() }),
+  z.object({ type: z.literal('LOBBY_UNSUBSCRIBE'), rid }),
+  z.object({ type: z.literal('ROOM_WATCH'), rid, roomId: z.string() }),
+  z.object({ type: z.literal('READY'), rid, roomId: z.string(), ready: z.boolean() }),
+  z.object({ type: z.literal('RECONNECT'), rid, roomId: z.string(), lastVersion: z.number().int().optional() }),
+  z.object({ type: z.literal('PLAY_CARD'), rid, gameId: z.string(), card: cardSchema, target: z.number().int().min(0).max(5).optional() }),
+  z.object({ type: z.literal('TRANSFER'), rid, gameId: z.string(), card: cardSchema }),
+  z.object({ type: z.literal('TAKE_CARDS'), rid, gameId: z.string() }),
+  z.object({ type: z.literal('PASS'), rid, gameId: z.string() }),
+  z.object({ type: z.literal('LEAVE_GAME'), rid, gameId: z.string() }),
+]);

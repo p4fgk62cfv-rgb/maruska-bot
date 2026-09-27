@@ -59,6 +59,7 @@ from games.crocodile import (
 )
 from games.dice import router as dice_router
 from games.fishing import router as fishing_router
+from games.arena import router as arena_router
 
 from progress.handler import router as progress_router
 
@@ -139,6 +140,7 @@ dp.include_router(progress_router)
 dp.include_router(digest_router)
 dp.include_router(dice_router)
 dp.include_router(fishing_router)
+dp.include_router(arena_router)
 dp.include_router(rating_router)
 dp.include_router(weather_router)
 dp.include_router(cats_router)

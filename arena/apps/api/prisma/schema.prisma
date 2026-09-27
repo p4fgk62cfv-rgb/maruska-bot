@@ -1,0 +1,470 @@
+// Маруська Арена — PostgreSQL schema.
+// Lives in its own schema "arena" next to the Python bot's tables in "public",
+// so both services can share one database without name clashes
+// (the bot already owns public.users, public.transactions, public.user_achievements).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["arena"]
+}
+
+// ───────────────────────── identity ─────────────────────────
+
+model User {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  telegramId   BigInt    @unique @map("telegram_id")
+  username     String?   @db.VarChar(64)
+  firstName    String    @map("first_name") @db.VarChar(128)
+  lastName     String?   @map("last_name") @db.VarChar(128)
+  photoUrl     String?   @map("photo_url")
+  languageCode String?   @map("language_code") @db.VarChar(16)
+  isPremium    Boolean   @default(false) @map("is_premium")
+  bannedAt     DateTime? @map("banned_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  lastSeenAt   DateTime  @default(now()) @map("last_seen_at")
+
+  profile            Profile?
+  wallets            Wallet[]
+  transactions       Transaction[]
+  ownedRooms         Room[]            @relation("RoomOwner")
+  gamePlayers        GamePlayer[]
+  gameMoves          GameMove[]
+  friends            Friend[]          @relation("FriendOwner")
+  friendOf           Friend[]          @relation("FriendTarget")
+  sentRequests       FriendRequest[]   @relation("RequestFrom")
+  receivedRequests   FriendRequest[]   @relation("RequestTo")
+  items              UserItem[]
+  achievements       UserAchievement[]
+  tournamentEntries  TournamentPlayer[]
+  notifications      Notification[]
+
+  @@map("users")
+  @@schema("arena")
+}
+
+model Profile {
+  userId       String   @id @map("user_id") @db.Uuid
+  level        Int      @default(1)
+  xp           Int      @default(0)
+  rating       Int      @default(1000)
+  gamesPlayed  Int      @default(0) @map("games_played")
+  gamesWon     Int      @default(0) @map("games_won")
+  gamesLost    Int      @default(0) @map("games_lost")
+  gamesDraw    Int      @default(0) @map("games_draw")
+  winStreak    Int      @default(0) @map("win_streak")
+  bestStreak   Int      @default(0) @map("best_streak")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([rating(sort: Desc)])
+  @@map("profiles")
+  @@schema("arena")
+}
+
+// ───────────────────────── economy ─────────────────────────
+
+/// CHIPS — stake currency (the big "balance"); COINS — premium soft currency;
+/// DIAMONDS — reserved for the bridge with the bot's 💎.
+enum Currency {
+  CHIPS
+  COINS
+  DIAMONDS
+
+  @@schema("arena")
+}
+
+enum TransactionType {
+  SIGNUP_BONUS
+  DAILY_BONUS
+  GAME_STAKE
+  GAME_PAYOUT
+  GAME_REFUND
+  PURCHASE
+  TOURNAMENT_FEE
+  TOURNAMENT_PRIZE
+  ACHIEVEMENT_REWARD
+  EXCHANGE
+  ADMIN
+
+  @@schema("arena")
+}
+
+/// Balance is changed only by the ledger service, inside the same DB transaction
+/// that writes the Transaction row. A CHECK constraint forbids negative balances.
+model Wallet {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  currency  Currency
+  balance   BigInt   @default(0)
+  version   Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@unique([userId, currency])
+  @@map("wallets")
+  @@schema("arena")
+}
+
+model Transaction {
+  id             String          @id @default(uuid(7)) @db.Uuid
+  walletId       String          @map("wallet_id") @db.Uuid
+  userId         String          @map("user_id") @db.Uuid
+  currency       Currency
+  amount         BigInt
+  balanceBefore  BigInt          @map("balance_before")
+  balanceAfter   BigInt          @map("balance_after")
+  type           TransactionType
+  /// What caused it, e.g. "game:<id>", "room:<id>", "shop:<item>".
+  source         String          @db.VarChar(128)
+  /// Unique per business operation, e.g. "stake:<gameId>:<userId>". Repeats are no-ops.
+  idempotencyKey String          @unique @map("idempotency_key") @db.VarChar(160)
+  meta           Json?
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  wallet Wallet @relation(fields: [walletId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([source])
+  @@map("transactions")
+  @@schema("arena")
+}
+
+// ───────────────────────── rooms and games ─────────────────────────
+
+enum RoomStatus {
+  WAITING
+  PLAYING
+  FINISHED
+  CLOSED
+
+  @@schema("arena")
+}
+
+/// Durable record of a room. Live membership, ready flags and connections sit in Redis.
+model Room {
+  id           String     @id @db.VarChar(16)
+  server       String     @db.VarChar(32)
+  ownerId      String     @map("owner_id") @db.Uuid
+  status       RoomStatus @default(WAITING)
+  isPrivate    Boolean    @default(false) @map("is_private")
+  passwordHash String?    @map("password_hash")
+  stake        BigInt
+  currency     Currency   @default(CHIPS)
+  maxPlayers   Int        @map("max_players")
+  deckSize     Int        @map("deck_size")
+  speed        String     @db.VarChar(16)
+  variant      String     @db.VarChar(16)
+  throwIn      String     @map("throw_in") @db.VarChar(16)
+  fairness     String     @db.VarChar(16)
+  ending       String     @db.VarChar(16)
+  createdAt    DateTime   @default(now()) @map("created_at")
+  closedAt     DateTime?  @map("closed_at")
+
+  owner User   @relation("RoomOwner", fields: [ownerId], references: [id])
+  games Game[]
+
+  @@index([status, isPrivate, server])
+  @@map("rooms")
+  @@schema("arena")
+}
+
+enum GameStatus {
+  PLAYING
+  FINISHED
+  ABORTED
+
+  @@schema("arena")
+}
+
+model Game {
+  id          String     @id @default(uuid(7)) @db.Uuid
+  roomId      String     @map("room_id") @db.VarChar(16)
+  status      GameStatus @default(PLAYING)
+  stake       BigInt
+  currency    Currency   @default(CHIPS)
+  settings    Json
+  trumpCard   String     @map("trump_card") @db.VarChar(3)
+  /// Full shuffled deck for audits and dispute resolution. Never sent to clients.
+  initialDeck String[]   @map("initial_deck")
+  startedAt   DateTime   @default(now()) @map("started_at")
+  finishedAt  DateTime?  @map("finished_at")
+
+  room    Room         @relation(fields: [roomId], references: [id])
+  players GamePlayer[]
+  moves   GameMove[]
+  result  GameResult?
+
+  @@index([roomId])
+  @@index([status])
+  @@map("games")
+  @@schema("arena")
+}
+
+enum GameOutcome {
+  WIN
+  LOSS
+  DRAW
+  LEFT
+
+  @@schema("arena")
+}
+
+model GamePlayer {
+  gameId  String       @map("game_id") @db.Uuid
+  userId  String       @map("user_id") @db.Uuid
+  seat    Int
+  place   Int?
+  outcome GameOutcome?
+  payout  BigInt?
+  net     BigInt?
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@id([gameId, userId])
+  @@unique([gameId, seat])
+  @@index([userId])
+  @@map("game_players")
+  @@schema("arena")
+}
+
+/// Append-only move log. Replaying it on the stored deck reproduces the game exactly.
+model GameMove {
+  id        BigInt   @id @default(autoincrement())
+  gameId    String   @map("game_id") @db.Uuid
+  seq       Int
+  /// null for server moves (turn timeout)
+  userId    String?  @map("user_id") @db.Uuid
+  action    Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  game Game  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id])
+
+  @@unique([gameId, seq])
+  @@map("game_moves")
+  @@schema("arena")
+}
+
+model GameResult {
+  gameId     String   @id @map("game_id") @db.Uuid
+  kind       String   @db.VarChar(16)
+  reason     String?  @db.VarChar(32)
+  winnerId   String?  @map("winner_id") @db.Uuid
+  loserId    String?  @map("loser_id") @db.Uuid
+  pot        BigInt
+  rake       BigInt
+  durationMs Int      @map("duration_ms")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@map("game_results")
+  @@schema("arena")
+}
+
+// ───────────────────────── social ─────────────────────────
+
+/// Friendship is stored in both directions so "my friends" is a single index scan.
+model Friend {
+  userId    String   @map("user_id") @db.Uuid
+  friendId  String   @map("friend_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User @relation("FriendOwner", fields: [userId], references: [id], onDelete: Cascade)
+  friend User @relation("FriendTarget", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@id([userId, friendId])
+  @@map("friends")
+  @@schema("arena")
+}
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+
+  @@schema("arena")
+}
+
+model FriendRequest {
+  id          String              @id @default(uuid(7)) @db.Uuid
+  fromId      String              @map("from_id") @db.Uuid
+  toId        String              @map("to_id") @db.Uuid
+  status      FriendRequestStatus @default(PENDING)
+  createdAt   DateTime            @default(now()) @map("created_at")
+  respondedAt DateTime?           @map("responded_at")
+
+  from User @relation("RequestFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to   User @relation("RequestTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@unique([fromId, toId])
+  @@index([toId, status])
+  @@map("friend_requests")
+  @@schema("arena")
+}
+
+// ───────────────────────── cosmetics and progress ─────────────────────────
+
+enum ItemKind {
+  CARD_BACK
+  AVATAR
+  FRAME
+  TABLE
+  EFFECT
+  EMOJI
+  CROWN
+
+  @@schema("arena")
+}
+
+enum Rarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+
+  @@schema("arena")
+}
+
+/// Cosmetic only: items never change game rules or odds.
+model Item {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  key       String   @unique @db.VarChar(64)
+  kind      ItemKind
+  name      String   @db.VarChar(128)
+  rarity    Rarity   @default(COMMON)
+  price     BigInt   @default(0)
+  currency  Currency @default(COINS)
+  assetUrl  String?  @map("asset_url")
+  isActive  Boolean  @default(true) @map("is_active")
+  sortOrder Int      @default(0) @map("sort_order")
+
+  owners UserItem[]
+
+  @@map("items")
+  @@schema("arena")
+}
+
+model UserItem {
+  userId     String   @map("user_id") @db.Uuid
+  itemId     String   @map("item_id") @db.Uuid
+  equipped   Boolean  @default(false)
+  source     String   @db.VarChar(64)
+  acquiredAt DateTime @default(now()) @map("acquired_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item Item @relation(fields: [itemId], references: [id])
+
+  @@id([userId, itemId])
+  @@map("user_items")
+  @@schema("arena")
+}
+
+model Achievement {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  key         String   @unique @db.VarChar(64)
+  title       String   @db.VarChar(128)
+  description String
+  icon        String   @db.VarChar(32)
+  goal        Int      @default(1)
+  reward      BigInt   @default(0)
+  currency    Currency @default(COINS)
+  sortOrder   Int      @default(0) @map("sort_order")
+
+  users UserAchievement[]
+
+  @@map("achievements")
+  @@schema("arena")
+}
+
+model UserAchievement {
+  userId        String    @map("user_id") @db.Uuid
+  achievementId String    @map("achievement_id") @db.Uuid
+  progress      Int       @default(0)
+  unlockedAt    DateTime? @map("unlocked_at")
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id])
+
+  @@id([userId, achievementId])
+  @@map("user_achievements")
+  @@schema("arena")
+}
+
+// ───────────────────────── tournaments ─────────────────────────
+
+enum TournamentStatus {
+  ANNOUNCED
+  REGISTRATION
+  RUNNING
+  FINISHED
+  CANCELLED
+
+  @@schema("arena")
+}
+
+model Tournament {
+  id         String           @id @default(uuid(7)) @db.Uuid
+  title      String           @db.VarChar(128)
+  status     TournamentStatus @default(ANNOUNCED)
+  entryFee   BigInt           @default(0) @map("entry_fee")
+  prizePool  BigInt           @default(0) @map("prize_pool")
+  currency   Currency         @default(CHIPS)
+  maxPlayers Int              @map("max_players")
+  settings   Json
+  startsAt   DateTime         @map("starts_at")
+  finishedAt DateTime?        @map("finished_at")
+  createdAt  DateTime         @default(now()) @map("created_at")
+
+  players TournamentPlayer[]
+
+  @@index([status, startsAt])
+  @@map("tournaments")
+  @@schema("arena")
+}
+
+model TournamentPlayer {
+  tournamentId String   @map("tournament_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  place        Int?
+  prize        BigInt?
+  joinedAt     DateTime @default(now()) @map("joined_at")
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id])
+
+  @@id([tournamentId, userId])
+  @@map("tournament_players")
+  @@schema("arena")
+}
+
+// ───────────────────────── notifications ─────────────────────────
+
+/// Outbox for messages the bot delivers to Telegram (invites, results, events).
+model Notification {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  kind      String    @db.VarChar(32)
+  payload   Json
+  createdAt DateTime  @default(now()) @map("created_at")
+  sentAt    DateTime? @map("sent_at")
+  readAt    DateTime? @map("read_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([sentAt, createdAt])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notifications")
+  @@schema("arena")
+}

@@ -1,0 +1,25 @@
+{
+  "name": "maruska-arena",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Маруська Арена — игровая платформа внутри Telegram (дурак онлайн)",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "npm run build -w @arena/web && npm run build -w @arena/api",
+    "dev:api": "npm run dev -w @arena/api",
+    "dev:web": "npm run dev -w @arena/web",
+    "start": "npm run start -w @arena/api",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}
