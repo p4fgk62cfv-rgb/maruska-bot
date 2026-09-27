@@ -1,10 +1,10 @@
 const AS='/fishing-assets/';
 const locations=[
-{id:'quiet',name:'Тихая заводь',img:'backgrounds/quiet.svg',weather:'🌤 Ясно',time:'🌅 Рассвет',fish:['pike','perch','crucian','roach','carp'],bonus:'Крупный карп'},
-{id:'forest',name:'Лесное озеро',img:'backgrounds/forest.svg',weather:'🌤 Прохладно',time:'☀️ День',fish:['pike','perch','carp','tench','bream'],bonus:'Эпический карп'},
-{id:'river',name:'Большая река',img:'backgrounds/river.svg',weather:'☁️ Облачно',time:'🌇 Вечер',fish:['zander','asp','catfish','bream','chub'],bonus:'Судак-хищник'},
-{id:'mountain',name:'Горное озеро',img:'backgrounds/mountain.svg',weather:'🌫 Туман',time:'☀️ День',fish:['trout','taimen','perch'],bonus:'Горная форель'},
-{id:'deep',name:'Глубокая вода',img:'backgrounds/deep.svg',weather:'🌙 Ночь',time:'🌙 Ночь',fish:['catfish','taimen','beluga','burbo'],bonus:'Легендарный сом'}];
+{id:'quiet',name:'Тихая заводь',img:'backgrounds/quiet.jpg?v=1',weather:'🌤 Ясно',time:'🌅 Рассвет',fish:['pike','perch','crucian','roach','carp'],bonus:'Крупный карп'},
+{id:'forest',name:'Лесное озеро',img:'backgrounds/forest.jpg?v=1',weather:'🌤 Прохладно',time:'☀️ День',fish:['pike','perch','carp','tench','bream'],bonus:'Эпический карп'},
+{id:'river',name:'Большая река',img:'backgrounds/river.jpg?v=1',weather:'☁️ Облачно',time:'🌇 Вечер',fish:['zander','asp','catfish','bream','chub'],bonus:'Судак-хищник'},
+{id:'mountain',name:'Горное озеро',img:'backgrounds/mountain.jpg?v=1',weather:'🌫 Туман',time:'☀️ День',fish:['trout','taimen','perch'],bonus:'Горная форель'},
+{id:'deep',name:'Глубокая вода',img:'backgrounds/deep.jpg?v=1',weather:'🌙 Ночь',time:'🌙 Ночь',fish:['catfish','taimen','beluga','burbo'],bonus:'Легендарный сом'}];
 const fish={
 pike:{name:'Щука',img:'fish_clean/pike.jpg?v=4',trophy:'fish_clean/pike.jpg?v=4',rarity:'Редкая',min:.8,max:8.8,power:78,value:320,xp:55},perch:{name:'Окунь',img:'fish_clean/perch.jpg?v=4',rarity:'Обычная',min:.15,max:2.1,power:35,value:90,xp:24},crucian:{name:'Карась',img:'fish_clean/crucian.jpg?v=4',rarity:'Обычная',min:.12,max:1.8,power:28,value:70,xp:22},roach:{name:'Плотва',img:'fish_clean/roach.jpg?v=4',rarity:'Обычная',min:.08,max:1.3,power:22,value:55,xp:18},carp:{name:'Карп',img:'fish_clean/carp.jpg?v=4',trophy:'fish_clean/carp.jpg?v=4',rarity:'Эпическая',min:1.5,max:12,power:82,value:620,xp:95},tench:{name:'Линь',img:'fish_clean/tench.jpg?v=4',rarity:'Необычная',min:.3,max:3.4,power:48,value:180,xp:42},bream:{name:'Лещ',img:'fish_clean/bream.jpg?v=4',rarity:'Необычная',min:.4,max:4.8,power:55,value:210,xp:46},zander:{name:'Судак',img:'fish_clean/zander.jpg?v=4',rarity:'Редкая',min:.7,max:6.2,power:68,value:390,xp:62},asp:{name:'Жерех',img:'fish_clean/asp.jpg?v=4',rarity:'Редкая',min:.8,max:5.6,power:64,value:360,xp:58},catfish:{name:'Сом',img:'fish_clean/catfish.jpg?v=4',trophy:'fish_clean/catfish.jpg?v=4',rarity:'Легендарная',min:3,max:25,power:96,value:1250,xp:170},chub:{name:'Голавль',img:'fish_clean/chub.jpg?v=4',rarity:'Необычная',min:.4,max:3.5,power:51,value:200,xp:44},burbo:{name:'Налим',img:'fish_clean/burbo.jpg?v=4',rarity:'Редкая',min:.6,max:5.8,power:62,value:410,xp:68},trout:{name:'Форель',img:'fish_clean/trout.jpg?v=4',trophy:'fish_clean/trout.jpg?v=4',rarity:'Эпическая',min:.5,max:6,power:73,value:700,xp:105},taimen:{name:'Таймень',img:'fish_clean/taimen.jpg?v=4',trophy:'fish_clean/taimen.jpg?v=4',rarity:'Легендарная',min:2,max:18,power:91,value:1600,xp:220},beluga:{name:'Белуга',img:'fish_clean/beluga.jpg?v=4',rarity:'Мифическая',min:8,max:35,power:100,value:3000,xp:350}};
 const gear=[
@@ -390,7 +390,7 @@ const FX=(()=>{
       else{S.sub=0;if(now<nibbleUntil)by+=5;else if(Math.random()<.004)nibbleUntil=now+170;if(now>nextRing){ring(T.x,T.y,false);nextRing=now+1700}}
     }else{ // fight: fish pulls the line; keep it above the fight card so it stays visible
       const card=document.getElementById('fightCard'),top=card&&!card.classList.contains('hidden')?card.getBoundingClientRect().top-sc.getBoundingClientRect().top-30:T.y;
-      const fy=Math.min(T.y,top),k=.5+S.tension/140;bx=T.x+Math.sin(time*1.7)*38*k+Math.sin(time*4.3)*6;by=fy+Math.cos(time*1.1)*6;showBob=false;sag=0;
+      const fy=Math.max(g.H*.5,Math.min(T.y,top)),k=.5+S.tension/140;bx=T.x+Math.sin(time*1.7)*38*k+Math.sin(time*4.3)*6;by=fy+Math.cos(time*1.1)*6;showBob=false;sag=0;
       S.bend=10+S.tension*.42+Math.sin(time*11)*S.tension*.04;
       if(now>nextRing){ring(bx,by-6,false);nextRing=now+420-S.tension*2}
     }
@@ -422,7 +422,7 @@ const FX=(()=>{
   return {
     async cast(){
       S.mode='idle';S.biting=false;S.sub=0;S.lineOn=true;S.tension=0;
-      S.tx=.5+Math.random()*.24;S.ty=.47+Math.random()*.06;
+      S.tx=.56+Math.random()*.22;S.ty=.56+Math.random()*.06;
       tween('bend',0,150);tween('ang',80,240);await wait(240);
       tween('ang',34,170);tween('bend',26,170);await wait(120);
       const g=geo();S.fx0=g.tip.x;S.fy0=g.tip.y;S.fly=0;S.mode='fly';
