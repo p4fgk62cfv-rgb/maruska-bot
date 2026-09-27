@@ -360,7 +360,7 @@ async def api_dashboard(request):
 async def api_journal(request):
     from database.repository import audit_actors
 
-    admin, chats = await require_perm(request, None, "journal")
+    admin, chats, _role = await require_perm(request, None, "journal")
     chat_id = _chat_param(request, chats)
 
     ids = [chat_id] if chat_id else [c["chat_id"] for c in chats]
@@ -774,7 +774,7 @@ async def api_broadcast_test(request):
 
 async def api_broadcasts(request):
     if request.method == "GET":
-        admin, chats = await require_perm(request, None, "broadcast")
+        admin, chats, _role = await require_perm(request, None, "broadcast")
         ids = None if is_owner(admin["id"]) else [c["chat_id"] for c in chats]
         return web.json_response({"broadcasts": await list_broadcasts(ids)})
 
