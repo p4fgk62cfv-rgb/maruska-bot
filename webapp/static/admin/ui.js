@@ -55,8 +55,11 @@
     var name = M.icons && (M.icons[icon] ? icon : M.EMOJI && M.EMOJI[icon]);
     var shown = name ? M.icon(name, 18) : icon;
 
+    var raw = String(value).replace(/[\s ,]/g, "");
+    var isNum = /^\d+$/.test(raw) && raw.length > 0 && raw.length < 10;
     return '<div class="metric"><div class="ic"' + (tint ? ' style="background:' + tint + '"' : "") + ">"
-      + shown + '</div><div class="v">' + value + '</div><div class="l">' + esc(label) + "</div>"
+      + shown + '</div><div class="v"' + (isNum ? ' data-count="' + raw + '"' : "") + ">"
+      + value + '</div><div class="l">' + esc(label) + "</div>"
       + (delta ? '<div class="d">' + esc(delta) + "</div>" : "") + "</div>";
   };
 
