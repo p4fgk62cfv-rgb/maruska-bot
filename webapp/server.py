@@ -132,7 +132,14 @@ NO_CACHE = {
     "Expires": "0",
 }
 
-ASSET_TYPES = {".css": "text/css", ".js": "application/javascript"}
+ASSET_TYPES = {
+    ".css": "text/css",
+    ".js": "application/javascript",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+}
 
 
 def _page_with_version(page) -> web.Response:
@@ -202,6 +209,13 @@ async def admin_asset(request: web.Request):
 
     if kind is None or not path.is_file():
         raise web.HTTPNotFound()
+
+    if kind.startswith("image/"):
+        return web.Response(
+            body=path.read_bytes(),
+            content_type=kind,
+            headers=NO_CACHE,
+        )
 
     return web.Response(
         text=path.read_text(encoding="utf-8"),
