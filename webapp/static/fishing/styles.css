@@ -172,6 +172,121 @@ html,body{overscroll-behavior:none}
   .cast-fab{min-width:165px}
 }
 
+/* ===== CAST, LINE & BOBBER REWRITE ===== */
+
+/* Diagonal line from rod tip toward water center */
+.cast-line {
+  left: 17% !important;
+  top: 58% !important;
+  width: 1.5px !important;
+  transform-origin: top center;
+  transform: rotate(28deg) !important;
+  background: linear-gradient(rgba(215,235,240,.95), rgba(255,255,255,.25)) !important;
+  transition: height .55s cubic-bezier(.25,.46,.45,.94) !important;
+  box-shadow: 0 0 3px rgba(200,235,245,.4);
+}
+
+/* Bobber at water surface — adjusted position */
+.bobber {
+  left: 51% !important;
+  top: 50% !important;
+  width: 15px !important;
+  height: 22px !important;
+  border-radius: 10px !important;
+  background: linear-gradient(#ff5f5f 0 46%, #f5f8f8 47%) !important;
+  box-shadow: 0 3px 8px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.2) !important;
+}
+
+/* Antenna on top of bobber */
+.bobber::before {
+  content: '';
+  position: absolute;
+  left: 50%; top: -8px;
+  transform: translateX(-50%);
+  width: 2px; height: 9px;
+  background: linear-gradient(#ff9900, #ffcc00);
+  border-radius: 1px;
+}
+
+/* Ring ripple around bobber */
+.bobber span {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(180,230,240,.55);
+  animation: bobberRing 2s ease-out infinite;
+}
+
+/* Fly-in animation when casting */
+.bobber.is-flying {
+  animation: castFly .65s cubic-bezier(.25,.46,.45,.94) forwards !important;
+}
+
+/* Gentle floating after cast */
+.bobber.is-floating {
+  animation: bobFloat 2.2s ease-in-out infinite;
+}
+
+/* Dramatic dip on bite */
+.bobber.is-biting {
+  animation: bobBite .55s ease-in-out infinite !important;
+}
+
+@keyframes castFly {
+  0%   { transform: translate(-145px,-75px) scale(.35) rotate(-200deg); opacity:0; }
+  18%  { opacity:1; }
+  65%  { transform: translate(8px,-8px) scale(1.12) rotate(15deg); }
+  82%  { transform: translate(-3px,7px) scale(.9) rotate(-4deg); }
+  100% { transform: translate(0,0) scale(1) rotate(0deg); }
+}
+
+@keyframes bobFloat {
+  0%,100% { transform: translateY(0); }
+  30%      { transform: translateY(3.5px); }
+  65%      { transform: translateY(-1.5px); }
+}
+
+@keyframes bobBite {
+  0%   { transform: translateY(0) scaleY(1); }
+  18%  { transform: translateY(16px) scaleY(.75); }
+  38%  { transform: translateY(8px) scaleY(.88); }
+  58%  { transform: translateY(20px) scaleY(.7); }
+  78%  { transform: translateY(9px) scaleY(.85); }
+  100% { transform: translateY(0) scaleY(1); }
+}
+
+@keyframes bobberRing {
+  0%   { transform: scale(.5); opacity:.7; }
+  100% { transform: scale(2.2); opacity:0; }
+}
+
+/* Rod swings forward on cast */
+.scene.is-casting .rod-visual {
+  transform: rotate(-42deg) translate(22px,-14px) !important;
+  transition: transform .45s cubic-bezier(.2,1.2,.4,1) !important;
+}
+.scene.is-fighting .rod-visual {
+  transform: rotate(-34deg) translate(12px,-7px) !important;
+  transition: transform .3s ease !important;
+}
+
+/* Bite card: more dramatic */
+.bite-card {
+  background: linear-gradient(145deg,rgba(255,90,60,.18),rgba(5,18,27,.94)) !important;
+  border-color: rgba(255,100,80,.45) !important;
+  box-shadow: 0 0 32px rgba(255,80,60,.22), 0 25px 70px rgba(0,0,0,.62) !important;
+  animation: biteCardPulse .6s ease-in-out infinite alternate, rise .35s ease !important;
+}
+@keyframes biteCardPulse {
+  from { box-shadow: 0 0 22px rgba(255,80,60,.18), 0 25px 70px rgba(0,0,0,.62); }
+  to   { box-shadow: 0 0 42px rgba(255,100,60,.4), 0 25px 70px rgba(0,0,0,.62); }
+}
+.bite-icon { animation: biteIconPulse .45s ease-in-out infinite alternate !important; }
+@keyframes biteIconPulse {
+  from { transform: scale(1) rotate(-5deg); }
+  to   { transform: scale(1.25) rotate(8deg); }
+}
+
 /* ===== CANVA FISH PHOTOS — realistic image polish ===== */
 
 /* Collection grid: full-bleed photo card */
