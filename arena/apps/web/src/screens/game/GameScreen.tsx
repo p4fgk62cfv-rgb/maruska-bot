@@ -1,9 +1,12 @@
 import { rankOf, type CardId } from '@arena/game-engine';
 import { EMOJIS, FEATURE_PRICES } from '@arena/shared';
 import { BottomSheet, Button, IconButton, PlayingCard } from '@arena/ui';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { safeStorage, useCountdown } from '../../lib/hooks.js';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCountdown } from '../../lib/hooks.js';
 import { haptic } from '../../lib/telegram.js';
+import { play, unlockAudio } from '../../lib/sound.js';
+import { settings, useSettings } from '../../lib/settings.js';
+import { MotionDirector } from './motion.js';
 import { useRealtime, type LiveGame } from '../../realtime.js';
 import { useMe } from '../../session.js';
 import { useToast } from '../../toast.js';
@@ -14,17 +17,20 @@ import { Seat } from './Seat.js';
 import { Table } from './Table.js';
 
 type Sheet = null | 'menu' | 'emoji' | 'surrender' | 'discard' | { report: number };
-const SORT_KEY = 'arena.handSort';
 
 export function GameScreen({ game }: { game: LiveGame }) {
   const me = useMe();
-  const { socket, result, dismissGame, onEmoji, status } = useRealtime();
+  const { socket, result, dismissGame, onEmoji, onEvents, status } = useRealtime();
+  const prefs = useSettings();
   const toast = useToast();
   const view = game.state;
   const a = view.actions;
   const [selected, setSelected] = useState<CardId[]>([]);
   const [sheet, setSheet] = useState<Sheet>(null);
-  const [sort, setSort] = useState<'suit' | 'rank'>(() => safeStorage.get(SORT_KEY, 'suit'));
+  const sort = prefs.handSort;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const layerRef = useRef<HTMLDivElement>(null);
+  const director = useRef(new MotionDirector()).current;
   const [busy, setBusy] = useState(false);
   const [emojis, setEmojis] = useState<Record<string, string>>({});
   const gameId = view.gameId;
@@ -38,9 +44,45 @@ export function GameScreen({ game }: { game: LiveGame }) {
     setSelected((s) => s.filter((c) => view.you?.hand.includes(c)));
   }, [view.version, view.you?.hand]);
 
+  // Motion + sound: snapshot the table when events arrive, animate after the new state renders.
+  useLayoutEffect(() => director.attach(rootRef.current, layerRef.current), [director]);
+  useEffect(
+    () =>
+      onEvents((events) => {
+        director.prepare(events, me.id);
+        let sfx: Parameters<typeof play>[0] | null = null;
+        for (const e of events) {
+          if (e.type === 'CARD_PLAYED' || e.type === 'CARD_TRANSFERRED') sfx = 'card';
+          else if (e.type === 'CARDS_TAKEN') sfx = 'take';
+          else if (e.type === 'ROUND_FINISHED' && e.outcome === 'beaten') sfx = 'discard';
+          else if (e.type === 'PLAYER_TURN' && e.playerId === me.id && !sfx) sfx = 'turn';
+        }
+        if (sfx) play(sfx);
+      }),
+    [onEvents, director, me.id],
+  );
+  useLayoutEffect(() => director.play(), [view.version, director]);
+  // Opening deal, once, when the table is fresh.
+  useLayoutEffect(() => {
+    if (view.version <= 1 && view.table.length === 0 && view.discardCount === 0) {
+      director.deal(me.id, view.players.map((p) => p.id), 6);
+      play('deal');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [director]);
+
+  // Last five seconds of my turn: a tick every second and a nudge.
+  const secondsLeft = left !== null ? Math.ceil(left / 1000) : null;
+  useEffect(() => {
+    if (view.currentPlayer !== me.id || secondsLeft === null || secondsLeft > 5 || secondsLeft === 0) return;
+    play('tick');
+    if (secondsLeft === 5) haptic.warning();
+  }, [secondsLeft, view.currentPlayer, me.id]);
+
   useEffect(
     () =>
       onEmoji((userId, emoji) => {
+        play('emoji');
         setEmojis((e) => ({ ...e, [userId]: emoji }));
         window.setTimeout(() => setEmojis((e) => (e[userId] === emoji ? { ...e, [userId]: '' } : e)), 2500);
       }),
@@ -56,7 +98,10 @@ export function GameScreen({ game }: { game: LiveGame }) {
       setBusy(true);
       const reply = await socket.send(msg);
       setBusy(false);
-      if (!reply.ok) toast(reply.message, 'error');
+      if (!reply.ok) {
+        play('error');
+        toast(reply.message, 'error');
+      }
       else setSelected([]);
       return reply.ok;
     },
@@ -76,6 +121,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
 
   const tapCard = (card: CardId) => {
     haptic.select();
+    unlockAudio();
     setSelected((s) => {
       if (s.includes(card)) return s.filter((c) => c !== card);
       // Several cards only when leading with one rank.
@@ -115,11 +161,13 @@ export function GameScreen({ game }: { game: LiveGame }) {
   const roleOf = (id: string) => (id === view.attacker ? 'attacker' : id === view.defender ? 'defender' : null);
 
   return (
-    <div className="game">
+    <div className="game" ref={rootRef}>
+      <div className="motion-layer" ref={layerRef} />
       {status !== 'open' && <div className="game__banner">Соединение восстанавливается…</div>}
 
       <div className={`game__opponents game__opponents--${opponents.length}`}>
-        {opponents.map((p) => (
+        {opponents.map((p, i) => (
+          <div key={p.id} className="game__opp" style={{ ['--arc' as string]: `${arcOffset(i, opponents.length)}px` }}>
           <Seat
             key={p.id}
             player={p}
@@ -132,6 +180,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
             emoji={emojis[p.id] || null}
             compact={opponents.length > 3}
           />
+          </div>
         ))}
       </div>
 
@@ -141,7 +190,16 @@ export function GameScreen({ game }: { game: LiveGame }) {
         targets={targets}
         onPair={tapPair}
         onReport={view.rules.fairness === 'cheaters' && a.canReport ? (seq) => setSheet({ report: seq }) : null}
+        transferSlot={
+          a.canTransfer
+            ? {
+                active: canTransferSelected,
+                onDrop: () => canTransferSelected && void send({ type: 'TRANSFER', gameId, card: selected[0]! }),
+              }
+            : null
+        }
       />
+      {myTurn && <div className="game__yourturn" key={`turn-${view.version}-${view.phase}`}>Ваш ход</div>}
 
       <div className="game__me">
         <div className="game__me-row">
@@ -199,11 +257,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
           cardWidth={Math.min(74, Math.max(56, window.innerWidth / 5.6))}
           onTap={tapCard}
           onDoubleTap={doubleTap}
-          onSwipeRight={() => {
-            const next = sort === 'suit' ? 'rank' : 'suit';
-            setSort(next);
-            safeStorage.set(SORT_KEY, next);
-          }}
+          onSwipeRight={() => settings.set({ handSort: sort === 'suit' ? 'rank' : 'suit' })}
         />
       </div>
 
@@ -274,6 +328,14 @@ export function GameScreen({ game }: { game: LiveGame }) {
 }
 
 /** Opponents in play order, starting with the player after me. */
+/** Opponents sit on an arc: the outer seats a little lower, like around a real table. */
+function arcOffset(index: number, count: number): number {
+  if (count < 3) return 0;
+  const center = (count - 1) / 2;
+  const d = Math.abs(index - center) / center;
+  return Math.round(d * d * 30);
+}
+
 function rotate<T extends { id: string; seat: number }>(players: T[], myId: string): T[] {
   const mySeat = players.find((p) => p.id === myId)?.seat ?? 0;
   return [...players].filter((p) => p.id !== myId).sort((a, b) => ((a.seat - mySeat + 10) % 10) - ((b.seat - mySeat + 10) % 10));

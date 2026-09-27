@@ -25,6 +25,7 @@ const ServersScreen = lazy(() => import('./screens/ServersScreen.js'));
 const SoonScreen = lazy(() => import('./screens/SoonScreen.js'));
 const LeaderboardScreen = lazy(() => import('./screens/LeaderboardScreen.js'));
 const CreateGameScreen = lazy(() => import('./screens/CreateGameScreen.js'));
+const SettingsScreen = lazy(() => import('./screens/SettingsScreen.js'));
 // The table is the most important screen: it loads as soon as the app starts, not on first use.
 const gameModule = import('./screens/game/GameScreen.js');
 const GameScreen = lazy(() => gameModule.then((m) => ({ default: m.GameScreen })));
@@ -71,7 +72,7 @@ function PageScreen({ page }: { page: Page }) {
     case 'news':
       return <SoonScreen title="Новости" text="Здесь будут обновления Арены, турниры и события." />;
     case 'settings':
-      return <SoonScreen title="Настройки" text="Звук, вибрация, рубашка карт и стол — на следующем этапе." />;
+      return <SettingsScreen />;
   }
 }
 
@@ -157,6 +158,12 @@ function DevLogin() {
     setBusy(true);
     devLogin(id, name).catch(() => setFailed(true)).finally(() => setBusy(false));
   };
+  // Development only: ?dev=3 signs in as «Игрок 3» — handy for testing tables of up to six.
+  const auto = import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('dev')) : 0;
+  useEffect(() => {
+    if (auto > 0) login(1000 + auto, `Игрок ${auto}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto]);
   return (
     <div className="app-center">
       <EmptyState

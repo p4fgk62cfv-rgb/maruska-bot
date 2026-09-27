@@ -1,6 +1,6 @@
 import { DAILY_CREDITS, RATING, type MeDto, type PublicUserDto, type WalletDto } from '@arena/shared';
 import type { Db } from '../db.js';
-import type { Currency, Profile, User } from '../generated/prisma/client.js';
+import { Prisma, type Currency, type Profile, type User } from '../generated/prisma/client.js';
 import { toNumber } from '../lib/money.js';
 import type { TelegramUser } from '../telegram/initData.js';
 import type { Ledger } from './ledger.js';
@@ -28,13 +28,10 @@ export class UserService {
       languageCode: tg.language_code ?? null,
       isPremium: tg.is_premium ?? false,
     };
-    const user = await this.db.user.upsert({
-      where: { telegramId: BigInt(tg.id) },
-      create: { telegramId: BigInt(tg.id), ...fields },
-      update: { ...fields, lastSeenAt: new Date() },
-    });
+    const user = await this.upsertUser(BigInt(tg.id), fields);
 
-    await this.db.profile.upsert({ where: { userId: user.id }, create: { userId: user.id }, update: {} });
+    // INSERT … ON CONFLICT DO NOTHING: two first logins at the same moment must both succeed.
+    await this.db.profile.createMany({ data: [{ userId: user.id }], skipDuplicates: true });
     await this.db.wallet.createMany({
       data: CURRENCIES.map((currency) => ({ userId: user.id, currency })),
       skipDuplicates: true,
@@ -50,6 +47,22 @@ export class UserService {
       });
     }
     return user;
+  }
+
+  /** Upsert that survives a concurrent first login (Prisma may run it as select + insert). */
+  private async upsertUser(telegramId: bigint, fields: Omit<Prisma.UserCreateInput, 'telegramId'>): Promise<User> {
+    const write = () =>
+      this.db.user.upsert({
+        where: { telegramId },
+        create: { telegramId, ...fields },
+        update: { ...fields, lastSeenAt: new Date() },
+      });
+    try {
+      return await write();
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return write();
+      throw error;
+    }
   }
 
   async findById(id: string): Promise<User | null> {

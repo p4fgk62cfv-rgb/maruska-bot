@@ -209,15 +209,13 @@ select.app-input { appearance: none; }
 .felt__pairs { display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 14px 18px; min-height: 60%; max-width: calc(var(--card-w) * 3 + 60px); margin: 0 auto; }
 .felt__hint { width: 100%; text-align: center; color: rgba(255, 255, 255, 0.35); font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; }
 .pair { position: relative; width: var(--card-w); height: calc(var(--card-w) * 1.42 + 16px); border-radius: 8px; }
-.pair > span { position: absolute; left: 0; top: 0; animation: card-in 0.32s var(--ease); }
+.pair > span { position: absolute; left: 0; top: 0; }
 .pair__defense { transform: translate(10px, 16px) rotate(8deg); }
 .pair--target .pair__attack .ui-card { box-shadow: 0 0 0 2px var(--cyan), 0 0 18px rgba(34, 211, 238, 0.7); }
 .pair__report { position: absolute; top: -8px; right: -8px; width: 22px; height: 22px; border-radius: 50%; background: var(--red); color: #fff; font-weight: 900; font-size: 13px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4); }
-@keyframes card-in { from { transform: translateY(40px) scale(0.85); opacity: 0; } }
 
 .hand { position: relative; margin: 0 auto; max-width: 100%; }
-.hand__slot { position: absolute; left: 0; top: 14px; transition: transform 0.25s var(--ease); animation: hand-in 0.35s var(--ease); }
-@keyframes hand-in { from { opacity: 0; translate: 0 30px; } }
+.hand__slot { position: absolute; left: 0; top: 14px; }
 
 .emoji-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; font-size: 30px; }
 .emoji-grid button { height: 52px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); }
@@ -233,3 +231,33 @@ select.app-input { appearance: none; }
 .result__rating { font-size: 14px; color: var(--violet-hi); }
 .result__list { width: 100%; display: flex; flex-direction: column; gap: 6px; }
 .result__row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; font-size: 14px; }
+
+.motion-layer { position: fixed; inset: 0; z-index: 30; pointer-events: none; }
+
+/* Stage 4: seats on an arc, transfer slot, turn cue, win/lose effects */
+.game__opp { translate: 0 var(--arc, 0px); min-width: 0; }
+.game__opponents { align-items: flex-start; }
+.game__opponents--4, .game__opponents--5 { gap: 2px; }
+.transfer-slot {
+  width: var(--card-w); height: calc(var(--card-w) * 1.42); border-radius: 8px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  border: 2px dashed rgba(245, 196, 81, 0.55); color: rgba(245, 196, 81, 0.8); font-size: 11px; font-weight: 800;
+  background: rgba(245, 196, 81, 0.06);
+}
+.transfer-slot span:first-child { font-size: 22px; }
+.transfer-slot--active { border-style: solid; background: rgba(245, 196, 81, 0.18); color: var(--gold); box-shadow: 0 0 18px rgba(245, 196, 81, 0.45); animation: app-pulse 1.2s ease-in-out infinite; }
+.game__yourturn {
+  position: absolute; left: 50%; top: 46%; z-index: 20; padding: 10px 22px; border-radius: 22px; translate: -50% 0;
+  background: rgba(10, 16, 48, 0.85); color: var(--cyan); font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase;
+  box-shadow: var(--glow-cyan); pointer-events: none; animation: turn-cue 1.3s var(--ease) forwards;
+}
+@keyframes turn-cue { 0% { opacity: 0; scale: 0.7; } 15% { opacity: 1; scale: 1.05; } 70% { opacity: 1; scale: 1; } 100% { opacity: 0; scale: 1; } }
+.confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.confetti span { position: absolute; top: -12px; width: 8px; height: 14px; border-radius: 2px; animation: confetti-fall linear forwards; }
+@keyframes confetti-fall { to { transform: translateY(105vh) rotate(720deg); } }
+.result--lose .result__card { animation: ui-rise 0.35s var(--ease), lose-shake 0.5s 0.35s ease-in-out; }
+@keyframes lose-shake { 20%, 60% { translate: -8px 0; } 40%, 80% { translate: 8px 0; } }
+@media (max-width: 360px) {
+  .seat--compact .seat__name { max-width: 52px; font-size: 11px; }
+  .game__actions .ui-btn { padding: 0 12px; }
+}

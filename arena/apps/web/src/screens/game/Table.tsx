@@ -8,21 +8,23 @@ export interface TableProps {
   targets: number[];
   onPair: (index: number) => void;
   onReport: ((seq: number) => void) | null;
+  /** «Переводной»: the marked place where a same-rank card passes the attack on. */
+  transferSlot: { active: boolean; onDrop: () => void } | null;
 }
 
 /** Felt with the stock + trump on the left, the discard on the right and up to six pairs in the middle. */
-export function Table({ view, cardWidth, targets, onPair, onReport }: TableProps) {
+export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot }: TableProps) {
   const trumpCard = view.trump.card;
   return (
     <div className="felt">
-      <div className="felt__deck" aria-label={`В колоде ${view.deckCount}`}>
+      <div className="felt__deck" data-anchor="deck" aria-label={`В колоде ${view.deckCount}`}>
         {trumpCard ? (
           <>
-            <span className="felt__trump">
+            <span className="felt__trump" {...(view.deckCount === 1 ? { 'data-anchor': 'deck-card' } : {})}>
               <PlayingCard card={trumpCard} width={cardWidth * 0.8} trump />
             </span>
             {view.deckCount > 1 && (
-              <span className="felt__stock">
+              <span className="felt__stock" data-anchor="deck-card">
                 <PlayingCard faceDown width={cardWidth * 0.8} />
               </span>
             )}
@@ -40,7 +42,7 @@ export function Table({ view, cardWidth, targets, onPair, onReport }: TableProps
             className={`pair${targets.includes(index) ? ' pair--target' : ''}${pair.defense ? ' pair--beaten' : ''}`}
             onClick={() => onPair(index)}
           >
-            <span className="pair__attack" onContextMenu={(e) => e.preventDefault()}>
+            <span className="pair__attack" data-card={pair.attack} data-zone="table">
               <PlayingCard card={pair.attack} width={cardWidth} />
               {onReport && pair.by !== view.you?.id && (
                 <button type="button" className="pair__report" onClick={(e) => (e.stopPropagation(), onReport(pair.attackSeq))}>
@@ -49,7 +51,7 @@ export function Table({ view, cardWidth, targets, onPair, onReport }: TableProps
               )}
             </span>
             {pair.defense && (
-              <span className="pair__defense">
+              <span className="pair__defense" data-card={pair.defense} data-zone="table">
                 <PlayingCard card={pair.defense as CardId} width={cardWidth} />
                 {onReport && pair.defenseBy !== view.you?.id && pair.defenseSeq !== null && (
                   <button type="button" className="pair__report" onClick={(e) => (e.stopPropagation(), onReport(pair.defenseSeq!))}>
@@ -60,10 +62,16 @@ export function Table({ view, cardWidth, targets, onPair, onReport }: TableProps
             )}
           </div>
         ))}
+        {transferSlot && (
+          <button type="button" className={`transfer-slot${transferSlot.active ? ' transfer-slot--active' : ''}`} onClick={transferSlot.onDrop}>
+            <span>⇄</span>
+            <span>Перевести</span>
+          </button>
+        )}
         {view.table.length === 0 && <span className="felt__hint">{view.phase === 'attack' ? 'Ход' : ''}</span>}
       </div>
 
-      <div className="felt__discard" aria-label={`В отбое ${view.discardCount}`}>
+      <div className="felt__discard" data-anchor="discard" aria-label={`В отбое ${view.discardCount}`}>
         {view.discardCount > 0 && (
           <>
             <span className="felt__discard-pile">

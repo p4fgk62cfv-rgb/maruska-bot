@@ -24,7 +24,7 @@ export const Seat = memo(function Seat({ player, info, role, active, progress, p
     player.status === 'out' ? `Вышел · ${player.place} место` : player.status === 'left' ? 'Сдался' : passed ? 'Бито' : role ? ROLE[role] : null;
   return (
     <div className={`seat${active ? ' seat--active' : ''}${compact ? ' seat--compact' : ''}${player.status !== 'active' ? ' seat--out' : ''}`}>
-      <div className="seat__avatar">
+      <div className="seat__avatar" data-seat={player.id}>
         {progress !== null && (
           <svg className="seat__timer" viewBox="0 0 44 44" aria-hidden="true">
             <circle cx="22" cy="22" r="20" pathLength="1" style={{ strokeDashoffset: 1 - progress }} className={progress < 0.25 ? 'seat__timer--low' : ''} />

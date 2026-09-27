@@ -36,7 +36,7 @@ describe.skipIf(!url)('API + ledger on Postgres', () => {
     await db?.$disconnect();
   });
 
-  async function login(id = tgId) {
+  async function login(id = tgId, remoteAddress?: string) {
     const initData = signInitData(
       {
         auth_date: String(Math.floor(Date.now() / 1000)),
@@ -45,7 +45,7 @@ describe.skipIf(!url)('API + ledger on Postgres', () => {
       },
       BOT_TOKEN,
     );
-    return app.inject({ method: 'POST', url: '/api/auth/telegram', payload: { initData } });
+    return app.inject({ method: 'POST', url: '/api/auth/telegram', payload: { initData }, ...(remoteAddress ? { remoteAddress } : {}) });
   }
 
   it('logs in through Telegram, creates the account once and grants the signup bonus once', async () => {
@@ -140,5 +140,16 @@ describe.skipIf(!url)('API + ledger on Postgres', () => {
     expect(board.statusCode).toBe(200);
     await db.user.update({ where: { id: me.id }, data: { bannedAt: new Date() } });
     expect((await login(tgId + 4)).json()).toMatchObject({ error: 'BANNED' });
+  });
+
+  it('survives several simultaneous first logins of the same new player', async () => {
+    for (let n = 0; n < 5; n++) {
+      const id = tgId + 100 + n;
+      // Each round from its own address: /auth/telegram allows 20 logins a minute per IP.
+      const results = await Promise.all(Array.from({ length: 15 }, () => login(id, `10.0.0.${n + 1}`)));
+      expect(results.map((r) => r.statusCode).filter((c) => c !== 200)).toEqual([]);
+      expect(new Set(results.map((r) => r.json().me.id)).size).toBe(1);
+      expect(results[0]!.json().me.wallet.credits).toBe(10_000);
+    }
   });
 });

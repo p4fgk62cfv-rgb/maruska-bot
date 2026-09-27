@@ -44,7 +44,7 @@ export function Hand({ cards, trump, selected, playable, cardWidth, onTap, onDou
       }}
     >
       {cards.map((card, i) => (
-        <span key={card} className="hand__slot" style={{ transform: `translateX(${i * step}px)`, zIndex: i }}>
+        <span key={card} className="hand__slot" data-card={card} data-zone="hand" style={{ transform: `translateX(${i * step}px)`, zIndex: i }}>
           <PlayingCard
             card={card}
             width={cardWidth}

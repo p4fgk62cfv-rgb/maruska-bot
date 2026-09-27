@@ -1,3 +1,5 @@
+import { settings } from './settings.js';
+
 /**
  * Thin typed layer over Telegram's official Mini App SDK (telegram-web-app.js).
  * Everything degrades to no-ops outside Telegram so the app still runs in a browser for development.
@@ -66,11 +68,17 @@ export function initTelegram(): void {
   for (const event of ['safeAreaChanged', 'contentSafeAreaChanged', 'viewportChanged']) tg.onEvent(event, applyInsets);
 }
 
+const vibrate = (fn: () => void) => {
+  if (tg && settings.get().vibration) fn();
+};
+
 export const haptic = {
-  tap: () => tg?.HapticFeedback.impactOccurred('light'),
-  select: () => tg?.HapticFeedback.selectionChanged(),
-  success: () => tg?.HapticFeedback.notificationOccurred('success'),
-  error: () => tg?.HapticFeedback.notificationOccurred('error'),
+  tap: () => vibrate(() => tg!.HapticFeedback.impactOccurred('light')),
+  heavy: () => vibrate(() => tg!.HapticFeedback.impactOccurred('medium')),
+  select: () => vibrate(() => tg!.HapticFeedback.selectionChanged()),
+  success: () => vibrate(() => tg!.HapticFeedback.notificationOccurred('success')),
+  warning: () => vibrate(() => tg!.HapticFeedback.notificationOccurred('warning')),
+  error: () => vibrate(() => tg!.HapticFeedback.notificationOccurred('error')),
 };
 
 export function setBackButton(handler: (() => void) | null): () => void {
