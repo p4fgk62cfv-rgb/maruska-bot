@@ -171,3 +171,91 @@ html,body{overscroll-behavior:none}
   .fight-actions{gap:6px}.action-btn{min-height:54px}
   .cast-fab{min-width:165px}
 }
+
+/* ===== CANVA FISH PHOTOS — realistic image polish ===== */
+
+/* Collection grid: full-bleed photo card */
+.item img {
+  width:100%;height:110px;object-fit:cover;border-radius:12px 12px 0 0;
+  display:block;margin:-10px -10px 8px;width:calc(100% + 20px);
+  box-shadow:0 4px 12px rgba(0,0,0,.5);
+}
+.item {
+  padding-top:0;overflow:hidden;
+}
+.item .fish-rarity-tag {
+  display:inline-block;font-size:9px;padding:3px 7px;border-radius:999px;
+  margin-top:4px;font-weight:800;letter-spacing:.05em;
+}
+/* Rarity tints on collection items */
+.item[data-rarity="Обычная"]   { border-color:rgba(150,200,210,.18); }
+.item[data-rarity="Необычная"] { border-color:rgba(99,230,190,.28); }
+.item[data-rarity="Редкая"]    { border-color:rgba(96,165,250,.35); }
+.item[data-rarity="Эпическая"] { border-color:rgba(192,132,252,.45); }
+.item[data-rarity="Легендарная"]{ border-color:rgba(251,191,36,.5);box-shadow:0 0 18px rgba(251,191,36,.12),inset 0 1px rgba(255,255,255,.07); }
+.item[data-rarity="Мифическая"] { border-color:rgba(244,114,182,.55);box-shadow:0 0 24px rgba(244,114,182,.2),inset 0 1px rgba(255,255,255,.07); }
+
+/* Fight card: landscape photo fills the stage */
+.fish-stage { height:140px; margin:8px 0 4px; border-radius:16px; overflow:hidden; position:relative; }
+.fish-stage img {
+  width:100%;height:100%;object-fit:cover;object-position:center;
+  border-radius:16px;filter:none;animation:fishFloat 2.8s ease-in-out infinite;
+  max-width:100%;
+}
+.fish-stage::after {
+  content:"";position:absolute;inset:0;border-radius:16px;
+  background:linear-gradient(180deg,transparent 55%,rgba(0,4,8,.65));
+  pointer-events:none;
+}
+.tension-wave { bottom:-2px; }
+
+/* Catch card: full-width hero photo */
+.catch-card { padding:0; overflow:hidden; }
+.catch-card img {
+  width:100%;height:190px;object-fit:cover;object-position:center 40%;
+  display:block;border-radius:24px 24px 0 0;filter:none;margin:0;
+}
+.catch-burst { top:12px;right:16px;z-index:2; }
+.trophy-glow { top:60px; }
+.catch-copy {
+  padding:12px 17px 17px;
+  background:linear-gradient(180deg,rgba(2,10,16,.0),rgba(2,10,16,.88));
+}
+.catch-copy .label { margin-top:0; }
+
+/* Trophy shimmer on legendary catches */
+@keyframes tropShimmer {
+  0%,100%{box-shadow:0 0 0 0 rgba(251,191,36,.0)}
+  50%{box-shadow:0 0 40px 8px rgba(251,191,36,.28)}
+}
+.catch-card.trophy { animation:pop .45s cubic-bezier(.2,1.5,.3,1),tropShimmer 2s ease-in-out 0.5s 3; }
+
+/* Bite card: little fish preview */
+.bite-card { gap:13px; }
+.bite-card .bite-icon { font-size:28px; }
+
+/* Fish in spots panel: bigger and cover-cropped */
+.item.spot img { height:130px; object-fit:cover; border-radius:12px 12px 0 0; margin:-10px -10px 8px; width:calc(100% + 20px); }
+
+/* Gear rod images keep contain */
+.item[data-gear] img { object-fit:contain; height:88px; width:100%; margin:0 0 4px; background:transparent; border-radius:0; box-shadow:none; }
+
+/* Bait images keep contain */
+.bait img { object-fit:contain; }
+
+/* Collection fish count badge */
+.fish-catch-count {
+  position:absolute;top:8px;right:8px;background:rgba(0,4,8,.7);color:#fff;
+  font-size:10px;font-weight:800;padding:3px 7px;border-radius:999px;
+  border:1px solid rgba(255,255,255,.2);
+}
+.item { position:relative; }
+
+/* Rarity tag colours */
+.tag-Обычная    { background:rgba(150,200,210,.18);color:#9eb8c1; }
+.tag-Необычная  { background:rgba(99,230,190,.18);color:#63e6be; }
+.tag-Редкая     { background:rgba(96,165,250,.18);color:#93c5fd; }
+.tag-Эпическая  { background:rgba(192,132,252,.22);color:#d8b4fe; }
+.tag-Легендарная{ background:rgba(251,191,36,.18);color:#fcd34d; }
+.tag-Мифическая { background:rgba(244,114,182,.22);color:#f9a8d4; }
+
