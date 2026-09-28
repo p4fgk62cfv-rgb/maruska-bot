@@ -96,12 +96,15 @@ export const SeatTile = memo(function SeatTile({ seat, cards = 0, back = 'classi
         {cards > 0 && <span className="seat-tile__count">{cards}</span>}
         {emoji && <span className="seat__emoji">{emoji}</span>}
       </span>
-      {progress !== null && (
-        <span className="seat-tile__timer" aria-hidden="true">
-          <span style={{ transform: `scaleX(${progress})` }} className={progress < 0.25 ? 'is-low' : undefined} />
-        </span>
+      {/* The timer and the status keep their room when empty, so the table below never jumps. */}
+      <span className={`seat-tile__timer${progress === null ? ' seat-tile__timer--idle' : ''}`} aria-hidden="true">
+        {progress !== null && <span style={{ transform: `scaleX(${progress})` }} className={progress < 0.25 ? 'is-low' : undefined} />}
+      </span>
+      {label ? (
+        <span className={`seat-tile__label seat-tile__label--${label.tone}`}>{label.text}</span>
+      ) : (
+        <span className="seat-tile__label seat-tile__label--idle" aria-hidden="true">&nbsp;</span>
       )}
-      {label && <span className={`seat-tile__label seat-tile__label--${label.tone}`}>{label.text}</span>}
       {note && <span className="seat-tile__note">{note}</span>}
       {number !== undefined && <span className="seat-tile__number">{number}</span>}
     </div>
