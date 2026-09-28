@@ -197,3 +197,26 @@ export interface TournamentDetailDto extends TournamentDto {
   entrants: (PublicUserDto & { place: number | null; prize: number | null; eliminatedRound: number | null })[];
   matches: TournamentMatchDto[];
 }
+
+/** Opponent card opened from the table: season and all-time numbers, badges, my private label. */
+export interface PlayerCardDto extends PublicUserDto {
+  frame: string | null;
+  crown: string | null;
+  premium: boolean;
+  season: { title: string; rating: number; winnings: number; wins: number } | null;
+  total: { rating: number; winnings: number; wins: number; games: number; winRate: number };
+  /** Unlocked achievements, newest first. */
+  achievements: { key: string; title: string; icon: string }[];
+  relation: Relation;
+  /** «+добавить метку» — only the viewer ever sees it. */
+  note: string | null;
+}
+
+export type ReportReasonDto = 'cheating' | 'collusion' | 'insult' | 'other';
+
+export const REPORT_REASON_RU: Record<ReportReasonDto, string> = {
+  cheating: 'Жульничает',
+  collusion: 'Играет в сговоре',
+  insult: 'Оскорбительные имя или фото',
+  other: 'Другое',
+};

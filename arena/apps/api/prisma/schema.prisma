@@ -46,6 +46,10 @@ model User {
   tournamentEntries  TournamentPlayer[]
   notifications      Notification[]
   seasonRatings      SeasonRating[]
+  notesWritten       PlayerNote[]      @relation("NoteOwner")
+  notesAbout         PlayerNote[]      @relation("NoteTarget")
+  reportsSent        PlayerReport[]    @relation("ReportFrom")
+  reportsReceived    PlayerReport[]    @relation("ReportAbout")
 
   @@map("users")
   @@schema("arena")
@@ -554,5 +558,49 @@ model SeasonRating {
   @@id([seasonId, userId])
   @@index([seasonId, rating(sort: Desc)])
   @@map("season_ratings")
+  @@schema("arena")
+}
+
+// ───────────────────────── players at the table ─────────────────────────
+
+/// «+добавить метку»: a private label one player keeps about another; nobody else sees it.
+model PlayerNote {
+  ownerId   String   @map("owner_id") @db.Uuid
+  targetId  String   @map("target_id") @db.Uuid
+  text      String   @db.VarChar(40)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  owner  User @relation("NoteOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  target User @relation("NoteTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@id([ownerId, targetId])
+  @@map("player_notes")
+  @@schema("arena")
+}
+
+enum ReportReason {
+  CHEATING
+  COLLUSION
+  INSULT
+  OTHER
+
+  @@schema("arena")
+}
+
+/// «Пожаловаться»: read by moderators via /internal/moderation/reports.
+model PlayerReport {
+  id         String       @id @default(uuid(7)) @db.Uuid
+  reporterId String       @map("reporter_id") @db.Uuid
+  targetId   String       @map("target_id") @db.Uuid
+  gameId     String?      @map("game_id") @db.Uuid
+  reason     ReportReason
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  reporter User @relation("ReportFrom", fields: [reporterId], references: [id], onDelete: Cascade)
+  target   User @relation("ReportAbout", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([targetId, createdAt])
+  @@index([reporterId, targetId, createdAt])
+  @@map("player_reports")
   @@schema("arena")
 }

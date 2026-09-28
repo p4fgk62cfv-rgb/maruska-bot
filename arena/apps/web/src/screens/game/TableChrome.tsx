@@ -1,6 +1,6 @@
 import { formatStake, type RoomDto } from '@arena/shared';
 import { Avatar, Icon, PlayingCard, type IconName } from '@arena/ui';
-import { memo, type ReactNode } from 'react';
+import { memo, type KeyboardEvent, type ReactNode } from 'react';
 import { ringOf } from '../../lib/cosmetics.js';
 import { ModeStrip } from '../lobbyParts.js';
 
@@ -59,13 +59,27 @@ export interface SeatTileProps {
   /** Motion anchor: cards fly to and from `[data-seat]`. */
   anchor?: boolean;
   size?: number;
+  /** «Бито», «Пас», «Беру» in a speech bubble above the portrait. */
+  bubble?: { text: string; tone: 'take' | 'pass' } | null;
+  /** My private label about this player. */
+  note?: string | null;
+  onOpen?: () => void;
 }
 
 /** A player at the table: square portrait with the name on it, cards fanned behind, status below. */
-export const SeatTile = memo(function SeatTile({ seat, cards = 0, back = 'classic', active, progress = null, label, number, emoji, dim, offline, anchor, size = 58 }: SeatTileProps) {
+export const SeatTile = memo(function SeatTile({ seat, cards = 0, back = 'classic', active, progress = null, label, number, emoji, dim, offline, anchor, size = 58, bubble, note, onOpen }: SeatTileProps) {
   const fan = Math.min(cards, 7);
   return (
-    <div className={`seat-tile${active ? ' seat-tile--active' : ''}${dim ? ' seat-tile--dim' : ''}`} style={{ ['--tile' as string]: `${size}px` }}>
+    <div
+      className={`seat-tile${active ? ' seat-tile--active' : ''}${dim ? ' seat-tile--dim' : ''}${onOpen ? ' seat-tile--button' : ''}`}
+      style={{ ['--tile' as string]: `${size}px` }}
+      {...(onOpen ? { role: 'button', tabIndex: 0, 'aria-label': `Профиль: ${seat.name}`, onClick: onOpen, onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => (e.key === 'Enter' || e.key === ' ') && onOpen() } : {})}
+    >
+      {bubble && (
+        <span className={`seat-tile__bubble seat-tile__bubble--${bubble.tone}`} key={bubble.text}>
+          {bubble.text}
+        </span>
+      )}
       {fan > 0 && (
         <span className="seat-tile__fan" aria-hidden="true">
           {Array.from({ length: fan }, (_, i) => (
@@ -87,6 +101,7 @@ export const SeatTile = memo(function SeatTile({ seat, cards = 0, back = 'classi
         </span>
       )}
       {label && <span className={`seat-tile__label seat-tile__label--${label.tone}`}>{label.text}</span>}
+      {note && <span className="seat-tile__note">{note}</span>}
       {number !== undefined && <span className="seat-tile__number">{number}</span>}
     </div>
   );

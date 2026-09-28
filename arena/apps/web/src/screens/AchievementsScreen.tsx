@@ -1,11 +1,9 @@
 import type { AchievementDto } from '@arena/shared';
-import { Badge, Icon, Panel, ProgressBar, type IconName } from '@arena/ui';
+import { Badge, Icon, Panel, ProgressBar } from '@arena/ui';
+import { ACHIEVEMENT_ICON } from '../lib/achievements.js';
 import { useQuery } from '../lib/useQuery.js';
 import { QueryView, ScreenHeader } from './common.js';
 
-const ICONS: Record<string, IconName> = {
-  cards: 'cards', trophy: 'trophy', crown: 'crown', flame: 'flame', swap: 'swap', users: 'users', gem: 'gem', star: 'star', heart: 'heart',
-};
 
 export default function AchievementsScreen() {
   const query = useQuery<AchievementDto[]>('/achievements');
@@ -19,7 +17,7 @@ export default function AchievementsScreen() {
             {list.map((a) => (
               <Panel key={a.key} className={`ach${a.unlockedAt ? ' ach--done' : ''}`}>
                 <span className="ach__icon">
-                  <Icon name={ICONS[a.icon] ?? 'star'} />
+                  <Icon name={ACHIEVEMENT_ICON[a.icon] ?? 'star'} />
                 </span>
                 <div className="ach__body">
                   <div className="app-row app-row--between">

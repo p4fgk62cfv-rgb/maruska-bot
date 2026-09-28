@@ -20,6 +20,7 @@ import { websocketRoutes } from './realtime/ws.js';
 import { RealtimePresence } from './services/presence.js';
 import { FriendService } from './services/friends.js';
 import { Outbox, TelegramBot } from './services/notifier.js';
+import { playerRoutes } from './routes/players.js';
 import { friendRoutes } from './routes/friends.js';
 import { internalRoutes } from './routes/internal.js';
 import { tournamentRoutes } from './routes/tournaments.js';
@@ -131,6 +132,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
       await boardRoutes(api, ctx);
       await roomRoutes(api, ctx);
       await friendRoutes(api, ctx);
+      await playerRoutes(api, ctx);
       await tournamentRoutes(api, ctx);
       await internalRoutes(api, ctx);
     },

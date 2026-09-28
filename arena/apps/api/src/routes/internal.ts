@@ -74,6 +74,31 @@ export async function internalRoutes(app: FastifyInstance, ctx: Context): Promis
     return { taken };
   });
 
+  /** «Пожаловаться» from the table: players with the most distinct reporters first. */
+  app.get('/internal/moderation/reports', { preHandler: check }, async (request) => {
+    const { days } = z.object({ days: z.coerce.number().int().min(1).max(90).default(7) }).parse(request.query);
+    const since = new Date(Date.now() - days * 86_400_000);
+    const rows = await ctx.db.playerReport.findMany({
+      where: { createdAt: { gt: since } },
+      select: { targetId: true, reporterId: true, reason: true, target: { select: { telegramId: true, username: true, firstName: true } } },
+    });
+    const byTarget = new Map<string, { telegramId: string; name: string; reporters: Set<string>; reasons: Record<string, number> }>();
+    for (const r of rows) {
+      const entry = byTarget.get(r.targetId) ?? {
+        telegramId: r.target.telegramId.toString(),
+        name: r.target.username ? `@${r.target.username}` : r.target.firstName,
+        reporters: new Set<string>(),
+        reasons: {},
+      };
+      entry.reporters.add(r.reporterId);
+      entry.reasons[r.reason] = (entry.reasons[r.reason] ?? 0) + 1;
+      byTarget.set(r.targetId, entry);
+    }
+    return [...byTarget.values()]
+      .map((e) => ({ telegramId: e.telegramId, name: e.name, reporters: e.reporters.size, reasons: e.reasons }))
+      .sort((a, b) => b.reporters - a.reporters);
+  });
+
   /** Prometheus scrape target. */
   app.get('/internal/metrics', { preHandler: check }, async (_request, reply) => {
     const rooms = ctx.realtime.rooms.list();

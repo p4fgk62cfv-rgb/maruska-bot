@@ -1,6 +1,6 @@
 import { rankOf, type CardId } from '@arena/game-engine';
 import { EMOJIS, FEATURE_PRICES, type RoomDto } from '@arena/shared';
-import { BottomSheet, Button, PlayingCard } from '@arena/ui';
+import { Balance, BottomSheet, Button, PlayingCard } from '@arena/ui';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useCountdown } from '../../lib/hooks.js';
 import { haptic } from '../../lib/telegram.js';
@@ -9,11 +9,14 @@ import { settings, useSettings } from '../../lib/settings.js';
 import { MotionDirector } from './motion.js';
 import { backOf, tableOf } from '../../lib/cosmetics.js';
 import { useRealtime, type LiveGame } from '../../realtime.js';
-import { useMe } from '../../session.js';
+import { useMe, useSession } from '../../session.js';
 import { useToast } from '../../toast.js';
 import { sameRank, sortHand } from './cards.js';
 import { Hand } from './Hand.js';
 import { ResultView } from './ResultView.js';
+import { PlayerSheet } from './PlayerSheet.js';
+import { Payout } from './Payout.js';
+import { api } from '../../lib/api.js';
 import { DockAction, DockExtra, SeatTile, TableDock, TableTop } from './TableChrome.js';
 import { Table } from './Table.js';
 
@@ -35,11 +38,29 @@ export function GameScreen({ game }: { game: LiveGame }) {
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState<{ card: CardId; hover: string | null } | null>(null);
   const [emojis, setEmojis] = useState<Record<string, string>>({});
+  const [profileOf, setProfileOf] = useState<string | null>(null);
+  const { refreshMe } = useSession();
+  const [paid, setPaid] = useState<string | null>(null);
+  const myNet = result?.payouts.find((p) => p.userId === me.id)?.net ?? 0;
+  const payoutActive = Boolean(result) && myNet > 0 && paid !== view.gameId;
+  // The stake left the wallet when the game started: show the balance as it is now.
+  useEffect(() => {
+    void refreshMe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view.gameId]);
+  const [notes, setNotes] = useState<Record<string, string>>({});
   const gameId = view.gameId;
 
   const now = useCallback(() => socket.now(), [socket]);
   const left = useCountdown(view.turnDeadline, now);
   const progress = left !== null ? Math.min(1, left / view.rules.turnMs) : null;
+
+  // My private labels about the people at this table.
+  const opponentIds = view.players.filter((p) => p.id !== me.id).map((p) => p.id).join(',');
+  useEffect(() => {
+    if (!opponentIds) return;
+    api<Record<string, string>>(`/players/notes?ids=${opponentIds}`).then(setNotes).catch(() => undefined);
+  }, [opponentIds]);
 
   // A new state invalidates the selection unless those cards are still in hand.
   useEffect(() => {
@@ -207,9 +228,13 @@ export function GameScreen({ game }: { game: LiveGame }) {
     if (p.status === 'out') return { text: `${p.place} место`, tone: 'muted' as const };
     if (p.status === 'left') return { text: 'Сдался', tone: 'muted' as const };
     if (infoOf(p.id)?.connected === false) return { text: 'Нет связи', tone: 'alert' as const };
-    if (view.passed.includes(p.id)) return { text: 'Бито', tone: 'muted' as const };
     const role = roleOf(p.id);
     return role === 'attacker' ? { text: 'Ходит', tone: 'attack' as const } : role === 'defender' ? { text: 'Отбивается', tone: 'defend' as const } : null;
+  };
+  const bubbleOf = (id: string) => {
+    if (view.phase === 'taking' && id === view.defender) return { text: 'Беру', tone: 'take' as const };
+    if (view.passed.includes(id)) return { text: undefended.length === 0 ? 'Бито' : 'Пас', tone: 'pass' as const };
+    return null;
   };
   const seatOf = (id: string) => {
     const info = infoOf(id);
@@ -255,6 +280,9 @@ export function GameScreen({ game }: { game: LiveGame }) {
               active={view.currentPlayer === p.id}
               progress={view.currentPlayer === p.id ? progress : null}
               label={labelOf(p)}
+              bubble={p.status === 'active' ? bubbleOf(p.id) : null}
+              note={notes[p.id] ?? null}
+              onOpen={() => setProfileOf(p.id)}
               emoji={emojis[p.id] || null}
               dim={p.status !== 'active'}
               offline={infoOf(p.id)?.connected === false}
@@ -281,7 +309,6 @@ export function GameScreen({ game }: { game: LiveGame }) {
             : null
         }
       />
-      {myTurn && <div className="game__yourturn" key={`turn-${view.version}-${view.phase}`}>Ваш ход</div>}
       {isDefender && selected.length === 1 && undefended.length > 1 && !drag && <p className="game__tip">Перетащите карту на ту, которую бьёте, или нажмите на неё</p>}
 
       <Hand
@@ -298,11 +325,15 @@ export function GameScreen({ game }: { game: LiveGame }) {
       />
 
       <TableDock
-        actions={actions.slice(0, 2).map((act) => (
-          <DockAction key={act.key} tone={act.tone} busy={busy} onClick={act.run}>
-            {act.text}
-          </DockAction>
-        ))}
+        actions={
+          actions.length === 0 && myTurn ? (
+            <span className="dock-yourturn" key={`turn-${view.version}`}>Ваш ход</span>
+          ) : actions.slice(0, 2).map((act) => (
+              <DockAction key={act.key} tone={act.tone} busy={busy} onClick={act.run}>
+                {act.text}
+              </DockAction>
+            ))
+        }
         me={
           <button type="button" className="table-dock__avatar" onClick={() => setSheet('emoji')} aria-label="Отправить смайлик">
             {mine && (
@@ -312,6 +343,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
                 active={myTurn}
                 progress={myTurn ? progress : null}
                 label={mine.status === 'active' ? null : labelOf(mine)}
+                bubble={mine.status === 'active' ? bubbleOf(mine.id) : null}
                 emoji={emojis[me.id] || null}
               />
             )}
@@ -319,6 +351,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
         }
         extras={
           <>
+            <span className="dock-extras">
             <DockExtra icon="undo" label="Вернуть карту" price={FEATURE_PRICES.undo} disabled={!game.features.canUndo || busy} onClick={() => void send({ type: 'UNDO_MOVE', gameId })} />
             <DockExtra icon="eye" label="Подсветка карт" price={game.features.hints ? null : FEATURE_PRICES.hints} on={game.features.hints} disabled={game.features.hints || busy} onClick={() => void buy('hints')} />
             <DockExtra
@@ -329,6 +362,10 @@ export function GameScreen({ game }: { game: LiveGame }) {
               disabled={busy}
               onClick={() => (game.features.discardReminder ? setSheet('discard') : void buy('discardReminder'))}
             />
+            </span>
+            <span className={`dock-balance${paid === gameId ? ' dock-balance--bump' : ''}`} data-balance key={paid === gameId ? 'after' : 'before'}>
+              <Balance kind="credits" value={me.wallet.credits} compact />
+            </span>
           </>
         }
       />
@@ -386,7 +423,20 @@ export function GameScreen({ game }: { game: LiveGame }) {
         </div>
       </BottomSheet>
 
-      {result && <ResultView result={result} players={game.players} onClose={dismissGame} />}
+      <PlayerSheet
+        userId={profileOf}
+        gameId={gameId}
+        onClose={() => setProfileOf(null)}
+        onNote={(id, note) => setNotes((n) => {
+          const next = { ...n };
+          if (note) next[id] = note;
+          else delete next[id];
+          return next;
+        })}
+      />
+
+      {payoutActive && <Payout amount={myNet} target="[data-balance]" onDone={() => { setPaid(gameId); void refreshMe(); }} />}
+      {result && !payoutActive && <ResultView result={result} players={game.players} onClose={dismissGame} />}
     </div>
   );
 }
