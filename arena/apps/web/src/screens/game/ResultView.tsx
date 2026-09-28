@@ -51,7 +51,11 @@ function AddFriend({ userId }: { userId: string }) {
   );
 }
 
-export function ResultView({ result, players, onClose }: { result: GameResultDto; players: PlayerInfo[]; onClose: () => void }) {
+/**
+ * `onAgain`: the table stays together — back to the same chairs, everyone presses «Готов» for the next deal.
+ * `onClose`: leave the table for the lobby.
+ */
+export function ResultView({ result, players, onClose, onAgain }: { result: GameResultDto; players: PlayerInfo[]; onClose: () => void; onAgain?: (() => void) | null }) {
   const rewards = useSettings().rewardAnimations;
   const me = useMe();
   const mine = result.payouts.find((p) => p.userId === me.id);
@@ -118,9 +122,20 @@ export function ResultView({ result, players, onClose }: { result: GameResultDto
             );
           })}
         </div>
-        <Button size="lg" block variant="gold" onClick={onClose}>
-          В лобби
-        </Button>
+        {onAgain ? (
+          <div className="result__actions">
+            <Button size="lg" block variant="gold" onClick={onAgain}>
+              Играть ещё
+            </Button>
+            <Button block variant="ghost" onClick={onClose}>
+              Выйти в лобби
+            </Button>
+          </div>
+        ) : (
+          <Button size="lg" block variant="gold" onClick={onClose}>
+            В лобби
+          </Button>
+        )}
       </div>
     </div>
   );

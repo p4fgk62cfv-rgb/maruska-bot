@@ -26,6 +26,9 @@ import type { Room, RoomConfig, Seat } from './types.js';
 export const READY_TIMEOUT_MS = 30_000;
 /** A player who drops out of a waiting room keeps the seat this long. */
 export const WAITING_GRACE_MS = 30_000;
+/** After a deal the same company has this long to press «Готов» for the next one. */
+export const REMATCH_READY_MS = 60_000;
+const EMOJI_COOLDOWN_MS = 1500;
 
 /** Callbacks into the tournament service for match rooms. */
 export interface MatchHooks {
@@ -59,6 +62,7 @@ export class RoomManager {
   private readonly rooms = new Map<string, Room>();
   private readonly queues = new Map<string, SerialQueue>();
   private readonly timers = new Map<string, NodeJS.Timeout>();
+  private readonly lastEmoji = new Map<string, number>();
   matchHooks: MatchHooks | null = null;
 
   constructor(private readonly deps: RoomDeps) {}
@@ -318,6 +322,16 @@ export class RoomManager {
     });
   }
 
+  /** Smiles work at a gathering table too, not only during a deal. */
+  emoji(userId: string, roomId: string, emoji: string): void {
+    const room = this.rooms.get(roomId);
+    if (!room || !room.seats.some((s) => s.userId === userId)) throw new AppError('FORBIDDEN');
+    const now = Date.now();
+    if (now - (this.lastEmoji.get(userId) ?? 0) < EMOJI_COOLDOWN_MS) throw new AppError('RATE_LIMITED');
+    this.lastEmoji.set(userId, now);
+    for (const s of room.seats) this.deps.hub.send(s.userId, { type: 'EMOJI', gameId: null, roomId, userId, emoji });
+  }
+
   // ── connections ────────────────────────────────────────────
 
   async connected(userId: string): Promise<Room | undefined> {
@@ -385,16 +399,39 @@ export class RoomManager {
     }
   }
 
-  /** Called by the game when it is settled: the room closes and players are free again. */
+  /**
+   * Called by the game when it is settled. A tournament match room closes; a casual table
+   * stays together: it waits again, and when everyone presses «Готов» the next deal starts.
+   * Whoever does not want another round leaves; whoever is gone loses the seat after the grace.
+   */
   finished(roomId: string, result: GameResultDto | null): void {
     const room = this.rooms.get(roomId);
     if (!room) return;
-    if (room.tournament) this.matchHooks?.finished(room, result);
-    room.status = 'finished';
-    this.rooms.delete(roomId);
-    this.queues.delete(roomId);
-    this.deps.store.deleteRoom(roomId).catch(() => undefined);
-    this.deps.hub.publishRoom(this.dto(room));
+    if (room.tournament) {
+      this.matchHooks?.finished(room, result);
+      room.status = 'finished';
+      this.rooms.delete(roomId);
+      this.queues.delete(roomId);
+      this.deps.store.deleteRoom(roomId).catch(() => undefined);
+      this.deps.hub.publishRoom(this.dto(room));
+      return;
+    }
+    this.queue(roomId)
+      .run(async () => {
+        room.status = 'waiting';
+        room.gameId = null;
+        room.readyDeadline = null;
+        for (const s of room.seats) {
+          s.ready = false;
+          s.connected = this.deps.hub.isOnline(s.userId);
+        }
+        for (const s of room.seats) {
+          if (!s.connected) this.setTimer(`grace:${s.userId}`, WAITING_GRACE_MS, () => this.queue(room.id).run(() => this.dropIfAway(room, s.userId)));
+        }
+        if (room.seats.length === room.settings.players) this.armReadyTimer(room, REMATCH_READY_MS);
+        await this.changed(room);
+      })
+      .catch((error) => this.deps.log.error({ err: error, roomId }, 'rematch reset failed'));
   }
 
   restore(room: Room): void {
