@@ -111,7 +111,7 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
 
   it('two players: lobby → room → ready → a full game → payouts, rating and history', async () => {
     const watcher = await player('Watcher');
-    await watcher.send({ type: 'LOBBY_SUBSCRIBE', filter: { stakes: [100], players: [], deckSizes: [], speeds: [], modes: ['podkidnoy'] } });
+    await watcher.send({ type: 'LOBBY_SUBSCRIBE', filter: { scope: 'open', stakes: [100], players: [], deckSizes: [], speeds: [], modes: ['podkidnoy'] } });
 
     const { players, roomId } = await table(2);
     await watcher.waitFor((m) => m.type === 'ROOM_CREATED' && m.room.id === roomId);
@@ -203,6 +203,10 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     const code = /game_[A-Z0-9]{8}_([A-Za-z0-9_-]+)/.exec(created.invite.link)![1]!;
 
     const guest = await player('Guest');
+    // Listed on the «Приватные» tab only; the listing never carries the password.
+    const privateList = (await api(guest, 'GET', `/rooms?scope=private`)).json() as { id: string }[];
+    expect(privateList.some((r) => r.id === roomId)).toBe(true);
+    expect(JSON.stringify(privateList)).not.toContain('secret');
     expect((await api(guest, 'POST', `/rooms/${roomId}/join`, {})).json()).toMatchObject({ error: 'WRONG_PASSWORD' });
     expect((await api(guest, 'POST', `/rooms/${roomId}/join`, { password: 'nope' })).json()).toMatchObject({ error: 'WRONG_PASSWORD' });
     expect((await api(guest, 'POST', `/rooms/${roomId}/join`, { invite: code })).statusCode).toBe(200);

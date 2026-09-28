@@ -1,4 +1,4 @@
-import { Button, EmptyState, Skeleton } from '@arena/ui';
+import { Button, EmptyState, Icon, Skeleton } from '@arena/ui';
 import type { ReactNode } from 'react';
 import type { Query } from '../lib/useQuery.js';
 import { useNav } from '../navigation.js';
@@ -27,16 +27,18 @@ export function ScreenHeader({ title, subtitle, action }: { title: string; subti
   const { stack, back } = useNav();
   return (
     <header className="app-header">
-      {stack.length > 0 && (
-        <button type="button" className="ui-icon-btn app-header__back" aria-label="Назад" onClick={back}>
-          ‹
-        </button>
-      )}
+      <span className="app-header__side">
+        {stack.length > 0 && (
+          <button type="button" className="app-header__back" aria-label="Назад" onClick={back}>
+            <Icon name="back" size={20} /> Назад
+          </button>
+        )}
+      </span>
       <div className="app-header__titles">
         <h1>{title}</h1>
         {subtitle && <p>{subtitle}</p>}
       </div>
-      {action}
+      <span className="app-header__side app-header__side--end">{action}</span>
     </header>
   );
 }

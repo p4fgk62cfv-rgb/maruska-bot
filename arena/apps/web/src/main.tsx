@@ -1,3 +1,5 @@
+import '@fontsource/marck-script/cyrillic-400.css';
+import '@fontsource/marck-script/latin-400.css';
 import '@arena/ui/styles.css';
 import './app.css';
 import { StrictMode } from 'react';

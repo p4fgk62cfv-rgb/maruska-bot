@@ -19,6 +19,12 @@ export async function profileRoutes(app: FastifyInstance, ctx: Context): Promise
     return me;
   });
 
+  /** Link to the Mini App for «Поделиться». */
+  app.get('/app-link', auth, async () => {
+    const { BOT_USERNAME, MINI_APP_SHORT_NAME } = ctx.config;
+    return { link: MINI_APP_SHORT_NAME ? `https://t.me/${BOT_USERNAME}/${MINI_APP_SHORT_NAME}` : `https://t.me/${BOT_USERNAME}` };
+  });
+
   app.get('/profile', auth, async (request) => {
     const me = await ctx.users.me(sessionOf(request).sub);
     if (!me) throw new AppError('UNAUTHORIZED');

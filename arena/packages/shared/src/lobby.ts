@@ -1,7 +1,19 @@
 import type { z } from 'zod';
 import type { roomFilterSchema, roomSettingsSchema } from './schemas.js';
 
-export const STAKE_OPTIONS = [100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000] as const;
+/** Stakes on a 1–2.5–5 ladder: the stake slider snaps to these. */
+export const STAKE_OPTIONS = [
+  100, 250, 500, 1_000, 2_500, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000, 2_500_000, 5_000_000, 10_000_000,
+] as const;
+
+/** The four pairs a room is set up with; the lobby filter accepts either side of each pair. */
+export const MODE_PAIRS = [
+  ['podkidnoy', 'perevodnoy'],
+  ['neighbors', 'all'],
+  ['cheaters', 'fair'],
+  ['classic', 'draw'],
+] as const;
+export type GameMode = (typeof MODE_PAIRS)[number][number];
 
 export type RoomSettings = z.infer<typeof roomSettingsSchema>;
 export type RoomFilter = z.infer<typeof roomFilterSchema>;
@@ -88,21 +100,27 @@ export function parseRoomStartParam(value: string | null | undefined): { roomId:
 
 type FilterableRoom = Pick<RoomDto, 'settings' | 'server'>;
 
-/** Lobby filter: every non-empty group must match; empty groups mean "any". */
+/**
+ * Lobby filter: every non-empty group must match; empty groups mean "any".
+ * Modes are matched per pair: ticking «Подкидной» and «Переводной» accepts both.
+ */
 export function matchesFilter(room: FilterableRoom, filter: RoomFilter): boolean {
   const s = room.settings;
   if (filter.stakes.length && !filter.stakes.includes(s.stake)) return false;
+  if (filter.stakeMin !== undefined && s.stake < filter.stakeMin) return false;
+  if (filter.stakeMax !== undefined && s.stake > filter.stakeMax) return false;
   if (filter.players.length && !filter.players.includes(s.players)) return false;
   if (filter.deckSizes.length && !filter.deckSizes.includes(s.deckSize)) return false;
   if (filter.speeds.length && !filter.speeds.includes(s.speed)) return false;
   if (filter.server && filter.server !== room.server) return false;
-  if (filter.modes.length) {
-    const values = [s.variant, s.throwIn, s.fairness, s.ending] as string[];
-    if (!filter.modes.every((m) => values.includes(m))) return false;
+  const values: readonly string[] = [s.variant, s.throwIn, s.fairness, s.ending];
+  for (const pair of MODE_PAIRS) {
+    const wanted = filter.modes.filter((m) => (pair as readonly string[]).includes(m));
+    if (wanted.length && !wanted.some((m) => values.includes(m))) return false;
   }
   return true;
 }
 
-export const EMPTY_FILTER: RoomFilter = { stakes: [], players: [], deckSizes: [], speeds: [], modes: [] };
+export const EMPTY_FILTER: RoomFilter = { scope: 'open', stakes: [], players: [], deckSizes: [], speeds: [], modes: [] };
 
 export const EMOJIS = ['😀', '😂', '😎', '🤔', '😡', '😭', '👍', '👏', '🔥', '🃏', '🍀', '💀'] as const;

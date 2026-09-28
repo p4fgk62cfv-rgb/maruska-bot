@@ -13,10 +13,10 @@ import { useEffect, useRef } from 'react';
 import { ScreenFallback } from './screens/common.js';
 
 // Home ships in the main bundle; everything else loads on first visit.
-const GamesScreen = lazy(() => import('./screens/GamesScreen.js'));
+const LobbyScreen = lazy(() => import('./screens/LobbyScreen.js'));
+const FiltersScreen = lazy(() => import('./screens/FiltersScreen.js'));
 const TournamentsScreen = lazy(() => import('./screens/TournamentsScreen.js'));
 const FriendsScreen = lazy(() => import('./screens/FriendsScreen.js'));
-const MoreScreen = lazy(() => import('./screens/MoreScreen.js'));
 const ProfileScreen = lazy(() => import('./screens/ProfileScreen.js'));
 const AchievementsScreen = lazy(() => import('./screens/AchievementsScreen.js'));
 const ItemsScreen = lazy(() => import('./screens/ItemsScreen.js'));
@@ -32,31 +32,32 @@ const GameScreen = lazy(() => gameModule.then((m) => ({ default: m.GameScreen })
 
 const TABS: NavItem<Tab>[] = [
   { key: 'home', label: 'Профиль', icon: 'user' },
-  { key: 'games', label: 'Игры', icon: 'cards' },
-  { key: 'tournaments', label: 'Турниры', icon: 'trophy' },
-  { key: 'friends', label: 'Друзья', icon: 'users' },
-  { key: 'more', label: 'Ещё', icon: 'more' },
+  { key: 'open', label: 'Открытые', icon: 'cards' },
+  { key: 'private', label: 'Приватные', icon: 'lock' },
+  { key: 'create', label: 'Создать игру', icon: 'plus', accent: true },
 ];
 
 function TabScreen({ tab }: { tab: Tab }) {
   switch (tab) {
     case 'home':
       return <HomeScreen />;
-    case 'games':
-      return <GamesScreen />;
-    case 'tournaments':
-      return <TournamentsScreen />;
-    case 'friends':
-      return <FriendsScreen />;
-    case 'more':
-      return <MoreScreen />;
+    case 'open':
+      return <LobbyScreen scope="open" />;
+    case 'private':
+      return <LobbyScreen scope="private" />;
+    case 'create':
+      return <CreateGameScreen />;
   }
 }
 
 function PageScreen({ page }: { page: Page }) {
   switch (page) {
-    case 'create':
-      return <CreateGameScreen />;
+    case 'filters':
+      return <FiltersScreen />;
+    case 'tournaments':
+      return <TournamentsScreen />;
+    case 'friends':
+      return <FriendsScreen />;
     case 'profile':
       return <ProfileScreen />;
     case 'achievements':
@@ -79,7 +80,7 @@ function PageScreen({ page }: { page: Page }) {
 function Shell() {
   const { tab, stack, setTab } = useNav();
   const { room, game, result, requestCount } = useRealtime();
-  const items = TABS.map((t) => (t.key === 'friends' ? { ...t, badge: requestCount } : t));
+  const items = TABS.map((t) => (t.key === 'home' ? { ...t, badge: requestCount } : t));
   const page = stack[stack.length - 1];
   const passwordPrompt = useDeepLink();
 
@@ -120,11 +121,11 @@ function useDeepLink() {
   const [needPassword, setNeedPassword] = useState<string | null>(null);
   const startParam = state.status === 'ready' ? state.startParam : null;
 
-  const { setTab } = useNav();
+  const { push } = useNav();
   useEffect(() => {
     if (startParam === 'friends' && !handled.current) {
       handled.current = true;
-      setTab('friends');
+      push('friends');
       return;
     }
     const link = parseRoomStartParam(startParam);
@@ -136,7 +137,7 @@ function useDeepLink() {
         if (e instanceof ApiError && e.code === 'WRONG_PASSWORD') setNeedPassword(link.roomId);
         else toast(e instanceof ApiError ? e.message : 'Ошибка', 'error');
       });
-  }, [startParam, enterRoom, toast, setTab]);
+  }, [startParam, enterRoom, toast, push]);
 
   return needPassword ? <PasswordPrompt roomId={needPassword} onDone={() => setNeedPassword(null)} /> : null;
 }

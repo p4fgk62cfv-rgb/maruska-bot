@@ -12,6 +12,9 @@ const idParam = z.object({ id: z.string().regex(/^[A-Z0-9]{8}$/) });
 const csv = (schema: z.ZodType) => z.preprocess((v) => (typeof v === 'string' && v ? v.split(',') : []), z.array(schema));
 
 const listQuery = z.object({
+  scope: z.enum(['open', 'private']).optional(),
+  stakeMin: z.coerce.number().int().optional(),
+  stakeMax: z.coerce.number().int().optional(),
   stakes: csv(z.coerce.number().int()),
   players: csv(z.coerce.number().int()),
   deckSizes: csv(z.coerce.number().int()),
@@ -28,7 +31,7 @@ export async function roomRoutes(app: FastifyInstance, ctx: Context): Promise<vo
     const filter = roomFilterSchema.parse(listQuery.parse(request.query));
     return rooms()
       .list()
-      .filter((r) => isListed(r) && matchesFilter(r, filter));
+      .filter((r) => isListed(r, filter.scope) && matchesFilter(r, filter));
   });
 
   app.post('/rooms', auth, async (request): Promise<MyRoomDto> => {

@@ -29,6 +29,8 @@ export const joinRoomSchema = z.object({
 export const quickGameSchema = z.object({ stake: z.number().int().optional() });
 
 export const roomFilterSchema = z.object({
+  /** «Открытые» lists public tables, «Приватные» the password-protected ones. */
+  scope: z.enum(['open', 'private']).default('open'),
   stakes: z.array(z.number().int()).default([]),
   players: z.array(z.number().int().min(2).max(6)).default([]),
   deckSizes: z.array(z.number().int()).default([]),
@@ -37,6 +39,8 @@ export const roomFilterSchema = z.object({
     .array(z.enum(['podkidnoy', 'perevodnoy', 'all', 'neighbors', 'fair', 'cheaters', 'classic', 'draw']))
     .default([]),
   server: z.string().optional(),
+  stakeMin: z.number().int().nonnegative().optional(),
+  stakeMax: z.number().int().nonnegative().optional(),
 });
 
 const cardSchema = z.string().refine(isCardId, 'card') as unknown as z.ZodType<CardId>;

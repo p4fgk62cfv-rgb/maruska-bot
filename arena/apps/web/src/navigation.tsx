@@ -1,8 +1,19 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { haptic, setBackButton } from './lib/telegram.js';
 
-export type Tab = 'home' | 'games' | 'tournaments' | 'friends' | 'more';
-export type Page = 'create' | 'profile' | 'achievements' | 'items' | 'rules' | 'servers' | 'leaderboard' | 'news' | 'settings';
+export type Tab = 'home' | 'open' | 'private' | 'create';
+export type Page =
+  | 'filters'
+  | 'tournaments'
+  | 'friends'
+  | 'profile'
+  | 'achievements'
+  | 'items'
+  | 'rules'
+  | 'servers'
+  | 'leaderboard'
+  | 'news'
+  | 'settings';
 
 interface Navigation {
   tab: Tab;

@@ -1,38 +1,41 @@
-import { Avatar, Badge, Balance, Button, Icon, Panel, PlayingCard, RatingBadge, Tile, type TileProps } from '@arena/ui';
+import { Avatar, Balance, Icon, RatingBadge, type IconName } from '@arena/ui';
 import { DAILY_CREDITS, type MyRoomDto } from '@arena/shared';
-import { useRealtime } from '../realtime.js';
-import { ringOf } from '../lib/cosmetics.js';
 import { useState } from 'react';
+import { ringOf } from '../lib/cosmetics.js';
 import { ApiError, api } from '../lib/api.js';
-import { haptic } from '../lib/telegram.js';
-import { useSession } from '../session.js';
+import { haptic, tg } from '../lib/telegram.js';
+import { useNav, type Page } from '../navigation.js';
+import { useRealtime } from '../realtime.js';
+import { useMe, useSession } from '../session.js';
 import { useToast } from '../toast.js';
-import { useNav, type Page, type Tab } from '../navigation.js';
-import { useMe } from '../session.js';
 
-type Link = Omit<TileProps, 'onClick'> & ({ tab: Tab } | { page: Page });
+interface Tile {
+  icon: IconName;
+  title: string;
+  page?: Page;
+  action?: 'share';
+}
 
-const LINKS: Link[] = [
-  { icon: 'cards', title: 'Открытые игры', hint: 'Лобби комнат', tone: 'violet', tab: 'games' },
-  { icon: 'lock', title: 'Приватные игры', hint: 'По ссылке и паролю', tone: 'cyan', tab: 'games' },
-  { icon: 'trophy', title: 'Турниры', hint: 'Призовые фонды', tone: 'gold', tab: 'tournaments' },
-  { icon: 'users', title: 'Друзья', hint: 'Играйте вместе', tone: 'green', tab: 'friends' },
-  { icon: 'bag', title: 'Предметы', hint: 'Рубашки, столы, рамки', tone: 'rose', page: 'items' },
-  { icon: 'star', title: 'Достижения', tone: 'gold', page: 'achievements' },
-  { icon: 'news', title: 'Новости', hint: 'Что нового', tone: 'cyan', page: 'news' },
-  { icon: 'medal', title: 'Доска почёта', hint: 'Лучшие игроки', tone: 'gold', page: 'leaderboard' },
-  { icon: 'settings', title: 'Настройки', tone: 'violet', page: 'settings' },
-  { icon: 'book', title: 'Правила', hint: 'Как играть в дурака', tone: 'green', page: 'rules' },
+const TILES: Tile[] = [
+  { icon: 'trophy', title: 'Турниры', page: 'tournaments' },
+  { icon: 'news', title: 'Новости', page: 'news' },
+  { icon: 'users', title: 'Друзья', page: 'friends' },
+  { icon: 'bag', title: 'Предметы', page: 'items' },
+  { icon: 'crown', title: 'Доска почёта', page: 'leaderboard' },
+  { icon: 'star', title: 'Достижения', page: 'achievements' },
+  { icon: 'settings', title: 'Настройки', page: 'settings' },
+  { icon: 'share', title: 'Поделиться', action: 'share' },
+  { icon: 'book', title: 'Правила', page: 'rules' },
+  { icon: 'server', title: 'Серверы', page: 'servers' },
 ];
 
 export function HomeScreen() {
   const me = useMe();
-  const { refreshMe } = useSession();
+  const { push } = useNav();
   const toast = useToast();
-  const { setTab, push } = useNav();
-  const [claiming, setClaiming] = useState(false);
+  const { enterRoom, requestCount } = useRealtime();
   const [finding, setFinding] = useState(false);
-  const { enterRoom } = useRealtime();
+  const s = me.stats;
 
   const quickGame = () => {
     setFinding(true);
@@ -41,9 +44,70 @@ export function HomeScreen() {
       .catch((e: unknown) => toast(e instanceof ApiError ? e.message : 'Ошибка', 'error'))
       .finally(() => setFinding(false));
   };
-  const s = me.stats;
 
-  const claimDaily = () => {
+  const share = () => {
+    api<{ link: string }>('/app-link')
+      .then(({ link }) => {
+        const text = 'Го в дурака! Подкидной, переводной, турниры — прямо в Telegram 🃏';
+        const url = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
+        if (tg) tg.openTelegramLink(url);
+        else void navigator.clipboard?.writeText(link).then(() => toast('Ссылка скопирована', 'success'));
+      })
+      .catch((e: unknown) => toast(e instanceof ApiError ? e.message : 'Ошибка', 'error'));
+  };
+
+  const counter = (tile: Tile): string | number | null => {
+    if (tile.page === 'achievements') return `${s.achievementsUnlocked} / ${s.achievementsTotal}`;
+    if (tile.page === 'friends' && requestCount) return requestCount;
+    return null;
+  };
+
+  return (
+    <div className="home">
+      <HomeBar />
+
+      <button type="button" className="quick-play" onClick={quickGame} disabled={finding} aria-busy={finding}>
+        <span className="quick-play__icon">{finding ? <span className="ui-spinner" /> : <Icon name="play" size={30} />}</span>
+        <span className="quick-play__title">Быстрая игра</span>
+        <span className="quick-play__hint">Подберём стол по вашей ставке</span>
+      </button>
+
+      <div className="tile-grid">
+        {TILES.map((tile) => {
+          const count = counter(tile);
+          return (
+            <button key={tile.title} type="button" className="grid-tile" onClick={() => (tile.action === 'share' ? share() : tile.page && push(tile.page))}>
+              <span className="grid-tile__icon">
+                <Icon name={tile.icon} size={36} />
+                {count !== null && <span className={`grid-tile__count${typeof count === 'number' ? ' grid-tile__count--alert' : ''}`}>{count}</span>}
+              </span>
+              <span className="grid-tile__title">{tile.title}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Ivory bar: who I am on the left, what I have on the right. */
+function HomeBar() {
+  const me = useMe();
+  const { refreshMe } = useSession();
+  const { push } = useNav();
+  const toast = useToast();
+  const [claiming, setClaiming] = useState(false);
+
+  const topUpCredits = () => {
+    if (!me.dailyCredits.available) {
+      const at = me.dailyCredits.availableAt ? new Date(me.dailyCredits.availableAt) : null;
+      toast(
+        at
+          ? `Бесплатные кредиты снова будут ${at.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}`
+          : `Бесплатные ${DAILY_CREDITS.amount} кредитов дают, когда на счёте меньше ${DAILY_CREDITS.belowBalance}`,
+      );
+      return;
+    }
     setClaiming(true);
     api('/wallet/daily-credits', { method: 'POST' })
       .then(() => {
@@ -56,68 +120,36 @@ export function HomeScreen() {
   };
 
   return (
-    <div className="app-stack">
-      <Panel className="home-profile" onClick={() => push('profile')} role="button" tabIndex={0}>
-        <Avatar id={me.id} name={me.name} photoUrl={me.photoUrl} size={58} ring={me.equipped.frame ? ringOf(me.equipped.frame) : 'violet'} crown={Boolean(me.equipped.crown)} />
-        <div className="home-profile__main">
-          <div className="home-profile__name">
-            <strong>{me.name}</strong>
-            {me.premiumUntil && new Date(me.premiumUntil) > new Date() && <Badge tone="gold">Премиум</Badge>}
-          </div>
-          <RatingBadge rating={s.rating} streak={me.bonus.streak} />
-          <div className="home-profile__meta">
-            <span><Icon name="trophy" size={14} /> {s.gamesWon} побед</span>
-            <span>{s.winRate}%</span>
-            {me.bonus.availableAt === null && <span className="home-profile__bonus">×{me.bonus.multiplier} к рейтингу</span>}
-          </div>
-        </div>
-      </Panel>
-
-      <div className="home-wallet">
-        <Panel padded={false} className="home-wallet__main">
-          <span className="home-wallet__label">Кредиты</span>
+    <header className="home-bar">
+      <button type="button" className="home-bar__me" onClick={() => push('profile')} aria-label="Мой профиль">
+        <Avatar
+          id={me.id}
+          name={me.name}
+          photoUrl={me.photoUrl}
+          size={60}
+          ring={me.equipped.frame ? ringOf(me.equipped.frame) : undefined}
+          crown={Boolean(me.equipped.crown)}
+        />
+        <span className="home-bar__who">
+          <strong>{me.name}</strong>
+          <RatingBadge rating={me.stats.rating} streak={me.bonus.streak} />
+        </span>
+      </button>
+      <div className="home-bar__wallet">
+        <span className="home-bar__money">
           <Balance kind="credits" value={me.wallet.credits} />
-          {me.dailyCredits.available && (
-            <Button size="sm" variant="gold" loading={claiming} onClick={claimDaily}>
-              +{DAILY_CREDITS.amount} бесплатно
-            </Button>
-          )}
-        </Panel>
-        <Panel padded={false} className="home-wallet__side">
+          <button type="button" className={`plus${me.dailyCredits.available ? ' plus--glow' : ''}`} aria-label="Получить кредиты" onClick={topUpCredits} disabled={claiming}>
+            <Icon name="plus" size={16} />
+          </button>
+        </span>
+        <span className="home-bar__money">
           <Balance kind="coins" value={me.wallet.coins} compact />
           <Balance kind="diamonds" value={me.wallet.diamonds} compact />
-        </Panel>
+          <button type="button" className="plus" aria-label="Магазин предметов" onClick={() => push('items')}>
+            <Icon name="plus" size={16} />
+          </button>
+        </span>
       </div>
-
-      <section className="home-hero" aria-label="Быстрая игра">
-        <div className="home-hero__felt" />
-        <div className="home-hero__cards" aria-hidden="true">
-          <PlayingCard card="AS" width={54} />
-          <PlayingCard card="KH" width={54} />
-          <PlayingCard card="QD" width={54} trump />
-          <PlayingCard faceDown width={54} />
-        </div>
-        <div className="home-hero__text">
-          <span className="home-hero__kicker">Дурак онлайн</span>
-          <h2>Быстрая игра</h2>
-          <p>Подберём стол по вашей ставке</p>
-        </div>
-        <Button size="lg" variant="gold" icon="play" block loading={finding} onClick={quickGame}>
-          Играть
-        </Button>
-      </section>
-
-      <div className="home-grid">
-        {LINKS.map((link) => (
-          <Tile
-            key={link.title}
-            {...link}
-            // The count goes under the title: a badge beside it squeezes «Достижения» into two lines on phones.
-            hint={'page' in link && link.page === 'achievements' ? `Открыто ${s.achievementsUnlocked} из ${s.achievementsTotal}` : link.hint}
-            onClick={() => ('tab' in link ? setTab(link.tab) : push(link.page))}
-          />
-        ))}
-      </div>
-    </div>
+    </header>
   );
 }

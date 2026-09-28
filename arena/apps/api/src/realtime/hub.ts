@@ -14,9 +14,13 @@ export interface Client {
   refilledAt: number;
 }
 
-/** Visible in the lobby: waiting for players and not full. */
-export function isListed(room: RoomDto): boolean {
-  return room.status === 'waiting' && !room.isPrivate && room.seats.length < room.settings.players;
+/**
+ * Visible in the lobby: waiting for players and not full. Private tables are listed on their
+ * own tab (joining still needs the password); tournament matches are never listed.
+ */
+export function isListed(room: RoomDto, scope: RoomFilter['scope'] = 'open'): boolean {
+  if (room.status !== 'waiting' || room.tournament || room.seats.length >= room.settings.players) return false;
+  return room.isPrivate === (scope === 'private');
 }
 
 /**
@@ -61,7 +65,7 @@ export class Hub {
   subscribeLobby(client: Client, filter: RoomFilter | undefined, rooms: RoomDto[]): void {
     client.lobby = filter ?? EMPTY_FILTER;
     const lobbyFilter = client.lobby;
-    this.sendTo(client, { type: 'LOBBY_SNAPSHOT', rooms: rooms.filter((r) => isListed(r) && matchesFilter(r, lobbyFilter)) });
+    this.sendTo(client, { type: 'LOBBY_SNAPSHOT', rooms: rooms.filter((r) => isListed(r, lobbyFilter.scope) && matchesFilter(r, lobbyFilter)) });
   }
 
   unsubscribeLobby(client: Client): void {
@@ -70,10 +74,9 @@ export class Hub {
 
   /** A room changed: lobby watchers whose filter matches get it, others learn it is gone. */
   publishRoom(room: RoomDto, created = false): void {
-    const listed = isListed(room);
     for (const client of this.clients.values()) {
       if (!client.lobby) continue;
-      if (listed && matchesFilter(room, client.lobby)) {
+      if (isListed(room, client.lobby.scope) && matchesFilter(room, client.lobby)) {
         this.sendTo(client, created ? { type: 'ROOM_CREATED', room } : { type: 'ROOM_UPDATED', room });
       } else {
         this.sendTo(client, { type: 'ROOM_REMOVED', roomId: room.id });
