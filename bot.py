@@ -248,6 +248,15 @@ async def main():
 
     await init_db()
 
+    # Главные админы, назначенные в панели, — с теми же правами, что OWNER_IDS
+    try:
+        from settings import owners
+        count = await owners.load()
+        if count:
+            logger.info("Главных админов: %s", count)
+    except Exception as error:
+        logger.warning("OWNERS: %s %s", type(error).__name__, error)
+
     me = await bot.get_me()
     set_identity(me.id, me.username or "")
     set_bot_username(me.username or "")

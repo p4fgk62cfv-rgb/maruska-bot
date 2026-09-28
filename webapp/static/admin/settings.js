@@ -122,6 +122,7 @@
     ["arena", "game", "Арена", "Дурак онлайн: игроки, деньги, турниры", true, "gold"],
     ["broadcasts", "megaphone", "Рассылки", "Фото, видео, кнопки, расписание", false, "blue"],
     ["journal", "journal", "Журнал", "Кто что сделал", false, "purple"],
+    ["owners", "crown", "Главные админы", "Права как у создателя", "creator", "gold"],
     ["roles", "crown", "Роли", "Права администраторов", false, "gold"],
     ["groups", "group", "Группы", "Где работает Мара", false, "green"],
     ["achievements", "trophy", "Достижения", "Кто что открыл", false, "gold"],
@@ -132,9 +133,10 @@
 
   M.screen("more", function () {
     var owner = M.state.session.user.owner;
+    var creator = M.state.session.user.creator;
 
     M.app.innerHTML = M.header("Ещё", "Все разделы панели", "menu", "blue")
-      + '<div class="menu-grid">' + MORE.filter(function (r) { return owner || !r[4]; }).map(function (r) {
+      + '<div class="menu-grid">' + MORE.filter(function (r) { return r[4] === "creator" ? creator : owner || !r[4]; }).map(function (r) {
           var fresh = r[0] === "changelog" && M.hasUpdate();
           return '<div class="menu-tile" data-open="' + r[0] + '">' + M.tile(r[1], r[5], 20)
             + '<div class="t">' + r[2] + (fresh ? ' <span class="tag new">новое</span>' : "") + "</div>"

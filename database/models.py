@@ -850,6 +850,23 @@ class AdminRole(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class BotOwner(Base):
+    """
+    Главный админ бота: права как у создателя (OWNER_IDS) во всех группах
+    и во всех разделах панели. Назначает и снимает только создатель.
+    """
+
+    __tablename__ = "bot_owners"
+
+    telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    added_by: Mapped[int] = mapped_column(BigInteger)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class ActionToggle(Base):
     """Отключённые в группе действия."""
 
