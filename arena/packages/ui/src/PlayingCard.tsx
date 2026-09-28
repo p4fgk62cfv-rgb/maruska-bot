@@ -13,7 +13,11 @@ export interface PlayingCardProps {
   onClick?: () => void;
 }
 
-/** Pure CSS/SVG card: no image downloads, crisp on every screen density. */
+/** Illustrated faces exist for the 36-card deck (6…A); 2–5 of the 52-card deck stay CSS-drawn. */
+const ILLUSTRATED = new Set(['6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']);
+const FACE_URL = '/cards/';
+
+/** Card face from the illustrated set when there is one, otherwise a CSS card. */
 export const PlayingCard = memo(function PlayingCard({ card, faceDown, selected, playable, trump, width = 64, back = 'classic', onClick }: PlayingCardProps) {
   const style = { width, height: width * 1.42, fontSize: width * 0.28 };
   if (faceDown || !card) {
@@ -22,8 +26,10 @@ export const PlayingCard = memo(function PlayingCard({ card, faceDown, selected,
   const suit = suitOf(card);
   const rank = RANK_LABEL_RU[rankOf(card)];
   const red = suit === 'H' || suit === 'D';
+  const art = ILLUSTRATED.has(rankOf(card));
   const classes = [
     'ui-card',
+    art && 'ui-card--art',
     red ? 'ui-card--red' : 'ui-card--black',
     selected && 'ui-card--selected',
     playable && 'ui-card--playable',
@@ -31,7 +37,9 @@ export const PlayingCard = memo(function PlayingCard({ card, faceDown, selected,
   ]
     .filter(Boolean)
     .join(' ');
-  const content = (
+  const content = art ? (
+    <img className="ui-card__art" src={`${FACE_URL}${card}.webp`} alt="" draggable={false} decoding="async" />
+  ) : (
     <>
       <span className="ui-card__corner">
         <span>{rank}</span>

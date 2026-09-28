@@ -12,15 +12,23 @@ export interface TableProps {
   transferSlot: { active: boolean; onDrop: () => void } | null;
   /** The viewer's card back design. */
   back: string;
+  /** Where a dragged card would land right now: a pair, the transfer slot or the open felt. */
+  hover: string | null;
+  /** A card is being dragged — drop zones light up. */
+  dragging: boolean;
 }
 
 const DISCARD_TILT = [-18, 12, -6, 24, -26, 4];
 
 /** Felt with the stock + trump on the left, the discard on the right and up to six pairs in the middle. */
-export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot, back }: TableProps) {
+export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot, back, hover, dragging }: TableProps) {
   const trumpCard = view.trump.card;
   return (
-    <div className="felt" style={{ ['--card-w' as string]: `${cardWidth}px` }}>
+    <div
+      className={`felt${dragging ? ' felt--dragging' : ''}${hover === 'table' ? ' felt--hover' : ''}`}
+      data-drop="table"
+      style={{ ['--card-w' as string]: `${cardWidth}px` }}
+    >
       <div className="felt__deck" data-anchor="deck" aria-label={`В колоде ${view.deckCount}`}>
         {trumpCard ? (
           <>
@@ -43,7 +51,8 @@ export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot
         {view.table.map((pair, index) => (
           <div
             key={pair.attackSeq}
-            className={`pair${targets.includes(index) ? ' pair--target' : ''}${pair.defense ? ' pair--beaten' : ''}`}
+            className={`pair${targets.includes(index) ? ' pair--target' : ''}${pair.defense ? ' pair--beaten' : ''}${hover === `pair:${index}` ? ' pair--hover' : ''}`}
+            data-drop={`pair:${index}`}
             onClick={() => onPair(index)}
           >
             <span className="pair__attack" data-card={pair.attack} data-zone="table">
@@ -67,7 +76,12 @@ export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot
           </div>
         ))}
         {transferSlot && (
-          <button type="button" className={`transfer-slot${transferSlot.active ? ' transfer-slot--active' : ''}`} onClick={transferSlot.onDrop}>
+          <button
+            type="button"
+            className={`transfer-slot${transferSlot.active ? ' transfer-slot--active' : ''}${hover === 'transfer' ? ' transfer-slot--hover' : ''}`}
+            data-drop="transfer"
+            onClick={transferSlot.onDrop}
+          >
             <span>⇄</span>
             <span>Перевести</span>
           </button>

@@ -33,6 +33,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
   const layerRef = useRef<HTMLDivElement>(null);
   const director = useRef(new MotionDirector()).current;
   const [busy, setBusy] = useState(false);
+  const [drag, setDrag] = useState<{ card: CardId; hover: string | null } | null>(null);
   const [emojis, setEmojis] = useState<Record<string, string>>({});
   const gameId = view.gameId;
 
@@ -118,7 +119,8 @@ export function GameScreen({ game }: { game: LiveGame }) {
     return new Set<CardId>([...a.attack, ...(Object.keys(a.defend) as CardId[]), ...a.transfer]);
   }, [game.features.hints, a]);
 
-  const targets = selected.length === 1 && game.features.hints ? (a.defend[selected[0]!] ?? []) : [];
+  const hinted = drag?.card ?? (selected.length === 1 ? selected[0]! : null);
+  const targets = hinted && game.features.hints ? (a.defend[hinted] ?? []) : [];
 
   const tapCard = (card: CardId) => {
     haptic.select();
@@ -144,6 +146,45 @@ export function GameScreen({ game }: { game: LiveGame }) {
   const tapPair = (index: number) => {
     const card = selected[0];
     if (card && isDefender && selected.length === 1 && undefended.includes(index)) void defend(card, index);
+  };
+
+  /** The drop zone under the finger; the dragged card itself (inside the hand) is ignored. */
+  const dropAt = (x: number, y: number): string | null => {
+    for (const el of document.elementsFromPoint(x, y)) {
+      if (el.closest('.hand')) continue;
+      const zone = el.closest<HTMLElement>('[data-drop]');
+      if (zone) return zone.dataset.drop ?? null;
+    }
+    return null;
+  };
+
+  const dragMove = (card: CardId | null, x: number, y: number) => {
+    if (!card) return setDrag(null);
+    const hover = dropAt(x, y);
+    setDrag((d) => (d && d.card === card && d.hover === hover ? d : { card, hover }));
+  };
+
+  /** Drag-and-drop move: onto the felt to lead or throw in, onto a card to beat it, onto «Перевести» to pass the attack. */
+  const dropCard = async (card: CardId, x: number, y: number): Promise<boolean> => {
+    unlockAudio();
+    const zone = dropAt(x, y);
+    if (!zone || busy) return false;
+    const sameRankAsLead = view.table.length > 0 && rankOf(card) === rankOf(view.table[0]!.attack);
+
+    if (zone === 'transfer') return a.canTransfer && sameRankAsLead ? send({ type: 'TRANSFER', gameId, card }) : false;
+
+    if (isDefender) {
+      const index = zone.startsWith('pair:') ? Number(zone.slice(5)) : undefended.length === 1 ? undefended[0]! : -1;
+      if (index >= 0 && undefended.includes(index)) return defend(card, index);
+      if (a.canTransfer && sameRankAsLead) return send({ type: 'TRANSFER', gameId, card });
+      if (undefended.length > 1) toast('Перетащите на карту, которую бьёте');
+      return false;
+    }
+
+    if (!a.canAttack) return false;
+    // Leading with several of one rank: the whole selection goes if the dragged card is part of it.
+    const cards = selected.includes(card) && selected.length > 1 && sameRank(selected) ? selected : [card];
+    return attack(cards);
   };
 
   const canTransferSelected =
@@ -229,6 +270,8 @@ export function GameScreen({ game }: { game: LiveGame }) {
         onPair={tapPair}
         back={back}
         onReport={view.rules.fairness === 'cheaters' && a.canReport ? (seq) => setSheet({ report: seq }) : null}
+        hover={drag?.hover ?? null}
+        dragging={drag !== null}
         transferSlot={
           a.canTransfer
             ? {
@@ -239,7 +282,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
         }
       />
       {myTurn && <div className="game__yourturn" key={`turn-${view.version}-${view.phase}`}>Ваш ход</div>}
-      {isDefender && selected.length === 1 && undefended.length > 1 && <p className="game__tip">Нажмите на карту на столе, которую хотите побить</p>}
+      {isDefender && selected.length === 1 && undefended.length > 1 && !drag && <p className="game__tip">Перетащите карту на ту, которую бьёте, или нажмите на неё</p>}
 
       <Hand
         cards={hand}
@@ -250,6 +293,8 @@ export function GameScreen({ game }: { game: LiveGame }) {
         onTap={tapCard}
         onDoubleTap={doubleTap}
         onSwipeRight={() => settings.set({ handSort: sort === 'suit' ? 'rank' : 'suit' })}
+        onDragMove={dragMove}
+        onDrop={dropCard}
       />
 
       <TableDock
@@ -292,7 +337,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
         <div className="app-list">
           <Button block variant="ghost" icon="heart" onClick={() => setSheet('emoji')}>Смайлик</Button>
           <p className="app-muted">
-            Двойной тап по карте — сразу сыграть. Свайп вправо по руке — сменить сортировку. Внизу справа — подсказки за монеты: вернуть карту ({FEATURE_PRICES.undo}), подсветка ({FEATURE_PRICES.hints}), отбой ({FEATURE_PRICES.discardReminder}).
+            Перетащите карту пальцем: на стол — сходить или подкинуть, на карту соперника — побить её, на «Перевести» — перевести. Двойной тап по карте — сразу сыграть. Свайп вправо по руке — сменить сортировку. Внизу справа — подсказки за монеты: вернуть карту ({FEATURE_PRICES.undo}), подсветка ({FEATURE_PRICES.hints}), отбой ({FEATURE_PRICES.discardReminder}).
           </p>
           {mine?.status === 'active' && (
             <Button block variant="danger" icon="flag" onClick={() => setSheet('surrender')}>Сдаться</Button>

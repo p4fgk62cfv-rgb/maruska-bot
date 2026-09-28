@@ -480,3 +480,14 @@ select.app-input { appearance: none; }
 .tour-match__side--win { color: var(--gold); font-weight: 800; }
 .tour-match__side--out { opacity: 0.5; }
 .tour-match__state { font-size: 11px; color: var(--text-3); }
+
+/* Drag-and-drop: the card in the finger floats above the table, drop zones answer to it */
+.hand__slot { touch-action: none; }
+.hand__slot--drag { z-index: 60 !important; transition: none !important; filter: drop-shadow(0 18px 22px rgba(0, 0, 0, 0.55)); }
+.hand__slot--drag .ui-card { transform: none; }
+.hand__slot--return { transition: transform 0.24s var(--ease, cubic-bezier(0.2, 0.8, 0.2, 1)); }
+.felt--dragging .felt__pairs { outline: 2px dashed rgba(255, 255, 255, 0.18); outline-offset: 10px; border-radius: 18px; transition: outline-color 0.15s; }
+.felt--hover .felt__pairs { outline-color: rgba(245, 196, 81, 0.75); background: rgba(245, 196, 81, 0.06); }
+.pair--hover .pair__attack .ui-card { box-shadow: 0 0 0 3px #7ee8c3, 0 0 22px rgba(126, 232, 195, 0.8); transform: scale(1.05); }
+.transfer-slot--hover { border-style: solid; background: rgba(245, 196, 81, 0.28); transform: scale(1.06); }
+.felt--dragging .felt__pairs { min-width: calc(var(--card-w) * 1.6); min-height: calc(var(--card-w) * 1.7); }

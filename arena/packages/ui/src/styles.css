@@ -318,3 +318,7 @@ h1, h2, h3, p { margin: 0; }
 }
 .ui-avatar--ring-silver { box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 4px #d8dee9, 0 0 16px rgba(216, 222, 233, 0.55); }
 .ui-avatar__crown { position: absolute; left: 50%; top: -0.55em; translate: -50% 0; font-size: 0.7em; color: #fb3f6c; text-shadow: 0 0 8px rgba(251, 63, 108, 0.8), 0 1px 0 #7f1d1d; line-height: 1; }
+
+/* Illustrated faces: the picture is the whole card, the frame keeps shadows and highlights */
+.ui-card--art { background: #f7efdc; }
+.ui-card__art { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: inherit; object-fit: fill; pointer-events: none; -webkit-user-drag: none; user-select: none; }
