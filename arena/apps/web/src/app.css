@@ -123,7 +123,7 @@
 .board-row__value { font-weight: 800; font-variant-numeric: tabular-nums; }
 .league-card { display: flex; flex-direction: column; gap: 10px; }
 .league-card__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.board-row__body .ui-rank { align-self: flex-start; }
+.board-row__body .ui-rank, .friend-row__body .ui-rank { align-self: flex-start; }
 
 .app-screen--full { padding-bottom: calc(var(--safe-bottom) + 20px); }
 .app-input {
@@ -230,7 +230,9 @@ select.app-input { appearance: none; }
 .result__mine .ui-balance { color: inherit; }
 .result__rating { font-size: 14px; color: var(--violet-hi); }
 .result__list { width: 100%; display: flex; flex-direction: column; gap: 6px; }
-.result__row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; font-size: 14px; }
+.result__row { display: grid; grid-template-columns: auto 1fr auto 28px; align-items: center; gap: 10px; font-size: 14px; }
+.result__add { width: 28px; height: 28px; border-radius: 50%; background: rgba(139, 92, 246, 0.25); color: var(--violet-hi); font-weight: 900; font-size: 18px; line-height: 28px; }
+.result__added { color: var(--green); font-weight: 900; text-align: center; }
 
 .motion-layer { position: fixed; inset: 0; z-index: 30; pointer-events: none; }
 

@@ -23,6 +23,9 @@ export type AppErrorCode =
   | 'BANNED'
   | 'DAILY_CREDITS_NOT_READY'
   | 'DAILY_CREDITS_BALANCE_TOO_HIGH'
+  | 'FRIEND_LIMIT'
+  | 'NOT_FRIENDS'
+  | 'NOT_IN_ROOM'
   | 'SERVER_ERROR'
   | EngineErrorCode;
 
@@ -55,6 +58,9 @@ export const ERROR_TEXT_RU: Record<AppErrorCode, string> = {
   DAILY_CREDITS_NOT_READY: 'Бесплатные кредиты можно получать раз в сутки.',
   DAILY_CREDITS_BALANCE_TOO_HIGH: 'Бесплатные кредиты выдаются, только если на счету меньше 1450.',
   NOT_ILLEGAL: 'Эта карта сыграна честно.',
+  FRIEND_LIMIT: 'Слишком много друзей и заявок.',
+  NOT_FRIENDS: 'Приглашать можно только друзей.',
+  NOT_IN_ROOM: 'Сначала создайте игру или войдите в комнату.',
   CANNOT_UNDO: 'Вернуть карту уже нельзя.',
   GAME_FINISHED: 'Игра уже закончилась.',
   NOT_A_PLAYER: 'Вы не участвуете в этой игре.',

@@ -1,7 +1,9 @@
 import { formatStake, SPEED_LABEL_RU, type RoomDto } from '@arena/shared';
-import { Avatar, Badge, Button, Panel, RatingBadge } from '@arena/ui';
+import type { FriendDto } from '@arena/shared';
+import { Avatar, Badge, BottomSheet, Button, EmptyState, Panel, RatingBadge } from '@arena/ui';
+import { useQuery } from '../lib/useQuery.js';
 import { useState } from 'react';
-import { ApiError } from '../lib/api.js';
+import { ApiError, api } from '../lib/api.js';
 import { useCountdown } from '../lib/hooks.js';
 import { haptic, tg } from '../lib/telegram.js';
 import { useRealtime } from '../realtime.js';
@@ -15,6 +17,7 @@ export function RoomScreen({ room }: { room: RoomDto }) {
   const { socket, invite, leaveRoom, status } = useRealtime();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [friendsOpen, setFriendsOpen] = useState(false);
   const mySeat = room.seats.find((s) => s.userId === me.id);
   const full = room.seats.length === room.settings.players;
   const left = useCountdown(room.readyDeadline, () => socket.now());
@@ -82,10 +85,44 @@ export function RoomScreen({ room }: { room: RoomDto }) {
         </Button>
       )}
       <div className="app-row">
-        <Button variant="ghost" icon="share" onClick={share}>Пригласить</Button>
+        <Button variant="ghost" icon="users" onClick={() => setFriendsOpen(true)}>Позвать друга</Button>
+        <Button variant="ghost" icon="share" onClick={share}>Ссылка</Button>
         <Button variant="danger" onClick={() => void leave()}>Выйти</Button>
       </div>
       <p className="app-muted">Код комнаты: <strong>{room.id}</strong></p>
+      <BottomSheet open={friendsOpen} title="Позвать друга" onClose={() => setFriendsOpen(false)}>
+        {friendsOpen && <FriendPicker seated={room.seats.map((s) => s.userId)} />}
+      </BottomSheet>
+    </div>
+  );
+}
+
+function FriendPicker({ seated }: { seated: string[] }) {
+  const query = useQuery<FriendDto[]>('/friends');
+  const toast = useToast();
+  const [sent, setSent] = useState<string[]>([]);
+  const invite = (f: FriendDto) =>
+    api(`/friends/${f.id}/invite`, { method: 'POST' })
+      .then(() => setSent((s) => [...s, f.id]))
+      .catch((e: unknown) => toast(e instanceof ApiError ? e.message : 'Ошибка', 'error'));
+  const list = (query.data ?? []).filter((f) => !seated.includes(f.id));
+  if (query.data && list.length === 0) {
+    return <EmptyState icon="users" title="Некого позвать" text="Добавляйте соперников в друзья — и зовите их одной кнопкой." />;
+  }
+  return (
+    <div className="app-list">
+      {list.map((f) => (
+        <div key={f.id} className="friend-row">
+          <Avatar id={f.id} name={f.name} photoUrl={f.photoUrl} status={f.presence} />
+          <div className="friend-row__body">
+            <strong>{f.name}</strong>
+            <span className="app-muted">{f.presence === 'offline' ? 'придёт сообщение от бота' : f.presence === 'in_game' ? 'сейчас в игре' : 'в сети'}</span>
+          </div>
+          <Button size="sm" disabled={sent.includes(f.id)} onClick={() => void invite(f)}>
+            {sent.includes(f.id) ? 'Позвали' : 'Позвать'}
+          </Button>
+        </div>
+      ))}
     </div>
   );
 }

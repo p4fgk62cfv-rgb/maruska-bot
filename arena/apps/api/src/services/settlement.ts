@@ -5,6 +5,7 @@ import { isPremium, ratingGain, settleBonus, type PremiumFactor } from '@arena/s
 import type { Db } from '../db.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { AppError } from '../lib/errors.js';
+import { progressAchievements } from './achievements.js';
 import type { Ledger } from './ledger.js';
 
 type Tx = Prisma.TransactionClient;
@@ -232,7 +233,6 @@ export class SettlementService {
     };
   }
 
-  /** Progress counters and one-time coin rewards. Unlocking is idempotent per (user, achievement). */
   private async progressAchievements(
     tx: Tx,
     userId: string,
@@ -251,34 +251,7 @@ export class SettlementService {
     };
     if (game.players === 6) absolute.full_table = 1;
     if (game.stake >= 1_000_000) absolute.high_roller = 1;
-    const additive: Record<string, number> = game.transfers ? { transfer_master: game.transfers } : {};
-
-    const keys = [...Object.keys(absolute), ...Object.keys(additive)];
-    const achievements = await tx.achievement.findMany({
-      where: { key: { in: keys } },
-      include: { users: { where: { userId } } },
-    });
-    for (const a of achievements) {
-      const current = a.users[0];
-      if (current?.unlockedAt) continue;
-      const progress = a.key in additive ? (current?.progress ?? 0) + additive[a.key]! : Math.max(current?.progress ?? 0, absolute[a.key] ?? 0);
-      const unlocked = progress >= a.goal;
-      await tx.userAchievement.upsert({
-        where: { userId_achievementId: { userId, achievementId: a.id } },
-        create: { userId, achievementId: a.id, progress: Math.min(progress, a.goal), unlockedAt: unlocked ? new Date() : null },
-        update: { progress: Math.min(progress, a.goal), unlockedAt: unlocked ? new Date() : null },
-      });
-      if (unlocked && a.reward > 0n) {
-        await this.ledger.postIn(tx, {
-          userId,
-          currency: a.currency,
-          amount: a.reward,
-          type: 'ACHIEVEMENT_REWARD',
-          source: `game:${gameId}`,
-          idempotencyKey: `ach:${userId}:${a.key}`,
-        });
-      }
-    }
+    await progressAchievements(tx, this.ledger, userId, `game:${gameId}`, absolute, game.transfers ? { transfer_master: game.transfers } : {});
   }
 }
 

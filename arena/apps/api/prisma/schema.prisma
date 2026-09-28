@@ -476,6 +476,9 @@ model Notification {
   createdAt DateTime  @default(now()) @map("created_at")
   sentAt    DateTime? @map("sent_at")
   readAt    DateTime? @map("read_at")
+  attempts  Int       @default(0)
+  /// Last delivery failure; "blocked" means the user never started the bot or blocked it — no more retries.
+  lastError String?   @map("last_error") @db.VarChar(255)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

@@ -29,6 +29,8 @@ const schema = z.object({
   WEB_DIST: z.string().default('../web/dist'),
   /** Local development only: lets /auth/dev log in without Telegram. Refused in production. */
   DEV_AUTH: bool,
+  /** Bot API base URL; tests point it at a fake. Empty disables bot messages. */
+  TELEGRAM_API_URL: z.string().default('https://api.telegram.org'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });
 

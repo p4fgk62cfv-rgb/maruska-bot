@@ -78,7 +78,8 @@ function PageScreen({ page }: { page: Page }) {
 
 function Shell() {
   const { tab, stack, setTab } = useNav();
-  const { room, game, result } = useRealtime();
+  const { room, game, result, requestCount } = useRealtime();
+  const items = TABS.map((t) => (t.key === 'friends' ? { ...t, badge: requestCount } : t));
   const page = stack[stack.length - 1];
   const passwordPrompt = useDeepLink();
 
@@ -94,16 +95,18 @@ function Shell() {
     return (
       <main className="app-screen app-screen--full">
         <RoomScreen room={room} />
+        <InviteSheet />
       </main>
     );
   }
   return (
     <>
       {passwordPrompt}
+      <InviteSheet />
       <main className="app-screen" key={page ?? tab}>
         <Suspense fallback={<ScreenFallback />}>{page ? <PageScreen page={page} /> : <TabScreen tab={tab} />}</Suspense>
       </main>
-      <NavigationBar items={TABS} active={tab} onSelect={setTab} />
+      <NavigationBar items={items} active={tab} onSelect={setTab} />
     </>
   );
 }
@@ -117,7 +120,13 @@ function useDeepLink() {
   const [needPassword, setNeedPassword] = useState<string | null>(null);
   const startParam = state.status === 'ready' ? state.startParam : null;
 
+  const { setTab } = useNav();
   useEffect(() => {
+    if (startParam === 'friends' && !handled.current) {
+      handled.current = true;
+      setTab('friends');
+      return;
+    }
     const link = parseRoomStartParam(startParam);
     if (!link || handled.current) return;
     handled.current = true;
@@ -127,9 +136,44 @@ function useDeepLink() {
         if (e instanceof ApiError && e.code === 'WRONG_PASSWORD') setNeedPassword(link.roomId);
         else toast(e instanceof ApiError ? e.message : 'Ошибка', 'error');
       });
-  }, [startParam, enterRoom, toast]);
+  }, [startParam, enterRoom, toast, setTab]);
 
   return needPassword ? <PasswordPrompt roomId={needPassword} onDone={() => setNeedPassword(null)} /> : null;
+}
+
+/** «Друг зовёт вас в игру» — shown over any screen while not already at a table. */
+function InviteSheet() {
+  const { invites, dismissInvite, enterRoom, room } = useRealtime();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const current = invites[0];
+  if (!current || (room && room.id === current.room.id)) return null;
+  const accept = () => {
+    setBusy(true);
+    api<MyRoomDto>(`/rooms/${current.room.id}/join`, { method: 'POST', body: { invite: current.invite } })
+      .then(enterRoom)
+      .catch((e: unknown) => toast(e instanceof ApiError ? e.message : 'Ошибка', 'error'))
+      .finally(() => {
+        setBusy(false);
+        dismissInvite(current.room.id);
+      });
+  };
+  return (
+    <BottomSheet open title="Приглашение в игру" onClose={() => dismissInvite(current.room.id)}>
+      <div className="app-stack">
+        <p>
+          <strong>{current.from.name}</strong> зовёт вас за стол: ставка {current.room.settings.stake}, игроков{' '}
+          {current.room.seats.length}/{current.room.settings.players}.
+        </p>
+        <Button block variant="gold" loading={busy} onClick={accept}>
+          Играть
+        </Button>
+        <Button block variant="ghost" onClick={() => dismissInvite(current.room.id)}>
+          Не сейчас
+        </Button>
+      </div>
+    </BottomSheet>
+  );
 }
 
 function PasswordPrompt({ roomId, onDone }: { roomId: string; onDone: () => void }) {

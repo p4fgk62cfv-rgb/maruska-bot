@@ -8,3 +8,4 @@ export * from './Overlay.js';
 export * from './PlayingCard.js';
 export * from './Surfaces.js';
 export * from './RatingBadge.js';
+export * from './SwipeRow.js';

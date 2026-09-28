@@ -1,4 +1,4 @@
-import type { AchievementDto, FriendDto, ItemDto, ServerDto, TournamentDto, TransactionDto } from '@arena/shared';
+import type { AchievementDto, ItemDto, ServerDto, TournamentDto, TransactionDto } from '@arena/shared';
 import { GAME_SERVERS } from '@arena/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -6,7 +6,6 @@ import { requireSession, sessionOf } from '../auth/plugin.js';
 import type { Context } from '../context.js';
 import { AppError } from '../lib/errors.js';
 import { toNumber } from '../lib/money.js';
-import { publicUser } from '../services/users.js';
 
 const pageSchema = z.object({ limit: z.coerce.number().int().min(1).max(100).default(30) });
 
@@ -91,18 +90,6 @@ export async function profileRoutes(app: FastifyInstance, ctx: Context): Promise
       owned: i.price === 0n || i.owners.length > 0,
       equipped: i.owners[0]?.equipped ?? false,
     }));
-  });
-
-  app.get('/friends', auth, async (request): Promise<FriendDto[]> => {
-    const rows = await db.friend.findMany({
-      where: { userId: sessionOf(request).sub },
-      include: { friend: { include: { profile: true } } },
-      take: 200,
-    });
-    const presence = await ctx.presence.lookup(rows.map((r) => r.friendId));
-    return rows
-      .filter((r) => r.friend.profile)
-      .map((r) => ({ ...publicUser(r.friend, r.friend.profile!), presence: presence[r.friendId] ?? 'offline' }));
   });
 
   app.get('/tournaments', auth, async (request): Promise<TournamentDto[]> => {

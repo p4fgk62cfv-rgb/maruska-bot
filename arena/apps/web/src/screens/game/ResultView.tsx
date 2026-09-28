@@ -1,5 +1,7 @@
 import type { GameResultDto, PlayerInfo } from '@arena/shared';
 import { Avatar, Balance, Button } from '@arena/ui';
+import { useState } from 'react';
+import { api } from '../../lib/api.js';
 import { useEffect } from 'react';
 import { haptic } from '../../lib/telegram.js';
 import { play } from '../../lib/sound.js';
@@ -25,6 +27,28 @@ const CONFETTI = Array.from({ length: 36 }, (_, i) => ({
   delay: (i * 53) % 700,
   duration: 1600 + ((i * 97) % 900),
 }));
+
+function AddFriend({ userId }: { userId: string }) {
+  const [state, setState] = useState<'idle' | 'busy' | 'done'>('idle');
+  if (state === 'done') return <span className="result__added">✓</span>;
+  return (
+    <button
+      type="button"
+      className="result__add"
+      aria-label="Добавить в друзья"
+      disabled={state === 'busy'}
+      onClick={() => {
+        setState('busy');
+        api('/friends/requests', { method: 'POST', body: { userId } }).then(
+          () => setState('done'),
+          () => setState('idle'),
+        );
+      }}
+    >
+      +
+    </button>
+  );
+}
 
 export function ResultView({ result, players, onClose }: { result: GameResultDto; players: PlayerInfo[]; onClose: () => void }) {
   const me = useMe();
@@ -79,6 +103,7 @@ export function ResultView({ result, players, onClose }: { result: GameResultDto
                 <Avatar id={p.userId} name={info?.name ?? '?'} photoUrl={info?.photoUrl} size={30} />
                 <span>{p.userId === me.id ? 'Вы' : info?.name}</span>
                 <span className={p.net >= 0 ? 'tx-plus' : 'tx-minus'}>{p.net >= 0 ? `+${p.net}` : `−${Math.abs(p.net)}`}</span>
+                {p.userId !== me.id ? <AddFriend userId={p.userId} /> : <span />}
               </div>
             );
           })}

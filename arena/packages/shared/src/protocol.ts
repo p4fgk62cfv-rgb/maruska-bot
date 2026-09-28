@@ -2,6 +2,7 @@ import type { z } from 'zod';
 import type { GameEvent, PlayerView } from '@arena/game-engine';
 import type { clientMessageSchema } from './schemas.js';
 import type { AppErrorCode } from './errors.js';
+import type { PublicUserDto } from './api.js';
 import type { RoomDto } from './lobby.js';
 
 /**
@@ -41,7 +42,11 @@ export type ServerMessage =
   | { type: 'EMOJI'; gameId: string; userId: string; emoji: string }
   | { type: 'PLAYER_CONNECTED'; roomId: string; userId: string }
   | { type: 'PLAYER_DISCONNECTED'; roomId: string; userId: string; graceUntil: number }
-  | { type: 'PLAYER_RECONNECTED'; roomId: string; userId: string };
+  | { type: 'PLAYER_RECONNECTED'; roomId: string; userId: string }
+  | { type: 'FRIEND_REQUEST'; from: PublicUserDto }
+  | { type: 'FRIEND_ACCEPTED'; friend: PublicUserDto }
+  /** A friend calls you to their table; `invite` lets you in without the password. */
+  | { type: 'ROOM_INVITE'; from: PublicUserDto; room: RoomDto; invite: string };
 
 export interface GameResultDto {
   kind: 'loser' | 'draw';

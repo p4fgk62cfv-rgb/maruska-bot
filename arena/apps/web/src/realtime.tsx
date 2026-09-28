@@ -1,5 +1,5 @@
 import type { GameEvent, PlayerView } from '@arena/game-engine';
-import type { GameResultDto, MyRoomDto, PlayerInfo, RoomDto, ServerMessage } from '@arena/shared';
+import type { FriendRequestsDto, GameResultDto, MyRoomDto, PlayerInfo, PublicUserDto, RoomDto, ServerMessage } from '@arena/shared';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, getToken } from './lib/api.js';
 import { GameSocket, type SocketStatus } from './lib/socket.js';
@@ -13,6 +13,12 @@ export interface LiveGame {
   features: { hints: boolean; discardReminder: boolean; canUndo: boolean };
 }
 
+export interface RoomInvite {
+  from: PublicUserDto;
+  room: RoomDto;
+  invite: string;
+}
+
 interface RealtimeValue {
   socket: GameSocket;
   status: SocketStatus;
@@ -24,6 +30,11 @@ interface RealtimeValue {
   enterRoom: (mine: MyRoomDto) => void;
   leaveRoom: () => Promise<void>;
   dismissGame: () => void;
+  /** Incoming friend requests waiting for an answer — the badge on «Друзья». */
+  requestCount: number;
+  refreshRequests: () => void;
+  invites: RoomInvite[];
+  dismissInvite: (roomId: string) => void;
   /** Subscribe to animation events and emoji. */
   onEvents: (listener: (events: GameEvent[]) => void) => () => void;
   onEmoji: (listener: (userId: string, emoji: string) => void) => () => void;
@@ -41,6 +52,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   const [invite, setInvite] = useState<MyRoomDto['invite'] | null>(null);
   const [game, setGame] = useState<LiveGame | null>(null);
   const [result, setResult] = useState<GameResultDto | null>(null);
+  const [requestCount, setRequestCount] = useState(0);
+  const [invites, setInvites] = useState<RoomInvite[]>([]);
   const eventListeners = useRef(new Set<(e: GameEvent[]) => void>());
   const emojiListeners = useRef(new Set<(u: string, e: string) => void>());
   const myId = session.status === 'ready' ? session.me.id : null;
@@ -57,6 +70,15 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     }).catch(() => undefined);
     return () => socket.stop();
   }, [session.status, socket]);
+
+  const refreshRequests = useCallback(() => {
+    api<FriendRequestsDto>('/friends/requests')
+      .then((r) => setRequestCount(r.incoming.length))
+      .catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    if (session.status === 'ready') refreshRequests();
+  }, [session.status, refreshRequests]);
 
   useEffect(() => socket.onStatus(setStatus), [socket]);
 
@@ -93,6 +115,18 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
             setInvite(null);
             void refreshMe();
             return;
+          case 'FRIEND_REQUEST':
+            haptic.tap();
+            toast(`${msg.from.name} хочет добавить вас в друзья`, 'info');
+            setRequestCount((n) => n + 1);
+            return;
+          case 'FRIEND_ACCEPTED':
+            toast(`${msg.friend.name} теперь ваш друг`, 'success');
+            return;
+          case 'ROOM_INVITE':
+            haptic.success();
+            setInvites((list) => [...list.filter((i) => i.room.id !== msg.room.id), { from: msg.from, room: msg.room, invite: msg.invite }]);
+            return;
           case 'ERROR':
             if (!msg.rid) toast(msg.message, 'error');
             return;
@@ -122,6 +156,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     setResult(null);
   }, []);
 
+  const dismissInvite = useCallback((roomId: string) => setInvites((list) => list.filter((i) => i.room.id !== roomId)), []);
+
   const onEvents = useCallback((l: (e: GameEvent[]) => void) => {
     eventListeners.current.add(l);
     return () => void eventListeners.current.delete(l);
@@ -132,8 +168,11 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ socket, status, room, invite, game, result, enterRoom, leaveRoom, dismissGame, onEvents, onEmoji }),
-    [socket, status, room, invite, game, result, enterRoom, leaveRoom, dismissGame, onEvents, onEmoji],
+    () => ({
+      socket, status, room, invite, game, result, enterRoom, leaveRoom, dismissGame, onEvents, onEmoji,
+      requestCount, refreshRequests, invites, dismissInvite,
+    }),
+    [socket, status, room, invite, game, result, enterRoom, leaveRoom, dismissGame, onEvents, onEmoji, requestCount, refreshRequests, invites, dismissInvite],
   );
   return <RealtimeContext.Provider value={value}>{children}</RealtimeContext.Provider>;
 }

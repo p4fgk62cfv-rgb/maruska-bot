@@ -115,8 +115,39 @@ export interface ItemDto {
   equipped: boolean;
 }
 
+export type Presence = 'online' | 'in_game' | 'offline';
+
 export interface FriendDto extends PublicUserDto {
-  presence: 'online' | 'in_game' | 'offline';
+  presence: Presence;
+}
+
+export interface FriendRequestDto {
+  id: string;
+  user: PublicUserDto;
+  createdAt: string;
+}
+
+export interface FriendRequestsDto {
+  incoming: FriendRequestDto[];
+  outgoing: FriendRequestDto[];
+}
+
+/** Relation of the viewer to another player, shown on buttons («Добавить», «Заявка отправлена»…). */
+export type Relation = 'self' | 'friend' | 'outgoing' | 'incoming' | 'none';
+
+export interface RecentPlayerDto extends PublicUserDto {
+  relation: Relation;
+  lastPlayedAt: string;
+  games: number;
+}
+
+export interface SearchUserDto extends PublicUserDto {
+  relation: Relation;
+}
+
+export interface SendRequestResult {
+  /** 'friends' when the other side had already asked — the request is accepted at once. */
+  status: 'sent' | 'friends' | 'already_friends' | 'already_sent';
 }
 
 export interface TournamentDto {

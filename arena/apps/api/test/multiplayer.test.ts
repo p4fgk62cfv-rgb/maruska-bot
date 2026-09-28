@@ -38,7 +38,7 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
   let nextTg = 800_000_000 + Math.floor(Math.random() * 10_000_000);
 
   async function start(store?: SnapshotStore): Promise<void> {
-    handle = await buildApp(base, store);
+    handle = await buildApp(base, { store, bot: null });
     address = await handle.app.listen({ port: 0, host: '127.0.0.1' });
   }
 

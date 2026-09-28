@@ -17,13 +17,24 @@ import { Realtime } from './realtime/realtime.js';
 import { MemoryStore, type SnapshotStore } from './realtime/store.js';
 import { websocketRoutes } from './realtime/ws.js';
 import { RealtimePresence } from './services/presence.js';
+import { FriendService } from './services/friends.js';
+import { Outbox, TelegramBot } from './services/notifier.js';
+import { friendRoutes } from './routes/friends.js';
+import { internalRoutes } from './routes/internal.js';
 
 export interface AppHandle {
   app: FastifyInstance;
   ctx: Context;
 }
 
-export async function buildApp(base: BaseContext, store: SnapshotStore = new MemoryStore()): Promise<AppHandle> {
+export interface AppOptions {
+  store?: SnapshotStore;
+  /** Replaces the Telegram HTTP client (tests). */
+  bot?: TelegramBot | null;
+}
+
+export async function buildApp(base: BaseContext, options: AppOptions = {}): Promise<AppHandle> {
+  const store = options.store ?? new MemoryStore();
   const { config } = base;
   const app = Fastify({
     logger: config.NODE_ENV === 'test' ? false : { level: config.LOG_LEVEL, redact: ['req.headers.authorization'] },
@@ -34,9 +45,17 @@ export async function buildApp(base: BaseContext, store: SnapshotStore = new Mem
   app.decorateRequest('session', null);
 
   const realtime = new Realtime({ ...base, store, log: app.log });
-  const ctx: Context = { ...base, realtime, presence: new RealtimePresence(realtime) };
+  const presence = new RealtimePresence(realtime);
+  const bot = options.bot !== undefined ? options.bot : config.TELEGRAM_API_URL ? new TelegramBot(config.BOT_TOKEN, config.TELEGRAM_API_URL) : null;
+  const outbox = new Outbox(base.db, bot, app.log);
+  const friends = new FriendService({ ...base, outbox, presence, realtime });
+  const ctx: Context = { ...base, realtime, presence, outbox, friends };
   await realtime.recover();
-  app.addHook('onClose', async () => realtime.shutdown());
+  if (config.NODE_ENV !== 'test') outbox.start();
+  app.addHook('onClose', async () => {
+    outbox.stop();
+    await realtime.shutdown();
+  });
 
   const origins = config.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean);
   if (origins.length) await app.register(cors, { origin: origins });
@@ -78,6 +97,8 @@ export async function buildApp(base: BaseContext, store: SnapshotStore = new Mem
       await profileRoutes(api, ctx);
       await boardRoutes(api, ctx);
       await roomRoutes(api, ctx);
+      await friendRoutes(api, ctx);
+      await internalRoutes(api, ctx);
     },
     { prefix: '/api' },
   );

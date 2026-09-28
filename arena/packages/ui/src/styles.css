@@ -283,3 +283,8 @@ h1, h2, h3, p { margin: 0; }
 .ui-rank--glow-green { box-shadow: inset 0 0 0 1px var(--rank), 0 0 14px rgba(52, 211, 153, 0.8); }
 .ui-rank--glow-blue { box-shadow: inset 0 0 0 1px var(--rank), 0 0 14px rgba(59, 130, 246, 0.85); }
 .ui-rank--glow-purple { box-shadow: inset 0 0 0 1px var(--rank), 0 0 16px rgba(168, 85, 247, 0.9); }
+
+/* ── Swipe row ── */
+.ui-swipe { position: relative; overflow: hidden; border-radius: var(--radius-l); }
+.ui-swipe__action { position: absolute; top: 0; right: 0; bottom: 0; background: linear-gradient(135deg, #e11d48, #fb7185); color: #fff; font-weight: 800; }
+.ui-swipe__content { position: relative; transition: transform 0.25s var(--ease); touch-action: pan-y; }
