@@ -111,14 +111,18 @@ async def bot_rights(bot, chat_id: int) -> dict:
     if cached and time.monotonic() - cached[0] < 300:
         return cached[1]
 
-    rights = {"admin": False, "restrict": False, "delete": False, "pin": False, "change_info": False}
+    # present: Мара вообще состоит в группе (её не удалили, группа существует)
+    rights = {"present": False, "admin": False, "restrict": False, "delete": False, "pin": False, "change_info": False}
 
     try:
         me = await bot.me()
         member = await bot.get_chat_member(chat_id, me.id)
 
+        rights["present"] = member.status not in ("left", "kicked")
+
         if member.status in ("administrator", "creator"):
             rights = {
+                "present": True,
                 "admin": True,
                 "restrict": bool(getattr(member, "can_restrict_members", False)),
                 "delete": bool(getattr(member, "can_delete_messages", False)),
