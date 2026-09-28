@@ -1,6 +1,5 @@
-import { formatStake, SPEED_LABEL_RU, type RoomDto } from '@arena/shared';
-import type { FriendDto } from '@arena/shared';
-import { Avatar, Badge, BottomSheet, Button, EmptyState, Panel, RatingBadge } from '@arena/ui';
+import type { FriendDto, RoomDto } from '@arena/shared';
+import { Avatar, Balance, BottomSheet, Button, EmptyState, Icon } from '@arena/ui';
 import { useQuery } from '../lib/useQuery.js';
 import { useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
@@ -9,19 +8,21 @@ import { haptic, tg } from '../lib/telegram.js';
 import { useRealtime } from '../realtime.js';
 import { useMe } from '../session.js';
 import { useToast } from '../toast.js';
-import { modeLabels } from './lobbyParts.js';
-import { ringOf } from '../lib/cosmetics.js';
+import { tableOf } from '../lib/cosmetics.js';
+import { DockAction, EmptySeat, SeatTile, TableDock, TableTop } from './game/TableChrome.js';
 
-/** Waiting room: seats fill up live, everyone presses «Готов», the server deals. */
+/** Waiting room: the same felt as the game — chairs fill up live, everyone presses «Готов», the server deals. */
 export function RoomScreen({ room }: { room: RoomDto }) {
   const me = useMe();
   const { socket, invite, leaveRoom, status } = useRealtime();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const mySeat = room.seats.find((s) => s.userId === me.id);
   const full = room.seats.length === room.settings.players;
   const left = useCountdown(room.readyDeadline, () => socket.now());
+  const others = seatsAfter(room, me.id);
 
   const ready = async (value: boolean) => {
     haptic.tap();
@@ -38,83 +39,115 @@ export function RoomScreen({ room }: { room: RoomDto }) {
   };
 
   const leave = () => leaveRoom().catch((e: unknown) => toast(e instanceof ApiError ? e.message : 'Ошибка', 'error'));
+  const tileSize = room.settings.players > 4 ? 50 : 58;
 
   return (
-    <div className="app-stack room-screen">
-      <header className="app-header">
-        <div className="app-header__titles">
-          <h1>{room.tournament ? 'Матч турнира' : `Ставка ${formatStake(room.settings.stake)}`}</h1>
-          <p>
-            {modeLabels(room.settings).join(' · ')} · {room.settings.deckSize} карт · {SPEED_LABEL_RU[room.settings.speed]}
-          </p>
-        </div>
-        {room.tournament ? (
-          <Badge tone="gold">🏆 {room.tournament.title} · раунд {room.tournament.round}</Badge>
-        ) : (
-          room.isPrivate && <Badge tone="cyan">Приватная</Badge>
-        )}
-      </header>
+    <div className={`game game--room game--table-${tableOf(me.equipped.table)}`}>
+      {status !== 'open' && <div className="game__banner">Соединение восстанавливается…</div>}
+      <TableTop
+        settings={room.settings}
+        title={room.tournament ? `${room.tournament.title} · раунд ${room.tournament.round}` : undefined}
+        button={{ icon: 'back', label: room.tournament ? 'Сдаться в матче' : 'Выйти', onClick: () => (room.tournament ? setLeaving(true) : void leave()) }}
+      />
 
-      {status !== 'open' && <Badge tone="red">Соединение восстанавливается…</Badge>}
-
-      <Panel className="room-seats">
-        {Array.from({ length: room.settings.players }, (_, i) => {
-          const seat = room.seats[i];
-          return seat ? (
-            <div key={seat.userId} className={`room-seat${seat.ready ? ' room-seat--ready' : ''}`}>
-              <Avatar
-                id={seat.userId}
-                name={seat.name}
-                photoUrl={seat.photoUrl}
-                size={52}
-                ring={seat.frame ? ringOf(seat.frame) : seat.ready ? 'cyan' : 'none'}
-                crown={Boolean(seat.crown)}
-                status={seat.connected ? 'online' : 'offline'}
-              />
-              <strong>{seat.userId === me.id ? 'Вы' : seat.name}</strong>
-              <RatingBadge rating={seat.rating} showValue={false} />
-              <Badge tone={seat.ready ? 'green' : 'muted'}>{seat.ready ? 'Готов' : 'Ждём'}</Badge>
-            </div>
+      <div className={`game__opponents game__opponents--${others.length}`}>
+        {others.map(({ number, seat }) =>
+          seat ? (
+            <SeatTile
+              key={seat.userId}
+              seat={{ id: seat.userId, name: seat.name, photoUrl: seat.photoUrl, frame: seat.frame, crown: seat.crown }}
+              size={tileSize}
+              number={number}
+              active={seat.ready}
+              offline={!seat.connected}
+              label={seat.ready ? { text: 'Готов', tone: 'ready' } : null}
+            />
           ) : (
-            <div key={`empty${i}`} className="room-seat room-seat--empty">
-              <span className="room-seat__empty" />
-              <span className="app-muted">Свободно</span>
-            </div>
-          );
-        })}
-      </Panel>
+            <EmptySeat key={`empty${number}`} number={number} size={tileSize} />
+          ),
+        )}
+      </div>
 
-      <p className="app-muted room-hint">
-        {full
-          ? left !== null
-            ? `Все места заняты. Нажмите «Готов» — осталось ${Math.ceil(left / 1000)} с`
-            : 'Все места заняты. Нажмите «Готов».'
-          : `Ждём ещё ${room.settings.players - room.seats.length} игроков`}
-      </p>
+      <div className="felt">
+        <div className="room-center">
+          <p className="room-center__hint">{full ? (mySeat?.ready ? 'Ждём остальных…' : 'Нажмите «Готов»') : 'Ждём игроков…'}</p>
+          <p className="room-center__sub">
+            {full
+              ? left !== null
+                ? `Кто не нажмёт «Готов» за ${Math.ceil(left / 1000)} с, освободит место`
+                : 'Партия начнётся, когда все будут готовы'
+              : `Свободно мест: ${room.settings.players - room.seats.length}`}
+          </p>
+          {room.tournament ? (
+            <p className="room-center__sub">Не нажмёте «Готов» вовремя или выйдете — матч засчитается сопернику.</p>
+          ) : (
+            <>
+              {!full && (
+                <button type="button" className="room-invite" onClick={() => setFriendsOpen(true)}>
+                  Пригласить друзей <Icon name="userPlus" size={26} />
+                </button>
+              )}
+              <div className="room-links">
+                <button type="button" onClick={share}>
+                  <Icon name="share" size={14} /> Ссылка
+                </button>
+                <span>
+                  Код: <strong>{room.id}</strong>
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
 
-      {mySeat && (
-        <Button size="lg" block variant={mySeat.ready ? 'ghost' : 'gold'} loading={busy} onClick={() => void ready(!mySeat.ready)}>
-          {mySeat.ready ? 'Не готов' : 'Готов'}
-        </Button>
-      )}
-      {room.tournament ? (
-        <div className="app-stack">
-          <p className="app-muted">Не нажмёте «Готов» вовремя или выйдете — матч засчитается сопернику.</p>
-          <Button variant="danger" onClick={() => void leave()}>Сдаться в матче</Button>
-        </div>
-      ) : (
-        <div className="app-row">
-          <Button variant="ghost" icon="users" onClick={() => setFriendsOpen(true)}>Позвать друга</Button>
-          <Button variant="ghost" icon="share" onClick={share}>Ссылка</Button>
-          <Button variant="danger" onClick={() => void leave()}>Выйти</Button>
-        </div>
-      )}
-      <p className="app-muted">Код комнаты: <strong>{room.id}</strong></p>
+      <TableDock
+        actions={
+          mySeat && (
+            <DockAction tone={mySeat.ready ? 'alt' : 'main'} busy={busy} onClick={() => void ready(!mySeat.ready)}>
+              {mySeat.ready ? 'Не готов' : 'Готов'}
+            </DockAction>
+          )
+        }
+        me={
+          <SeatTile
+            seat={{ id: me.id, name: me.name, photoUrl: me.photoUrl, frame: me.equipped.frame, crown: me.equipped.crown }}
+            size={56}
+            active={mySeat?.ready}
+            number={mySeat ? mySeat.seat + 1 : undefined}
+          />
+        }
+        extras={
+          <span className="room-wallet">
+            <Balance kind="credits" value={me.wallet.credits} compact />
+            <Balance kind="coins" value={me.wallet.coins} compact />
+          </span>
+        }
+      />
+
       <BottomSheet open={friendsOpen} title="Позвать друга" onClose={() => setFriendsOpen(false)}>
         {friendsOpen && <FriendPicker seated={room.seats.map((s) => s.userId)} />}
       </BottomSheet>
+      <BottomSheet open={leaving} title="Сдаться в матче?" onClose={() => setLeaving(false)}>
+        <div className="app-stack">
+          <p className="app-muted">Матч засчитается сопернику.</p>
+          <Button block variant="danger" onClick={() => (setLeaving(false), void leave())}>Сдаться</Button>
+        </div>
+      </BottomSheet>
     </div>
   );
+}
+
+/** Chairs in play order after mine; empty ones included, numbered from 1. */
+function seatsAfter(room: RoomDto, myId: string): { number: number; seat: RoomDto['seats'][number] | null }[] {
+  const n = room.settings.players;
+  const mine = room.seats.find((s) => s.userId === myId)?.seat ?? -1;
+  const out: { number: number; seat: RoomDto['seats'][number] | null }[] = [];
+  for (let k = 1; k <= n; k++) {
+    const index = (mine + k + n) % n;
+    if (index === mine) continue;
+    out.push({ number: index + 1, seat: room.seats.find((s) => s.seat === index) ?? null });
+  }
+  return out;
 }
 
 function FriendPicker({ seated }: { seated: string[] }) {

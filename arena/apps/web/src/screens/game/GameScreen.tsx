@@ -1,6 +1,6 @@
 import { rankOf, type CardId } from '@arena/game-engine';
-import { EMOJIS, FEATURE_PRICES } from '@arena/shared';
-import { BottomSheet, Button, IconButton, PlayingCard } from '@arena/ui';
+import { EMOJIS, FEATURE_PRICES, type RoomDto } from '@arena/shared';
+import { BottomSheet, Button, PlayingCard } from '@arena/ui';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useCountdown } from '../../lib/hooks.js';
 import { haptic } from '../../lib/telegram.js';
@@ -14,14 +14,14 @@ import { useToast } from '../../toast.js';
 import { sameRank, sortHand } from './cards.js';
 import { Hand } from './Hand.js';
 import { ResultView } from './ResultView.js';
-import { Seat } from './Seat.js';
+import { DockAction, DockExtra, SeatTile, TableDock, TableTop } from './TableChrome.js';
 import { Table } from './Table.js';
 
 type Sheet = null | 'menu' | 'emoji' | 'surrender' | 'discard' | { report: number };
 
 export function GameScreen({ game }: { game: LiveGame }) {
   const me = useMe();
-  const { socket, result, dismissGame, onEmoji, onEvents, status } = useRealtime();
+  const { socket, result, dismissGame, onEmoji, onEvents, status, room } = useRealtime();
   const prefs = useSettings();
   const toast = useToast();
   const view = game.state;
@@ -161,36 +161,73 @@ export function GameScreen({ game }: { game: LiveGame }) {
   const infoOf = (id: string) => game.players.find((p) => p.userId === id);
   const roleOf = (id: string) => (id === view.attacker ? 'attacker' : id === view.defender ? 'defender' : null);
 
+  const labelOf = (p: { id: string; status: string; place: number | null }) => {
+    if (view.cheaters.includes(p.id)) return { text: 'Шулер', tone: 'alert' as const };
+    if (p.status === 'out') return { text: `${p.place} место`, tone: 'muted' as const };
+    if (p.status === 'left') return { text: 'Сдался', tone: 'muted' as const };
+    if (infoOf(p.id)?.connected === false) return { text: 'Нет связи', tone: 'alert' as const };
+    if (view.passed.includes(p.id)) return { text: 'Бито', tone: 'muted' as const };
+    const role = roleOf(p.id);
+    return role === 'attacker' ? { text: 'Ходит', tone: 'attack' as const } : role === 'defender' ? { text: 'Отбивается', tone: 'defend' as const } : null;
+  };
+  const seatOf = (id: string) => {
+    const info = infoOf(id);
+    return { id, name: info?.name ?? 'Игрок', photoUrl: info?.photoUrl ?? null, frame: info?.frame ?? null, crown: info?.crown ?? null };
+  };
+  const back = backOf(me.equipped.cardBack);
+  const { rules } = view;
+  const tableSettings: RoomDto['settings'] = room?.settings ?? {
+    stake: 0,
+    players: view.players.length,
+    deckSize: rules.deckSize as RoomDto['settings']['deckSize'],
+    speed: rules.speed,
+    variant: rules.variant,
+    throwIn: rules.throwIn,
+    fairness: rules.fairness,
+    ending: rules.ending,
+  };
+  const tileSize = opponents.length > 3 ? 50 : 58;
+
+  const actions: { key: string; text: string; tone?: 'main' | 'alt' | 'gold'; run: () => void }[] = [];
+  if (canTransferSelected) actions.push({ key: 'transfer', text: 'Перевести', tone: 'gold', run: () => void send({ type: 'TRANSFER', gameId, card: selected[0]! }) });
+  if (selected.length > 0 && a.canAttack && !isDefender) actions.push({ key: 'attack', text: selected.length > 1 ? `Хожу (${selected.length})` : 'Хожу', run: () => void attack(selected) });
+  if (selected.length === 1 && isDefender && undefended.length === 1) actions.push({ key: 'defend', text: 'Бью', run: () => void defend(selected[0]!, undefended[0]!) });
+  if (a.take) actions.push({ key: 'take', text: 'Беру', run: () => void send({ type: 'TAKE_CARDS', gameId }) });
+  if (a.pass) actions.push({ key: 'pass', text: view.phase === 'defense' && undefended.length === 0 ? 'Бито' : 'Пас', tone: 'alt', run: () => void send({ type: 'PASS', gameId }) });
+
   return (
     <div className={`game game--table-${tableOf(me.equipped.table)}`} ref={rootRef}>
       <div className="motion-layer" ref={layerRef} />
       {status !== 'open' && <div className="game__banner">Соединение восстанавливается…</div>}
 
+      <TableTop settings={tableSettings} button={{ icon: 'menu', label: 'Меню', onClick: () => setSheet('menu') }} />
+
       <div className={`game__opponents game__opponents--${opponents.length}`}>
         {opponents.map((p, i) => (
           <div key={p.id} className="game__opp" style={{ ['--arc' as string]: `${arcOffset(i, opponents.length)}px` }}>
-          <Seat
-            key={p.id}
-            player={p}
-            info={infoOf(p.id)}
-            role={roleOf(p.id)}
-            active={view.currentPlayer === p.id}
-            progress={view.currentPlayer === p.id ? progress : null}
-            passed={view.passed.includes(p.id)}
-            cheater={view.cheaters.includes(p.id)}
-            emoji={emojis[p.id] || null}
-            compact={opponents.length > 3}
-          />
+            <SeatTile
+              seat={seatOf(p.id)}
+              anchor
+              size={tileSize}
+              cards={p.status === 'active' ? p.cardCount : 0}
+              back={back}
+              active={view.currentPlayer === p.id}
+              progress={view.currentPlayer === p.id ? progress : null}
+              label={labelOf(p)}
+              emoji={emojis[p.id] || null}
+              dim={p.status !== 'active'}
+              offline={infoOf(p.id)?.connected === false}
+            />
           </div>
         ))}
       </div>
 
       <Table
         view={view}
-        cardWidth={Math.min(62, (Math.min(window.innerWidth, 560) - 110) / 3.6)}
+        cardWidth={Math.min(74, (Math.min(window.innerWidth, 560) - 70) / 3.7)}
         targets={targets}
         onPair={tapPair}
-        back={backOf(me.equipped.cardBack)}
+        back={back}
         onReport={view.rules.fairness === 'cheaters' && a.canReport ? (seq) => setSheet({ report: seq }) : null}
         transferSlot={
           a.canTransfer
@@ -202,83 +239,63 @@ export function GameScreen({ game }: { game: LiveGame }) {
         }
       />
       {myTurn && <div className="game__yourturn" key={`turn-${view.version}-${view.phase}`}>Ваш ход</div>}
+      {isDefender && selected.length === 1 && undefended.length > 1 && <p className="game__tip">Нажмите на карту на столе, которую хотите побить</p>}
 
-      <div className="game__me">
-        <div className="game__me-row">
-          <button type="button" className="game__me-avatar" onClick={() => setSheet('emoji')} aria-label="Отправить смайлик">
+      <Hand
+        cards={hand}
+        trump={view.trump.suit}
+        selected={selected}
+        playable={playable}
+        cardWidth={Math.min(96, Math.max(64, (Math.min(window.innerWidth, 560) - 16) / 4.3))}
+        onTap={tapCard}
+        onDoubleTap={doubleTap}
+        onSwipeRight={() => settings.set({ handSort: sort === 'suit' ? 'rank' : 'suit' })}
+      />
+
+      <TableDock
+        actions={actions.slice(0, 2).map((act) => (
+          <DockAction key={act.key} tone={act.tone} busy={busy} onClick={act.run}>
+            {act.text}
+          </DockAction>
+        ))}
+        me={
+          <button type="button" className="table-dock__avatar" onClick={() => setSheet('emoji')} aria-label="Отправить смайлик">
             {mine && (
-              <Seat
-                player={mine}
-                info={infoOf(me.id)}
-                role={roleOf(me.id)}
+              <SeatTile
+                seat={seatOf(me.id)}
+                size={56}
                 active={myTurn}
                 progress={myTurn ? progress : null}
-                passed={view.passed.includes(me.id)}
-                cheater={view.cheaters.includes(me.id)}
+                label={mine.status === 'active' ? null : labelOf(mine)}
                 emoji={emojis[me.id] || null}
-                compact
               />
             )}
           </button>
-          <div className="game__actions">
-            {selected.length > 0 && a.canAttack && !isDefender && (
-              <Button loading={busy} onClick={() => void attack(selected)}>
-                Хожу{selected.length > 1 ? ` (${selected.length})` : ''}
-              </Button>
-            )}
-            {selected.length === 1 && isDefender && undefended.length === 1 && (
-              <Button loading={busy} onClick={() => void defend(selected[0]!, undefended[0]!)}>Бью</Button>
-            )}
-            {canTransferSelected && (
-              <Button variant="gold" loading={busy} onClick={() => void send({ type: 'TRANSFER', gameId, card: selected[0]! })}>
-                Перевести
-              </Button>
-            )}
-            {a.take && <Button variant="danger" loading={busy} onClick={() => void send({ type: 'TAKE_CARDS', gameId })}>Беру</Button>}
-            {a.pass && (
-              <Button variant="ghost" loading={busy} onClick={() => void send({ type: 'PASS', gameId })}>
-                {view.phase === 'defense' && undefended.length === 0 ? 'Бито' : 'Пас'}
-              </Button>
-            )}
-          </div>
-          <IconButton icon="more" label="Меню" onClick={() => setSheet('menu')} />
-        </div>
-
-        {myTurn && left !== null && (
-          <div className="game__turnbar" aria-hidden="true">
-            <span style={{ transform: `scaleX(${progress ?? 0})` }} className={(progress ?? 1) < 0.25 ? 'game__turnbar--low' : ''} />
-          </div>
-        )}
-        {isDefender && selected.length === 1 && undefended.length > 1 && <p className="game__tip">Нажмите на карту на столе, которую хотите побить</p>}
-
-        <Hand
-          cards={hand}
-          trump={view.trump.suit}
-          selected={selected}
-          playable={playable}
-          cardWidth={Math.min(74, Math.max(56, window.innerWidth / 5.6))}
-          onTap={tapCard}
-          onDoubleTap={doubleTap}
-          onSwipeRight={() => settings.set({ handSort: sort === 'suit' ? 'rank' : 'suit' })}
-        />
-      </div>
+        }
+        extras={
+          <>
+            <DockExtra icon="undo" label="Вернуть карту" price={FEATURE_PRICES.undo} disabled={!game.features.canUndo || busy} onClick={() => void send({ type: 'UNDO_MOVE', gameId })} />
+            <DockExtra icon="eye" label="Подсветка карт" price={game.features.hints ? null : FEATURE_PRICES.hints} on={game.features.hints} disabled={game.features.hints || busy} onClick={() => void buy('hints')} />
+            <DockExtra
+              icon="cards"
+              label={game.features.discardReminder ? 'Показать отбой' : 'Напомнить отбой'}
+              price={game.features.discardReminder ? null : FEATURE_PRICES.discardReminder}
+              on={game.features.discardReminder}
+              disabled={busy}
+              onClick={() => (game.features.discardReminder ? setSheet('discard') : void buy('discardReminder'))}
+            />
+          </>
+        }
+      />
 
       <BottomSheet open={sheet === 'menu'} title="Меню" onClose={() => setSheet(null)}>
         <div className="app-list">
-          {game.features.canUndo && (
-            <Button block variant="ghost" onClick={() => (setSheet(null), void send({ type: 'UNDO_MOVE', gameId }))}>
-              Вернуть карту · {FEATURE_PRICES.undo} монета
-            </Button>
-          )}
-          <Button block variant="ghost" disabled={game.features.hints} onClick={() => void buy('hints')}>
-            {game.features.hints ? 'Подсветка включена' : `Подсветка карт · ${FEATURE_PRICES.hints} монеты`}
-          </Button>
-          <Button block variant="ghost" onClick={() => (game.features.discardReminder ? setSheet('discard') : void buy('discardReminder'))}>
-            {game.features.discardReminder ? 'Показать отбой' : `Напомнить отбой · ${FEATURE_PRICES.discardReminder} монеты`}
-          </Button>
-          <p className="app-muted">Двойной тап по карте — сразу сыграть. Свайп вправо по руке — сменить сортировку.</p>
+          <Button block variant="ghost" icon="heart" onClick={() => setSheet('emoji')}>Смайлик</Button>
+          <p className="app-muted">
+            Двойной тап по карте — сразу сыграть. Свайп вправо по руке — сменить сортировку. Внизу справа — подсказки за монеты: вернуть карту ({FEATURE_PRICES.undo}), подсветка ({FEATURE_PRICES.hints}), отбой ({FEATURE_PRICES.discardReminder}).
+          </p>
           {mine?.status === 'active' && (
-            <Button block variant="danger" onClick={() => setSheet('surrender')}>Сдаться</Button>
+            <Button block variant="danger" icon="flag" onClick={() => setSheet('surrender')}>Сдаться</Button>
           )}
         </div>
       </BottomSheet>

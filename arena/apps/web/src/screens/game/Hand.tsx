@@ -13,6 +13,15 @@ export interface HandProps {
   onSwipeRight: () => void;
 }
 
+/** A gentle fan: outer cards tilt out and sit a little lower. */
+function tilt(i: number, n: number): number {
+  return n > 1 ? (i - (n - 1) / 2) * Math.min(4, 24 / n) : 0;
+}
+function arc(i: number, n: number): number {
+  const d = n > 1 ? Math.abs(i - (n - 1) / 2) / ((n - 1) / 2) : 0;
+  return Math.round(d * d * 10);
+}
+
 /** Overlapping fan that always fits the screen width; selected cards lift up. */
 export function Hand({ cards, trump, selected, playable, cardWidth, onTap, onDoubleTap, onSwipeRight }: HandProps) {
   const lastTap = useRef<{ card: CardId; at: number } | null>(null);
@@ -34,7 +43,7 @@ export function Hand({ cards, trump, selected, playable, cardWidth, onTap, onDou
   return (
     <div
       className="hand"
-      style={{ height: cardWidth * 1.42 + 22, width: step * Math.max(0, cards.length - 1) + cardWidth }}
+      style={{ height: cardWidth * 1.42 + 30, width: step * Math.max(0, cards.length - 1) + cardWidth }}
       onTouchStart={(e) => (touch.current = e.touches[0]?.clientX ?? null)}
       onTouchEnd={(e) => {
         const start = touch.current;
@@ -44,7 +53,13 @@ export function Hand({ cards, trump, selected, playable, cardWidth, onTap, onDou
       }}
     >
       {cards.map((card, i) => (
-        <span key={card} className="hand__slot" data-card={card} data-zone="hand" style={{ transform: `translateX(${i * step}px)`, zIndex: i }}>
+        <span
+          key={card}
+          className="hand__slot"
+          data-card={card}
+          data-zone="hand"
+          style={{ transform: `translateX(${i * step}px) translateY(${arc(i, cards.length)}px) rotate(${tilt(i, cards.length)}deg)`, zIndex: i }}
+        >
           <PlayingCard
             card={card}
             width={cardWidth}

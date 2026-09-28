@@ -14,20 +14,22 @@ export interface TableProps {
   back: string;
 }
 
+const DISCARD_TILT = [-18, 12, -6, 24, -26, 4];
+
 /** Felt with the stock + trump on the left, the discard on the right and up to six pairs in the middle. */
 export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot, back }: TableProps) {
   const trumpCard = view.trump.card;
   return (
-    <div className="felt">
+    <div className="felt" style={{ ['--card-w' as string]: `${cardWidth}px` }}>
       <div className="felt__deck" data-anchor="deck" aria-label={`В колоде ${view.deckCount}`}>
         {trumpCard ? (
           <>
             <span className="felt__trump" {...(view.deckCount === 1 ? { 'data-anchor': 'deck-card' } : {})}>
-              <PlayingCard card={trumpCard} width={cardWidth * 0.8} trump />
+              <PlayingCard card={trumpCard} width={cardWidth * 0.9} trump />
             </span>
             {view.deckCount > 1 && (
               <span className="felt__stock" data-anchor="deck-card">
-                <PlayingCard faceDown back={back} width={cardWidth * 0.8} />
+                <PlayingCard faceDown back={back} width={cardWidth * 0.9} />
               </span>
             )}
             <span className="felt__deck-count">{view.deckCount}</span>
@@ -37,7 +39,7 @@ export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot
         )}
       </div>
 
-      <div className="felt__pairs" style={{ ['--card-w' as string]: `${cardWidth}px` }}>
+      <div className="felt__pairs">
         {view.table.map((pair, index) => (
           <div
             key={pair.attackSeq}
@@ -70,17 +72,18 @@ export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot
             <span>Перевести</span>
           </button>
         )}
-        {view.table.length === 0 && <span className="felt__hint">{view.phase === 'attack' ? 'Ход' : ''}</span>}
+        
       </div>
 
       <div className="felt__discard" data-anchor="discard" aria-label={`В отбое ${view.discardCount}`}>
         {view.discardCount > 0 && (
-          <>
-            <span className="felt__discard-pile">
-              <PlayingCard faceDown back={back} width={cardWidth * 0.8} />
-            </span>
-            <span className="felt__deck-count">{view.discardCount}</span>
-          </>
+          <span className="felt__discard-pile">
+            {Array.from({ length: Math.min(6, Math.ceil(view.discardCount / 4)) }, (_, i) => (
+              <span key={i} style={{ rotate: `${DISCARD_TILT[i]}deg`, translate: `0 ${i * 14}px` }}>
+                <PlayingCard faceDown back={back} width={cardWidth * 0.85} />
+              </span>
+            ))}
+          </span>
         )}
       </div>
     </div>
