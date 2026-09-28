@@ -21,6 +21,8 @@ import { FriendService } from './services/friends.js';
 import { Outbox, TelegramBot } from './services/notifier.js';
 import { friendRoutes } from './routes/friends.js';
 import { internalRoutes } from './routes/internal.js';
+import { tournamentRoutes } from './routes/tournaments.js';
+import { TournamentService } from './services/tournaments.js';
 
 export interface AppHandle {
   app: FastifyInstance;
@@ -49,11 +51,16 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   const bot = options.bot !== undefined ? options.bot : config.TELEGRAM_API_URL ? new TelegramBot(config.BOT_TOKEN, config.TELEGRAM_API_URL) : null;
   const outbox = new Outbox(base.db, bot, app.log);
   const friends = new FriendService({ ...base, outbox, presence, realtime });
-  const ctx: Context = { ...base, realtime, presence, outbox, friends };
+  const tournaments = new TournamentService({ ...base, outbox, realtime, log: app.log });
+  const ctx: Context = { ...base, realtime, presence, outbox, friends, tournaments };
   await realtime.recover();
-  if (config.NODE_ENV !== 'test') outbox.start();
+  if (config.NODE_ENV !== 'test') {
+    outbox.start();
+    tournaments.start();
+  }
   app.addHook('onClose', async () => {
     outbox.stop();
+    tournaments.stop();
     await realtime.shutdown();
   });
 
@@ -98,6 +105,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
       await boardRoutes(api, ctx);
       await roomRoutes(api, ctx);
       await friendRoutes(api, ctx);
+      await tournamentRoutes(api, ctx);
       await internalRoutes(api, ctx);
     },
     { prefix: '/api' },

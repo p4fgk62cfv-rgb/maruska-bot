@@ -3,6 +3,7 @@ import { ratingBadge } from '@arena/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Context } from '../context.js';
+import { createTournamentSchema } from '../services/tournaments.js';
 import { AppError } from '../lib/errors.js';
 import { toNumber } from '../lib/money.js';
 
@@ -34,6 +35,12 @@ export async function internalRoutes(app: FastifyInstance, ctx: Context): Promis
       gamesWon: user.profile.gamesWon,
       totalWinnings: toNumber(user.profile.totalWinnings),
     };
+  });
+
+  /** Owner tools (bot admin panel): announce a tournament. */
+  app.post('/internal/tournaments', { preHandler: check }, async (request) => {
+    const id = await ctx.tournaments.create(createTournamentSchema.parse(request.body));
+    return { id };
   });
 
   /** What is going on right now — for a bot status line or the admin panel. */

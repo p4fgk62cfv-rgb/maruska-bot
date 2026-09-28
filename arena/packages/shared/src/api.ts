@@ -162,14 +162,38 @@ export interface SendRequestResult {
   status: 'sent' | 'friends' | 'already_friends' | 'already_sent';
 }
 
+export type TournamentStatus = 'ANNOUNCED' | 'REGISTRATION' | 'RUNNING' | 'FINISHED' | 'CANCELLED';
+
 export interface TournamentDto {
   id: string;
   title: string;
-  status: 'ANNOUNCED' | 'REGISTRATION' | 'RUNNING' | 'FINISHED' | 'CANCELLED';
+  status: TournamentStatus;
   prizePool: number;
   entryFee: number;
   currency: Currency;
   players: number;
   maxPlayers: number;
   startsAt: string;
+  /** The viewer is registered. */
+  joined: boolean;
+  /** Game rules of the matches, e.g. ['Подкидной', 'Все', 'Классика']. */
+  modes: string[];
+}
+
+export interface TournamentMatchDto {
+  id: string;
+  round: number;
+  slot: number;
+  a: PublicUserDto;
+  b: PublicUserDto | null;
+  winnerId: string | null;
+  status: 'PENDING' | 'PLAYING' | 'DONE';
+  decidedBy: string | null;
+}
+
+export interface TournamentDetailDto extends TournamentDto {
+  rounds: number;
+  prizes: number[];
+  entrants: (PublicUserDto & { place: number | null; prize: number | null; eliminatedRound: number | null })[];
+  matches: TournamentMatchDto[];
 }

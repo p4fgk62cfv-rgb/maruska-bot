@@ -123,6 +123,10 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           case 'FRIEND_ACCEPTED':
             toast(`${msg.friend.name} теперь ваш друг`, 'success');
             return;
+          case 'TOURNAMENT_MATCH':
+            haptic.success();
+            toast(`${msg.title}: ваш матч начинается — нажмите «Готов»`, 'success');
+            return;
           case 'ROOM_INVITE':
             haptic.success();
             setInvites((list) => [...list.filter((i) => i.room.id !== msg.room.id), { from: msg.from, room: msg.room, invite: msg.invite }]);

@@ -5,3 +5,4 @@ export * from './protocol.js';
 export * from './servers.js';
 export * from './rating.js';
 export * from './economy.js';
+export * from './tournament.js';

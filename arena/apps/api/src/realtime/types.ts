@@ -28,6 +28,8 @@ export interface Room {
   gameId: string | null;
   createdAt: number;
   readyDeadline: number | null;
+  /** Tournament match rooms: pre-seated, no stake, leaving or not showing up loses the match. */
+  tournament?: { id: string; title: string; round: number; matchId: string } | null;
 }
 
 export interface Features {

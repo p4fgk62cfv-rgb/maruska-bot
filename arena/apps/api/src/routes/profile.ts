@@ -1,4 +1,4 @@
-import type { AchievementDto, ItemDto, ServerDto, TournamentDto, TransactionDto } from '@arena/shared';
+import type { AchievementDto, ItemDto, ServerDto, TransactionDto } from '@arena/shared';
 import { GAME_SERVERS } from '@arena/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -82,25 +82,4 @@ export async function profileRoutes(app: FastifyInstance, ctx: Context): Promise
   });
   app.post('/items/:key/equip', auth, async (request) => ctx.items.equip(sessionOf(request).sub, itemParam.parse(request.params).key));
   app.post('/items/:key/unequip', auth, async (request) => ctx.items.unequip(sessionOf(request).sub, itemParam.parse(request.params).key));
-
-  app.get('/tournaments', auth, async (request): Promise<TournamentDto[]> => {
-    const { status } = z.object({ status: z.enum(['active', 'finished']).default('active') }).parse(request.query);
-    const rows = await db.tournament.findMany({
-      where: { status: status === 'active' ? { in: ['ANNOUNCED', 'REGISTRATION', 'RUNNING'] } : { in: ['FINISHED', 'CANCELLED'] } },
-      orderBy: { startsAt: status === 'active' ? 'asc' : 'desc' },
-      include: { _count: { select: { players: true } } },
-      take: 50,
-    });
-    return rows.map((t) => ({
-      id: t.id,
-      title: t.title,
-      status: t.status,
-      prizePool: toNumber(t.prizePool),
-      entryFee: toNumber(t.entryFee),
-      currency: t.currency,
-      players: t._count.players,
-      maxPlayers: t.maxPlayers,
-      startsAt: t.startsAt.toISOString(),
-    }));
-  });
 }

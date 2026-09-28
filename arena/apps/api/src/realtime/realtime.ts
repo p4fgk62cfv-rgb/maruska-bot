@@ -23,7 +23,10 @@ export interface RealtimeDeps {
 }
 
 /** Wires the hub, rooms and games together and speaks the WebSocket protocol. */
+const ORPHAN_AFTER_MS = 120_000;
+
 export class Realtime {
+  private sweeper: NodeJS.Timeout | null = null;
   readonly hub = new Hub();
   readonly rooms: RoomManager;
   readonly games: GameManager;
@@ -50,19 +53,34 @@ export class Realtime {
   async recover(): Promise<void> {
     const { rooms, games } = await this.deps.store.loadAll();
     for (const room of rooms) this.rooms.restore(room);
-    const restored = new Set<string>();
     for (const game of games) {
       const room = rooms.find((r) => r.id === game.roomId);
       const players = (room?.seats ?? []).map((s) => ({ ...s, connected: false }));
       if (!room || players.length !== game.state.players.length) continue;
       await this.games.restore(game, players.map(({ userId, name, photoUrl, rating, premium, frame, crown, connected }) => ({ userId, name, photoUrl, rating, premium, frame: frame ?? null, crown: crown ?? null, connected })));
-      restored.add(game.gameId);
     }
-    const orphans = await this.deps.db.game.findMany({ where: { status: 'PLAYING' }, select: { id: true } });
-    for (const { id } of orphans) {
-      if (restored.has(id)) continue;
-      await this.settlement.abort(id);
-      this.deps.log.warn({ gameId: id }, 'aborted unrecoverable game, stakes refunded');
+    await this.sweepOrphans();
+    this.sweeper = setInterval(() => void this.sweepOrphans().catch((e) => this.deps.log.error({ err: e }, 'orphan sweep failed')), 60_000);
+    this.sweeper.unref();
+  }
+
+  /**
+   * Games the database shows as running but nobody runs: refund them. A game counts as
+   * abandoned only after two minutes without a move (turns time out after 30 s and moves are
+   * logged every 2 s), so a game that another instance is still running — e.g. during a
+   * rolling deploy — is never touched.
+   */
+  async sweepOrphans(now = Date.now()): Promise<void> {
+    const running = await this.deps.db.game.findMany({
+      where: { status: 'PLAYING' },
+      select: { id: true, startedAt: true, moves: { orderBy: { seq: 'desc' }, take: 1, select: { createdAt: true } } },
+    });
+    for (const game of running) {
+      if (this.games.get(game.id)) continue;
+      const lastActivity = Math.max(game.startedAt.getTime(), game.moves[0]?.createdAt.getTime() ?? 0);
+      if (now - lastActivity < ORPHAN_AFTER_MS) continue;
+      await this.settlement.abort(game.id);
+      this.deps.log.warn({ gameId: game.id }, 'aborted abandoned game, stakes refunded');
     }
   }
 
@@ -134,6 +152,7 @@ export class Realtime {
   }
 
   async shutdown(): Promise<void> {
+    if (this.sweeper) clearInterval(this.sweeper);
     this.rooms.shutdown();
     await this.games.shutdown();
     this.hub.closeAll();

@@ -43,12 +43,16 @@ export function RoomScreen({ room }: { room: RoomDto }) {
     <div className="app-stack room-screen">
       <header className="app-header">
         <div className="app-header__titles">
-          <h1>Ставка {formatStake(room.settings.stake)}</h1>
+          <h1>{room.tournament ? 'Матч турнира' : `Ставка ${formatStake(room.settings.stake)}`}</h1>
           <p>
             {modeLabels(room.settings).join(' · ')} · {room.settings.deckSize} карт · {SPEED_LABEL_RU[room.settings.speed]}
           </p>
         </div>
-        {room.isPrivate && <Badge tone="cyan">Приватная</Badge>}
+        {room.tournament ? (
+          <Badge tone="gold">🏆 {room.tournament.title} · раунд {room.tournament.round}</Badge>
+        ) : (
+          room.isPrivate && <Badge tone="cyan">Приватная</Badge>
+        )}
       </header>
 
       {status !== 'open' && <Badge tone="red">Соединение восстанавливается…</Badge>}
@@ -93,11 +97,18 @@ export function RoomScreen({ room }: { room: RoomDto }) {
           {mySeat.ready ? 'Не готов' : 'Готов'}
         </Button>
       )}
-      <div className="app-row">
-        <Button variant="ghost" icon="users" onClick={() => setFriendsOpen(true)}>Позвать друга</Button>
-        <Button variant="ghost" icon="share" onClick={share}>Ссылка</Button>
-        <Button variant="danger" onClick={() => void leave()}>Выйти</Button>
-      </div>
+      {room.tournament ? (
+        <div className="app-stack">
+          <p className="app-muted">Не нажмёте «Готов» вовремя или выйдете — матч засчитается сопернику.</p>
+          <Button variant="danger" onClick={() => void leave()}>Сдаться в матче</Button>
+        </div>
+      ) : (
+        <div className="app-row">
+          <Button variant="ghost" icon="users" onClick={() => setFriendsOpen(true)}>Позвать друга</Button>
+          <Button variant="ghost" icon="share" onClick={share}>Ссылка</Button>
+          <Button variant="danger" onClick={() => void leave()}>Выйти</Button>
+        </div>
+      )}
       <p className="app-muted">Код комнаты: <strong>{room.id}</strong></p>
       <BottomSheet open={friendsOpen} title="Позвать друга" onClose={() => setFriendsOpen(false)}>
         {friendsOpen && <FriendPicker seated={room.seats.map((s) => s.userId)} />}

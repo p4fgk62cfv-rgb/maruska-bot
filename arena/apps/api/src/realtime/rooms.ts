@@ -20,12 +20,20 @@ import { displayName, type UserService } from '../services/users.js';
 import type { GameManager } from './games.js';
 import type { Hub } from './hub.js';
 import type { SnapshotStore } from './store.js';
-import type { Room, Seat } from './types.js';
+import type { Room, RoomConfig, Seat } from './types.js';
 
 /** Full rooms wait this long for everyone to press «Готов»; then the slow ones are removed. */
 export const READY_TIMEOUT_MS = 30_000;
 /** A player who drops out of a waiting room keeps the seat this long. */
 export const WAITING_GRACE_MS = 30_000;
+
+/** Callbacks into the tournament service for match rooms. */
+export interface MatchHooks {
+  finished(room: Room, result: GameResultDto | null): void;
+  /** The ready timer ran out; `ready` are the players who did press «Готов». */
+  noShow(room: Room, ready: string[]): void;
+  forfeit(room: Room, userId: string): void;
+}
 
 export interface RoomDeps {
   config: Config;
@@ -51,6 +59,7 @@ export class RoomManager {
   private readonly rooms = new Map<string, Room>();
   private readonly queues = new Map<string, SerialQueue>();
   private readonly timers = new Map<string, NodeJS.Timeout>();
+  matchHooks: MatchHooks | null = null;
 
   constructor(private readonly deps: RoomDeps) {}
 
@@ -82,6 +91,7 @@ export class RoomManager {
       createdAt: room.createdAt,
       premium: room.seats.some((s) => s.premium),
       readyDeadline: room.readyDeadline,
+      tournament: room.tournament ? { id: room.tournament.id, title: room.tournament.title, round: room.tournament.round } : null,
     };
   }
 
@@ -214,8 +224,77 @@ export class RoomManager {
     if (!room) return;
     await this.queue(roomId).run(async () => {
       if (room.status === 'playing') throw new AppError('GAME_ALREADY_STARTED');
+      if (room.tournament) {
+        if (!room.seats.some((s) => s.userId === userId)) return;
+        // Walking out of a match hands it to the opponent.
+        this.matchHooks?.forfeit(room, userId);
+        await this.closeRoom(room);
+        return;
+      }
       await this.removeSeat(room, userId);
     });
+  }
+
+  /**
+   * Tournament match: both players are seated by the server. A player waiting at a casual
+   * table is moved out of it; a player still in a running game makes this throw (retry later).
+   */
+  async createMatchRoom(
+    tournament: { id: string; title: string; round: number; matchId: string },
+    userIds: [string, string],
+    settings: Omit<RoomConfig, 'stake' | 'players'>,
+  ): Promise<Room> {
+    for (const userId of userIds) {
+      const current = this.roomOf(userId);
+      if (!current) continue;
+      if (current.status !== 'waiting' || current.tournament) throw new AppError('ALREADY_IN_ROOM');
+      await this.leave(userId, current.id);
+    }
+    const seats = await Promise.all(userIds.map((id) => this.seatFor(id, 0)));
+    const room: Room = {
+      id: newRoomId(),
+      server: 'almaz',
+      ownerId: userIds[0],
+      isPrivate: true,
+      passwordHash: null,
+      settings: { ...settings, stake: 0, players: 2 },
+      status: 'waiting',
+      seats,
+      gameId: null,
+      createdAt: Date.now(),
+      readyDeadline: null,
+      tournament,
+    };
+    await this.deps.db.room.create({
+      data: {
+        id: room.id,
+        server: room.server,
+        ownerId: room.ownerId,
+        isPrivate: true,
+        stake: 0n,
+        maxPlayers: 2,
+        deckSize: settings.deckSize,
+        speed: settings.speed,
+        variant: settings.variant,
+        throwIn: settings.throwIn,
+        fairness: settings.fairness,
+        ending: settings.ending,
+      },
+    });
+    this.rooms.set(room.id, room);
+    this.armReadyTimer(room, this.deps.config.MATCH_READY_SECONDS * 1000);
+    await this.changed(room);
+    return room;
+  }
+
+  /** Removes a room and everyone in it (used for tournament matches that end without a game). */
+  private async closeRoom(room: Room): Promise<void> {
+    this.clearTimer(`ready:${room.id}`);
+    room.status = 'closed';
+    this.rooms.delete(room.id);
+    for (const s of room.seats) this.deps.hub.send(s.userId, { type: 'ROOM_LEFT', room: this.dto(room), userId: s.userId });
+    await this.deps.store.deleteRoom(room.id).catch(() => undefined);
+    await this.deps.db.room.update({ where: { id: room.id }, data: { status: 'CLOSED', closedAt: new Date() } }).catch(() => undefined);
   }
 
   async setReady(userId: string, roomId: string, ready: boolean): Promise<void> {
@@ -263,7 +342,8 @@ export class RoomManager {
       }
     });
     // In a waiting room an absent player would block everybody; in a game the turn timer handles it.
-    if (room.status === 'waiting') {
+    // Tournament matches have their own (longer) no-show timer.
+    if (room.status === 'waiting' && !room.tournament) {
       this.setTimer(`grace:${userId}`, WAITING_GRACE_MS, () =>
         this.queue(room.id).run(async () => {
           const seat = room.seats.find((s) => s.userId === userId);
@@ -298,9 +378,10 @@ export class RoomManager {
   }
 
   /** Called by the game when it is settled: the room closes and players are free again. */
-  finished(roomId: string, _result: GameResultDto | null): void {
+  finished(roomId: string, result: GameResultDto | null): void {
     const room = this.rooms.get(roomId);
     if (!room) return;
+    if (room.tournament) this.matchHooks?.finished(room, result);
     room.status = 'finished';
     this.rooms.delete(roomId);
     this.queues.delete(roomId);
@@ -311,6 +392,10 @@ export class RoomManager {
   restore(room: Room): void {
     for (const s of room.seats) s.connected = false;
     this.rooms.set(room.id, room);
+    if (room.tournament && room.status === 'waiting') {
+      this.armReadyTimer(room, this.deps.config.MATCH_READY_SECONDS * 1000);
+      return;
+    }
     if (room.status === 'waiting') {
       for (const s of room.seats) this.setTimer(`grace:${s.userId}`, WAITING_GRACE_MS, () => this.queue(room.id).run(() => this.dropIfAway(room, s.userId)));
     }
@@ -345,7 +430,7 @@ export class RoomManager {
   private async leaveWaitingRoomOf(userId: string): Promise<void> {
     const current = this.roomOf(userId);
     if (!current) return;
-    if (current.status !== 'waiting') throw new AppError('ALREADY_IN_ROOM');
+    if (current.status !== 'waiting' || current.tournament) throw new AppError('ALREADY_IN_ROOM');
     await this.leave(userId, current.id);
   }
 
@@ -372,12 +457,17 @@ export class RoomManager {
     await this.changed(room);
   }
 
-  private armReadyTimer(room: Room): void {
-    room.readyDeadline = Date.now() + READY_TIMEOUT_MS;
-    this.setTimer(`ready:${room.id}`, READY_TIMEOUT_MS, () =>
+  private armReadyTimer(room: Room, ms = READY_TIMEOUT_MS): void {
+    room.readyDeadline = Date.now() + ms;
+    this.setTimer(`ready:${room.id}`, ms, () =>
       this.queue(room.id).run(async () => {
-        if (room.status !== 'waiting') return;
+        if (room.status !== 'waiting' || !this.rooms.has(room.id)) return;
         room.readyDeadline = null;
+        if (room.tournament) {
+          this.matchHooks?.noShow(room, room.seats.filter((s) => s.ready).map((s) => s.userId));
+          await this.closeRoom(room);
+          return;
+        }
         for (const s of room.seats.filter((seat) => !seat.ready)) await this.removeSeat(room, s.userId);
       }),
     );

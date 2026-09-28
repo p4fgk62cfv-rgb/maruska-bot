@@ -23,6 +23,8 @@ const schema = z.object({
   /** Shared secret for bot → arena calls on /internal/*. */
   INTERNAL_API_SECRET: z.string().min(16).optional(),
   SIGNUP_BONUS_CREDITS: z.coerce.number().int().nonnegative().default(1_450),
+  /** Seconds tournament players have to press «Готов» before a no-show loss. */
+  MATCH_READY_SECONDS: z.coerce.number().int().positive().default(90),
   RAKE_PERCENT: z.coerce.number().min(0).max(50).default(5),
   CORS_ORIGINS: z.string().default(''),
   /** Directory with the built web app; served from the same origin as the API. */

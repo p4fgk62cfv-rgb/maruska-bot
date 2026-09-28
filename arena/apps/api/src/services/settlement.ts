@@ -101,7 +101,12 @@ export class SettlementService {
       async (tx) => {
         // Only the first finisher settles; a retry sees FINISHED and just rebuilds the answer.
         const claimed = await tx.game.updateMany({ where: { id: gameId, status: 'PLAYING' }, data: { status: 'FINISHED', finishedAt: now } });
-        if (claimed.count === 0) return this.loadResult(tx, gameId, stake);
+        if (claimed.count === 0) {
+          const current = await tx.game.findUnique({ where: { id: gameId }, select: { status: true } });
+          // Aborted and refunded meanwhile: there is no result to report.
+          if (current?.status !== 'FINISHED') throw new Error(`game ${gameId} is ${current?.status ?? 'missing'}, not settled`);
+          return this.loadResult(tx, gameId, stake);
+        }
 
         const profiles = await tx.profile.findMany({ where: { userId: { in: ids } } });
         const anyPremium = profiles.some((p) => isPremium(p.premiumUntil?.getTime() ?? null, now.getTime()));

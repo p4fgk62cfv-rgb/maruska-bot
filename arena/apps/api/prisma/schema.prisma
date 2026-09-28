@@ -101,6 +101,7 @@ enum TransactionType {
   PURCHASE
   TOURNAMENT_FEE
   TOURNAMENT_PRIZE
+  TOURNAMENT_REFUND
   ACHIEVEMENT_REWARD
   EXCHANGE
   ADMIN
@@ -444,6 +445,7 @@ model Tournament {
   createdAt  DateTime         @default(now()) @map("created_at")
 
   players TournamentPlayer[]
+  matches TournamentMatch[]
 
   @@index([status, startsAt])
   @@map("tournaments")
@@ -455,6 +457,8 @@ model TournamentPlayer {
   userId       String   @map("user_id") @db.Uuid
   place        Int?
   prize        BigInt?
+  /// Round in which the player lost; null while still in.
+  eliminatedRound Int? @map("eliminated_round")
   joinedAt     DateTime @default(now()) @map("joined_at")
 
   tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
@@ -462,6 +466,38 @@ model TournamentPlayer {
 
   @@id([tournamentId, userId])
   @@map("tournament_players")
+  @@schema("arena")
+}
+
+enum MatchStatus {
+  PENDING
+  PLAYING
+  DONE
+
+  @@schema("arena")
+}
+
+/// Heads-up single-elimination bracket. playerB null = a bye.
+model TournamentMatch {
+  id           String      @id @default(uuid(7)) @db.Uuid
+  tournamentId String      @map("tournament_id") @db.Uuid
+  round        Int
+  slot         Int
+  playerA      String      @map("player_a") @db.Uuid
+  playerB      String?     @map("player_b") @db.Uuid
+  roomId       String?     @map("room_id") @db.VarChar(16)
+  gameId       String?     @map("game_id") @db.Uuid
+  winnerId     String?     @map("winner_id") @db.Uuid
+  status       MatchStatus @default(PENDING)
+  /// How it was decided: game, bye, no_show, draw_replay…
+  decidedBy    String?     @map("decided_by") @db.VarChar(16)
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, round, slot])
+  @@index([status])
+  @@map("tournament_matches")
   @@schema("arena")
 }
 

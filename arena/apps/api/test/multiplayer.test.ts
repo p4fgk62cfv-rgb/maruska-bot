@@ -223,6 +223,23 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     expect(rb.room.seats).toHaveLength(2);
   });
 
+  it('a second instance (rolling deploy) leaves live games alone and refunds only abandoned ones', async () => {
+    const { players, roomId } = await table(2);
+    const gameId = await startGame(players, roomId);
+    const other = await buildApp(base, { bot: null });
+    try {
+      await other.ctx.realtime.sweepOrphans();
+      expect((await db.game.findUniqueOrThrow({ where: { id: gameId } })).status).toBe('PLAYING');
+
+      // Three minutes of silence: the game is treated as abandoned and the stakes come back.
+      await other.ctx.realtime.sweepOrphans(Date.now() + 180_000);
+      expect((await db.game.findUniqueOrThrow({ where: { id: gameId } })).status).toBe('ABORTED');
+      for (const p of players) expect((await base.users.wallet(p.userId)).credits).toBe(1450);
+    } finally {
+      await other.app.close();
+    }
+  });
+
   it.skipIf(!redisUrl)('a running game survives a server restart through Redis', async () => {
     const redis = new Redis(redisUrl!);
     await redis.flushdb();

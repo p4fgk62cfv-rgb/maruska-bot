@@ -275,3 +275,12 @@ select.app-input { appearance: none; }
 .sparks { position: absolute; left: 50%; top: 28%; width: 0; height: 0; pointer-events: none; }
 .sparks span { position: absolute; left: -3px; top: -3px; width: 6px; height: 26px; border-radius: 3px; background: linear-gradient(var(--gold), transparent); transform-origin: 3px 3px; animation: spark 0.9s var(--ease) forwards; }
 @keyframes spark { from { transform: translateY(0) scaleY(0.2); opacity: 1; } to { transform: translateY(-120px) scaleY(1); opacity: 0; } }
+
+/* Tournaments */
+.tour-prizes { display: flex; flex-direction: column; gap: 6px; }
+.tour-match { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 14px; background: rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px var(--stroke); }
+.tour-match__side { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; }
+.tour-match__side span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tour-match__side--win { color: var(--gold); font-weight: 800; }
+.tour-match__side--out { opacity: 0.5; }
+.tour-match__state { font-size: 11px; color: var(--text-3); }

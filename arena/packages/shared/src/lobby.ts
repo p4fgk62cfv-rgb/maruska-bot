@@ -35,6 +35,8 @@ export interface RoomDto {
   premium: boolean;
   /** When the not-ready players will be removed from a full room (epoch ms). */
   readyDeadline: number | null;
+  /** Set for tournament matches: no stake, no leaving without losing the match. */
+  tournament: { id: string; title: string; round: number } | null;
 }
 
 /** Members only: the invite link carries a code that lets friends skip the password. */

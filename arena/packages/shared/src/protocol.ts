@@ -48,7 +48,8 @@ export type ServerMessage =
   | { type: 'FRIEND_REQUEST'; from: PublicUserDto }
   | { type: 'FRIEND_ACCEPTED'; friend: PublicUserDto }
   /** A friend calls you to their table; `invite` lets you in without the password. */
-  | { type: 'ROOM_INVITE'; from: PublicUserDto; room: RoomDto; invite: string };
+  | { type: 'ROOM_INVITE'; from: PublicUserDto; room: RoomDto; invite: string }
+  | { type: 'TOURNAMENT_MATCH'; tournamentId: string; title: string; round: number; roomId: string };
 
 export interface GameResultDto {
   kind: 'loser' | 'draw';

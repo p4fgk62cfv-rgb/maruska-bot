@@ -4,6 +4,7 @@ import type { Realtime } from './realtime/realtime.js';
 import { ItemService } from './services/items.js';
 import { Ledger } from './services/ledger.js';
 import type { FriendService } from './services/friends.js';
+import type { TournamentService } from './services/tournaments.js';
 import type { Outbox } from './services/notifier.js';
 import type { Presence } from './services/presence.js';
 import { UserService } from './services/users.js';
@@ -25,6 +26,7 @@ export interface Context extends BaseContext {
   presence: Presence;
   outbox: Outbox;
   friends: FriendService;
+  tournaments: TournamentService;
 }
 
 export function createContext(config: Config, db: Db): BaseContext {
