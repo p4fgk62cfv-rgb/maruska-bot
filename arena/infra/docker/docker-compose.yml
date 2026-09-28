@@ -1,0 +1,34 @@
+# Local stack: Postgres + Redis + Arena.  cd arena && docker compose -f infra/docker/docker-compose.yml up --build
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: maruska
+    ports: ['5432:5432']
+    volumes: [pg:/var/lib/postgresql/data]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports: ['6379:6379']
+
+  arena:
+    build:
+      context: ../..
+      dockerfile: infra/docker/arena.Dockerfile
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+    env_file: ../../.env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/maruska?schema=arena
+      REDIS_URL: redis://redis:6379
+      PORT: 8080
+    ports: ['8080:8080']
+
+volumes:
+  pg:

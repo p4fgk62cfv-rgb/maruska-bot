@@ -1,0 +1,4 @@
+# Арена — отдельный Node-сервис со своим образом (arena/infra/docker)
+arena/
+.git/
+__pycache__/

@@ -1,0 +1,22 @@
+{
+  "name": "@arena/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles.css"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@arena/game-engine": "0.1.0",
+    "@arena/shared": "0.1.0"
+  },
+  "peerDependencies": {
+    "react": ">=19"
+  }
+}

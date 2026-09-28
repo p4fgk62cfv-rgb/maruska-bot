@@ -100,6 +100,8 @@ def main() -> int:
         ".".join(path.relative_to(ROOT).with_suffix("").parts)
         for path in ROOT.rglob("*.py")
         if "__pycache__" not in path.parts and not path.name.startswith("test_")
+        # arena/ — отдельный TypeScript-сервис; в его node_modules бывают чужие .py
+        and "arena" not in path.relative_to(ROOT).parts[:1] and "node_modules" not in path.parts
         and path.name != "__init__.py"
     )
 
