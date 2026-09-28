@@ -1,13 +1,14 @@
 import { rankValue, suitOf, SUITS, type CardId, type Suit } from '@arena/game-engine';
 
 /** Suits grouped, trumps last, low to high inside a suit. */
-export function sortHand(hand: CardId[], trump: Suit, mode: 'suit' | 'rank'): CardId[] {
+export function sortHand(hand: CardId[], trump: Suit, mode: 'suit' | 'rank', desc = false): CardId[] {
   const suitIndex = (c: CardId) => (suitOf(c) === trump ? 10 : SUITS.indexOf(suitOf(c)));
-  return [...hand].sort((a, b) =>
+  const sorted = [...hand].sort((a, b) =>
     mode === 'suit'
       ? suitIndex(a) - suitIndex(b) || rankValue(a) - rankValue(b)
       : Number(suitOf(a) === trump) - Number(suitOf(b) === trump) || rankValue(a) - rankValue(b) || suitIndex(a) - suitIndex(b),
   );
+  return desc ? sorted.reverse() : sorted;
 }
 
 export function sameRank(cards: CardId[]): boolean {

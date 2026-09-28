@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { haptic } from '../../lib/telegram.js';
 import { play } from '../../lib/sound.js';
 import { useMe } from '../../session.js';
+import { useSettings } from '../../lib/settings.js';
 
 const REASON: Record<string, string> = {
   cards: 'остался с картами',
@@ -51,6 +52,7 @@ function AddFriend({ userId }: { userId: string }) {
 }
 
 export function ResultView({ result, players, onClose }: { result: GameResultDto; players: PlayerInfo[]; onClose: () => void }) {
+  const rewards = useSettings().rewardAnimations;
   const me = useMe();
   const mine = result.payouts.find((p) => p.userId === me.id);
   const outcome = result.kind === 'draw' ? 'draw' : result.loserId === me.id ? 'lose' : 'win';
@@ -75,7 +77,7 @@ export function ResultView({ result, players, onClose }: { result: GameResultDto
           ))}
         </div>
       )}
-      {outcome === 'win' && (
+      {outcome === 'win' && rewards && (
         <div className="confetti" aria-hidden="true">
           {CONFETTI.map((c, i) => (
             <span key={i} style={{ left: `${c.x}%`, background: c.color, animationDelay: `${c.delay}ms`, animationDuration: `${c.duration}ms` }} />

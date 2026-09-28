@@ -7,6 +7,20 @@ import type { Context } from '../context.js';
 import { AppError } from '../lib/errors.js';
 import { toNumber } from '../lib/money.js';
 
+const AVATAR_MAX_BYTES = 200 * 1024;
+/** Letters, digits, spaces, a little punctuation and emoji — no markup, no control characters. */
+const NICKNAME = /^[\p{L}\p{N}\p{Extended_Pictographic}‍️ ._\-@!?~*'"()+=&#№]+$/u;
+/** Names that pose as staff or the bot. */
+const RESERVED = /(admin|админ|moder|модер|support|поддержк|маруськ|maruska|arena|арена)/i;
+
+/** Trusts the bytes, not the declared type. */
+function sniffImage(data: Buffer): 'image/jpeg' | 'image/png' | 'image/webp' | null {
+  if (data.length > 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) return 'image/jpeg';
+  if (data.length > 8 && data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+  if (data.length > 12 && data.toString('ascii', 0, 4) === 'RIFF' && data.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
+  return null;
+}
+
 const pageSchema = z.object({ limit: z.coerce.number().int().min(1).max(100).default(30) });
 
 export async function profileRoutes(app: FastifyInstance, ctx: Context): Promise<void> {
@@ -17,6 +31,58 @@ export async function profileRoutes(app: FastifyInstance, ctx: Context): Promise
     const me = await ctx.users.me(sessionOf(request).sub);
     if (!me) throw new AppError('UNAUTHORIZED');
     return me;
+  });
+
+  /** «Имя в игре»: 2–20 characters; empty brings the Telegram name back. */
+  app.put('/me/nickname', { ...auth, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request) => {
+    const userId = sessionOf(request).sub;
+    const raw = z.object({ nickname: z.string().max(64) }).parse(request.body).nickname;
+    const nickname = raw.replace(/\s+/g, ' ').trim();
+    if (nickname && (nickname.length < 2 || nickname.length > 20 || !NICKNAME.test(nickname) || RESERVED.test(nickname))) {
+      throw new AppError('VALIDATION_FAILED');
+    }
+    await db.profile.update({ where: { userId }, data: { nickname: nickname || null } });
+    const me = await ctx.users.me(userId);
+    return me;
+  });
+
+  /** «Загрузить аватарку»: the app sends a small square picture (resized on the phone). */
+  app.post('/me/avatar', { ...auth, bodyLimit: 400 * 1024, config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request) => {
+    const userId = sessionOf(request).sub;
+    const { image } = z.object({ image: z.string().max(380_000) }).parse(request.body);
+    const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(image);
+    if (!match) throw new AppError('VALIDATION_FAILED');
+    const data = Buffer.from(match[2]!, 'base64');
+    const mime = sniffImage(data);
+    if (!mime || data.length > AVATAR_MAX_BYTES) throw new AppError('VALIDATION_FAILED');
+    await db.$transaction([
+      db.userAvatar.upsert({ where: { userId }, create: { userId, mime, data }, update: { mime, data } }),
+      db.profile.update({ where: { userId }, data: { avatarVersion: { increment: 1 } } }),
+    ]);
+    // A null version cannot be incremented: start from 1.
+    await db.profile.updateMany({ where: { userId, avatarVersion: null }, data: { avatarVersion: 1 } });
+    return ctx.users.me(userId);
+  });
+
+  app.delete('/me/avatar', auth, async (request) => {
+    const userId = sessionOf(request).sub;
+    await db.$transaction([
+      db.userAvatar.deleteMany({ where: { userId } }),
+      db.profile.update({ where: { userId }, data: { avatarVersion: null } }),
+    ]);
+    return ctx.users.me(userId);
+  });
+
+  /** Public: <img> tags cannot send a token. URLs carry a version, so they are cached for good. */
+  app.get('/avatars/:userId', async (request, reply) => {
+    const { userId } = z.object({ userId: z.uuid() }).parse(request.params);
+    const avatar = await db.userAvatar.findUnique({ where: { userId } });
+    if (!avatar) throw new AppError('NOT_FOUND');
+    return reply
+      .type(avatar.mime)
+      .header('cache-control', 'public, max-age=31536000, immutable')
+      .header('x-content-type-options', 'nosniff')
+      .send(Buffer.from(avatar.data));
   });
 
   /** Link to the Mini App for «Поделиться». */

@@ -1,5 +1,7 @@
 import type { FriendDto, FriendRequestsDto, RecentPlayerDto, Relation, SearchUserDto, SendRequestResult } from '@arena/shared';
-import { Avatar, Badge, BottomSheet, Button, EmptyState, Panel, RatingBadge, SwipeRow, Tabs } from '@arena/ui';
+import { Avatar, Badge, BottomSheet, Button, EmptyState, Icon, RatingBadge, Tabs } from '@arena/ui';
+import { ratingBadge } from '@arena/shared';
+import { tg } from '../lib/telegram.js';
 import { useEffect, useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
 import { useQuery } from '../lib/useQuery.js';
@@ -7,14 +9,22 @@ import { useRealtime } from '../realtime.js';
 import { useToast } from '../toast.js';
 import { QueryView, ScreenHeader } from './common.js';
 
-const PRESENCE = { online: ['green', 'Онлайн'], in_game: ['gold', 'В игре'], offline: ['muted', 'Не в сети'] } as const;
 
 export default function FriendsScreen() {
   const { requestCount } = useRealtime();
   const [tab, setTab] = useState<'friends' | 'requests' | 'recent'>(requestCount ? 'requests' : 'friends');
+  const [searching, setSearching] = useState(false);
   return (
-    <div className="app-stack">
-      <ScreenHeader title="Друзья" />
+    <div className="app-stack people">
+      <ScreenHeader
+        title="Друзья"
+        action={
+          <button type="button" className="app-bar__icon" aria-label="Найти игрока" aria-pressed={searching} onClick={() => setSearching((v) => !v)}>
+            <Icon name="search" size={22} />
+          </button>
+        }
+      />
+      {searching && <SearchBox />}
       <Tabs
         value={tab}
         onChange={setTab}
@@ -28,6 +38,19 @@ export default function FriendsScreen() {
       {tab === 'requests' && <RequestsTab />}
       {tab === 'recent' && <RecentTab />}
     </div>
+  );
+}
+
+const PRESENCE_TEXT = { online: 'в сети', in_game: 'в игре', offline: 'не в сети' } as const;
+
+/** Square portrait with the league mark in the corner, as at the table. */
+function PeopleAvatar({ user }: { user: { id: string; name: string; photoUrl: string | null; rating: number } }) {
+  const badge = ratingBadge(user.rating);
+  return (
+    <span className="people-avatar" style={{ ['--league' as string]: badge.league.color }}>
+      <Avatar id={user.id} name={user.name} photoUrl={user.photoUrl} size={56} />
+      <span className="people-avatar__level">{badge.level}</span>
+    </span>
   );
 }
 
@@ -50,7 +73,15 @@ function FriendsTab() {
   const { room } = useRealtime();
   const act = useAction();
   const [picked, setPicked] = useState<FriendDto | null>(null);
+  const [removing, setRemoving] = useState<FriendDto | null>(null);
   const inRoom = room?.status === 'waiting';
+  const invite = (f: FriendDto) => act(() => api(`/friends/${f.id}/invite`, { method: 'POST' }), `${f.name} получит приглашение`);
+  const write = (f: FriendDto) => {
+    if (!f.username) return;
+    const url = `https://t.me/${f.username}`;
+    if (tg) tg.openTelegramLink(url);
+    else window.open(url, '_blank', 'noopener');
+  };
 
   const remove = async (f: FriendDto) => {
     if (await act(() => api(`/friends/${f.id}`, { method: 'DELETE' }), `${f.name} удалён из друзей`)) query.reload();
@@ -58,33 +89,50 @@ function FriendsTab() {
 
   return (
     <>
-      <SearchBox />
       <QueryView query={query}>
         {(list) =>
           list.length === 0 ? (
             <EmptyState icon="users" title="Пока никого" text="Найдите друга по @username или добавьте соперника из «Недавних»." />
           ) : (
-            <div className="app-list">
-              {list.map((f) => {
-                const [tone, label] = PRESENCE[f.presence];
-                return (
-                  <SwipeRow key={f.id} actionLabel="Удалить" onAction={() => void remove(f)}>
-                    <Panel className="friend-row" role="button" tabIndex={0} onClick={() => setPicked(f)}>
-                      <Avatar id={f.id} name={f.name} photoUrl={f.photoUrl} status={f.presence} />
-                      <div className="friend-row__body">
-                        <strong>{f.name}</strong>
-                        <RatingBadge rating={f.rating} showValue={false} />
-                      </div>
-                      <Badge tone={tone}>{label}</Badge>
-                    </Panel>
-                  </SwipeRow>
-                );
-              })}
-              <p className="app-muted">Проведите по другу справа налево, чтобы удалить.</p>
+            <div className="people-list">
+              {list.map((f) => (
+                <div key={f.id} className="people-row">
+                  <button type="button" className="people-row__who" onClick={() => setPicked(f)}>
+                    <PeopleAvatar user={f} />
+                    <span className="people-row__text">
+                      <strong>{f.name}</strong>
+                      <span className={`people-row__sub people-row__sub--${f.presence}`}>{f.username ? `@${f.username} · ` : ''}{PRESENCE_TEXT[f.presence]}</span>
+                    </span>
+                  </button>
+                  <button type="button" className="people-row__btn" aria-label={`Удалить ${f.name} из друзей`} onClick={() => setRemoving(f)}>
+                    <Icon name="close" size={20} />
+                  </button>
+                  <button
+                    type="button"
+                    className="people-row__btn"
+                    aria-label={inRoom ? `Позвать ${f.name} за стол` : `Написать ${f.name}`}
+                    disabled={!inRoom && !f.username}
+                    onClick={() => (inRoom ? void invite(f) : write(f))}
+                  >
+                    <Icon name="mail" size={20} />
+                  </button>
+                </div>
+              ))}
             </div>
           )
         }
       </QueryView>
+
+      <BottomSheet open={removing !== null} title="Удалить из друзей?" onClose={() => setRemoving(null)}>
+        {removing && (
+          <div className="app-stack">
+            <p className="app-muted">{removing.name} пропадёт из списка. Снова добавить можно в «Недавних» или через поиск.</p>
+            <Button block variant="danger" onClick={() => void remove(removing).then(() => setRemoving(null))}>
+              Удалить
+            </Button>
+          </div>
+        )}
+      </BottomSheet>
 
       <BottomSheet open={picked !== null} title={picked?.name} onClose={() => setPicked(null)}>
         {picked && (
@@ -145,11 +193,11 @@ function RequestsTab() {
         incoming.length + outgoing.length === 0 ? (
           <EmptyState icon="users" title="Заявок нет" text="Здесь появятся приглашения дружить." />
         ) : (
-          <div className="app-list">
+          <div className="people-list">
             {incoming.map((r) => (
-              <Panel key={r.id} className="friend-row">
-                <Avatar id={r.user.id} name={r.user.name} photoUrl={r.user.photoUrl} />
-                <div className="friend-row__body">
+              <div key={r.id} className="people-row people-row--plain">
+                <PeopleAvatar user={r.user} />
+                <div className="people-row__text">
                   <strong>{r.user.name}</strong>
                   <span className="app-muted">хочет дружить</span>
                 </div>
@@ -161,20 +209,20 @@ function RequestsTab() {
                     ✕
                   </Button>
                 </div>
-              </Panel>
+              </div>
             ))}
             {outgoing.length > 0 && <h3 className="app-section">Вы отправили</h3>}
             {outgoing.map((r) => (
-              <Panel key={r.id} className="friend-row">
-                <Avatar id={r.user.id} name={r.user.name} photoUrl={r.user.photoUrl} />
-                <div className="friend-row__body">
+              <div key={r.id} className="people-row people-row--plain">
+                <PeopleAvatar user={r.user} />
+                <div className="people-row__text">
                   <strong>{r.user.name}</strong>
                   <span className="app-muted">ждём ответа</span>
                 </div>
                 <Button size="sm" variant="ghost" onClick={() => void act(() => api(`/friends/requests/${r.id}`, { method: 'DELETE' })).then(reload)}>
                   Отменить
                 </Button>
-              </Panel>
+              </div>
             ))}
           </div>
         )
@@ -191,7 +239,7 @@ function RecentTab() {
         list.length === 0 ? (
           <EmptyState icon="cards" title="Недавних соперников нет" text="Сыграйте партию — соперники появятся здесь." />
         ) : (
-          <div className="app-list">
+          <div className="people-list">
             {list.map((p) => (
               <PersonRow
                 key={p.id}
@@ -221,9 +269,9 @@ export function PersonRow({ user, relation, hint }: { user: { id: string; name: 
     if (status) setState(status === 'friends' || status === 'already_friends' ? 'friend' : 'outgoing');
   };
   return (
-    <Panel className="friend-row">
-      <Avatar id={user.id} name={user.name} photoUrl={user.photoUrl} />
-      <div className="friend-row__body">
+    <div className="people-row people-row--plain">
+      <PeopleAvatar user={user} />
+      <div className="people-row__text">
         <strong>{user.name}</strong>
         {hint ? <span className="app-muted">{hint}</span> : <RatingBadge rating={user.rating} showValue={false} />}
       </div>
@@ -234,6 +282,6 @@ export function PersonRow({ user, relation, hint }: { user: { id: string; name: 
       ) : (
         <Badge tone={state === 'friend' ? 'green' : 'muted'}>{RELATION_LABEL[state]}</Badge>
       )}
-    </Panel>
+    </div>
   );
 }

@@ -16,7 +16,7 @@ import { AppError } from '../lib/errors.js';
 import { checkInvite, hashPassword, inviteCode, newRoomId, verifyPassword } from '../lib/ids.js';
 import { SerialQueue } from '../lib/serial.js';
 import { ShortOfFunds } from '../services/settlement.js';
-import { displayName, type UserService } from '../services/users.js';
+import type { UserService } from '../services/users.js';
 import type { GameManager } from './games.js';
 import type { Hub } from './hub.js';
 import type { SnapshotStore } from './store.js';
@@ -412,10 +412,9 @@ export class RoomManager {
     const me = await this.deps.users.me(userId);
     if (!me) throw new AppError('UNAUTHORIZED');
     if (me.wallet.credits < stake) throw new AppError('INSUFFICIENT_FUNDS');
-    const user = await this.deps.users.findById(userId);
     return {
       userId,
-      name: user ? displayName(user) : me.name,
+      name: me.name,
       photoUrl: me.photoUrl,
       rating: me.rating,
       premium: isPremium(me.premiumUntil ? Date.parse(me.premiumUntil) : null, Date.now()),

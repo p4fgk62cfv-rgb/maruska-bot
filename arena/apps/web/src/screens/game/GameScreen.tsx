@@ -42,7 +42,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
   const { refreshMe } = useSession();
   const [paid, setPaid] = useState<string | null>(null);
   const myNet = result?.payouts.find((p) => p.userId === me.id)?.net ?? 0;
-  const payoutActive = Boolean(result) && myNet > 0 && paid !== view.gameId;
+  const payoutActive = Boolean(result) && myNet > 0 && paid !== view.gameId && prefs.rewardAnimations;
   // The stake left the wallet when the game started: show the balance as it is now.
   useEffect(() => {
     void refreshMe();
@@ -105,11 +105,12 @@ export function GameScreen({ game }: { game: LiveGame }) {
   useEffect(
     () =>
       onEmoji((userId, emoji) => {
+        if (!settings.get().emojis && userId !== me.id) return;
         play('emoji');
         setEmojis((e) => ({ ...e, [userId]: emoji }));
         window.setTimeout(() => setEmojis((e) => (e[userId] === emoji ? { ...e, [userId]: '' } : e)), 2500);
       }),
-    [onEmoji],
+    [onEmoji, me.id],
   );
 
   useEffect(() => {
@@ -131,7 +132,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
     [socket, toast],
   );
 
-  const hand = useMemo(() => sortHand(view.you?.hand ?? [], view.trump.suit, sort), [view.you?.hand, view.trump.suit, sort]);
+  const hand = useMemo(() => sortHand(view.you?.hand ?? [], view.trump.suit, sort, prefs.sortDesc), [view.you?.hand, view.trump.suit, sort, prefs.sortDesc]);
   const isDefender = view.defender === me.id && view.phase === 'defense';
   const undefended = view.table.map((p, i) => (p.defense ? -1 : i)).filter((i) => i >= 0);
 
@@ -318,7 +319,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
         playable={playable}
         cardWidth={Math.min(96, Math.max(64, (Math.min(window.innerWidth, 560) - 16) / 4.3))}
         onTap={tapCard}
-        onDoubleTap={doubleTap}
+        onDoubleTap={prefs.doubleTap ? doubleTap : tapCard}
         onSwipeRight={() => settings.set({ handSort: sort === 'suit' ? 'rank' : 'suit' })}
         onDragMove={dragMove}
         onDrop={dropCard}

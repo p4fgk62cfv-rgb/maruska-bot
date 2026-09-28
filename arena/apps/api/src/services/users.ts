@@ -15,6 +15,11 @@ export function displayName(user: Pick<User, 'firstName' | 'lastName' | 'usernam
   return [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.username || 'Игрок';
 }
 
+/** A picture uploaded in «Настройки» wins over the Telegram photo; the version busts caches. */
+export function avatarUrl(user: Pick<User, 'id' | 'photoUrl'>, profile: Pick<Profile, 'avatarVersion'>): string | null {
+  return profile.avatarVersion ? `/api/avatars/${user.id}?v=${profile.avatarVersion}` : user.photoUrl;
+}
+
 export class UserService {
   constructor(
     private readonly db: Db,
@@ -100,6 +105,9 @@ export class UserService {
       firstName: user.firstName,
       lastName: user.lastName,
       languageCode: user.languageCode,
+      nickname: profile.nickname,
+      telegramName: displayName(user),
+      customAvatar: profile.avatarVersion !== null,
       wallet,
       stats: stats(profile, unlocked, total),
       premiumUntil: profile.premiumUntil?.toISOString() ?? null,
@@ -134,9 +142,9 @@ export class UserService {
 export function publicUser(user: User, profile: Profile): PublicUserDto {
   return {
     id: user.id,
-    name: displayName(user),
+    name: profile.nickname || displayName(user),
     username: user.username,
-    photoUrl: user.photoUrl,
+    photoUrl: avatarUrl(user, profile),
     rating: profile.rating,
   };
 }

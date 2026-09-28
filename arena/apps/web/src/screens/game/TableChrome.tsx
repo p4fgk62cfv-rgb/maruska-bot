@@ -2,6 +2,7 @@ import { formatStake, type RoomDto } from '@arena/shared';
 import { Avatar, Icon, PlayingCard, type IconName } from '@arena/ui';
 import { memo, type KeyboardEvent, type ReactNode } from 'react';
 import { ringOf } from '../../lib/cosmetics.js';
+import { useSettings } from '../../lib/settings.js';
 import { ModeStrip } from '../lobbyParts.js';
 
 /** Top of the table: a square button on the left, the rules in the middle, the stake on the right. */
@@ -121,8 +122,9 @@ export function EmptySeat({ number, size = 58 }: { number: number; size?: number
 
 /** Ivory dock at the bottom: the action on the left, me in the middle, extras on the right. */
 export function TableDock({ actions, me, extras }: { actions: ReactNode; me: ReactNode; extras: ReactNode }) {
+  const { actionRight } = useSettings();
   return (
-    <div className="table-dock">
+    <div className={`table-dock${actionRight ? ' table-dock--right' : ''}`}>
       <div className="table-dock__actions">{actions}</div>
       <div className="table-dock__me">{me}</div>
       <div className="table-dock__extras">{extras}</div>

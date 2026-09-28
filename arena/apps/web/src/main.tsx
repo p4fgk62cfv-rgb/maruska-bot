@@ -6,8 +6,10 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
 import { initTelegram } from './lib/telegram.js';
+import { applyTheme } from './lib/settings.js';
 
 initTelegram();
+applyTheme();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

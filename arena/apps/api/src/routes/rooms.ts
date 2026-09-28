@@ -7,6 +7,7 @@ import { requireSession, sessionOf } from '../auth/plugin.js';
 import type { Context } from '../context.js';
 import { AppError } from '../lib/errors.js';
 import { isListed } from '../realtime/hub.js';
+import { displayName } from '../services/users.js';
 
 const idParam = z.object({ id: z.string().regex(/^[A-Z0-9]{8}$/) });
 const csv = (schema: z.ZodType) => z.preprocess((v) => (typeof v === 'string' && v ? v.split(',') : []), z.array(schema));
@@ -73,7 +74,7 @@ export async function roomRoutes(app: FastifyInstance, ctx: Context): Promise<vo
     const { id } = z.object({ id: z.uuid() }).parse(request.params);
     const game = await ctx.db.game.findUnique({
       where: { id },
-      include: { result: true, players: { include: { user: true } } },
+      include: { result: true, players: { include: { user: { include: { profile: true } } } } },
     });
     if (!game || !game.players.some((p) => p.userId === sessionOf(request).sub)) throw new AppError('NOT_FOUND');
     return {
@@ -85,7 +86,7 @@ export async function roomRoutes(app: FastifyInstance, ctx: Context): Promise<vo
       result: game.result ? { kind: game.result.kind, reason: game.result.reason, winnerId: game.result.winnerId, loserId: game.result.loserId } : null,
       players: game.players.map((p) => ({
         userId: p.userId,
-        name: p.user.firstName,
+        name: p.user.profile?.nickname || displayName(p.user),
         seat: p.seat,
         place: p.place,
         outcome: p.outcome,

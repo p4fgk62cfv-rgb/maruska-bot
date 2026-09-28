@@ -50,6 +50,7 @@ model User {
   notesAbout         PlayerNote[]      @relation("NoteTarget")
   reportsSent        PlayerReport[]    @relation("ReportFrom")
   reportsReceived    PlayerReport[]    @relation("ReportAbout")
+  avatar             UserAvatar?
 
   @@map("users")
   @@schema("arena")
@@ -73,6 +74,10 @@ model Profile {
   bonusLastAt     DateTime? @map("bonus_last_at")
   bonusStreak     Int       @default(0) @map("bonus_streak")
   lastPlayedAt    DateTime? @map("last_played_at")
+  /// Name chosen in «Настройки»; falls back to the Telegram name.
+  nickname        String?   @db.VarChar(24)
+  /// Bumped on every upload so the avatar URL changes and caches refresh; null = Telegram photo.
+  avatarVersion   Int?      @map("avatar_version")
   /// Times caught in «С шулерами» — for moderation and achievements.
   caughtCheating  Int       @default(0) @map("caught_cheating")
   updatedAt     DateTime  @updatedAt @map("updated_at")
@@ -602,5 +607,18 @@ model PlayerReport {
   @@index([targetId, createdAt])
   @@index([reporterId, targetId, createdAt])
   @@map("player_reports")
+  @@schema("arena")
+}
+
+/// «Загрузить аватарку»: a small square picture (resized in the app), served from /api/avatars/:userId.
+model UserAvatar {
+  userId    String   @id @map("user_id") @db.Uuid
+  mime      String   @db.VarChar(16)
+  data      Bytes
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_avatars")
   @@schema("arena")
 }

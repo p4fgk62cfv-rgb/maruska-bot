@@ -35,7 +35,7 @@ describe.skipIf(!url)('opponent cards: stats, private labels, reports', () => {
     const { token, me } = res.json();
     return { id: me.id, token, tg };
   }
-  const call = (p: { token: string }, method: 'GET' | 'POST' | 'PUT', path: string, payload?: object) =>
+  const call = (p: { token: string }, method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, payload?: object) =>
     handle.app.inject({ method, url: `/api${path}`, payload, headers: { authorization: `Bearer ${p.token}` } });
 
   it('shows season and total stats, and a label only its author sees', async () => {
@@ -69,5 +69,35 @@ describe.skipIf(!url)('opponent cards: stats, private labels, reports', () => {
     ).json() as { telegramId: string; reporters: number; reasons: Record<string, number> }[];
     const row = list.find((r) => r.telegramId === String(target.tg));
     expect(row).toMatchObject({ reporters: 2, reasons: { CHEATING: 1, COLLUSION: 1 } });
+  });
+
+  it('lets a player pick an in-game name and upload an avatar that everyone sees', async () => {
+    const [me, rival] = [await player('Станислав'), await player('Соперник')];
+    expect((await call(me, 'PUT', '/me/nickname', { nickname: '  Стас 🃏 ' })).json()).toMatchObject({ name: 'Стас 🃏', nickname: 'Стас 🃏', telegramName: 'Станислав' });
+    expect((await call(rival, 'GET', `/players/${me.id}/card`)).json().name).toBe('Стас 🃏');
+    for (const bad of ['x', 'Админ Маруськи', '<b>hi</b>', 'a'.repeat(21)]) {
+      expect((await call(me, 'PUT', '/me/nickname', { nickname: bad })).statusCode).toBe(400);
+    }
+    expect((await call(me, 'PUT', '/me/nickname', { nickname: '' })).json()).toMatchObject({ name: 'Станислав', nickname: null });
+
+    // 1×1 PNG
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+    const up = (await call(me, 'POST', '/me/avatar', { image: `data:image/png;base64,${png.toString('base64')}` })).json();
+    expect(up.customAvatar).toBe(true);
+    expect(up.photoUrl).toBe(`/api/avatars/${me.id}?v=1`);
+    const img = await handle.app.inject({ method: 'GET', url: `/api/avatars/${me.id}` });
+    expect(img.statusCode).toBe(200);
+    expect(img.headers['content-type']).toBe('image/png');
+    expect(img.rawPayload.equals(png)).toBe(true);
+    expect((await call(rival, 'GET', `/players/${me.id}/card`)).json().photoUrl).toBe(`/api/avatars/${me.id}?v=1`);
+    expect((await call(me, 'POST', '/me/avatar', { image: `data:image/png;base64,${png.toString('base64')}` })).json().photoUrl).toBe(`/api/avatars/${me.id}?v=2`);
+
+    // Not a picture, whatever the declared type says.
+    const fake = Buffer.from('<svg onload=alert(1)>').toString('base64');
+    expect((await call(me, 'POST', '/me/avatar', { image: `data:image/png;base64,${fake}` })).statusCode).toBe(400);
+
+    const back = (await call(me, 'DELETE', '/me/avatar')).json();
+    expect(back).toMatchObject({ customAvatar: false, photoUrl: null });
+    expect((await handle.app.inject({ method: 'GET', url: `/api/avatars/${me.id}` })).statusCode).toBe(404);
   });
 });

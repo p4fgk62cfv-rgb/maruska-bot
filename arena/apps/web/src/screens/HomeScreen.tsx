@@ -91,7 +91,7 @@ export function HomeScreen() {
 }
 
 /** Ivory bar: who I am on the left, what I have on the right. */
-function HomeBar() {
+export function HomeBar() {
   const me = useMe();
   const { refreshMe } = useSession();
   const { push } = useNav();

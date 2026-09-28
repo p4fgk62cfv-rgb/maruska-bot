@@ -41,6 +41,11 @@ export interface MeDto extends PublicUserDto {
   firstName: string;
   lastName: string | null;
   languageCode: string | null;
+  /** Name set in «Настройки»; `name` already shows it. */
+  nickname: string | null;
+  telegramName: string;
+  /** An uploaded picture replaces the Telegram photo. */
+  customAvatar: boolean;
   wallet: WalletDto;
   stats: ProfileStatsDto;
   premiumUntil: string | null;
