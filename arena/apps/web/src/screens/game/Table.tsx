@@ -1,5 +1,8 @@
 import { type CardId, type PlayerView } from '@arena/game-engine';
 import { PlayingCard } from '@arena/ui';
+import { useLayoutEffect, useRef } from 'react';
+import { motionAllowed } from '../../lib/settings.js';
+import { fly } from './motion.js';
 
 export interface TableProps {
   view: PlayerView;
@@ -16,15 +19,38 @@ export interface TableProps {
   hover: string | null;
   /** A card is being dragged — drop zones light up. */
   dragging: boolean;
+  /** My move shown before the server confirms it. */
+  pending: PendingMove | null;
+}
+
+export interface PendingMove {
+  cards: CardId[];
+  /** Pair index being beaten; null for a lead, a throw-in or a transfer. */
+  target: number | null;
+  /** Where each card was in the hand, to glide from. */
+  from: Record<string, DOMRect>;
+  /** State version the move was made on. */
+  version: number;
 }
 
 const DISCARD_TILT = [-18, 12, -6, 24, -26, 4];
 
 /** Felt with the stock + trump on the left, the discard on the right and up to six pairs in the middle. */
-export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot, back, hover, dragging }: TableProps) {
+export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot, back, hover, dragging, pending }: TableProps) {
   const trumpCard = view.trump.card;
+  const feltRef = useRef<HTMLDivElement>(null);
+  // Pending cards appear where they will lie and glide there from the hand (or the finger).
+  useLayoutEffect(() => {
+    if (!pending || !motionAllowed()) return;
+    for (const card of pending.cards) {
+      const el = feltRef.current?.querySelector<HTMLElement>(`[data-card="${card}"]`);
+      const from = pending.from[card];
+      if (el && from) fly(el, from, el.getBoundingClientRect(), 0);
+    }
+  }, [pending]);
   return (
     <div
+      ref={feltRef}
       className={`felt${dragging ? ' felt--dragging' : ''}${hover === 'table' ? ' felt--hover' : ''}`}
       data-drop="table"
       style={{ ['--card-w' as string]: `${cardWidth}px` }}
@@ -63,6 +89,11 @@ export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot
                 </button>
               )}
             </span>
+            {!pair.defense && pending?.target === index && (
+              <span className="pair__defense pair__defense--pending" data-card={pending.cards[0]} data-zone="table">
+                <PlayingCard card={pending.cards[0]!} width={cardWidth} />
+              </span>
+            )}
             {pair.defense && (
               <span className="pair__defense" data-card={pair.defense} data-zone="table">
                 <PlayingCard card={pair.defense as CardId} width={cardWidth} />
@@ -75,6 +106,14 @@ export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot
             )}
           </div>
         ))}
+        {pending?.target === null &&
+          pending.cards.map((card) => (
+            <div key={`pending-${card}`} className="pair pair--pending">
+              <span className="pair__attack" data-card={card} data-zone="table">
+                <PlayingCard card={card} width={cardWidth} />
+              </span>
+            </div>
+          ))}
         {transferSlot && (
           <button
             type="button"

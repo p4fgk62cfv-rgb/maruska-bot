@@ -176,7 +176,7 @@ export class MotionDirector {
 }
 
 /** FLIP: the element already sits at `to`; start it at `from` and let it glide home. */
-function fly(el: HTMLElement, from: DOMRect, to: DOMRect, delay: number): void {
+export function fly(el: HTMLElement, from: DOMRect, to: DOMRect, delay: number): void {
   const dx = from.left + from.width / 2 - (to.left + to.width / 2);
   const dy = from.top + from.height / 2 - (to.top + to.height / 2);
   const scale = to.width ? from.width / to.width : 1;

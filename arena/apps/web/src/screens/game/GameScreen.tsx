@@ -1,12 +1,12 @@
-import { rankOf, type CardId } from '@arena/game-engine';
+import { beats, rankOf, type CardId } from '@arena/game-engine';
 import { EMOJIS, FEATURE_PRICES, type RoomDto } from '@arena/shared';
 import { Balance, BottomSheet, Button, PlayingCard } from '@arena/ui';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useCountdown } from '../../lib/hooks.js';
 import { haptic } from '../../lib/telegram.js';
 import { play, unlockAudio } from '../../lib/sound.js';
-import { settings, useSettings } from '../../lib/settings.js';
-import { MotionDirector } from './motion.js';
+import { motionAllowed, settings, useSettings } from '../../lib/settings.js';
+import { fly, MotionDirector } from './motion.js';
 import { backOf, tableOf } from '../../lib/cosmetics.js';
 import { useRealtime, type LiveGame } from '../../realtime.js';
 import { useMe, useSession } from '../../session.js';
@@ -18,7 +18,7 @@ import { PlayerSheet } from './PlayerSheet.js';
 import { Payout } from './Payout.js';
 import { api } from '../../lib/api.js';
 import { DockAction, DockExtra, SeatTile, TableDock, TableTop } from './TableChrome.js';
-import { Table } from './Table.js';
+import { Table, type PendingMove } from './Table.js';
 
 type Sheet = null | 'menu' | 'emoji' | 'surrender' | 'discard' | { report: number };
 
@@ -36,6 +36,8 @@ export function GameScreen({ game }: { game: LiveGame }) {
   const layerRef = useRef<HTMLDivElement>(null);
   const director = useRef(new MotionDirector()).current;
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<PendingMove | null>(null);
+  const returning = useRef<Record<string, DOMRect>>({});
   const [drag, setDrag] = useState<{ card: CardId; hover: string | null } | null>(null);
   const [emojis, setEmojis] = useState<Record<string, string>>({});
   const [profileOf, setProfileOf] = useState<string | null>(null);
@@ -132,7 +134,20 @@ export function GameScreen({ game }: { game: LiveGame }) {
     [socket, toast],
   );
 
-  const hand = useMemo(() => sortHand(view.you?.hand ?? [], view.trump.suit, sort, prefs.sortDesc), [view.you?.hand, view.trump.suit, sort, prefs.sortDesc]);
+  // A pending move only counts until the server's next state arrives.
+  const shown = pending && pending.version === view.version ? pending : null;
+  const sorted = useMemo(() => sortHand(view.you?.hand ?? [], view.trump.suit, sort, prefs.sortDesc), [view.you?.hand, view.trump.suit, sort, prefs.sortDesc]);
+  const hand = useMemo(() => (shown ? sorted.filter((c) => !shown.cards.includes(c)) : sorted), [sorted, shown]);
+
+  // A refused move: the cards glide from the felt back into the hand.
+  useLayoutEffect(() => {
+    const back = returning.current;
+    returning.current = {};
+    for (const [card, from] of Object.entries(back)) {
+      const el = rootRef.current?.querySelector<HTMLElement>(`.hand [data-card="${card}"]`);
+      if (el && motionAllowed()) fly(el, from, el.getBoundingClientRect(), 0);
+    }
+  }, [pending]);
   const isDefender = view.defender === me.id && view.phase === 'defense';
   const undefended = view.table.map((p, i) => (p.defense ? -1 : i)).filter((i) => i >= 0);
 
@@ -155,10 +170,43 @@ export function GameScreen({ game }: { game: LiveGame }) {
     });
   };
 
-  const attack = (cards: CardId[]) =>
-    send(cards.length === 1 ? { type: 'PLAY_CARD', gameId, card: cards[0]! } : { type: 'PLAY_CARDS', gameId, cards });
+  /**
+   * Optimistic move: the card lands on the felt at once instead of waiting a round trip for the
+   * server. The server's state replaces it (same spot, so nothing jumps); a refusal sends it back.
+   */
+  const playNow = async (msg: Parameters<typeof send>[0], cards: CardId[], target: number | null): Promise<boolean> => {
+    const from: Record<string, DOMRect> = {};
+    for (const c of cards) {
+      const el = rootRef.current?.querySelector<HTMLElement>(`.hand [data-card="${c}"]`);
+      if (el) from[c] = el.getBoundingClientRect();
+    }
+    setPending({ cards, target, from, version: view.version });
+    const ok = await send(msg);
+    if (!ok) {
+      // Remember where the cards were shown so they glide back into the hand.
+      for (const c of cards) {
+        const el = rootRef.current?.querySelector<HTMLElement>(`.felt [data-card="${c}"]`);
+        if (el) returning.current[c] = el.getBoundingClientRect();
+      }
+      setPending(null);
+    }
+    return ok;
+  };
 
-  const defend = (card: CardId, target: number) => send({ type: 'PLAY_CARD', gameId, card, target });
+  const leadable = (cards: CardId[]) => view.table.length === 0 || cards.every((c) => view.table.some((p) => rankOf(p.attack) === rankOf(c) || (p.defense && rankOf(p.defense as CardId) === rankOf(c))));
+
+  const attack = (cards: CardId[]) => {
+    const msg = cards.length === 1 ? ({ type: 'PLAY_CARD', gameId, card: cards[0]! } as const) : ({ type: 'PLAY_CARDS', gameId, cards } as const);
+    return leadable(cards) ? playNow(msg, cards, null) : send(msg);
+  };
+
+  const defend = (card: CardId, target: number) => {
+    const msg = { type: 'PLAY_CARD', gameId, card, target } as const;
+    const pair = view.table[target];
+    return pair && !pair.defense && beats(card, pair.attack, view.trump.suit) ? playNow(msg, [card], target) : send(msg);
+  };
+
+  const transfer = (card: CardId) => playNow({ type: 'TRANSFER', gameId, card }, [card], null);
 
   const doubleTap = (card: CardId) => {
     if (isDefender && undefended.length === 1) void defend(card, undefended[0]!);
@@ -193,12 +241,12 @@ export function GameScreen({ game }: { game: LiveGame }) {
     if (!zone || busy) return false;
     const sameRankAsLead = view.table.length > 0 && rankOf(card) === rankOf(view.table[0]!.attack);
 
-    if (zone === 'transfer') return a.canTransfer && sameRankAsLead ? send({ type: 'TRANSFER', gameId, card }) : false;
+    if (zone === 'transfer') return a.canTransfer && sameRankAsLead ? transfer(card) : false;
 
     if (isDefender) {
       const index = zone.startsWith('pair:') ? Number(zone.slice(5)) : undefended.length === 1 ? undefended[0]! : -1;
       if (index >= 0 && undefended.includes(index)) return defend(card, index);
-      if (a.canTransfer && sameRankAsLead) return send({ type: 'TRANSFER', gameId, card });
+      if (a.canTransfer && sameRankAsLead) return transfer(card);
       if (undefended.length > 1) toast('Перетащите на карту, которую бьёте');
       return false;
     }
@@ -256,7 +304,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
   const tileSize = opponents.length > 3 ? 50 : 58;
 
   const actions: { key: string; text: string; tone?: 'main' | 'alt' | 'gold'; run: () => void }[] = [];
-  if (canTransferSelected) actions.push({ key: 'transfer', text: 'Перевести', tone: 'gold', run: () => void send({ type: 'TRANSFER', gameId, card: selected[0]! }) });
+  if (canTransferSelected) actions.push({ key: 'transfer', text: 'Перевести', tone: 'gold', run: () => void transfer(selected[0]!) });
   if (selected.length > 0 && a.canAttack && !isDefender) actions.push({ key: 'attack', text: selected.length > 1 ? `Хожу (${selected.length})` : 'Хожу', run: () => void attack(selected) });
   if (selected.length === 1 && isDefender && undefended.length === 1) actions.push({ key: 'defend', text: 'Бью', run: () => void defend(selected[0]!, undefended[0]!) });
   if (a.take) actions.push({ key: 'take', text: 'Беру', run: () => void send({ type: 'TAKE_CARDS', gameId }) });
@@ -301,11 +349,12 @@ export function GameScreen({ game }: { game: LiveGame }) {
         onReport={view.rules.fairness === 'cheaters' && a.canReport ? (seq) => setSheet({ report: seq }) : null}
         hover={drag?.hover ?? null}
         dragging={drag !== null}
+        pending={shown}
         transferSlot={
           a.canTransfer
             ? {
                 active: canTransferSelected,
-                onDrop: () => canTransferSelected && void send({ type: 'TRANSFER', gameId, card: selected[0]! }),
+                onDrop: () => canTransferSelected && void transfer(selected[0]!),
               }
             : null
         }
