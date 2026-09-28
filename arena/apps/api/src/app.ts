@@ -7,8 +7,9 @@ import { errorText, type ApiErrorBody } from '@arena/shared';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import type { BaseContext, Context } from './context.js';
-import { bearerToken } from './auth/plugin.js';
+import { bearerToken, useBanList } from './auth/plugin.js';
 import { AppError } from './lib/errors.js';
+import { requestSerializer, securityHeaders } from './lib/security.js';
 import { authRoutes } from './routes/auth.js';
 import { boardRoutes } from './routes/board.js';
 import { profileRoutes } from './routes/profile.js';
@@ -33,18 +34,29 @@ export interface AppOptions {
   store?: SnapshotStore;
   /** Replaces the Telegram HTTP client (tests). */
   bot?: TelegramBot | null;
+  /** Where logs go (tests capture them to check nothing secret is written). */
+  logStream?: { write(line: string): void };
 }
 
 export async function buildApp(base: BaseContext, options: AppOptions = {}): Promise<AppHandle> {
   const store = options.store ?? new MemoryStore();
   const { config } = base;
   const app = Fastify({
-    logger: config.NODE_ENV === 'test' ? false : { level: config.LOG_LEVEL, redact: ['req.headers.authorization'] },
+    logger:
+      config.NODE_ENV === 'test' && !options.logStream
+        ? false
+        : {
+            level: config.LOG_LEVEL,
+            serializers: { req: requestSerializer },
+            redact: ['req.headers.authorization', 'headers.authorization'],
+            ...(options.logStream ? { stream: options.logStream } : {}),
+          },
     trustProxy: true,
     bodyLimit: 64 * 1024,
   });
 
   app.decorateRequest('session', null);
+  securityHeaders(app);
 
   const realtime = new Realtime({ ...base, store, log: app.log });
   const presence = new RealtimePresence(realtime);
@@ -53,6 +65,8 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   const friends = new FriendService({ ...base, outbox, presence, realtime });
   const tournaments = new TournamentService({ ...base, outbox, realtime, log: app.log });
   const ctx: Context = { ...base, realtime, presence, outbox, friends, tournaments };
+  await base.moderation.loadBans();
+  useBanList(base.moderation);
   await realtime.recover();
   if (config.NODE_ENV !== 'test') {
     outbox.start();
@@ -71,7 +85,8 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
     max: 300,
     timeWindow: '1 minute',
     // Mobile carriers put many players behind one IP, so signed-in requests are limited per session.
-    keyGenerator: (request) => bearerToken(request) ?? request.ip,
+    // /ws carries the session in the query string (WebViews cannot set socket headers).
+    keyGenerator: (request) => bearerToken(request) ?? (request.query as { token?: string } | undefined)?.token ?? request.ip,
     errorResponseBuilder: (): ApiErrorBody & { statusCode: number } => ({
       statusCode: 429,
       error: 'RATE_LIMITED',
@@ -93,6 +108,17 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
     }
     request.log.error({ err: error }, 'unhandled error');
     return reply.status(500).send({ error: 'SERVER_ERROR', message: errorText('SERVER_ERROR') });
+  });
+
+  /** Railway health check: the process can serve players (database and snapshot store reachable). */
+  app.get('/ready', async (_request, reply) => {
+    try {
+      await base.db.$queryRaw`SELECT 1`;
+      await store.ping();
+      return { ok: true };
+    } catch {
+      return reply.status(503).send({ ok: false });
+    }
   });
 
   app.get('/health', async () => ({ ok: true, service: 'arena', games: realtime.games.count(), online: realtime.hub.onlineUsers().length }));

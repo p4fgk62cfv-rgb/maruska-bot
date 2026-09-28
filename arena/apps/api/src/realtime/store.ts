@@ -13,6 +13,7 @@ export interface SnapshotStore {
   loadAll(): Promise<{ rooms: Room[]; games: GameSnapshot[] }>;
   /** Survives restarts: true when this store is shared/persistent (Redis). */
   readonly durable: boolean;
+  ping(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -36,6 +37,7 @@ export class MemoryStore implements SnapshotStore {
   async loadAll() {
     return { rooms: [...this.rooms.values()], games: [...this.games.values()] };
   }
+  async ping() {}
   async close() {}
 }
 
@@ -74,6 +76,9 @@ export class RedisStore implements SnapshotStore {
       return values.filter((v): v is string => Boolean(v)).map((v) => JSON.parse(v) as T);
     };
     return { rooms: await load<Room>(ROOMS, 'arena:room:'), games: await load<GameSnapshot>(GAMES, 'arena:game:') };
+  }
+  async ping() {
+    await this.redis.ping();
   }
   async close() {
     await this.redis.quit();

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { Context } from '../context.js';
 import { createTournamentSchema } from '../services/tournaments.js';
 import { AppError } from '../lib/errors.js';
+import { metrics } from '../lib/metrics.js';
 import { toNumber } from '../lib/money.js';
 
 /**
@@ -41,6 +42,49 @@ export async function internalRoutes(app: FastifyInstance, ctx: Context): Promis
   app.post('/internal/tournaments', { preHandler: check }, async (request) => {
     const id = await ctx.tournaments.create(createTournamentSchema.parse(request.body));
     return { id };
+  });
+
+  // ── moderation ──
+  const byTelegram = z.object({ telegramId: z.coerce.bigint() });
+
+  app.get('/internal/integrity/suspicious', { preHandler: check }, async (request) => {
+    const q = z
+      .object({ days: z.coerce.number().int().min(1).max(90).default(7), minGames: z.coerce.number().int().min(2).default(5), minCredits: z.coerce.number().int().min(0).default(1000) })
+      .parse(request.query);
+    return ctx.moderation.suspiciousPairs(q.days, q.minGames, q.minCredits);
+  });
+
+  app.post('/internal/moderation/ban', { preHandler: check }, async (request) => {
+    const body = byTelegram.extend({ days: z.number().int().positive().nullable().default(null), reason: z.string().min(1).max(255) }).parse(request.body);
+    const userId = await ctx.moderation.ban(body.telegramId, body.days, body.reason);
+    await ctx.realtime.expel(userId);
+    return { ok: true };
+  });
+
+  app.post('/internal/moderation/unban', { preHandler: check }, async (request) => {
+    await ctx.moderation.unban(byTelegram.parse(request.body).telegramId);
+    return { ok: true };
+  });
+
+  app.post('/internal/moderation/clawback', { preHandler: check }, async (request) => {
+    const body = byTelegram
+      .extend({ currency: z.enum(['CREDITS', 'COINS']), amount: z.number().int().positive(), reason: z.string().min(1).max(255), requestId: z.string().min(8).max(64) })
+      .parse(request.body);
+    const taken = await ctx.moderation.clawback(body.telegramId, body.currency, body.amount, body.reason, body.requestId);
+    return { taken };
+  });
+
+  /** Prometheus scrape target. */
+  app.get('/internal/metrics', { preHandler: check }, async (_request, reply) => {
+    const rooms = ctx.realtime.rooms.list();
+    const outbox = await ctx.db.notification.count({ where: { sentAt: null, attempts: { lt: 5 } } });
+    reply.type('text/plain; version=0.0.4');
+    return metrics.render({
+      arena_ws_online: { help: 'Connected players', value: ctx.realtime.hub.onlineUsers().length },
+      arena_games_running: { help: 'Games in memory', value: ctx.realtime.games.count() },
+      arena_rooms_waiting: { help: 'Rooms waiting for players', value: rooms.filter((r) => r.status === 'waiting').length },
+      arena_outbox_pending: { help: 'Bot messages not yet delivered', value: outbox },
+    });
   });
 
   /** What is going on right now — for a bot status line or the admin panel. */

@@ -34,4 +34,6 @@ TEST_DATABASE_URL='postgresql://…/maruska?schema=arena' TEST_REDIS_URL='redis:
 4. BotFather → `/newapp` (или Bot Settings → Configure Mini App) → URL = домен арены. Короткое имя приложения записать в `MINI_APP_SHORT_NAME` (арена) и `ARENA_APP_NAME` (бот).
 5. У бота задать `ARENA_URL` = домен арены. После этого `/game` покажет кнопку «🎮 Играть».
 
+Дополнительно: `INTERNAL_API_SECRET` (ключ для бота и модерации, `/api/internal/*`), в Settings → Healthcheck Path = `/ready`. Необязательные: `DB_POOL_SIZE` (20), `RAKE_PERCENT` (5), `MATCH_READY_SECONDS` (90), `AUTH_RATE_LIMIT` (20), `LOG_LEVEL` (info). Метрики Prometheus — `GET /api/internal/metrics` с тем же ключом; нагрузочный тест и античит-ручки описаны в `docs/ARCHITECTURE.md` (раздел 8a).
+
 Миграции выполняются при старте контейнера и затрагивают только схему `arena`.

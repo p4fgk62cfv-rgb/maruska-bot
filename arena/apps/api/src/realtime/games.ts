@@ -16,9 +16,10 @@ import type { Db } from '../db.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { AppError } from '../lib/errors.js';
 import { cryptoRandom } from '../lib/ids.js';
+import { metrics } from '../lib/metrics.js';
 import { SerialQueue } from '../lib/serial.js';
 import type { Ledger } from '../services/ledger.js';
-import type { SettlementService } from '../services/settlement.js';
+import { NotSettleable, type SettlementService } from '../services/settlement.js';
 import type { Hub } from './hub.js';
 import type { SnapshotStore } from './store.js';
 import type { Features, GameSnapshot, Room } from './types.js';
@@ -28,6 +29,7 @@ type GameMessage = Extract<ClientMessage, { gameId: string }>;
 const EMOJI_COOLDOWN_MS = 1500;
 /** Finished games stay in memory a little so late reconnects still see the result. */
 const LINGER_MS = 60_000;
+const SETTLE_ATTEMPTS = 4;
 
 export interface GameDeps {
   db: Db;
@@ -199,21 +201,35 @@ export class GameRunner {
     if (this.timer) clearTimeout(this.timer);
     await this.flushMoves();
     try {
-      this.result = await this.deps.settlement.finish({
-        gameId: this.id,
-        stake: this.snap.stake,
-        state: this.snap.state,
-        startedAt: this.snap.startedAt,
-        transfers: this.snap.transfers,
-      });
+      this.result = await this.settle();
     } catch (error) {
       // The snapshot stays in the store: the next boot retries settlement.
+      metrics.inc('arena_settlement_failures_total', 'Games whose settlement failed');
       this.deps.log.error({ err: error, gameId: this.id }, 'settlement failed');
       return;
     }
+    metrics.inc('arena_games_finished_total', 'Games settled', { kind: this.result.kind, reason: this.result.reason ?? 'draw' });
+    this.deps.log.info(
+      { gameId: this.id, roomId: this.roomId, kind: this.result.kind, reason: this.result.reason, moves: this.snap.state.version, ms: Date.now() - this.snap.startedAt },
+      'game finished',
+    );
     for (const p of this.players) this.deps.hub.send(p.userId, { type: 'GAME_FINISHED', gameId: this.id, result: this.result });
     await this.deps.store.deleteGame(this.id).catch(() => undefined);
     this.deps.onFinished(this.roomId, this.result);
+  }
+
+  /** Settlement is idempotent, so a transient database error is retried a few times. */
+  private async settle(): Promise<GameResultDto> {
+    const input = { gameId: this.id, stake: this.snap.stake, state: this.snap.state, startedAt: this.snap.startedAt, transfers: this.snap.transfers };
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await this.deps.settlement.finish(input);
+      } catch (error) {
+        if (attempt >= SETTLE_ATTEMPTS || error instanceof NotSettleable) throw error;
+        this.deps.log.warn({ err: error, gameId: this.id, attempt }, 'settlement retry');
+        await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
+      }
+    }
   }
 
   /** Settles a game that was already over when the process restarted. */
@@ -332,6 +348,8 @@ export class GameManager {
     const snapshot: GameSnapshot = { gameId, roomId: room.id, stake: room.settings.stake, state, previous: null, features: {}, transfers: {}, startedAt: now };
     const runner = this.add(snapshot, players);
     await this.deps.store.saveGame(snapshot);
+    metrics.inc('arena_games_started_total', 'Games dealt', { players: String(players.length), stake: String(room.settings.stake) });
+    this.deps.log.info({ gameId, roomId: room.id, players: players.length, stake: room.settings.stake }, 'game started');
     for (const p of players) this.deps.hub.send(p.userId, { type: 'GAME_STARTED', roomId: room.id, gameId, players: runner.playerInfo() });
     runner.resume();
     return runner;

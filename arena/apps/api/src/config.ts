@@ -25,6 +25,10 @@ const schema = z.object({
   SIGNUP_BONUS_CREDITS: z.coerce.number().int().nonnegative().default(1_450),
   /** Seconds tournament players have to press «Готов» before a no-show loss. */
   MATCH_READY_SECONDS: z.coerce.number().int().positive().default(90),
+  /** Logins per minute from one IP (raise only for load tests from a single machine). */
+  AUTH_RATE_LIMIT: z.coerce.number().int().positive().default(20),
+  /** Postgres connections per instance; keep instances × size under the server's max_connections. */
+  DB_POOL_SIZE: z.coerce.number().int().positive().default(20),
   RAKE_PERCENT: z.coerce.number().min(0).max(50).default(5),
   CORS_ORIGINS: z.string().default(''),
   /** Directory with the built web app; served from the same origin as the API. */

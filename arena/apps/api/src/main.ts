@@ -7,7 +7,7 @@ import { MemoryStore, RedisStore } from './realtime/store.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  const db = createDb(config.DATABASE_URL);
+  const db = createDb(config.DATABASE_URL, config.DB_POOL_SIZE);
   await seedCatalog(db);
 
   // Without Redis live games cannot survive a restart: they are refunded on the next boot.

@@ -5,6 +5,7 @@ import type { WebSocket } from 'ws';
 import type { Config } from '../config.js';
 import type { Db } from '../db.js';
 import { AppError } from '../lib/errors.js';
+import { metrics } from '../lib/metrics.js';
 import type { Ledger } from '../services/ledger.js';
 import { SettlementService } from '../services/settlement.js';
 import type { UserService } from '../services/users.js';
@@ -80,6 +81,7 @@ export class Realtime {
       const lastActivity = Math.max(game.startedAt.getTime(), game.moves[0]?.createdAt.getTime() ?? 0);
       if (now - lastActivity < ORPHAN_AFTER_MS) continue;
       await this.settlement.abort(game.id);
+      metrics.inc('arena_games_aborted_total', 'Abandoned games refunded');
       this.deps.log.warn({ gameId: game.id }, 'aborted abandoned game, stakes refunded');
     }
   }
@@ -106,6 +108,7 @@ export class Realtime {
     } catch {
       return this.hub.sendTo(client, wsError('VALIDATION_FAILED'));
     }
+    metrics.inc('arena_ws_messages_total', 'WebSocket messages received', { type: msg.type });
     // Answer with the rid so the client knows this exact request was dropped and may retry.
     if (!this.hub.allow(client)) return this.hub.sendTo(client, wsError('RATE_LIMITED', msg.rid));
 
@@ -122,6 +125,7 @@ export class Realtime {
     } catch (error) {
       if (msg.rid) client.seen.delete(msg.rid);
       const code: AppErrorCode = error instanceof AppError ? error.code : 'SERVER_ERROR';
+      metrics.inc('arena_ws_errors_total', 'Rejected WebSocket requests by error code', { code });
       if (!(error instanceof AppError)) this.deps.log.error({ err: error, type: msg.type }, 'ws handler failed');
       this.hub.sendTo(client, wsError(code, msg.rid));
     }
@@ -149,6 +153,15 @@ export class Realtime {
       default:
         return this.games.handle(userId, msg);
     }
+  }
+
+  /** A banned player: gives up a running game, leaves any table and is disconnected. */
+  async expel(userId: string): Promise<void> {
+    const game = this.games.forUser(userId);
+    if (game) await this.games.handle(userId, { type: 'LEAVE_GAME', gameId: game.id }).catch(() => undefined);
+    const room = this.rooms.roomOf(userId);
+    if (room && room.status === 'waiting') await this.rooms.leave(userId, room.id).catch(() => undefined);
+    this.hub.kick(userId);
   }
 
   async shutdown(): Promise<void> {

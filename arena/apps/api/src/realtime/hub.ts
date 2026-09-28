@@ -90,6 +90,13 @@ export class Hub {
     return true;
   }
 
+  kick(userId: string): void {
+    const client = this.clients.get(userId);
+    if (!client) return;
+    this.clients.delete(userId);
+    client.socket.close(WS_CLOSE.UNAUTHORIZED, 'banned');
+  }
+
   closeAll(): void {
     for (const client of this.clients.values()) client.socket.close(WS_CLOSE.SERVER_SHUTDOWN, 'restart');
     this.clients.clear();

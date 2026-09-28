@@ -48,7 +48,8 @@ export async function roomRoutes(app: FastifyInstance, ctx: Context): Promise<vo
     return { ...rooms().dto(room), member: room.seats.some((s) => s.userId === sessionOf(request).sub) };
   });
 
-  app.post('/rooms/:id/join', auth, async (request): Promise<MyRoomDto> => {
+  // Tight limit: private-room passwords must not be guessable by brute force.
+  app.post('/rooms/:id/join', { ...auth, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request): Promise<MyRoomDto> => {
     const { id } = idParam.parse(request.params);
     return rooms().join(sessionOf(request).sub, id, joinRoomSchema.parse(request.body ?? {}));
   });

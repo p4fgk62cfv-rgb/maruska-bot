@@ -11,7 +11,7 @@ export async function websocketRoutes(app: FastifyInstance, ctx: Context): Promi
   app.get('/ws', { websocket: true }, (socket, request) => {
     const token = (request.query as { token?: string }).token ?? '';
     const claims = readSession(token, ctx.config.SESSION_SECRET);
-    if (!claims) {
+    if (!claims || ctx.moderation.isBanned(claims.sub)) {
       socket.close(WS_CLOSE.UNAUTHORIZED, 'unauthorized');
       return;
     }

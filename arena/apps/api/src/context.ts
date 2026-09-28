@@ -2,6 +2,7 @@ import type { Config } from './config.js';
 import type { Db } from './db.js';
 import type { Realtime } from './realtime/realtime.js';
 import { ItemService } from './services/items.js';
+import { ModerationService } from './services/moderation.js';
 import { Ledger } from './services/ledger.js';
 import type { FriendService } from './services/friends.js';
 import type { TournamentService } from './services/tournaments.js';
@@ -18,6 +19,7 @@ export interface BaseContext {
   users: UserService;
   wallets: WalletService;
   items: ItemService;
+  moderation: ModerationService;
 }
 
 /** Explicit dependency container: routes receive what they need, nothing is a hidden global. */
@@ -39,5 +41,6 @@ export function createContext(config: Config, db: Db): BaseContext {
     users: new UserService(db, ledger, config.SIGNUP_BONUS_CREDITS, items),
     wallets: new WalletService(db, ledger),
     items,
+    moderation: new ModerationService(db, ledger),
   };
 }

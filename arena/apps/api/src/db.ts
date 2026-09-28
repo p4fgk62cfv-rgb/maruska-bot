@@ -10,7 +10,11 @@ function connectionString(url: string): string {
   return parsed.toString();
 }
 
-export function createDb(url: string): Db {
-  const adapter = new PrismaPg({ connectionString: connectionString(url), max: 10 });
-  return new PrismaClient({ adapter });
+/**
+ * Bursts of game starts and settlements queue for a pooled connection, so transactions wait
+ * longer than Prisma's 2 s default before giving up.
+ */
+export function createDb(url: string, poolSize = 20): Db {
+  const adapter = new PrismaPg({ connectionString: connectionString(url), max: poolSize });
+  return new PrismaClient({ adapter, transactionOptions: { maxWait: 10_000, timeout: 15_000 } });
 }

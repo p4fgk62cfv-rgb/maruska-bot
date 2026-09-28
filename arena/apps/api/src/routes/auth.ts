@@ -32,7 +32,7 @@ export async function authRoutes(app: FastifyInstance, ctx: Context): Promise<vo
 
   app.post(
     '/auth/telegram',
-    { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    { config: { rateLimit: { max: config.AUTH_RATE_LIMIT, timeWindow: '1 minute' } } },
     async (request) => login(bodySchema.parse(request.body).initData),
   );
 

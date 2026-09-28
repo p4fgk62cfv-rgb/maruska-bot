@@ -91,7 +91,7 @@ export class SettlementService {
   async finish(input: FinishInput): Promise<GameResultDto> {
     const { state, stake, gameId } = input;
     const result = state.result;
-    if (!result) throw new Error('game is not finished');
+    if (!result) throw new NotSettleable('game is not finished');
 
     const ids = state.players.map((p) => p.id);
     const settlement = settle(result, ids, stake, this.rakePercent);
@@ -104,7 +104,7 @@ export class SettlementService {
         if (claimed.count === 0) {
           const current = await tx.game.findUnique({ where: { id: gameId }, select: { status: true } });
           // Aborted and refunded meanwhile: there is no result to report.
-          if (current?.status !== 'FINISHED') throw new Error(`game ${gameId} is ${current?.status ?? 'missing'}, not settled`);
+          if (current?.status !== 'FINISHED') throw new NotSettleable(`game ${gameId} is ${current?.status ?? 'missing'}, not settled`);
           return this.loadResult(tx, gameId, stake);
         }
 
@@ -265,3 +265,6 @@ export class ShortOfFunds extends Error {
     super('INSUFFICIENT_FUNDS');
   }
 }
+
+/** Retrying cannot help: the game is not over, or it was aborted and refunded meanwhile. */
+export class NotSettleable extends Error {}
