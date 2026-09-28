@@ -73,24 +73,15 @@ export async function profileRoutes(app: FastifyInstance, ctx: Context): Promise
     }));
   });
 
-  app.get('/items', auth, async (request): Promise<ItemDto[]> => {
-    const userId = sessionOf(request).sub;
-    const rows = await db.item.findMany({
-      where: { isActive: true },
-      orderBy: { sortOrder: 'asc' },
-      include: { owners: { where: { userId } } },
-    });
-    return rows.map((i) => ({
-      key: i.key,
-      kind: i.kind,
-      name: i.name,
-      rarity: i.rarity,
-      price: toNumber(i.price),
-      currency: i.currency,
-      owned: i.price === 0n || i.owners.length > 0,
-      equipped: i.owners[0]?.equipped ?? false,
-    }));
+  app.get('/items', auth, async (request): Promise<ItemDto[]> => ctx.items.list(sessionOf(request).sub));
+
+  const itemParam = z.object({ key: z.string().regex(/^[a-z0-9_]{2,64}$/) });
+  app.post('/items/:key/buy', auth, async (request) => {
+    await ctx.items.buy(sessionOf(request).sub, itemParam.parse(request.params).key);
+    return ctx.items.list(sessionOf(request).sub);
   });
+  app.post('/items/:key/equip', auth, async (request) => ctx.items.equip(sessionOf(request).sub, itemParam.parse(request.params).key));
+  app.post('/items/:key/unequip', auth, async (request) => ctx.items.unequip(sessionOf(request).sub, itemParam.parse(request.params).key));
 
   app.get('/tournaments', auth, async (request): Promise<TournamentDto[]> => {
     const { status } = z.object({ status: z.enum(['active', 'finished']).default('active') }).parse(request.query);

@@ -288,3 +288,14 @@ h1, h2, h3, p { margin: 0; }
 .ui-swipe { position: relative; overflow: hidden; border-radius: var(--radius-l); }
 .ui-swipe__action { position: absolute; top: 0; right: 0; bottom: 0; background: linear-gradient(135deg, #e11d48, #fb7185); color: #fff; font-weight: 800; }
 .ui-swipe__content { position: relative; transition: transform 0.25s var(--ease); touch-action: pan-y; }
+
+/* ── Cosmetics ── */
+.ui-card--back-violet {
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.18), transparent 55%), repeating-conic-gradient(from 0deg, #7c3aed 0 15deg, #a21caf 15deg 30deg);
+}
+.ui-card--back-gold {
+  background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.25) 0 3px, transparent 3px 9px), linear-gradient(145deg, #b7791f, #f5c451 50%, #92400e);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35), inset 0 0 0 3px rgba(255, 250, 230, 0.9), inset 0 0 0 5px #b45309;
+}
+.ui-avatar--ring-silver { box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 4px #d8dee9, 0 0 16px rgba(216, 222, 233, 0.55); }
+.ui-avatar__crown { position: absolute; left: 50%; top: -0.55em; translate: -50% 0; font-size: 0.7em; color: #fb3f6c; text-shadow: 0 0 8px rgba(251, 63, 108, 0.8), 0 1px 0 #7f1d1d; line-height: 1; }

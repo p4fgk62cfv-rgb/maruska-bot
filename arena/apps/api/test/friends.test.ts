@@ -199,4 +199,27 @@ describe.skipIf(!url)('friends, requests and invites', () => {
     });
     expect(res.json()).toMatchObject({ rating: 0, league: 'Серебряная', gamesPlayed: 0 });
   });
+
+  it('items: buy once for coins, equip one per kind, others see the frame at the table', async () => {
+    const buyer = await player('Рита');
+    expect((await call(buyer, 'POST', '/items/frame_silver/buy')).json()).toMatchObject({ error: 'INSUFFICIENT_FUNDS' });
+    expect((await call(buyer, 'POST', '/items/frame_silver/equip')).json()).toMatchObject({ error: 'FORBIDDEN' });
+
+    await db.$transaction((tx) =>
+      handle.ctx.ledger.postIn(tx, { userId: buyer.id, currency: 'COINS', amount: 100n, type: 'ADMIN', source: 'test', idempotencyKey: `coins:${buyer.id}` }),
+    );
+    const results = await Promise.all([1, 2, 3].map(() => call(buyer, 'POST', '/items/frame_silver/buy')));
+    expect(results.map((r) => r.statusCode)).toEqual([200, 200, 200]);
+    expect((await call(buyer, 'GET', '/me')).json().wallet.coins).toBe(40);
+
+    expect((await call(buyer, 'POST', '/items/frame_silver/equip')).json()).toMatchObject({ frame: 'frame_silver', cardBack: 'back_classic' });
+    expect((await call(buyer, 'POST', '/items/table_felt/equip')).json()).toMatchObject({ table: 'table_felt' });
+    const items = (await call(buyer, 'GET', '/items')).json();
+    expect(items.filter((i: { equipped: boolean }) => i.equipped).map((i: { key: string }) => i.key).sort()).toEqual(['back_classic', 'frame_silver', 'table_felt']);
+
+    const room = (await call(buyer, 'POST', '/rooms', ROOM)).json().room;
+    expect(room.seats[0]).toMatchObject({ frame: 'frame_silver', crown: null });
+    await call(buyer, 'POST', `/rooms/${room.id}/leave`);
+    expect((await call(buyer, 'POST', '/items/frame_silver/unequip')).json()).toMatchObject({ frame: null });
+  });
 });

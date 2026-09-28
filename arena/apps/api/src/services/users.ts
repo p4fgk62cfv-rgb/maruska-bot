@@ -1,4 +1,4 @@
-import { DAILY_CREDITS, RATING, type MeDto, type PublicUserDto, type WalletDto } from '@arena/shared';
+import { DAILY_CREDITS, RATING, type EquippedDto, type MeDto, type PublicUserDto, type WalletDto } from '@arena/shared';
 import type { Db } from '../db.js';
 import { Prisma, type Currency, type Profile, type User } from '../generated/prisma/client.js';
 import { toNumber } from '../lib/money.js';
@@ -16,7 +16,12 @@ export function displayName(user: Pick<User, 'firstName' | 'lastName' | 'usernam
 }
 
 export class UserService {
-  constructor(private readonly db: Db, private readonly ledger: Ledger, private readonly signupBonus: number) {}
+  constructor(
+    private readonly db: Db,
+    private readonly ledger: Ledger,
+    private readonly signupBonus: number,
+    private readonly items: { equipped(userId: string): Promise<EquippedDto> },
+  ) {}
 
   /** Creates or refreshes the account from verified Telegram data. Safe to call on every login. */
   async upsertFromTelegram(tg: TelegramUser): Promise<User> {
@@ -78,11 +83,12 @@ export class UserService {
   async me(userId: string): Promise<MeDto | null> {
     const user = await this.db.user.findUnique({ where: { id: userId }, include: { profile: true } });
     if (!user?.profile) return null;
-    const [wallet, unlocked, total, lastDaily] = await Promise.all([
+    const [wallet, unlocked, total, lastDaily, equipped] = await Promise.all([
       this.wallet(userId),
       this.db.userAchievement.count({ where: { userId, unlockedAt: { not: null } } }),
       this.db.achievement.count(),
       this.lastDailyCredits(userId),
+      this.items.equipped(userId),
     ]);
     const profile = user.profile;
     const now = Date.now();
@@ -97,6 +103,7 @@ export class UserService {
       wallet,
       stats: stats(profile, unlocked, total),
       premiumUntil: profile.premiumUntil?.toISOString() ?? null,
+      equipped,
       bonus: {
         multiplier: bonusReset ? RATING.bonus.min : profile.bonusMultiplier,
         availableAt: bonusReady && bonusReady > now ? new Date(bonusReady).toISOString() : null,

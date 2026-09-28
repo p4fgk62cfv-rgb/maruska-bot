@@ -68,6 +68,13 @@ export function ResultView({ result, players, onClose }: { result: GameResultDto
 
   return (
     <div className={`result result--${outcome}`} role="dialog" aria-modal="true">
+      {outcome === 'win' && me.equipped.effect === 'effect_sparks' && (
+        <div className="sparks" aria-hidden="true">
+          {Array.from({ length: 18 }, (_, i) => (
+            <span key={i} style={{ rotate: `${i * 20}deg`, animationDelay: `${(i % 3) * 120}ms` }} />
+          ))}
+        </div>
+      )}
       {outcome === 'win' && (
         <div className="confetti" aria-hidden="true">
           {CONFETTI.map((c, i) => (

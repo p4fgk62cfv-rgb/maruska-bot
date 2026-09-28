@@ -10,6 +10,7 @@ import { useRealtime } from '../realtime.js';
 import { useMe } from '../session.js';
 import { useToast } from '../toast.js';
 import { modeLabels } from './lobbyParts.js';
+import { ringOf } from '../lib/cosmetics.js';
 
 /** Waiting room: seats fill up live, everyone presses «Готов», the server deals. */
 export function RoomScreen({ room }: { room: RoomDto }) {
@@ -57,7 +58,15 @@ export function RoomScreen({ room }: { room: RoomDto }) {
           const seat = room.seats[i];
           return seat ? (
             <div key={seat.userId} className={`room-seat${seat.ready ? ' room-seat--ready' : ''}`}>
-              <Avatar id={seat.userId} name={seat.name} photoUrl={seat.photoUrl} size={52} ring={seat.ready ? 'cyan' : 'none'} status={seat.connected ? 'online' : 'offline'} />
+              <Avatar
+                id={seat.userId}
+                name={seat.name}
+                photoUrl={seat.photoUrl}
+                size={52}
+                ring={seat.frame ? ringOf(seat.frame) : seat.ready ? 'cyan' : 'none'}
+                crown={Boolean(seat.crown)}
+                status={seat.connected ? 'online' : 'offline'}
+              />
               <strong>{seat.userId === me.id ? 'Вы' : seat.name}</strong>
               <RatingBadge rating={seat.rating} showValue={false} />
               <Badge tone={seat.ready ? 'green' : 'muted'}>{seat.ready ? 'Готов' : 'Ждём'}</Badge>

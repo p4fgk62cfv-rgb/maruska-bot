@@ -2,6 +2,7 @@ import type { PublicPlayer } from '@arena/game-engine';
 import type { PlayerInfo } from '@arena/shared';
 import { Avatar, RatingBadge } from '@arena/ui';
 import { memo } from 'react';
+import { ringOf } from '../../lib/cosmetics.js';
 
 export interface SeatProps {
   player: PublicPlayer;
@@ -30,7 +31,15 @@ export const Seat = memo(function Seat({ player, info, role, active, progress, p
             <circle cx="22" cy="22" r="20" pathLength="1" style={{ strokeDashoffset: 1 - progress }} className={progress < 0.25 ? 'seat__timer--low' : ''} />
           </svg>
         )}
-        <Avatar id={player.id} name={name} photoUrl={info?.photoUrl} size={compact ? 40 : 48} status={info?.connected === false ? 'offline' : undefined} />
+        <Avatar
+          id={player.id}
+          name={name}
+          photoUrl={info?.photoUrl}
+          size={compact ? 40 : 48}
+          ring={ringOf(info?.frame)}
+          crown={Boolean(info?.crown)}
+          status={info?.connected === false ? 'offline' : undefined}
+        />
         {emoji && <span className="seat__emoji">{emoji}</span>}
         {player.status === 'active' && <span className="seat__count">{player.cardCount}</span>}
       </div>

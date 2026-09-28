@@ -2,6 +2,7 @@ import type { TransactionDto } from '@arena/shared';
 import { ratingBadge, RATING } from '@arena/shared';
 import { Avatar, Badge, Balance, Panel, ProgressBar, RatingBadge, formatAmount, formatCompact } from '@arena/ui';
 import { useQuery } from '../lib/useQuery.js';
+import { ringOf } from '../lib/cosmetics.js';
 import { useNav } from '../navigation.js';
 import { useMe } from '../session.js';
 import { QueryView, ScreenHeader } from './common.js';
@@ -40,7 +41,7 @@ export default function ProfileScreen() {
     <div className="app-stack">
       <ScreenHeader title="Профиль" />
       <Panel glow="violet" className="profile-card">
-        <Avatar id={me.id} name={me.name} photoUrl={me.photoUrl} size={84} ring="gold" />
+        <Avatar id={me.id} name={me.name} photoUrl={me.photoUrl} size={84} ring={me.equipped.frame ? ringOf(me.equipped.frame) : 'gold'} crown={Boolean(me.equipped.crown)} />
         <h2>{me.name}</h2>
         {me.username && <span className="app-muted">@{me.username}</span>}
         <RatingBadge rating={s.rating} streak={me.bonus.streak} />

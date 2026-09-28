@@ -334,6 +334,8 @@ export class RoomManager {
       photoUrl: me.photoUrl,
       rating: me.rating,
       premium: isPremium(me.premiumUntil ? Date.parse(me.premiumUntil) : null, Date.now()),
+      frame: me.equipped.frame,
+      crown: me.equipped.crown,
       ready: false,
       connected: this.deps.hub.isOnline(userId),
     };

@@ -325,6 +325,8 @@ export class GameManager {
       photoUrl: s.photoUrl,
       rating: s.rating,
       premium: s.premium,
+      frame: s.frame,
+      crown: s.crown,
       connected: true,
     }));
     const snapshot: GameSnapshot = { gameId, roomId: room.id, stake: room.settings.stake, state, previous: null, features: {}, transfers: {}, startedAt: now };

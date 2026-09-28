@@ -20,12 +20,14 @@ export interface AvatarProps {
   name: string;
   photoUrl?: string | null;
   size?: number;
-  ring?: 'none' | 'violet' | 'gold' | 'cyan';
+  ring?: 'none' | 'violet' | 'gold' | 'cyan' | 'silver';
+  /** Crown item on top of the avatar. */
+  crown?: boolean;
   status?: 'online' | 'in_game' | 'offline';
 }
 
 /** Telegram photo when available, otherwise initials on a stable per-user gradient. */
-export const Avatar = memo(function Avatar({ id, name, photoUrl, size = 44, ring = 'none', status }: AvatarProps) {
+export const Avatar = memo(function Avatar({ id, name, photoUrl, size = 44, ring = 'none', status, crown }: AvatarProps) {
   const [from, to] = GRADIENTS[hash(id) % GRADIENTS.length]!;
   const initials = name
     .split(/\s+/)
@@ -43,6 +45,11 @@ export const Avatar = memo(function Avatar({ id, name, photoUrl, size = 44, ring
         </span>
       )}
       {status && <span className={`ui-avatar__status ui-avatar__status--${status}`} />}
+      {crown && (
+        <span className="ui-avatar__crown" aria-label="Корона">
+          ♛
+        </span>
+      )}
     </span>
   );
 });

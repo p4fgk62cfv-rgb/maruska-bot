@@ -8,14 +8,16 @@ export interface PlayingCardProps {
   playable?: boolean;
   trump?: boolean;
   width?: number;
+  /** Card back design (item key without the `back_` prefix). */
+  back?: string;
   onClick?: () => void;
 }
 
 /** Pure CSS/SVG card: no image downloads, crisp on every screen density. */
-export const PlayingCard = memo(function PlayingCard({ card, faceDown, selected, playable, trump, width = 64, onClick }: PlayingCardProps) {
+export const PlayingCard = memo(function PlayingCard({ card, faceDown, selected, playable, trump, width = 64, back = 'classic', onClick }: PlayingCardProps) {
   const style = { width, height: width * 1.42, fontSize: width * 0.28 };
   if (faceDown || !card) {
-    return <span className="ui-card ui-card--back" style={style} aria-label="Карта рубашкой вверх" />;
+    return <span className={`ui-card ui-card--back ui-card--back-${back}`} style={style} aria-label="Карта рубашкой вверх" />;
   }
   const suit = suitOf(card);
   const rank = RANK_LABEL_RU[rankOf(card)];

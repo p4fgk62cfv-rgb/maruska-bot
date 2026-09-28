@@ -7,6 +7,7 @@ import { haptic } from '../../lib/telegram.js';
 import { play, unlockAudio } from '../../lib/sound.js';
 import { settings, useSettings } from '../../lib/settings.js';
 import { MotionDirector } from './motion.js';
+import { backOf, tableOf } from '../../lib/cosmetics.js';
 import { useRealtime, type LiveGame } from '../../realtime.js';
 import { useMe } from '../../session.js';
 import { useToast } from '../../toast.js';
@@ -161,7 +162,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
   const roleOf = (id: string) => (id === view.attacker ? 'attacker' : id === view.defender ? 'defender' : null);
 
   return (
-    <div className="game" ref={rootRef}>
+    <div className={`game game--table-${tableOf(me.equipped.table)}`} ref={rootRef}>
       <div className="motion-layer" ref={layerRef} />
       {status !== 'open' && <div className="game__banner">Соединение восстанавливается…</div>}
 
@@ -189,6 +190,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
         cardWidth={Math.min(62, (Math.min(window.innerWidth, 560) - 110) / 3.6)}
         targets={targets}
         onPair={tapPair}
+        back={backOf(me.equipped.cardBack)}
         onReport={view.rules.fairness === 'cheaters' && a.canReport ? (seq) => setSheet({ report: seq }) : null}
         transferSlot={
           a.canTransfer

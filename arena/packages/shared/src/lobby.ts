@@ -15,6 +15,8 @@ export interface RoomSeatDto {
   photoUrl: string | null;
   rating: number;
   premium: boolean;
+  frame: string | null;
+  crown: string | null;
   ready: boolean;
   connected: boolean;
 }

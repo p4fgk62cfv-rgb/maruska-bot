@@ -10,10 +10,12 @@ export interface TableProps {
   onReport: ((seq: number) => void) | null;
   /** «Переводной»: the marked place where a same-rank card passes the attack on. */
   transferSlot: { active: boolean; onDrop: () => void } | null;
+  /** The viewer's card back design. */
+  back: string;
 }
 
 /** Felt with the stock + trump on the left, the discard on the right and up to six pairs in the middle. */
-export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot }: TableProps) {
+export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot, back }: TableProps) {
   const trumpCard = view.trump.card;
   return (
     <div className="felt">
@@ -25,7 +27,7 @@ export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot
             </span>
             {view.deckCount > 1 && (
               <span className="felt__stock" data-anchor="deck-card">
-                <PlayingCard faceDown width={cardWidth * 0.8} />
+                <PlayingCard faceDown back={back} width={cardWidth * 0.8} />
               </span>
             )}
             <span className="felt__deck-count">{view.deckCount}</span>
@@ -75,7 +77,7 @@ export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot
         {view.discardCount > 0 && (
           <>
             <span className="felt__discard-pile">
-              <PlayingCard faceDown width={cardWidth * 0.8} />
+              <PlayingCard faceDown back={back} width={cardWidth * 0.8} />
             </span>
             <span className="felt__deck-count">{view.discardCount}</span>
           </>

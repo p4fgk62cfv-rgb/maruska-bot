@@ -1,6 +1,7 @@
 import { Avatar, Badge, Balance, Button, Icon, Panel, PlayingCard, RatingBadge, Tile, type TileProps } from '@arena/ui';
 import { DAILY_CREDITS, type MyRoomDto } from '@arena/shared';
 import { useRealtime } from '../realtime.js';
+import { ringOf } from '../lib/cosmetics.js';
 import { useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
 import { haptic } from '../lib/telegram.js';
@@ -57,7 +58,7 @@ export function HomeScreen() {
   return (
     <div className="app-stack">
       <Panel className="home-profile" onClick={() => push('profile')} role="button" tabIndex={0}>
-        <Avatar id={me.id} name={me.name} photoUrl={me.photoUrl} size={58} ring="violet" />
+        <Avatar id={me.id} name={me.name} photoUrl={me.photoUrl} size={58} ring={me.equipped.frame ? ringOf(me.equipped.frame) : 'violet'} crown={Boolean(me.equipped.crown)} />
         <div className="home-profile__main">
           <div className="home-profile__name">
             <strong>{me.name}</strong>

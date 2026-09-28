@@ -20,6 +20,8 @@ export interface PlayerInfo {
   photoUrl: string | null;
   rating: number;
   premium: boolean;
+  frame: string | null;
+  crown: string | null;
   connected: boolean;
 }
 

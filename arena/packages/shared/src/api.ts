@@ -44,6 +44,7 @@ export interface MeDto extends PublicUserDto {
   wallet: WalletDto;
   stats: ProfileStatsDto;
   premiumUntil: string | null;
+  equipped: EquippedDto;
   bonus: BonusDto;
   dailyCredits: { available: boolean; availableAt: string | null };
 }
@@ -64,6 +65,17 @@ export interface SeasonDto {
   top: (PublicUserDto & { place: number; seasonRating: number })[];
   me: { place: number | null; seasonRating: number };
 }
+
+/** Cosmetics a player has on, by item key. Card back and table are personal; frame and crown are seen by others. */
+export interface EquippedDto {
+  cardBack: string;
+  table: string;
+  frame: string | null;
+  crown: string | null;
+  effect: string | null;
+}
+
+export const DEFAULT_EQUIPPED: EquippedDto = { cardBack: 'back_classic', table: 'table_felt', frame: null, crown: null, effect: null };
 
 export interface AuthResponse {
   token: string;

@@ -55,7 +55,7 @@ export class Realtime {
       const room = rooms.find((r) => r.id === game.roomId);
       const players = (room?.seats ?? []).map((s) => ({ ...s, connected: false }));
       if (!room || players.length !== game.state.players.length) continue;
-      await this.games.restore(game, players.map(({ userId, name, photoUrl, rating, premium, connected }) => ({ userId, name, photoUrl, rating, premium, connected })));
+      await this.games.restore(game, players.map(({ userId, name, photoUrl, rating, premium, frame, crown, connected }) => ({ userId, name, photoUrl, rating, premium, frame: frame ?? null, crown: crown ?? null, connected })));
       restored.add(game.gameId);
     }
     const orphans = await this.deps.db.game.findMany({ where: { status: 'PLAYING' }, select: { id: true } });
