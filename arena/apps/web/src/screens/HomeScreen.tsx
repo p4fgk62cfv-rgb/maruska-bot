@@ -112,7 +112,8 @@ export function HomeScreen() {
           <Tile
             key={link.title}
             {...link}
-            badge={link.title === 'Достижения' ? <Badge tone="gold">{s.achievementsUnlocked}/{s.achievementsTotal}</Badge> : undefined}
+            // The count goes under the title: a badge beside it squeezes «Достижения» into two lines on phones.
+            hint={'page' in link && link.page === 'achievements' ? `Открыто ${s.achievementsUnlocked} из ${s.achievementsTotal}` : link.hint}
             onClick={() => ('tab' in link ? setTab(link.tab) : push(link.page))}
           />
         ))}
