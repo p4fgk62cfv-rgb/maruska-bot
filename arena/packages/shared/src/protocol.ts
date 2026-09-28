@@ -41,7 +41,7 @@ export type ServerMessage =
   /** Engine events for animations. Already filtered: no hidden cards inside. */
   | { type: 'GAME_EVENTS'; gameId: string; version: number; events: GameEvent[] }
   | { type: 'GAME_FINISHED'; gameId: string; result: GameResultDto }
-  | { type: 'EMOJI'; gameId: string; userId: string; emoji: string }
+  | { type: 'EMOJI'; gameId: string | null; roomId?: string; userId: string; emoji: string }
   | { type: 'PLAYER_CONNECTED'; roomId: string; userId: string }
   | { type: 'PLAYER_DISCONNECTED'; roomId: string; userId: string; graceUntil: number }
   | { type: 'PLAYER_RECONNECTED'; roomId: string; userId: string }

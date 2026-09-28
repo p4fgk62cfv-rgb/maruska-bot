@@ -88,7 +88,10 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         switch (msg.type) {
           case 'ROOM_UPDATED':
           case 'ROOM_JOINED':
-            if (msg.room.seats.some((s) => s.userId === myId)) setRoom(msg.room);
+            if (!msg.room.seats.some((s) => s.userId === myId)) return;
+            if (msg.room.status === 'closed' || msg.room.status === 'finished') {
+              setRoom((current) => (current?.id === msg.room.id ? null : current));
+            } else setRoom(msg.room);
             return;
           case 'ROOM_LEFT':
             if (msg.userId === myId) {
@@ -111,8 +114,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
             return;
           case 'GAME_FINISHED':
             setResult(msg.result);
-            setRoom(null);
-            setInvite(null);
+            // A casual table stays together for the next deal; a tournament match room is gone.
+            setRoom((current) => (current?.tournament ? null : current));
             void refreshMe();
             return;
           case 'FRIEND_REQUEST':

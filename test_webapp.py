@@ -273,7 +273,7 @@ def main() -> int:
     # 6. Все вызываемые адреса существуют на сервере
     server = "".join(
         (ROOT / "webapp" / f).read_text(encoding="utf-8")
-        for f in ("admin.py", "admin_v2.py", "server.py", "fishing_api.py", "arena_admin.py")
+        for f in ("admin.py", "admin_v2.py", "server.py", "fishing_api.py", "arena_admin.py", "owners_api.py")
     )
     registered = set(re.findall(r'add_(?:get|post)\("([^"]+)"', server))
     # Маршруты-шаблоны вида /api/admin/arena/{path:.+} принимают всё, что ниже.

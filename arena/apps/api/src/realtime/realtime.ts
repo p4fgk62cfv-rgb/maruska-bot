@@ -150,6 +150,8 @@ export class Realtime {
       }
       case 'READY':
         return this.rooms.setReady(userId, msg.roomId, msg.ready);
+      case 'ROOM_EMOJI':
+        return this.rooms.emoji(userId, msg.roomId, msg.emoji);
       default:
         return this.games.handle(userId, msg);
     }

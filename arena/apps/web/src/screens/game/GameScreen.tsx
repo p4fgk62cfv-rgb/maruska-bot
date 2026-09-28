@@ -1,5 +1,5 @@
 import { beats, rankOf, type CardId } from '@arena/game-engine';
-import { EMOJIS, FEATURE_PRICES, type RoomDto } from '@arena/shared';
+import { FEATURE_PRICES, type RoomDto } from '@arena/shared';
 import { Balance, BottomSheet, Button, PlayingCard } from '@arena/ui';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useCountdown } from '../../lib/hooks.js';
@@ -18,13 +18,14 @@ import { PlayerSheet } from './PlayerSheet.js';
 import { Payout } from './Payout.js';
 import { api } from '../../lib/api.js';
 import { DockAction, DockExtra, SeatTile, TableDock, TableTop } from './TableChrome.js';
+import { EmojiSheet, useSeatEmojis } from './emoji.js';
 import { Table, type PendingMove } from './Table.js';
 
 type Sheet = null | 'menu' | 'emoji' | 'surrender' | 'discard' | { report: number };
 
 export function GameScreen({ game }: { game: LiveGame }) {
   const me = useMe();
-  const { socket, result, dismissGame, onEmoji, onEvents, status, room } = useRealtime();
+  const { socket, result, dismissGame, leaveRoom, onEvents, status, room } = useRealtime();
   const prefs = useSettings();
   const toast = useToast();
   const view = game.state;
@@ -39,7 +40,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
   const [pending, setPending] = useState<PendingMove | null>(null);
   const returning = useRef<Record<string, DOMRect>>({});
   const [drag, setDrag] = useState<{ card: CardId; hover: string | null } | null>(null);
-  const [emojis, setEmojis] = useState<Record<string, string>>({});
+  const emojis = useSeatEmojis(me.id);
   const [profileOf, setProfileOf] = useState<string | null>(null);
   const { refreshMe } = useSession();
   const [paid, setPaid] = useState<string | null>(null);
@@ -103,17 +104,6 @@ export function GameScreen({ game }: { game: LiveGame }) {
     play('tick');
     if (secondsLeft === 5) haptic.warning();
   }, [secondsLeft, view.currentPlayer, me.id]);
-
-  useEffect(
-    () =>
-      onEmoji((userId, emoji) => {
-        if (!settings.get().emojis && userId !== me.id) return;
-        play('emoji');
-        setEmojis((e) => ({ ...e, [userId]: emoji }));
-        window.setTimeout(() => setEmojis((e) => (e[userId] === emoji ? { ...e, [userId]: '' } : e)), 2500);
-      }),
-    [onEmoji, me.id],
-  );
 
   useEffect(() => {
     if (view.currentPlayer === me.id) haptic.tap();
@@ -378,6 +368,8 @@ export function GameScreen({ game }: { game: LiveGame }) {
         actions={
           actions.length === 0 && myTurn ? (
             <span className="dock-yourturn" key={`turn-${view.version}`}>Ваш ход</span>
+          ) : mine && mine.status !== 'active' && view.status === 'playing' ? (
+            <span className="dock-watching">Смотрите, как доигрывают</span>
           ) : actions.slice(0, 2).map((act) => (
               <DockAction key={act.key} tone={act.tone} busy={busy} onClick={act.run}>
                 {act.text}
@@ -439,15 +431,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
         </div>
       </BottomSheet>
 
-      <BottomSheet open={sheet === 'emoji'} title="Смайлик" onClose={() => setSheet(null)}>
-        <div className="emoji-grid">
-          {EMOJIS.map((e) => (
-            <button key={e} type="button" onClick={() => (setSheet(null), void send({ type: 'SEND_EMOJI', gameId, emoji: e }))}>
-              {e}
-            </button>
-          ))}
-        </div>
-      </BottomSheet>
+      <EmojiSheet open={sheet === 'emoji'} onClose={() => setSheet(null)} onPick={(emoji) => void send({ type: 'SEND_EMOJI', gameId, emoji })} />
 
       <BottomSheet open={sheet === 'discard'} title={`Отбой · ${view.discardCount}`} onClose={() => setSheet(null)}>
         <div className="discard-grid">
@@ -486,7 +470,18 @@ export function GameScreen({ game }: { game: LiveGame }) {
       />
 
       {payoutActive && <Payout amount={myNet} target="[data-balance]" onDone={() => { setPaid(gameId); void refreshMe(); }} />}
-      {result && !payoutActive && <ResultView result={result} players={game.players} onClose={dismissGame} />}
+      {result && !payoutActive && (
+        <ResultView
+          result={result}
+          players={game.players}
+          onAgain={room && !room.tournament ? dismissGame : null}
+          onClose={() => {
+            // Leaving the table frees the chair for someone else; the result closes either way.
+            if (room && !room.tournament) void leaveRoom().catch(() => undefined).finally(dismissGame);
+            else dismissGame();
+          }}
+        />
+      )}
     </div>
   );
 }

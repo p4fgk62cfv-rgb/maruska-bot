@@ -122,6 +122,7 @@
     ["arena", "game", "Арена", "Дурак онлайн: игроки, деньги, турниры", true, "gold"],
     ["broadcasts", "megaphone", "Рассылки", "Фото, видео, кнопки, расписание", false, "blue"],
     ["journal", "journal", "Журнал", "Кто что сделал", false, "purple"],
+    ["owners", "crown", "Главные админы", "Права как у создателя", true, "gold"],
     ["roles", "crown", "Роли", "Права администраторов", false, "gold"],
     ["groups", "group", "Группы", "Где работает Мара", false, "green"],
     ["achievements", "trophy", "Достижения", "Кто что открыл", false, "gold"],

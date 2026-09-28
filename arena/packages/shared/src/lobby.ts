@@ -123,4 +123,14 @@ export function matchesFilter(room: FilterableRoom, filter: RoomFilter): boolean
 
 export const EMPTY_FILTER: RoomFilter = { scope: 'open', stakes: [], players: [], deckSizes: [], speeds: [], modes: [] };
 
-export const EMOJIS = ['😀', '😂', '😎', '🤔', '😡', '😭', '👍', '👏', '🔥', '🃏', '🍀', '💀'] as const;
+export const EMOJIS = [
+  '😀', '😂', '🤣', '😊', '😉', '😎',
+  '😍', '🥰', '😘', '😚', '💋', '❤️',
+  '💕', '💖', '💔', '🌹', '🤗', '😇',
+  '😏', '😜', '🤪', '🤔', '🙄', '😴',
+  '😱', '😳', '🥺', '😭', '😡', '🤬',
+  '👍', '👎', '👏', '🙏', '🤝', '👋',
+  '💪', '🔥', '💯', '🥳', '🎉', '🍀',
+  '🃏', '🤡', '💀', '💩', '🍺', '☕',
+] as const;
+export type Emoji = (typeof EMOJIS)[number];

@@ -77,9 +77,29 @@ def _parse_owners(raw: str) -> frozenset[int]:
 # бота добавили к ним, им и решать, что в нём включено.
 OWNER_IDS = _parse_owners(os.getenv("OWNER_IDS", ""))
 
+# Главные админы бота: назначаются в панели («Ещё → Главные админы»),
+# права у них те же, что у OWNER_IDS, кроме одного — создателя им не убрать. Список живёт в таблице bot_owners
+# и держится здесь в памяти — is_owner вызывается на каждое сообщение.
+_GRANTED: frozenset[int] = frozenset()
+
+
+def set_granted_owners(ids) -> None:
+    global _GRANTED
+    _GRANTED = frozenset(int(i) for i in ids)
+
+
+def granted_owners() -> frozenset[int]:
+    return _GRANTED
+
+
+def is_creator(user_id: int | None) -> bool:
+    """Создатель — из OWNER_IDS. Его нельзя снять из панели."""
+    return bool(user_id) and user_id in OWNER_IDS
+
 
 def is_owner(user_id: int | None) -> bool:
-    return bool(user_id) and user_id in OWNER_IDS
+    """Полные права во всём боте: создатель или назначенный им главный админ."""
+    return bool(user_id) and (user_id in OWNER_IDS or user_id in _GRANTED)
 
 
 async def is_admin(event, bot) -> bool:

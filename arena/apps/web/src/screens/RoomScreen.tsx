@@ -9,6 +9,7 @@ import { useRealtime } from '../realtime.js';
 import { useMe } from '../session.js';
 import { useToast } from '../toast.js';
 import { DockAction, EmptySeat, SeatTile, TableDock, TableTop } from './game/TableChrome.js';
+import { EmojiSheet, useSeatEmojis } from './game/emoji.js';
 
 /** Waiting room: the same felt as the game — chairs fill up live, everyone presses «Готов», the server deals. */
 export function RoomScreen({ room }: { room: RoomDto }) {
@@ -18,6 +19,8 @@ export function RoomScreen({ room }: { room: RoomDto }) {
   const [busy, setBusy] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [smiles, setSmiles] = useState(false);
+  const emojis = useSeatEmojis(me.id);
   const mySeat = room.seats.find((s) => s.userId === me.id);
   const full = room.seats.length === room.settings.players;
   const left = useCountdown(room.readyDeadline, () => socket.now());
@@ -60,6 +63,7 @@ export function RoomScreen({ room }: { room: RoomDto }) {
               active={seat.ready}
               offline={!seat.connected}
               label={seat.ready ? { text: 'Готов', tone: 'ready' } : null}
+              emoji={emojis[seat.userId] || null}
             />
           ) : (
             <EmptySeat key={`empty${number}`} number={number} size={tileSize} />
@@ -108,12 +112,15 @@ export function RoomScreen({ room }: { room: RoomDto }) {
           )
         }
         me={
-          <SeatTile
-            seat={{ id: me.id, name: me.name, photoUrl: me.photoUrl, frame: me.equipped.frame, crown: me.equipped.crown }}
-            size={56}
-            active={mySeat?.ready}
-            number={mySeat ? mySeat.seat + 1 : undefined}
-          />
+          <button type="button" className="table-dock__avatar" onClick={() => setSmiles(true)} aria-label="Отправить смайлик">
+            <SeatTile
+              seat={{ id: me.id, name: me.name, photoUrl: me.photoUrl, frame: me.equipped.frame, crown: me.equipped.crown }}
+              size={56}
+              active={mySeat?.ready}
+              number={mySeat ? mySeat.seat + 1 : undefined}
+              emoji={emojis[me.id] || null}
+            />
+          </button>
         }
         extras={
           <span className="room-wallet">
@@ -123,6 +130,15 @@ export function RoomScreen({ room }: { room: RoomDto }) {
         }
       />
 
+      <EmojiSheet
+        open={smiles}
+        onClose={() => setSmiles(false)}
+        onPick={(emoji) =>
+          void socket.send({ type: 'ROOM_EMOJI', roomId: room.id, emoji }).then((reply) => {
+            if (!reply.ok) toast(reply.message, 'error');
+          })
+        }
+      />
       <BottomSheet open={friendsOpen} title="Позвать друга" onClose={() => setFriendsOpen(false)}>
         {friendsOpen && <FriendPicker seated={room.seats.map((s) => s.userId)} />}
       </BottomSheet>

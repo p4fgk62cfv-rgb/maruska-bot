@@ -53,7 +53,7 @@ from progress.achievements import ACHIEVEMENTS
 import audit
 
 from settings import store
-from settings.handler import ADMIN_STATUSES, is_owner
+from settings.handler import ADMIN_STATUSES, is_creator, is_owner
 from settings.registry import (
     CHOICE_BY_KEY,
     CHOICES,
@@ -217,6 +217,7 @@ async def api_session(request: web.Request):
             "username": user.get("username"),
             "photo": user.get("photo_url"),
             "owner": is_owner(user["id"]),
+            "creator": is_creator(user["id"]),
         },
         "chats": chats,
     })

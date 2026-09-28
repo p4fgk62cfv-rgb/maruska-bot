@@ -33,6 +33,7 @@ from webapp.admin import setup_admin_routes
 from webapp.admin_v2 import setup_v2_routes
 from webapp.fishing_api import setup_fishing_routes
 from webapp.arena_admin import setup_arena_admin_routes
+from webapp.owners_api import setup_owner_routes
 from games.words import LEVEL_NAMES
 
 
@@ -398,6 +399,7 @@ def create_app(bot, bot_token: str) -> web.Application:
     setup_v2_routes(app)
     setup_fishing_routes(app)
     setup_arena_admin_routes(app)
+    setup_owner_routes(app)
 
     app.router.add_get("/admin-assets/{name}", admin_asset)
     app.router.add_get("/fishing-assets/{path:.*}", fishing_asset)

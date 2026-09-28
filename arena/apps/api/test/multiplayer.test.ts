@@ -152,7 +152,23 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     expect(profile.gamesPlayed).toBe(1);
     const firstGame = await db.userAchievement.findFirst({ where: { userId: p1.userId, achievement: { key: 'first_game' } } });
     expect(firstGame?.unlockedAt).not.toBeNull();
-    expect(handle.ctx.realtime.rooms.get(roomId)).toBeUndefined();
+
+    // The same company stays at the table: it waits again, and the next deal starts when both are ready.
+    for (const p of players) p.autoplay = false;
+    await p1.waitFor((m) => m.type === 'ROOM_UPDATED' && m.room.id === roomId && m.room.status === 'waiting');
+    const room = handle.ctx.realtime.rooms.get(roomId)!;
+    expect(room.seats.map((s) => s.userId).sort()).toEqual([p1.userId, p2.userId].sort());
+    expect(room.seats.every((s) => !s.ready)).toBe(true);
+    expect(room.readyDeadline).not.toBeNull();
+    // The autoplaying bots spent their message budget; let the per-socket limiter refill.
+    await new Promise((resolve) => setTimeout(resolve, 2100));
+    // Smiles work between deals too.
+    expect((await p1.send({ type: 'ROOM_EMOJI', roomId, emoji: '😘' })).type).toBe('ACK');
+    await p2.waitFor((m) => m.type === 'EMOJI' && m.userId === p1.userId && m.emoji === '😘');
+    for (const p of players) expect((await p.send({ type: 'READY', roomId, ready: true })).type).toBe('ACK');
+    const again = await p1.waitFor((m) => m.type === 'GAME_STARTED' && m.gameId !== gameId);
+    expect(room.status).toBe('playing');
+    await handle.ctx.realtime.games.abort((again as { gameId: string }).gameId);
   }, 90_000);
 
   it('three players: a dropped player reconnects to the same game and it plays to the end', async () => {

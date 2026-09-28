@@ -39,15 +39,25 @@ const DISCARD_TILT = [-18, 12, -6, 24, -26, 4];
 export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot, back, hover, dragging, pending }: TableProps) {
   const trumpCard = view.trump.card;
   const feltRef = useRef<HTMLDivElement>(null);
+  /** Where the table cards were after the previous render, and on which state. */
+  const placed = useRef<{ version: number; rects: Map<string, DOMRect> }>({ version: -1, rects: new Map() });
   // Pending cards appear where they will lie and glide there from the hand (or the finger).
+  // The cards already on the table make room for them smoothly instead of jumping, and
+  // slide back if the move is refused. Server updates are animated by the MotionDirector.
   useLayoutEffect(() => {
-    if (!pending || !motionAllowed()) return;
-    for (const card of pending.cards) {
-      const el = feltRef.current?.querySelector<HTMLElement>(`[data-card="${card}"]`);
-      const from = pending.from[card];
-      if (el && from) fly(el, from, el.getBoundingClientRect(), 0);
+    if (!motionAllowed() || !feltRef.current) return;
+    const moving = new Set<string>(pending?.cards ?? []);
+    for (const el of feltRef.current.querySelectorAll<HTMLElement>('[data-card]')) {
+      const card = el.dataset.card!;
+      const from = moving.has(card) ? pending!.from[card] : placed.current.version === view.version ? placed.current.rects.get(card) : undefined;
+      if (from) fly(el, from, el.getBoundingClientRect(), 0);
     }
   }, [pending]);
+  useLayoutEffect(() => {
+    const rects = new Map<string, DOMRect>();
+    for (const el of feltRef.current?.querySelectorAll<HTMLElement>('[data-card]') ?? []) rects.set(el.dataset.card!, el.getBoundingClientRect());
+    placed.current = { version: view.version, rects };
+  });
   return (
     <div
       ref={feltRef}

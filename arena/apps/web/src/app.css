@@ -339,6 +339,7 @@ select.app-input { appearance: none; }
 .seat-tile__timer { width: var(--tile); height: 4px; border-radius: 2px; background: rgba(0, 0, 0, 0.35); overflow: hidden; margin-top: 2px; }
 .seat-tile__timer span { display: block; height: 100%; background: var(--gold); transform-origin: left; transition: transform 0.25s linear; }
 .seat-tile__timer span.is-low { background: var(--red); }
+.seat-tile__timer--idle, .seat-tile__label--idle { visibility: hidden; }
 .seat-tile__label { position: relative; z-index: 2; font-size: 10px; font-weight: 800; padding: 1px 7px; border-radius: 8px; background: rgba(0, 0, 0, 0.4); color: rgba(255, 255, 255, 0.8); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
 .seat-tile__label--attack { color: var(--gold); }
 .seat-tile__label--defend { color: #ffb4a8; }
@@ -423,7 +424,7 @@ select.app-input { appearance: none; }
 .room-wallet .ui-balance--credits { color: #b86e0c; }
 .room-wallet .ui-balance--coins { color: #a7790e; }
 
-.emoji-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; font-size: 30px; }
+.emoji-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; font-size: 30px; max-height: 52vh; overflow-y: auto; }
 .emoji-grid button { height: 52px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); }
 .discard-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 
@@ -619,3 +620,7 @@ select.app-input { appearance: none; }
   background: rgba(0, 0, 0, 0.55); color: var(--league); font-size: 11px; font-weight: 800; line-height: 18px; text-align: center;
 }
 .people-row--plain .ui-btn { flex: none; }
+
+/* After going out: the table stays open to watch the others finish */
+.dock-watching { display: grid; place-items: center; min-height: 52px; padding: 0 6px; text-align: center; font-family: var(--font-script); font-size: 21px; line-height: 1.1; color: var(--ink); opacity: 0.75; }
+.result__actions { display: grid; gap: 8px; }
