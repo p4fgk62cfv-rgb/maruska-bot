@@ -1,6 +1,6 @@
 """
-Проверка «Главных админов»: назначенные создателем люди получают права
-как у OWNER_IDS, управлять списком может только создатель.
+Проверка «Главных админов»: у них права как у OWNER_IDS, включая
+управление этим списком; создателя не может убрать никто.
 
 Запуск:  python test_owners.py
 С настоящей базой (создаёт таблицы в указанной БД):
@@ -47,7 +47,7 @@ expect("пустой id", handler.is_owner(None), False)
 
 # Панель: пункт только у создателя, скрипт подключён, маршруты на сервере.
 settings_js = (ROOT / "webapp/static/admin/settings.js").read_text(encoding="utf-8")
-expect("пункт меню для создателя", '["owners", "crown", "Главные админы", "Права как у создателя", "creator"' in settings_js, True)
+expect("пункт меню для владельцев", '["owners", "crown", "Главные админы", "Права как у создателя", true' in settings_js, True)
 expect("скрипт в панели", "/admin-assets/owners.js" in (ROOT / "webapp/static/admin.html").read_text(encoding="utf-8"), True)
 expect("маршруты на сервере", "setup_owner_routes(app)" in (ROOT / "webapp/server.py").read_text(encoding="utf-8"), True)
 expect("загрузка при старте", "owners.load()" in (ROOT / "bot.py").read_text(encoding="utf-8"), True)
@@ -120,12 +120,25 @@ async def with_database():
     expect("имя из базы", body["admins"][0]["name"], "Маша")
     expect("создатель в списке", [(c["id"], c["name"]) for c in body["creators"]], [(111, "Стас")])
 
-    # Главный админ не управляет списком.
+    # Главный админ может то же, что создатель: видит список, назначает, снимает…
     current["admin"] = {"id": 333, "first_name": "Маша"}
     status, _ = await call(api.api_owners, "GET", "/api/admin/owners")
-    expect("главный админ не видит список", status, 403)
+    expect("главный админ видит список", status, 200)
     status, _ = await call(api.api_owner_remove, "POST", "/api/admin/owners/444/remove", match={"id": "444"})
-    expect("главный админ не снимает", status, 403)
+    expect("главный админ снимает другого", status, 200)
+    status, _ = await call(api.api_owner_add, "POST", "/api/admin/owners", {"user": "444"})
+    expect("главный админ назначает", status, 200)
+    # …кроме одного: создателя не убрать.
+    status, body = await call(api.api_owner_remove, "POST", "/api/admin/owners/111/remove", match={"id": "111"})
+    expect("создателя не убрать", (status, body["error"]), (403, "Создателя убрать нельзя"))
+    expect("создатель на месте", handler.is_owner(111) and handler.is_creator(111), True)
+
+    # Обычный админ группы сюда не попадает.
+    current["admin"] = {"id": 555, "first_name": "Вася"}
+    status, _ = await call(api.api_owners, "GET", "/api/admin/owners")
+    expect("чужой не видит список", status, 403)
+    status, _ = await call(api.api_owner_add, "POST", "/api/admin/owners", {"user": "555"})
+    expect("чужой не назначает себя", status, 403)
     current["admin"] = {"id": 111, "first_name": "Стас"}
 
     # Перезапуск: список поднимается из базы.

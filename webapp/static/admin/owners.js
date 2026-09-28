@@ -1,7 +1,7 @@
 /* ===========================================================
-   👑 Главные админы: создатель бота назначает людей с такими же
-   полными правами, как у него самого, и снимает их.
-   Экран виден только создателю (OWNER_IDS).
+   👑 Главные админы: люди с такими же полными правами, как у создателя.
+   Назначают и снимают создатель и сами главные админы; создателя
+   (OWNER_IDS) не снять никому.
    =========================================================== */
 
 (function () {
@@ -17,7 +17,7 @@
     M.api("/api/admin/owners").then(function (data) {
       M.app.innerHTML = M.backButton()
         + '<div class="card"><div class="card-title">Добавить главного админа</div>'
-        + '<div class="dim" style="margin-bottom:8px">Получит все права, как у создателя: все группы, все разделы панели, Арена, логи и система. Назначать и снимать главных админов можете только вы.</div>'
+        + '<div class="dim" style="margin-bottom:8px">Получит все права, как у создателя: все группы, все разделы панели, Арена, логи и система, в том числе назначать и снимать главных админов. Убрать создателя не сможет никто.</div>'
         + '<input data-user placeholder="Telegram ID или @username">'
         + '<button class="btn primary block" data-add style="margin-top:10px">Назначить</button>'
         + '<div class="dim" style="margin-top:8px">По @username найдётся тот, кто уже писал боту или есть в его группах. Свой ID человек узнает командой /myid.</div></div>'
@@ -38,14 +38,14 @@
               + '<div class="grow"><div class="t">👑 ' + esc(c.name) + "</div>"
               + '<div class="s">' + (c.username ? "@" + esc(c.username) + " · " : "") + "ID " + esc(c.id) + "</div></div></div>";
           }).join("")
-        + '<div class="dim" style="margin-top:6px">Создатели задаются переменной OWNER_IDS в Railway, из панели их не снять.</div></div>';
+        + '<div class="dim" style="margin-top:6px">Создатель задаётся переменной OWNER_IDS в Railway — из панели его не снять.</div></div>';
       M.bind();
 
       var input = M.app.querySelector("[data-user]");
       var add = function () {
         var value = input.value.trim();
         if (!value) return M.toast("Укажите Telegram ID или @username");
-        M.confirm("Назначить главным админом?", value + " получит все права в боте, как у вас.", "Назначить").then(function (yes) {
+        M.confirm("Назначить главным админом?", value + " получит все права в боте, как у создателя.", "Назначить").then(function (yes) {
           if (!yes) return;
           M.post("/api/admin/owners", { user: value }).then(function (r) {
             M.toast("Назначен: " + r.admin.name);

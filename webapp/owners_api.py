@@ -1,13 +1,13 @@
 """
-«Главные админы» в панели: создатель бота (OWNER_IDS) назначает людей
-с такими же полными правами, как у него самого, и снимает их.
+«Главные админы» в панели: люди с такими же полными правами, как у
+создателя бота (OWNER_IDS).
 
   GET  /api/admin/owners               — создатели и главные админы
   POST /api/admin/owners               — назначить: {"user": "123456789" | "@username"}
   POST /api/admin/owners/{id}/remove   — снять
 
-Назначать и снимать может только создатель: главный админ не может
-убрать другого главного админа или добавить кого-то сам.
+Назначать и снимать могут создатель и главные админы. Создателя убрать
+нельзя никому: он задаётся переменной OWNER_IDS, а не этим списком.
 """
 
 from aiohttp import web
@@ -15,13 +15,13 @@ from aiohttp import web
 import audit
 
 
-async def _creator(request):
-    from settings.handler import is_creator
+async def _owner(request):
+    from settings.handler import is_owner
     from webapp.admin_v2 import _admin, _name
 
     admin, _chats = await _admin(request)
-    if not is_creator(admin["id"]):
-        raise web.HTTPForbidden(text="creator only")
+    if not is_owner(admin["id"]):
+        raise web.HTTPForbidden(text="owner only")
     return admin, _name(admin)
 
 
@@ -49,7 +49,7 @@ async def _creators() -> list[dict]:
 async def api_owners(request: web.Request):
     from settings import owners
 
-    await _creator(request)
+    await _owner(request)
     return web.json_response({"creators": await _creators(), "admins": await owners.list_all()})
 
 
@@ -57,7 +57,7 @@ async def api_owner_add(request: web.Request):
     from settings import owners
     from settings.handler import OWNER_IDS, granted_owners
 
-    admin, admin_name = await _creator(request)
+    admin, admin_name = await _owner(request)
     try:
         body = await request.json()
     except ValueError:
@@ -89,13 +89,15 @@ async def api_owner_add(request: web.Request):
 
 async def api_owner_remove(request: web.Request):
     from settings import owners
-    from settings.handler import granted_owners
+    from settings.handler import OWNER_IDS, granted_owners
 
-    admin, admin_name = await _creator(request)
+    admin, admin_name = await _owner(request)
     try:
         target = int(request.match_info["id"])
     except ValueError:
         raise web.HTTPBadRequest(text="bad id")
+    if target in OWNER_IDS:
+        return web.json_response({"ok": False, "error": "Создателя убрать нельзя"}, status=403)
     if target not in granted_owners():
         raise web.HTTPNotFound(text="not an admin")
 
