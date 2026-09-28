@@ -259,6 +259,14 @@ export class TournamentService {
     });
   }
 
+  /** Admin panel: call off a tournament that has not started; entry fees go back. */
+  async adminCancel(id: string): Promise<boolean> {
+    const t = await this.db.tournament.findUnique({ where: { id } });
+    if (!t || (t.status !== 'ANNOUNCED' && t.status !== 'REGISTRATION')) return false;
+    await this.cancel(t);
+    return true;
+  }
+
   private async cancel(t: Tournament): Promise<void> {
     await this.db.$transaction(async (tx) => {
       const claimed = await tx.tournament.updateMany({ where: { id: t.id, status: { not: 'CANCELLED' } }, data: { status: 'CANCELLED', finishedAt: new Date() } });

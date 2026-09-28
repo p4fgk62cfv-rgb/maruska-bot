@@ -47,9 +47,12 @@ const MAX_ATTEMPTS = 5;
  * Transactional outbox for bot messages: a row is written first, then delivered. Failed rows
  * are retried by a background sweep, so a Telegram hiccup or a restart never loses an invite.
  */
+const BATCH = 20;
+
 export class Outbox {
   private timer: NodeJS.Timeout | null = null;
   private sweeping = false;
+  private hurrying = false;
 
   constructor(
     private readonly db: Db,
@@ -71,17 +74,33 @@ export class Outbox {
     if (this.timer) clearInterval(this.timer);
   }
 
-  async sweep(): Promise<void> {
-    if (this.sweeping) return;
+  /**
+   * A broadcast just queued many messages: keep sweeping every second (about 20 messages a
+   * second, under Telegram's 30/s) until the queue is empty, then fall back to the timer.
+   */
+  hurry(): void {
+    if (this.hurrying) return;
+    this.hurrying = true;
+    const tick = async () => {
+      const sent = await this.sweep().catch(() => 0);
+      if (sent >= BATCH) setTimeout(() => void tick(), 1000).unref();
+      else this.hurrying = false;
+    };
+    void tick();
+  }
+
+  async sweep(): Promise<number> {
+    if (this.sweeping) return 0;
     this.sweeping = true;
     try {
       const pending = await this.db.notification.findMany({
         where: { sentAt: null, attempts: { lt: MAX_ATTEMPTS }, createdAt: { gt: new Date(Date.now() - 24 * 3600_000) } },
         orderBy: { createdAt: 'asc' },
-        take: 20,
+        take: BATCH,
         select: { id: true },
       });
       for (const { id } of pending) await this.deliver(id);
+      return pending.length;
     } finally {
       this.sweeping = false;
     }

@@ -85,7 +85,8 @@ export function ResultView({ result, players, onClose }: { result: GameResultDto
         </div>
       )}
       <div className="result__card">
-        <span className="result__title">{outcome === 'win' ? 'Победа!' : outcome === 'lose' ? 'Вы дурак' : 'Ничья'}</span>
+        <span className="result__title">{result.reason === 'cancelled' ? 'Партия отменена' : outcome === 'win' ? 'Победа!' : outcome === 'lose' ? 'Вы дурак' : 'Ничья'}</span>
+        {result.reason === 'cancelled' && <p className="app-muted">Модератор остановил партию. Ставки вернулись всем игрокам.</p>}
         {loser && result.kind === 'loser' && (
           <p className="app-muted">
             {loser.userId === me.id ? REASON_ME[result.reason ?? 'cards'] : `${loser.name} — ${REASON[result.reason ?? 'cards']}`}

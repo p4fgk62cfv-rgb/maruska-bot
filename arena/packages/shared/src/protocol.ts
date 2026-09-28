@@ -54,7 +54,7 @@ export type ServerMessage =
 export interface GameResultDto {
   kind: 'loser' | 'draw';
   /** Why the fool lost: last with cards, gave up, ran out of time, or threw the last card («Классика»). */
-  reason: 'cards' | 'surrender' | 'timeout' | 'last_attack' | null;
+  reason: 'cards' | 'surrender' | 'timeout' | 'last_attack' | 'cancelled' | null;
   loserId: string | null;
   winnerId: string | null;
   payouts: { userId: string; net: number; place: number | null; ratingGain: number; bonusMultiplier: number }[];

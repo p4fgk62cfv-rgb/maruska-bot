@@ -287,6 +287,14 @@ export class RoomManager {
     return room;
   }
 
+  /** Moderator: close a table that is still waiting for players (no stakes were taken yet). */
+  async adminClose(roomId: string): Promise<boolean> {
+    const room = this.rooms.get(roomId);
+    if (!room || room.status !== 'waiting' || room.tournament) return false;
+    await this.queue(roomId).run(() => this.closeRoom(room));
+    return true;
+  }
+
   /** Removes a room and everyone in it (used for tournament matches that end without a game). */
   private async closeRoom(room: Room): Promise<void> {
     this.clearTimer(`ready:${room.id}`);

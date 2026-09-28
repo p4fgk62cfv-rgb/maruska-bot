@@ -232,6 +232,42 @@ export class GameRunner {
     }
   }
 
+  /** What the admin panel shows about a running game; no cards. */
+  summary() {
+    const st = this.snap.state;
+    return {
+      gameId: this.id,
+      roomId: this.roomId,
+      stake: this.snap.stake,
+      startedAt: this.snap.startedAt,
+      moves: st.version,
+      deck: st.deck.length,
+      finished: this.result !== null,
+      players: this.players.map((p) => ({ userId: p.userId, name: p.name, cards: st.players.find((x) => x.id === p.userId)?.hand.length ?? 0, connected: p.connected })),
+    };
+  }
+
+  /** Moderator stop: everyone gets the stake back, the game ends as «cancelled». */
+  async adminAbort(): Promise<void> {
+    if (this.result) return;
+    if (this.timer) clearTimeout(this.timer);
+    await this.flushMoves();
+    await this.deps.settlement.abort(this.id);
+    this.result = {
+      kind: 'draw',
+      reason: 'cancelled',
+      loserId: null,
+      winnerId: null,
+      stake: this.snap.stake,
+      payouts: this.players.map((p) => ({ userId: p.userId, net: 0, place: null, ratingGain: 0, bonusMultiplier: 1 })),
+    };
+    metrics.inc('arena_games_aborted_total', 'Abandoned games refunded');
+    this.deps.log.warn({ gameId: this.id }, 'game cancelled by a moderator, stakes refunded');
+    for (const p of this.players) this.deps.hub.send(p.userId, { type: 'GAME_FINISHED', gameId: this.id, result: this.result });
+    await this.deps.store.deleteGame(this.id).catch(() => undefined);
+    this.deps.onFinished(this.roomId, this.result);
+  }
+
   /** Settles a game that was already over when the process restarted. */
   async settleRecovered(): Promise<void> {
     await this.finish();
@@ -375,6 +411,18 @@ export class GameManager {
     });
     this.runners.set(snapshot.gameId, runner);
     return runner;
+  }
+
+  /** Every game in memory, for the admin panel. */
+  all(): GameRunner[] {
+    return [...this.runners.values()];
+  }
+
+  async abort(gameId: string): Promise<boolean> {
+    const runner = this.runners.get(gameId);
+    if (!runner || runner.result) return false;
+    await runner.queue.run(() => runner.adminAbort());
+    return true;
   }
 
   async handle(userId: string, msg: GameMessage): Promise<void> {

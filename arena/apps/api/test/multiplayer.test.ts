@@ -43,7 +43,7 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
   }
 
   beforeAll(async () => {
-    config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url!, BOT_TOKEN, SESSION_SECRET: 'm'.repeat(40), WEB_DIST: '/none', RAKE_PERCENT: '5' });
+    config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url!, BOT_TOKEN, SESSION_SECRET: 'm'.repeat(40), WEB_DIST: '/none', RAKE_PERCENT: '5', INTERNAL_API_SECRET: 'internal-secret-multi-123' });
     db = createDb(url!);
     await seedCatalog(db);
     base = createContext(config, db);
@@ -216,6 +216,20 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     await intruder.connect('bad.token');
     await new Promise((r) => setTimeout(r, 200));
     expect(intruder.closedWith).toBe(4001);
+  });
+
+  it('a moderator cancels a running game: stakes come back, players see «cancelled»', async () => {
+    const { players, roomId } = await table(2);
+    const gameId = await startGame(players, roomId);
+    for (const p of players) expect((await base.users.wallet(p.userId)).credits).toBe(1350);
+    const res = await handle.app.inject({ method: 'POST', url: `/api/internal/admin/games/${gameId}/abort`, headers: { authorization: 'Bearer internal-secret-multi-123' } });
+    expect(res.json()).toEqual({ ok: true });
+    for (const p of players) {
+      const done = (await p.waitFor((m) => m.type === 'GAME_FINISHED')) as { result: { reason: string } };
+      expect(done.result.reason).toBe('cancelled');
+      expect((await base.users.wallet(p.userId)).credits).toBe(1450);
+    }
+    expect((await db.game.findUniqueOrThrow({ where: { id: gameId } })).status).toBe('ABORTED');
   });
 
   it('«Быстрая игра» seats two players at one table', async () => {

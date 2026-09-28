@@ -72,7 +72,10 @@ export async function seedCatalog(db: Db): Promise<void> {
   }
   for (const [index, item] of ITEMS.entries()) {
     const data = { ...item, isActive: item.isActive ?? true, price: BigInt(item.price), sortOrder: index };
-    await db.item.upsert({ where: { key: item.key }, create: data, update: data });
+    const existing = await db.item.findUnique({ where: { key: item.key }, select: { adminOverride: true } });
+    if (!existing) await db.item.create({ data });
+    else if (existing.adminOverride) await db.item.update({ where: { key: item.key }, data: { kind: data.kind, rarity: data.rarity, sortOrder: index } });
+    else await db.item.update({ where: { key: item.key }, data });
   }
   await retireItems(db);
 }
@@ -83,7 +86,9 @@ export async function seedCatalog(db: Db): Promise<void> {
  */
 async function retireItems(db: Db): Promise<void> {
   const ledger = new Ledger(db);
-  const owned = await db.userItem.findMany({ where: { source: 'shop', item: { isActive: false, price: { gt: 0 } } }, include: { item: true } });
+  // Only items the code retired; switching an item off in the admin panel just stops its sales.
+  const retired = ITEMS.filter((i) => i.isActive === false).map((i) => i.key);
+  const owned = await db.userItem.findMany({ where: { source: 'shop', item: { key: { in: retired }, price: { gt: 0 } } }, include: { item: true } });
   for (const row of owned) {
     await db.$transaction(async (tx) => {
       await ledger.postIn(tx, {

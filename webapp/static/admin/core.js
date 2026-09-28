@@ -280,7 +280,17 @@
     images: ["image", "green", "Изображения", "Источники и подбор"],
     library: ["image", "green", "Моя коллекция", "Свои картинки для действий"],
     games: ["game", "green", "Игры", "Крокодил и мини-игры"],
-    fishing: ["game", "blue", "Рыбалка", "Награды, лимиты, улов"]
+    fishing: ["game", "blue", "Рыбалка", "Награды, лимиты, улов"],
+    arena: ["game", "gold", "Арена", "Онлайн-дурак · только владелец"],
+    arena_players: ["users", "gold", "Игроки Арены", "Поиск, деньги, баны"],
+    arena_player: ["user", "gold", "Игрок Арены", "Карточка и действия"],
+    arena_live: ["game", "green", "Столы сейчас", "Ожидающие и идущие партии"],
+    arena_moderation: ["shield", "red", "Модерация Арены", "Жалобы и подозрительные пары"],
+    arena_tournaments: ["trophy", "gold", "Турниры", "Создать и отменить"],
+    arena_seasons: ["calendar", "blue", "Сезоны", "Сезонный рейтинг"],
+    arena_shop: ["bag", "pink", "Магазин Арены", "Цены и доступность"],
+    arena_broadcast: ["megaphone", "blue", "Рассылка игрокам", "Личные сообщения от бота"],
+    arena_settings: ["settings", "purple", "Правила экономики", "Бонусы, комиссия, цены"]
   };
 
   function addScreenHead() {

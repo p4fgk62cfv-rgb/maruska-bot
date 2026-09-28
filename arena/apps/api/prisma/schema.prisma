@@ -377,6 +377,8 @@ model Item {
   assetUrl  String?  @map("asset_url")
   isActive  Boolean  @default(true) @map("is_active")
   sortOrder Int      @default(0) @map("sort_order")
+  /// Price, name or availability were changed in the admin panel: boot seeding leaves them alone.
+  adminOverride Boolean @default(false) @map("admin_override")
 
   owners UserItem[]
 

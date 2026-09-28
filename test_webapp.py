@@ -273,13 +273,15 @@ def main() -> int:
     # 6. Все вызываемые адреса существуют на сервере
     server = "".join(
         (ROOT / "webapp" / f).read_text(encoding="utf-8")
-        for f in ("admin.py", "admin_v2.py", "server.py", "fishing_api.py")
+        for f in ("admin.py", "admin_v2.py", "server.py", "fishing_api.py", "arena_admin.py")
     )
     registered = set(re.findall(r'add_(?:get|post)\("([^"]+)"', server))
+    # Маршруты-шаблоны вида /api/admin/arena/{path:.+} принимают всё, что ниже.
+    prefixes = [r.split("{")[0] for r in registered if "{" in r]
 
     for path in sorted(set(re.findall(r'"(/api/admin/[a-z_/]+)', js))):
         checks += 1
-        if path not in registered:
+        if path not in registered and not any(path.startswith(p) and p.endswith("/") for p in prefixes):
             failures.append(f"  [api] панель зовёт {path}, а на сервере его нет")
 
     # 7. Права на сервере

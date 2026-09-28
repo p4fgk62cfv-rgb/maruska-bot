@@ -119,6 +119,7 @@
     ["analytics", "chart", "Аналитика", "Графики и тепловая карта", false, "blue"],
     ["economy", "diamond", "Экономика", "Алмазы и операции", false, "gold"],
     ["games", "game", "Игры", "Крокодил, кубики, награды", false, "green"],
+    ["arena", "game", "Арена", "Дурак онлайн: игроки, деньги, турниры", true, "gold"],
     ["broadcasts", "megaphone", "Рассылки", "Фото, видео, кнопки, расписание", false, "blue"],
     ["journal", "journal", "Журнал", "Кто что сделал", false, "purple"],
     ["roles", "crown", "Роли", "Права администраторов", false, "gold"],

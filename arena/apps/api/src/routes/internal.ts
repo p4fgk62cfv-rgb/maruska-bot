@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Context } from '../context.js';
 import { createTournamentSchema } from '../services/tournaments.js';
+import { adminRoutes } from './admin.js';
 import { AppError } from '../lib/errors.js';
 import { metrics } from '../lib/metrics.js';
 import { toNumber } from '../lib/money.js';
@@ -21,6 +22,8 @@ export async function internalRoutes(app: FastifyInstance, ctx: Context): Promis
     const expected = Buffer.from(secret);
     if (given.length !== expected.length || !timingSafeEqual(given, expected)) throw new AppError('UNAUTHORIZED');
   };
+
+  await adminRoutes(app, ctx, check);
 
   /** Arena card for the bot's /profile: rating, league, wins. */
   app.get('/internal/players/:telegramId', { preHandler: check }, async (request) => {
