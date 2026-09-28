@@ -8,7 +8,6 @@ import { haptic, tg } from '../lib/telegram.js';
 import { useRealtime } from '../realtime.js';
 import { useMe } from '../session.js';
 import { useToast } from '../toast.js';
-import { tableOf } from '../lib/cosmetics.js';
 import { DockAction, EmptySeat, SeatTile, TableDock, TableTop } from './game/TableChrome.js';
 
 /** Waiting room: the same felt as the game — chairs fill up live, everyone presses «Готов», the server deals. */
@@ -42,7 +41,7 @@ export function RoomScreen({ room }: { room: RoomDto }) {
   const tileSize = room.settings.players > 4 ? 50 : 58;
 
   return (
-    <div className={`game game--room game--table-${tableOf(me.equipped.table)}`}>
+    <div className="game game--room">
       {status !== 'open' && <div className="game__banner">Соединение восстанавливается…</div>}
       <TableTop
         settings={room.settings}

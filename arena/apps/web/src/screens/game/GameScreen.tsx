@@ -7,7 +7,7 @@ import { haptic } from '../../lib/telegram.js';
 import { play, unlockAudio } from '../../lib/sound.js';
 import { motionAllowed, settings, useSettings } from '../../lib/settings.js';
 import { fly, MotionDirector } from './motion.js';
-import { backOf, tableOf } from '../../lib/cosmetics.js';
+import { backOf } from '../../lib/cosmetics.js';
 import { useRealtime, type LiveGame } from '../../realtime.js';
 import { useMe, useSession } from '../../session.js';
 import { useToast } from '../../toast.js';
@@ -311,7 +311,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
   if (a.pass) actions.push({ key: 'pass', text: view.phase === 'defense' && undefended.length === 0 ? 'Бито' : 'Пас', tone: 'alt', run: () => void send({ type: 'PASS', gameId }) });
 
   return (
-    <div className={`game game--table-${tableOf(me.equipped.table)}`} ref={rootRef}>
+    <div className="game" ref={rootRef}>
       <div className="motion-layer" ref={layerRef} />
       {status !== 'open' && <div className="game__banner">Соединение восстанавливается…</div>}
 

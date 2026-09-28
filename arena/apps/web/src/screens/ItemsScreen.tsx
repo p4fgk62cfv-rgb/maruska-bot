@@ -2,7 +2,7 @@ import type { ItemDto, ItemKind } from '@arena/shared';
 import { Avatar, Badge, Balance, Button, Panel, PlayingCard, Tabs } from '@arena/ui';
 import { useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
-import { backOf, ringOf, tableOf } from '../lib/cosmetics.js';
+import { backOf, ringOf } from '../lib/cosmetics.js';
 import { primeCache, useQuery } from '../lib/useQuery.js';
 import { useMe, useSession } from '../session.js';
 import { useToast } from '../toast.js';
@@ -11,20 +11,17 @@ import { QueryView, ScreenHeader } from './common.js';
 const KINDS: { value: ItemKind | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'Все' },
   { value: 'CARD_BACK', label: 'Рубашки' },
-  { value: 'TABLE', label: 'Столы' },
   { value: 'FRAME', label: 'Рамки' },
 ];
 const RARITY = { COMMON: ['muted', 'Обычный'], RARE: ['cyan', 'Редкий'], EPIC: ['violet', 'Эпический'], LEGENDARY: ['gold', 'Легендарный'] } as const;
 const OPTIONAL: ItemKind[] = ['FRAME', 'CROWN', 'EFFECT'];
-const WEARABLE: ItemKind[] = ['CARD_BACK', 'TABLE', 'FRAME', 'CROWN', 'EFFECT'];
+const WEARABLE: ItemKind[] = ['CARD_BACK', 'FRAME', 'CROWN', 'EFFECT'];
 
 function Preview({ item }: { item: ItemDto }) {
   const me = useMe();
   switch (item.kind) {
     case 'CARD_BACK':
-      return <PlayingCard faceDown back={backOf(item.key)} width={46} />;
-    case 'TABLE':
-      return <span className={`item-table item-table--${tableOf(item.key)}`} />;
+      return <PlayingCard faceDown back={backOf(item.key)} width={64} />;
     case 'FRAME':
     case 'CROWN':
       return <Avatar id={me.id} name={me.name} photoUrl={me.photoUrl} size={48} ring={item.kind === 'FRAME' ? ringOf(item.key) : 'none'} crown={item.kind === 'CROWN'} />;
@@ -77,7 +74,7 @@ export default function ItemsScreen() {
                     <Badge tone={tone}>{label}</Badge>
                     {!i.owned ? (
                       <Button size="sm" block loading={busy === i.key} onClick={() => void run(i.key, `/items/${i.key}/buy`, `«${i.name}» куплено`)}>
-                        <Balance kind="coins" value={i.price} />
+                        <Balance kind={i.currency === 'CREDITS' ? 'credits' : 'coins'} value={i.price} />
                       </Button>
                     ) : i.equipped ? (
                       OPTIONAL.includes(i.kind) ? (

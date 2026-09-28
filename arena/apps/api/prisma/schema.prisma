@@ -108,6 +108,8 @@ enum TransactionType {
   GAME_PAYOUT
   GAME_REFUND
   PURCHASE
+  /// Money back for an item taken off sale.
+  PURCHASE_REFUND
   TOURNAMENT_FEE
   TOURNAMENT_PRIZE
   TOURNAMENT_REFUND

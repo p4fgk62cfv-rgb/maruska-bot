@@ -213,13 +213,34 @@ describe.skipIf(!url)('friends, requests and invites', () => {
     expect((await call(buyer, 'GET', '/me')).json().wallet.coins).toBe(40);
 
     expect((await call(buyer, 'POST', '/items/frame_silver/equip')).json()).toMatchObject({ frame: 'frame_silver', cardBack: 'back_classic' });
-    expect((await call(buyer, 'POST', '/items/table_felt/equip')).json()).toMatchObject({ table: 'table_felt' });
-    const items = (await call(buyer, 'GET', '/items')).json();
-    expect(items.filter((i: { equipped: boolean }) => i.equipped).map((i: { key: string }) => i.key).sort()).toEqual(['back_classic', 'frame_silver', 'table_felt']);
+    // Illustrated backs cost credits: 1450 at sign-up is not enough for 2500.
+    expect((await call(buyer, 'POST', '/items/back_tartan/buy')).json()).toMatchObject({ error: 'INSUFFICIENT_FUNDS' });
+    await db.$transaction((tx) =>
+      handle.ctx.ledger.postIn(tx, { userId: buyer.id, currency: 'CREDITS', amount: 2_000n, type: 'ADMIN', source: 'test', idempotencyKey: `credits:${buyer.id}` }),
+    );
+    expect((await call(buyer, 'POST', '/items/back_tartan/buy')).statusCode).toBe(200);
+    expect((await call(buyer, 'GET', '/me')).json().wallet).toMatchObject({ credits: 950, coins: 40 });
+    expect((await call(buyer, 'POST', '/items/back_tartan/equip')).json()).toMatchObject({ cardBack: 'back_tartan' });
+    const items = (await call(buyer, 'GET', '/items')).json() as { key: string; kind: string; equipped: boolean }[];
+    expect(items.filter((i) => i.equipped).map((i) => i.key).sort()).toEqual(['back_tartan', 'frame_silver']);
+    // The table is no longer sold: one felt for everyone.
+    expect(items.some((i) => i.kind === 'TABLE')).toBe(false);
+    expect((await call(buyer, 'POST', '/items/table_midnight/buy')).json()).toMatchObject({ error: 'NOT_FOUND' });
 
     const room = (await call(buyer, 'POST', '/rooms', ROOM)).json().room;
     expect(room.seats[0]).toMatchObject({ frame: 'frame_silver', crown: null });
     await call(buyer, 'POST', `/rooms/${room.id}/leave`);
     expect((await call(buyer, 'POST', '/items/frame_silver/unequip')).json()).toMatchObject({ frame: null });
+  });
+
+  it('refunds items taken off sale once, however many times the catalogue is seeded', async () => {
+    const owner = await player('Владелец стола');
+    const midnight = await db.item.findUniqueOrThrow({ where: { key: 'table_midnight' } });
+    await db.userItem.create({ data: { userId: owner.id, itemId: midnight.id, source: 'shop', equipped: true } });
+    const before = (await call(owner, 'GET', '/me')).json().wallet.coins as number;
+    await seedCatalog(db);
+    await seedCatalog(db);
+    expect((await call(owner, 'GET', '/me')).json().wallet.coins).toBe(before + 80);
+    expect(await db.userItem.count({ where: { userId: owner.id, itemId: midnight.id } })).toBe(0);
   });
 });

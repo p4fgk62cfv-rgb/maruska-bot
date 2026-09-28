@@ -16,12 +16,20 @@ export interface PlayingCardProps {
 /** Illustrated faces exist for the 36-card deck (6…A); 2–5 of the 52-card deck stay CSS-drawn. */
 const ILLUSTRATED = new Set(['6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']);
 const FACE_URL = '/cards/';
+/** Illustrated backs (public/backs/<name>.webp); the rest are CSS-drawn. */
+const ART_BACKS = new Set(['tartan', 'celtic', 'emerald', 'amethyst', 'frost', 'mandala', 'crystal', 'ruby', 'moon', 'starburst', 'wolf', 'spider']);
 
 /** Card face from the illustrated set when there is one, otherwise a CSS card. */
 export const PlayingCard = memo(function PlayingCard({ card, faceDown, selected, playable, trump, width = 64, back = 'classic', onClick }: PlayingCardProps) {
   const style = { width, height: width * 1.42, fontSize: width * 0.28 };
   if (faceDown || !card) {
-    return <span className={`ui-card ui-card--back ui-card--back-${back}`} style={style} aria-label="Карта рубашкой вверх" />;
+    return ART_BACKS.has(back) ? (
+      <span className="ui-card ui-card--back ui-card--back-art" style={style} aria-label="Карта рубашкой вверх">
+        <img className="ui-card__art" src={`/backs/${back}.webp`} alt="" draggable={false} decoding="async" />
+      </span>
+    ) : (
+      <span className={`ui-card ui-card--back ui-card--back-${back}`} style={style} aria-label="Карта рубашкой вверх" />
+    );
   }
   const suit = suitOf(card);
   const rank = RANK_LABEL_RU[rankOf(card)];

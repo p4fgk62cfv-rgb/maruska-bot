@@ -14,6 +14,7 @@ const TX_LABEL: Record<string, string> = {
   GAME_PAYOUT: 'Выигрыш',
   GAME_REFUND: 'Возврат ставки',
   PURCHASE: 'Покупка',
+  PURCHASE_REFUND: 'Возврат за предмет',
   TOURNAMENT_FEE: 'Взнос за турнир',
   TOURNAMENT_PRIZE: 'Приз турнира',
   ACHIEVEMENT_REWARD: 'Награда за достижение',

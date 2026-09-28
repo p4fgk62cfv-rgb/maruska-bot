@@ -1,4 +1,5 @@
 import type { Db } from '../db.js';
+import { Ledger } from './ledger.js';
 import type { Currency, ItemKind, Rarity } from '../generated/prisma/client.js';
 
 interface AchievementSeed {
@@ -33,14 +34,30 @@ interface ItemSeed {
   rarity: Rarity;
   price: number;
   currency: Currency;
+  /** Off sale: hidden from the shop; paid copies are refunded once (see retireItems). */
+  isActive?: boolean;
 }
 
 export const ITEMS: ItemSeed[] = [
   { key: 'back_classic', kind: 'CARD_BACK', name: 'Классическая рубашка', rarity: 'COMMON', price: 0, currency: 'COINS' },
   { key: 'back_violet', kind: 'CARD_BACK', name: 'Неоновый фиолет', rarity: 'RARE', price: 50, currency: 'COINS' },
   { key: 'back_gold', kind: 'CARD_BACK', name: 'Золотой узор', rarity: 'EPIC', price: 150, currency: 'COINS' },
-  { key: 'table_felt', kind: 'TABLE', name: 'Зелёное сукно', rarity: 'COMMON', price: 0, currency: 'COINS' },
-  { key: 'table_midnight', kind: 'TABLE', name: 'Полночь', rarity: 'RARE', price: 80, currency: 'COINS' },
+  // Illustrated backs, bought with credits.
+  { key: 'back_tartan', kind: 'CARD_BACK', name: 'Шотландка', rarity: 'COMMON', price: 2_500, currency: 'CREDITS' },
+  { key: 'back_celtic', kind: 'CARD_BACK', name: 'Кельтский узел', rarity: 'COMMON', price: 2_500, currency: 'CREDITS' },
+  { key: 'back_emerald', kind: 'CARD_BACK', name: 'Изумрудный сад', rarity: 'COMMON', price: 2_500, currency: 'CREDITS' },
+  { key: 'back_amethyst', kind: 'CARD_BACK', name: 'Аметист', rarity: 'RARE', price: 10_000, currency: 'CREDITS' },
+  { key: 'back_frost', kind: 'CARD_BACK', name: 'Морозный узор', rarity: 'RARE', price: 10_000, currency: 'CREDITS' },
+  { key: 'back_mandala', kind: 'CARD_BACK', name: 'Золотая мандала', rarity: 'RARE', price: 10_000, currency: 'CREDITS' },
+  { key: 'back_crystal', kind: 'CARD_BACK', name: 'Розовый кристалл', rarity: 'RARE', price: 10_000, currency: 'CREDITS' },
+  { key: 'back_ruby', kind: 'CARD_BACK', name: 'Рубиновый огонь', rarity: 'EPIC', price: 25_000, currency: 'CREDITS' },
+  { key: 'back_moon', kind: 'CARD_BACK', name: 'Лунная ночь', rarity: 'EPIC', price: 25_000, currency: 'CREDITS' },
+  { key: 'back_starburst', kind: 'CARD_BACK', name: 'Звёздная вспышка', rarity: 'EPIC', price: 25_000, currency: 'CREDITS' },
+  { key: 'back_wolf', kind: 'CARD_BACK', name: 'Волк', rarity: 'LEGENDARY', price: 50_000, currency: 'CREDITS' },
+  { key: 'back_spider', kind: 'CARD_BACK', name: 'Паутина', rarity: 'LEGENDARY', price: 50_000, currency: 'CREDITS' },
+  // The table is the same «VEGAS» felt for everyone now.
+  { key: 'table_felt', kind: 'TABLE', name: 'Зелёное сукно', rarity: 'COMMON', price: 0, currency: 'COINS', isActive: false },
+  { key: 'table_midnight', kind: 'TABLE', name: 'Полночь', rarity: 'RARE', price: 80, currency: 'COINS', isActive: false },
   { key: 'frame_silver', kind: 'FRAME', name: 'Серебряная рамка', rarity: 'RARE', price: 60, currency: 'COINS' },
   { key: 'frame_gold', kind: 'FRAME', name: 'Золотая рамка', rarity: 'EPIC', price: 200, currency: 'COINS' },
   { key: 'crown_ruby', kind: 'CROWN', name: 'Рубиновая корона', rarity: 'LEGENDARY', price: 1000, currency: 'COINS' },
@@ -54,7 +71,30 @@ export async function seedCatalog(db: Db): Promise<void> {
     await db.achievement.upsert({ where: { key: a.key }, create: data, update: data });
   }
   for (const [index, item] of ITEMS.entries()) {
-    const data = { ...item, price: BigInt(item.price), sortOrder: index };
+    const data = { ...item, isActive: item.isActive ?? true, price: BigInt(item.price), sortOrder: index };
     await db.item.upsert({ where: { key: item.key }, create: data, update: data });
+  }
+  await retireItems(db);
+}
+
+/**
+ * Items taken off sale go back to their buyers' wallets at the price paid. The ledger key makes it
+ * once per player, however many times the server boots; the item then leaves their inventory.
+ */
+async function retireItems(db: Db): Promise<void> {
+  const ledger = new Ledger(db);
+  const owned = await db.userItem.findMany({ where: { source: 'shop', item: { isActive: false, price: { gt: 0 } } }, include: { item: true } });
+  for (const row of owned) {
+    await db.$transaction(async (tx) => {
+      await ledger.postIn(tx, {
+        userId: row.userId,
+        currency: row.item.currency,
+        amount: row.item.price,
+        type: 'PURCHASE_REFUND',
+        source: `item:${row.item.key}`,
+        idempotencyKey: `retired:${row.userId}:${row.item.key}`,
+      });
+      await tx.userItem.delete({ where: { userId_itemId: { userId: row.userId, itemId: row.itemId } } });
+    });
   }
 }
