@@ -1,5 +1,5 @@
 import { formatStake, MODE_LABEL_RU, SPEED_LABEL_RU, STAKE_OPTIONS, type GameMode, type RoomDto } from '@arena/shared';
-import { Avatar, Icon, type IconName } from '@arena/ui';
+import { Avatar, CurrencyIcon, Icon, type IconName } from '@arena/ui';
 import type { ReactNode } from 'react';
 
 export const MODE_ICON: Record<GameMode, IconName> = {
@@ -49,7 +49,7 @@ export function RoomRow({ room, onOpen, busy }: { room: RoomDto; onOpen: () => v
       <span className="room-row__main">
         <span className="room-row__stake">
           {formatStake(s.stake)}
-          <Icon name="chip" size={20} />
+          <CurrencyIcon kind="credits" size={22} />
         </span>
         <span className="room-row__avatars" aria-hidden="true">
           {room.seats.slice(0, 3).map((seat) => (

@@ -1,5 +1,5 @@
 import { formatStake, type RoomDto } from '@arena/shared';
-import { Avatar, Icon, PlayingCard, type IconName } from '@arena/ui';
+import { Avatar, CurrencyIcon, Icon, PlayingCard, type IconName } from '@arena/ui';
 import { memo, type KeyboardEvent, type ReactNode } from 'react';
 import { ringOf } from '../../lib/cosmetics.js';
 import { useSettings } from '../../lib/settings.js';
@@ -26,7 +26,7 @@ export function TableTop({
       {settings.stake > 0 ? (
         <div className="table-top__stake">
           <span>
-            {formatStake(settings.stake)} <Icon name="chip" size={18} />
+            {formatStake(settings.stake)} <CurrencyIcon kind="credits" size={20} />
           </span>
           <small>банк {formatStake(bank)}</small>
         </div>
@@ -161,7 +161,7 @@ export function DockExtra({ icon, label, price, on, onClick, disabled }: { icon:
         {price !== null ? (
           <>
             {price}
-            <Icon name="coin" size={12} />
+            <CurrencyIcon kind="coins" size={13} />
           </>
         ) : (
           '✓'
