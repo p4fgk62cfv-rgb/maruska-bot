@@ -1,4 +1,4 @@
-import { formatCompact, Icon } from '@arena/ui';
+import { CurrencyIcon, formatCompact, Icon } from '@arena/ui';
 import { useEffect, useRef, useState } from 'react';
 import { haptic } from '../../lib/telegram.js';
 
@@ -46,11 +46,11 @@ export function Payout({ amount, target, onDone }: { amount: number; target: str
       <div className="payout__glow" />
       <div className="payout__note" ref={ref}>
         <span className="payout__corner">
-          <Icon name="chip" size={22} />
+          <CurrencyIcon kind="credits" size={24} />
         </span>
         <span className="payout__sum">+{formatCompact(amount)}</span>
         <span className="payout__corner payout__corner--end">
-          <Icon name="chip" size={22} />
+          <CurrencyIcon kind="credits" size={24} />
         </span>
       </div>
     </div>

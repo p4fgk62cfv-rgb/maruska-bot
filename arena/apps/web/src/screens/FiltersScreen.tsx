@@ -1,5 +1,5 @@
 import { EMPTY_FILTER, formatStake, MODE_LABEL_RU, MODE_PAIRS, STAKE_OPTIONS, type GameMode } from '@arena/shared';
-import { Button, Icon } from '@arena/ui';
+import { Button, CurrencyIcon, Icon } from '@arena/ui';
 import { setLobbyFilter, useLobbyFilter } from '../lib/lobbyFilter.js';
 import { useNav } from '../navigation.js';
 import { ScreenHeader } from './common.js';
@@ -34,7 +34,7 @@ export default function FiltersScreen() {
       <section className="felt-section">
         <ScriptTitle>Ставка</ScriptTitle>
         <p className="felt-value">
-          {formatStake(min)} – {formatStake(max)} <Icon name="chip" size={18} />
+          {formatStake(min)} – {formatStake(max)} <CurrencyIcon kind="credits" size={20} />
         </p>
         <StakeRange
           min={min}

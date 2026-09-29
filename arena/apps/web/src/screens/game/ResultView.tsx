@@ -7,6 +7,7 @@ import { haptic } from '../../lib/telegram.js';
 import { play } from '../../lib/sound.js';
 import { useMe } from '../../session.js';
 import { useSettings } from '../../lib/settings.js';
+import { useCountdown } from '../../lib/hooks.js';
 
 const REASON: Record<string, string> = {
   cards: 'остался с картами',
@@ -55,7 +56,23 @@ function AddFriend({ userId }: { userId: string }) {
  * `onAgain`: the table stays together — back to the same chairs, everyone presses «Готов» for the next deal.
  * `onClose`: leave the table for the lobby.
  */
-export function ResultView({ result, players, onClose, onAgain }: { result: GameResultDto; players: PlayerInfo[]; onClose: () => void; onAgain?: (() => void) | null }) {
+export function ResultView({
+  result,
+  players,
+  onClose,
+  onAgain,
+  againDeadline = null,
+  now,
+}: {
+  result: GameResultDto;
+  players: PlayerInfo[];
+  onClose: () => void;
+  onAgain?: (() => void) | null;
+  /** When the table stops holding the chairs for the next deal. */
+  againDeadline?: number | null;
+  now?: () => number;
+}) {
+  const left = useCountdown(againDeadline, now);
   const rewards = useSettings().rewardAnimations;
   const me = useMe();
   const mine = result.payouts.find((p) => p.userId === me.id);
@@ -127,6 +144,11 @@ export function ResultView({ result, players, onClose, onAgain }: { result: Game
             <Button size="lg" block variant="gold" onClick={onAgain}>
               Играть ещё
             </Button>
+            {left !== null && left > 0 && (
+              <p className="result__wait">
+                Стол ждёт {Math.floor(left / 60000)}:{String(Math.floor((left % 60000) / 1000)).padStart(2, '0')} — потом свободные места займут другие
+              </p>
+            )}
             <Button block variant="ghost" onClick={onClose}>
               Выйти в лобби
             </Button>

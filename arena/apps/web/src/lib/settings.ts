@@ -5,6 +5,8 @@ export type Theme = 'light' | 'dark' | 'system';
 
 export interface Settings {
   sound: boolean;
+  /** Sound volume, 0…1. */
+  volume: number;
   vibration: boolean;
   animations: boolean;
   handSort: 'suit' | 'rank';
@@ -24,6 +26,7 @@ export interface Settings {
 const KEY = 'arena.settings';
 const DEFAULTS: Settings = {
   sound: true,
+  volume: 0.8,
   vibration: true,
   animations: true,
   handSort: 'suit',

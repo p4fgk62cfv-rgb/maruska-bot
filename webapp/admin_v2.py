@@ -295,10 +295,17 @@ async def build_attention(bot, chat_id, chats, owner: bool) -> list[dict]:
 
         if not rights["admin"] or not rights["restrict"]:
             title = next((c["title"] for c in chats if c["chat_id"] == cid), cid)
+            # Три разных случая — и три разных способа починить.
+            if not rights.get("present", True):
+                text = f"Мары нет в группе «{title}»: её удалили или группы больше нет"
+            elif not rights["admin"]:
+                text = f"Мара не администратор в «{title}» — назначьте её админом в группе"
+            else:
+                text = f"У Мары нет права «Блокировка участников» в «{title}» — включите в правах админа"
             items.append({
                 "level": "warn",
                 "icon": "🔑",
-                "text": f"У Мары нет прав модерации в «{title}»",
+                "text": text,
                 "object": f"Группа «{title}»",
                 "go": "groups",
             })

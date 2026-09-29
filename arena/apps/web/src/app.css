@@ -347,8 +347,23 @@ select.app-input { appearance: none; }
 .seat-tile__label--ready { background: rgba(95, 212, 155, 0.25); color: #b9f5d6; }
 .seat-tile__number { font-family: var(--font-script); font-size: 24px; line-height: 1; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4); }
 .seat-tile--empty .seat-tile__frame { background: rgba(255, 255, 255, 0.05); box-shadow: none; border: 2px dashed rgba(255, 255, 255, 0.7); color: rgba(255, 255, 255, 0.8); }
-.seat__emoji { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); z-index: 3; font-size: 30px; animation: emoji-pop 2.5s var(--ease) forwards; pointer-events: none; }
-@keyframes emoji-pop { 0% { transform: translate(-50%, 10px) scale(0.4); opacity: 0; } 15% { transform: translate(-50%, -6px) scale(1.15); opacity: 1; } 80% { opacity: 1; } 100% { transform: translate(-50%, -24px); opacity: 0; } }
+/* A smile covers the portrait: pops in, sways for a few seconds, fades back to the photo */
+.seat__emoji {
+  position: absolute; inset: -12%; z-index: 3; display: grid; place-items: center; pointer-events: none;
+  transform-origin: 50% 70%; animation: smile-show 3.4s linear forwards;
+}
+.seat__emoji .smile-img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.35)); }
+.seat__emoji .smile-text { font-size: calc(var(--tile) * 0.95); line-height: 1; filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.35)); }
+@keyframes smile-show {
+  0% { opacity: 0; transform: scale(0.55); }
+  6% { opacity: 1; transform: scale(1.08); }
+  11% { transform: scale(1); }
+  30% { transform: scale(1.06) rotate(-4deg); }
+  50% { transform: scale(1) rotate(3deg); }
+  70% { transform: scale(1.06) rotate(-3deg); }
+  90% { opacity: 1; transform: scale(1) rotate(0deg); }
+  100% { opacity: 0; transform: scale(0.92); }
+}
 
 .felt { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; }
 .felt__deck, .felt__discard { position: absolute; top: 14%; width: calc(var(--card-w) * 0.9); height: calc(var(--card-w) * 1.28); }
@@ -357,9 +372,16 @@ select.app-input { appearance: none; }
 .felt__trump { position: absolute; left: calc(var(--card-w) * 0.34); top: calc(var(--card-w) * 0.2); rotate: 90deg; z-index: 0; }
 .felt__stock { position: absolute; left: 0; top: 0; rotate: 4deg; z-index: 1; }
 .felt__deck-count { position: absolute; left: calc(var(--card-w) * 0.5); top: -26px; font-size: 16px; font-weight: 700; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
-.felt__suit { position: absolute; left: calc(var(--card-w) * 0.5); top: 10px; font-size: 44px; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35)); }
-.felt__suit--H, .felt__suit--D { color: #e5484d; }
-.felt__suit--S, .felt__suit--C { color: #0d1b16; }
+/* Trump suit printed on the felt where the deck lay — only after the deck runs out */
+.felt__suit {
+  position: absolute; left: calc(var(--card-w) * 0.62); top: calc(var(--card-w) * 0.12); z-index: 0;
+  width: calc(var(--card-w) * 0.95); height: calc(var(--card-w) * 0.95); pointer-events: none;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.1)) drop-shadow(0 -1px 1px rgba(0, 0, 0, 0.4));
+  animation: suit-in 0.5s var(--ease);
+}
+.felt__suit--S, .felt__suit--C { fill: #080e0b; opacity: 0.88; }
+.felt__suit--H, .felt__suit--D { fill: #96181c; opacity: 0.9; }
+@keyframes suit-in { from { opacity: 0; transform: scale(0.8); } }
 .felt__discard-pile { position: absolute; inset: 0; }
 .felt__discard-pile > span { position: absolute; left: 0; top: 0; }
 .felt__pairs { display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 16px 20px; max-width: calc(var(--card-w) * 3 + 70px); padding: 0 8px; }
@@ -425,7 +447,12 @@ select.app-input { appearance: none; }
 .room-wallet .ui-balance--coins { color: #a7790e; }
 
 .emoji-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; font-size: 30px; max-height: 52vh; overflow-y: auto; }
-.emoji-grid button { height: 52px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); }
+.emoji-grid button { display: grid; place-items: center; height: 52px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); }
+.emoji-grid--stickers { grid-template-columns: repeat(5, 1fr); }
+.emoji-grid--stickers button { height: auto; aspect-ratio: 1; padding: 4px; }
+.emoji-grid .smile-img { width: 100%; height: 100%; object-fit: contain; }
+.emoji-grid button:active { transform: scale(0.92); }
+.emoji-hint { margin: 10px 0 0; text-align: center; font-size: 12px; opacity: 0.6; }
 .discard-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .result { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 24px 16px; background: rgba(2, 4, 16, 0.72); animation: ui-fade 0.25s ease; }
@@ -624,3 +651,23 @@ select.app-input { appearance: none; }
 /* After going out: the table stays open to watch the others finish */
 .dock-watching { display: grid; place-items: center; min-height: 52px; padding: 0 6px; text-align: center; font-family: var(--font-script); font-size: 21px; line-height: 1.1; color: var(--ink); opacity: 0.75; }
 .result__actions { display: grid; gap: 8px; }
+
+/* «Предметы» → «Смайлы»: packs as a list, the chosen one marked */
+.pack-list { display: grid; gap: 8px; margin-bottom: 14px; }
+.pack-list__title { margin: 4px 2px 0; font-size: 15px; }
+.pack-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 16px; background: var(--surface, rgba(255, 255, 255, 0.06)); box-shadow: inset 0 0 0 1px var(--stroke); }
+.pack-row--on { box-shadow: inset 0 0 0 2px var(--gold); }
+.pack-row__icon { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: rgba(255, 255, 255, 0.9); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); overflow: hidden; }
+.pack-row__icon .smile-img { width: 50px; height: 50px; object-fit: contain; }
+.pack-row__body { display: grid; gap: 2px; min-width: 0; cursor: pointer; }
+.pack-row__body strong { font-family: var(--font-script); font-size: 21px; font-weight: 400; line-height: 1.1; }
+.pack-row__body span { font-size: 12px; opacity: 0.65; }
+.pack-row__radio { width: 28px; height: 28px; border-radius: 50%; border: 2px solid currentColor; opacity: 0.7; background: transparent; }
+.pack-row__radio--on { opacity: 1; border-color: var(--gold); background: radial-gradient(circle, var(--gold) 0 45%, transparent 50%); }
+.emoji-grid__cell { display: grid; place-items: center; aspect-ratio: 1; padding: 4px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); }
+.emoji-grid__cell .smile-img { width: 100%; height: 100%; object-fit: contain; }
+/* Prices on ivory buttons: the light coin colour is meant for dark backgrounds */
+.ui-btn--primary .ui-balance--coins, .ui-btn--primary .ui-balance--credits { color: #8a5a00; }
+.settings__volume { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; padding: 4px 4px 8px 40px; font-size: 14px; }
+.settings__volume input { width: 100%; accent-color: var(--gold-deep, #d9901a); }
+.result__wait { margin: 0; text-align: center; font-size: 12px; opacity: 0.7; }

@@ -1,9 +1,10 @@
 import { formatStake, type RoomDto } from '@arena/shared';
-import { Avatar, Icon, PlayingCard, type IconName } from '@arena/ui';
+import { Avatar, CurrencyIcon, Icon, PlayingCard, type IconName } from '@arena/ui';
 import { memo, type KeyboardEvent, type ReactNode } from 'react';
 import { ringOf } from '../../lib/cosmetics.js';
 import { useSettings } from '../../lib/settings.js';
 import { ModeStrip } from '../lobbyParts.js';
+import { Smile, type SeatSmile } from './emoji.js';
 
 /** Top of the table: a square button on the left, the rules in the middle, the stake on the right. */
 export function TableTop({
@@ -25,7 +26,7 @@ export function TableTop({
       {settings.stake > 0 ? (
         <div className="table-top__stake">
           <span>
-            {formatStake(settings.stake)} <Icon name="chip" size={18} />
+            {formatStake(settings.stake)} <CurrencyIcon kind="credits" size={20} />
           </span>
           <small>банк {formatStake(bank)}</small>
         </div>
@@ -54,7 +55,8 @@ export interface SeatTileProps {
   progress?: number | null;
   label?: { text: string; tone: 'attack' | 'defend' | 'muted' | 'alert' | 'ready' } | null;
   number?: number;
-  emoji?: string | null;
+  /** A smile over the portrait (see useSeatEmojis). */
+  emoji?: SeatSmile | null;
   dim?: boolean;
   offline?: boolean;
   /** Motion anchor: cards fly to and from `[data-seat]`. */
@@ -94,7 +96,11 @@ export const SeatTile = memo(function SeatTile({ seat, cards = 0, back = 'classi
         <Avatar id={seat.id} name={seat.name} photoUrl={seat.photoUrl} size={size} ring={ringOf(seat.frame)} crown={Boolean(seat.crown)} status={offline ? 'offline' : undefined} />
         <span className="seat-tile__name">{seat.name}</span>
         {cards > 0 && <span className="seat-tile__count">{cards}</span>}
-        {emoji && <span className="seat__emoji">{emoji}</span>}
+        {emoji && (
+          <span className="seat__emoji" key={emoji.n} aria-hidden="true">
+            <Smile smile={emoji.smile} />
+          </span>
+        )}
       </span>
       {/* At the table the timer and the status keep their room when empty, so the felt never jumps.
           Chairs in the waiting room carry a number instead and stay compact. */}
@@ -155,7 +161,7 @@ export function DockExtra({ icon, label, price, on, onClick, disabled }: { icon:
         {price !== null ? (
           <>
             {price}
-            <Icon name="coin" size={12} />
+            <CurrencyIcon kind="coins" size={13} />
           </>
         ) : (
           '✓'

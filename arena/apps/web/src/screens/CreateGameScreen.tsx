@@ -1,5 +1,5 @@
 import { GAME_SERVERS, MODE_LABEL_RU, MODE_PAIRS, STAKE_OPTIONS, type GameMode, type MyRoomDto, type RoomSettings } from '@arena/shared';
-import { Button, Icon } from '@arena/ui';
+import { Button, CurrencyIcon, Icon } from '@arena/ui';
 import { useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
 import { safeStorage } from '../lib/hooks.js';
@@ -59,7 +59,7 @@ export default function CreateGameScreen() {
         <div className="stake-head">
           <ScriptTitle>Ваша ставка:</ScriptTitle>
           <span className="stake-head__value">
-            {draft.stake.toLocaleString('ru-RU')} <Icon name="chip" size={22} />
+            {draft.stake.toLocaleString('ru-RU')} <CurrencyIcon kind="credits" size={24} />
           </span>
         </div>
         <StakeSlider value={draft.stake} max={me.wallet.credits} onChange={(v) => set('stake', v)} />

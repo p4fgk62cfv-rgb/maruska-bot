@@ -325,3 +325,6 @@ h1, h2, h3, p { margin: 0; }
 
 /* Illustrated backs: the picture carries its own frame */
 .ui-card--back-art { background: #111; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35); overflow: hidden; }
+.ui-currency { flex: none; vertical-align: middle; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25)); }
+/* In a balance the icon follows the number's size */
+.ui-balance .ui-currency { width: 1.4em; height: 1.4em; }

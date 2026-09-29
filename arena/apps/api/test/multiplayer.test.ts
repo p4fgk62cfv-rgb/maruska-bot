@@ -165,6 +165,9 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     // Smiles work between deals too.
     expect((await p1.send({ type: 'ROOM_EMOJI', roomId, emoji: '😘' })).type).toBe('ACK');
     await p2.waitFor((m) => m.type === 'EMOJI' && m.userId === p1.userId && m.emoji === '😘');
+    // A picture sticker needs its pack: P2 has not bought «Панда».
+    await new Promise((resolve) => setTimeout(resolve, 1600));
+    expect(await p2.send({ type: 'ROOM_EMOJI', roomId, emoji: 'panda:03' })).toMatchObject({ type: 'ERROR', code: 'FORBIDDEN' });
     for (const p of players) expect((await p.send({ type: 'READY', roomId, ready: true })).type).toBe('ACK');
     const again = await p1.waitFor((m) => m.type === 'GAME_STARTED' && m.gameId !== gameId);
     expect(room.status).toBe('playing');

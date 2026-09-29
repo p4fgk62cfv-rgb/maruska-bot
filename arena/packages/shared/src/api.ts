@@ -78,9 +78,11 @@ export interface EquippedDto {
   frame: string | null;
   crown: string | null;
   effect: string | null;
+  /** Smile pack shown in the picker (see EMOJI_PACKS). */
+  emoji: string;
 }
 
-export const DEFAULT_EQUIPPED: EquippedDto = { cardBack: 'back_classic', table: 'table_felt', frame: null, crown: null, effect: null };
+export const DEFAULT_EQUIPPED: EquippedDto = { cardBack: 'back_classic', table: 'table_felt', frame: null, crown: null, effect: null, emoji: 'emoji_pack_basic' };
 
 export interface AuthResponse {
   token: string;

@@ -22,6 +22,7 @@ import type { Ledger } from '../services/ledger.js';
 import { NotSettleable, type SettlementService } from '../services/settlement.js';
 import type { Hub } from './hub.js';
 import type { SnapshotStore } from './store.js';
+import { assertSmile } from './smiles.js';
 import type { Features, GameSnapshot, Room } from './types.js';
 
 type GameMessage = Extract<ClientMessage, { gameId: string }>;
@@ -146,11 +147,12 @@ export class GameRunner {
     this.sendState(userId);
   }
 
-  private emoji(userId: string, emoji: string): void {
+  private async emoji(userId: string, emoji: string): Promise<void> {
     if (!this.hasPlayer(userId)) throw new AppError('FORBIDDEN');
     const now = Date.now();
     if (now - (this.lastEmoji.get(userId) ?? 0) < EMOJI_COOLDOWN_MS) throw new AppError('RATE_LIMITED');
     this.lastEmoji.set(userId, now);
+    await assertSmile(this.deps.db, userId, emoji);
     for (const p of this.players) this.deps.hub.send(p.userId, { type: 'EMOJI', gameId: this.id, userId, emoji });
   }
 

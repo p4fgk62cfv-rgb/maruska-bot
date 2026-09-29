@@ -2,6 +2,7 @@ export * from './Avatar.js';
 export * from './Balance.js';
 export * from './Button.js';
 export * from './Controls.js';
+export * from './Currency.js';
 export * from './Icon.js';
 export * from './NavigationBar.js';
 export * from './Overlay.js';

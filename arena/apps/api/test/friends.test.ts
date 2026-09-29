@@ -222,7 +222,7 @@ describe.skipIf(!url)('friends, requests and invites', () => {
     expect((await call(buyer, 'GET', '/me')).json().wallet).toMatchObject({ credits: 950, coins: 40 });
     expect((await call(buyer, 'POST', '/items/back_tartan/equip')).json()).toMatchObject({ cardBack: 'back_tartan' });
     const items = (await call(buyer, 'GET', '/items')).json() as { key: string; kind: string; equipped: boolean }[];
-    expect(items.filter((i) => i.equipped).map((i) => i.key).sort()).toEqual(['back_tartan', 'frame_silver']);
+    expect(items.filter((i) => i.equipped).map((i) => i.key).sort()).toEqual(['back_tartan', 'emoji_pack_basic', 'frame_silver']);
     // The table is no longer sold: one felt for everyone.
     expect(items.some((i) => i.kind === 'TABLE')).toBe(false);
     expect((await call(buyer, 'POST', '/items/table_midnight/buy')).json()).toMatchObject({ error: 'NOT_FOUND' });

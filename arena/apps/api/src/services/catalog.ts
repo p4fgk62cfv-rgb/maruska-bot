@@ -61,7 +61,15 @@ export const ITEMS: ItemSeed[] = [
   { key: 'frame_silver', kind: 'FRAME', name: 'Серебряная рамка', rarity: 'RARE', price: 60, currency: 'COINS' },
   { key: 'frame_gold', kind: 'FRAME', name: 'Золотая рамка', rarity: 'EPIC', price: 200, currency: 'COINS' },
   { key: 'crown_ruby', kind: 'CROWN', name: 'Рубиновая корона', rarity: 'LEGENDARY', price: 1000, currency: 'COINS' },
-  { key: 'emoji_pack_basic', kind: 'EMOJI', name: 'Базовые эмоции', rarity: 'COMMON', price: 0, currency: 'COINS' },
+  { key: 'emoji_pack_basic', kind: 'EMOJI', name: 'Классические смайлы', rarity: 'COMMON', price: 0, currency: 'COINS' },
+  { key: 'emoji_pack_panda', kind: 'EMOJI', name: 'Смайлы «Панда»', rarity: 'RARE', price: 59, currency: 'COINS' },
+  { key: 'emoji_pack_santa', kind: 'EMOJI', name: 'Смайлы «Новогодняя панда»', rarity: 'RARE', price: 59, currency: 'COINS' },
+  { key: 'emoji_pack_smile', kind: 'EMOJI', name: 'Смайлы «Колобок»', rarity: 'RARE', price: 59, currency: 'COINS' },
+  { key: 'emoji_pack_horse', kind: 'EMOJI', name: 'Смайлы «Лошадка»', rarity: 'RARE', price: 59, currency: 'COINS' },
+  { key: 'emoji_pack_cat', kind: 'EMOJI', name: 'Смайлы «Котик»', rarity: 'RARE', price: 59, currency: 'COINS' },
+  // Replaced by «Котик»: whoever bought it gets the coins back once (see retireItems).
+  { key: 'emoji_pack_fox', kind: 'EMOJI', name: 'Смайлы «Лисёнок»', rarity: 'RARE', price: 59, currency: 'COINS', isActive: false },
+  { key: 'emoji_pack_raccoon', kind: 'EMOJI', name: 'Смайлы «Енот»', rarity: 'RARE', price: 59, currency: 'COINS' },
   { key: 'effect_sparks', kind: 'EFFECT', name: 'Искры победы', rarity: 'EPIC', price: 120, currency: 'COINS' },
 ];
 

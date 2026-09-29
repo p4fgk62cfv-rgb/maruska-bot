@@ -78,12 +78,16 @@ export function GameScreen({ game }: { game: LiveGame }) {
         director.prepare(events, me.id);
         let sfx: Parameters<typeof play>[0] | null = null;
         for (const e of events) {
-          if (e.type === 'CARD_PLAYED' || e.type === 'CARD_TRANSFERRED') sfx = 'card';
+          // Mine already clicked when it was dropped (optimistic move).
+          if ((e.type === 'CARD_PLAYED' || e.type === 'CARD_TRANSFERRED') && e.playerId !== me.id) sfx = 'card';
           else if (e.type === 'CARDS_TAKEN') sfx = 'take';
           else if (e.type === 'ROUND_FINISHED' && e.outcome === 'beaten') sfx = 'discard';
+          else if (e.type === 'CARDS_DRAWN' && !sfx) sfx = 'draw';
           else if (e.type === 'PLAYER_TURN' && e.playerId === me.id && !sfx) sfx = 'turn';
         }
         if (sfx) play(sfx);
+        // Cards drawn after a bout: their flick follows the «бито»/«беру» sound.
+        if (sfx && sfx !== 'draw' && events.some((e) => e.type === 'CARDS_DRAWN')) window.setTimeout(() => play('draw'), 380);
       }),
     [onEvents, director, me.id],
   );
@@ -171,6 +175,8 @@ export function GameScreen({ game }: { game: LiveGame }) {
       if (el) from[c] = el.getBoundingClientRect();
     }
     setPending({ cards, target, from, version: view.version });
+    // My own card sounds the moment it lands, not when the server confirms it.
+    play('card');
     const ok = await send(msg);
     if (!ok) {
       // Remember where the cards were shown so they glide back into the hand.
@@ -322,7 +328,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
               bubble={p.status === 'active' ? bubbleOf(p.id) : null}
               note={notes[p.id] ?? null}
               onOpen={() => setProfileOf(p.id)}
-              emoji={emojis[p.id] || null}
+              emoji={emojis[p.id] ?? null}
               dim={p.status !== 'active'}
               offline={infoOf(p.id)?.connected === false}
             />
@@ -386,7 +392,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
                 progress={myTurn ? progress : null}
                 label={mine.status === 'active' ? null : labelOf(mine)}
                 bubble={mine.status === 'active' ? bubbleOf(mine.id) : null}
-                emoji={emojis[me.id] || null}
+                emoji={emojis[me.id] ?? null}
               />
             )}
           </button>
@@ -431,7 +437,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
         </div>
       </BottomSheet>
 
-      <EmojiSheet open={sheet === 'emoji'} onClose={() => setSheet(null)} onPick={(emoji) => void send({ type: 'SEND_EMOJI', gameId, emoji })} />
+      <EmojiSheet open={sheet === 'emoji'} pack={me.equipped.emoji} onClose={() => setSheet(null)} onPick={(emoji) => void send({ type: 'SEND_EMOJI', gameId, emoji })} />
 
       <BottomSheet open={sheet === 'discard'} title={`Отбой · ${view.discardCount}`} onClose={() => setSheet(null)}>
         <div className="discard-grid">
@@ -475,6 +481,8 @@ export function GameScreen({ game }: { game: LiveGame }) {
           result={result}
           players={game.players}
           onAgain={room && !room.tournament ? dismissGame : null}
+          againDeadline={room && !room.tournament ? room.readyDeadline : null}
+          now={now}
           onClose={() => {
             // Leaving the table frees the chair for someone else; the result closes either way.
             if (room && !room.tournament) void leaveRoom().catch(() => undefined).finally(dismissGame);

@@ -155,6 +155,21 @@ export default function SettingsScreen() {
           unlockAudio();
           if (on) play('card');
         })}
+        {s.sound && (
+          <label className="settings__volume">
+            <span>Громкость</span>
+            <input
+              type="range"
+              min={0.1}
+              max={1}
+              step={0.05}
+              value={s.volume}
+              onChange={(e) => settings.set({ volume: Number(e.target.value) })}
+              onPointerUp={() => play('card')}
+              aria-label="Громкость"
+            />
+          </label>
+        )}
         {flag('vibration', 'Включить вибрации', (on) => on && haptic.tap())}
         {flag('actionRight', 'Кнопка действия справа')}
         <Check label="Сортировка карт по значению" checked={s.handSort === 'rank'} onChange={(on) => settings.set({ handSort: on ? 'rank' : 'suit' })} />

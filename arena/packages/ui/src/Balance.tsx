@@ -1,3 +1,4 @@
+import { CurrencyIcon } from './Currency.js';
 import { Icon } from './Icon.js';
 
 const FORMAT = new Intl.NumberFormat('ru-RU');
@@ -19,13 +20,12 @@ export interface BalanceProps {
   compact?: boolean;
 }
 
-const ICON = { credits: 'chip', coins: 'coin', diamonds: 'gem' } as const;
 const LABEL = { credits: 'Кредиты', coins: 'Монеты', diamonds: 'Алмазы' } as const;
 
 export function Balance({ kind, value, compact }: BalanceProps) {
   return (
     <span className={`ui-balance ui-balance--${kind}`} title={LABEL[kind]}>
-      <Icon name={ICON[kind]} size={16} />
+      {kind === 'diamonds' ? <Icon name="gem" size={16} /> : <CurrencyIcon kind={kind} size={18} />}
       <span>{compact ? formatCompact(value) : formatAmount(value)}</span>
     </span>
   );

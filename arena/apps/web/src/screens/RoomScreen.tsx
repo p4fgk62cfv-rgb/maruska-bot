@@ -63,7 +63,7 @@ export function RoomScreen({ room }: { room: RoomDto }) {
               active={seat.ready}
               offline={!seat.connected}
               label={seat.ready ? { text: 'Готов', tone: 'ready' } : null}
-              emoji={emojis[seat.userId] || null}
+              emoji={emojis[seat.userId] ?? null}
             />
           ) : (
             <EmptySeat key={`empty${number}`} number={number} size={tileSize} />
@@ -118,7 +118,7 @@ export function RoomScreen({ room }: { room: RoomDto }) {
               size={56}
               active={mySeat?.ready}
               number={mySeat ? mySeat.seat + 1 : undefined}
-              emoji={emojis[me.id] || null}
+              emoji={emojis[me.id] ?? null}
             />
           </button>
         }
@@ -132,6 +132,7 @@ export function RoomScreen({ room }: { room: RoomDto }) {
 
       <EmojiSheet
         open={smiles}
+        pack={me.equipped.emoji}
         onClose={() => setSmiles(false)}
         onPick={(emoji) =>
           void socket.send({ type: 'ROOM_EMOJI', roomId: room.id, emoji }).then((reply) => {
