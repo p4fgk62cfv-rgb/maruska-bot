@@ -140,7 +140,7 @@ export const EMOJIS = [
  */
 export const EMOJI_PACKS = {
   emoji_pack_basic: { title: 'Классические смайлы', stickers: null },
-  emoji_pack_panda: { title: 'Смайлы «Панда»', stickers: { prefix: 'panda', count: 30 } },
+  emoji_pack_panda: { title: 'Смайлы «Панда»', stickers: { prefix: 'panda', count: 25 } },
 } as const;
 export type EmojiPackKey = keyof typeof EMOJI_PACKS;
 export const DEFAULT_EMOJI_PACK: EmojiPackKey = 'emoji_pack_basic';

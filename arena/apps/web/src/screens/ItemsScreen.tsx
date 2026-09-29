@@ -20,7 +20,7 @@ const OPTIONAL: ItemKind[] = ['FRAME', 'CROWN', 'EFFECT'];
 const WEARABLE: ItemKind[] = ['CARD_BACK', 'FRAME', 'CROWN', 'EFFECT', 'EMOJI'];
 
 /** The face of a smile pack: its first smile. */
-const packIcon = (key: string) => smilesOf(key)[key === 'emoji_pack_basic' ? 0 : 1]!;
+const packIcon = (key: string) => smilesOf(key)[0]!;
 
 function Preview({ item }: { item: ItemDto }) {
   const me = useMe();
