@@ -372,18 +372,16 @@ select.app-input { appearance: none; }
 .felt__trump { position: absolute; left: calc(var(--card-w) * 0.34); top: calc(var(--card-w) * 0.2); rotate: 90deg; z-index: 0; }
 .felt__stock { position: absolute; left: 0; top: 0; rotate: 4deg; z-index: 1; }
 .felt__deck-count { position: absolute; left: calc(var(--card-w) * 0.5); top: -26px; font-size: 16px; font-weight: 700; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
-/* Trump suit under the stock: an ivory disc, fully in sight once the deck runs out */
+/* Trump suit printed on the felt where the deck lay — only after the deck runs out */
 .felt__suit {
-  position: absolute; left: calc(var(--card-w) * 0.52); top: calc(var(--card-w) * 0.3); z-index: 0;
-  display: grid; place-items: center; align-content: center; width: calc(var(--card-w) * 0.78); height: calc(var(--card-w) * 0.78);
-  border-radius: 50%; background: var(--paper, #f6efe0); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45), inset 0 0 0 2px rgba(0, 0, 0, 0.08);
-  line-height: 1;
+  position: absolute; left: calc(var(--card-w) * 0.62); top: calc(var(--card-w) * 0.12); z-index: 0;
+  width: calc(var(--card-w) * 0.95); height: calc(var(--card-w) * 0.95); pointer-events: none;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.1)) drop-shadow(0 -1px 1px rgba(0, 0, 0, 0.4));
+  animation: suit-in 0.5s var(--ease);
 }
-.felt__suit > span { font-size: calc(var(--card-w) * 0.46); }
-.felt__suit small { margin-top: 1px; font-size: 9px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #6b5a3c; }
-.felt__suit--open { box-shadow: 0 0 0 3px var(--gold), 0 0 18px rgba(245, 196, 81, 0.55), 0 3px 10px rgba(0, 0, 0, 0.45); animation: bubble-pop 0.35s var(--ease); }
-.felt__suit--H, .felt__suit--D { color: #d7262c; }
-.felt__suit--S, .felt__suit--C { color: #111; }
+.felt__suit--S, .felt__suit--C { fill: #080e0b; opacity: 0.88; }
+.felt__suit--H, .felt__suit--D { fill: #96181c; opacity: 0.9; }
+@keyframes suit-in { from { opacity: 0; transform: scale(0.8); } }
 .felt__discard-pile { position: absolute; inset: 0; }
 .felt__discard-pile > span { position: absolute; left: 0; top: 0; }
 .felt__pairs { display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 16px 20px; max-width: calc(var(--card-w) * 3 + 70px); padding: 0 8px; }

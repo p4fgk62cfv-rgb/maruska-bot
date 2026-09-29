@@ -34,7 +34,21 @@ export interface PendingMove {
 }
 
 const DISCARD_TILT = [-18, 12, -6, 24, -26, 4];
-const SUIT_SIGN = { S: '♠', H: '♥', D: '♦', C: '♣' } as const;
+/** Suits drawn as shapes: font glyphs differ between phones (and iOS turns them into emoji). */
+const SUIT_SHAPE = {
+  S: <path d="M50 4C36 24 8 38 8 59c0 16 16 25 31 17 3-2 6-4 8-7-1 11-7 21-17 26h40c-10-5-16-15-17-26 2 3 5 5 8 7 15 8 31-1 31-17C92 38 64 24 50 4z" />,
+  H: <path d="M50 93C20 69 5 53 5 33 5 18 16 8 29 8c10 0 17 6 21 14 4-8 11-14 21-14 13 0 24 10 24 25 0 20-15 36-45 60z" />,
+  D: <path d="M50 3l37 47-37 47-37-47z" />,
+  C: (
+    <>
+      <circle cx="50" cy="27" r="20" />
+      <circle cx="27" cy="57" r="20" />
+      <circle cx="73" cy="57" r="20" />
+      <circle cx="50" cy="52" r="12" />
+      <path d="M46 55c-1 17-6 30-16 40h40c-10-10-15-23-16-40z" />
+    </>
+  ),
+} as const;
 const SUIT_RU = { S: 'пики', H: 'червы', D: 'бубны', C: 'трефы' } as const;
 
 /** Felt with the stock + trump on the left, the discard on the right and up to six pairs in the middle. */
@@ -68,11 +82,12 @@ export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot
       style={{ ['--card-w' as string]: `${cardWidth}px` }}
     >
       <div className="felt__deck" data-anchor="deck" aria-label={`В колоде ${view.deckCount}, козырь ${SUIT_RU[view.trump.suit]}`}>
-        {/* The trump suit lies under the stock: once the deck is gone, it stays in sight. */}
-        <span className={`felt__suit felt__suit--${view.trump.suit}${trumpCard ? '' : ' felt__suit--open'}`}>
-          <span>{SUIT_SIGN[view.trump.suit]}</span>
-          {!trumpCard && <small>козырь</small>}
-        </span>
+        {/* Once the deck is gone, the trump suit stays printed on the felt where it lay. */}
+        {!trumpCard && (
+          <svg className={`felt__suit felt__suit--${view.trump.suit}`} viewBox="0 0 100 100" aria-hidden="true">
+            {SUIT_SHAPE[view.trump.suit]}
+          </svg>
+        )}
         {trumpCard && (
           <>
             <span className="felt__trump" {...(view.deckCount === 1 ? { 'data-anchor': 'deck-card' } : {})}>
