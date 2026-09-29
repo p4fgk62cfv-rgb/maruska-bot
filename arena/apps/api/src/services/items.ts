@@ -11,8 +11,9 @@ const SLOT: Partial<Record<ItemKind, keyof EquippedDto>> = {
   FRAME: 'frame',
   CROWN: 'crown',
   EFFECT: 'effect',
+  EMOJI: 'emoji',
 };
-/** Kinds that may be taken off; a card back and a table are always on. */
+/** Kinds that may be taken off; a card back, a table and a smile pack are always on. */
 const OPTIONAL: ItemKind[] = ['FRAME', 'CROWN', 'EFFECT'];
 
 /** Cosmetics only: nothing here changes rules, odds or rewards. */

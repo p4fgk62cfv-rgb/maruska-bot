@@ -20,6 +20,7 @@ import type { UserService } from '../services/users.js';
 import type { GameManager } from './games.js';
 import type { Hub } from './hub.js';
 import type { SnapshotStore } from './store.js';
+import { assertSmile } from './smiles.js';
 import type { Room, RoomConfig, Seat } from './types.js';
 
 /** Full rooms wait this long for everyone to press «Готов»; then the slow ones are removed. */
@@ -323,12 +324,13 @@ export class RoomManager {
   }
 
   /** Smiles work at a gathering table too, not only during a deal. */
-  emoji(userId: string, roomId: string, emoji: string): void {
+  async emoji(userId: string, roomId: string, emoji: string): Promise<void> {
     const room = this.rooms.get(roomId);
     if (!room || !room.seats.some((s) => s.userId === userId)) throw new AppError('FORBIDDEN');
     const now = Date.now();
     if (now - (this.lastEmoji.get(userId) ?? 0) < EMOJI_COOLDOWN_MS) throw new AppError('RATE_LIMITED');
     this.lastEmoji.set(userId, now);
+    await assertSmile(this.deps.db, userId, emoji);
     for (const s of room.seats) this.deps.hub.send(s.userId, { type: 'EMOJI', gameId: null, roomId, userId, emoji });
   }
 

@@ -133,4 +133,43 @@ export const EMOJIS = [
   '💪', '🔥', '💯', '🥳', '🎉', '🍀',
   '🃏', '🤡', '💀', '💩', '🍺', '☕',
 ] as const;
-export type Emoji = (typeof EMOJIS)[number];
+
+/**
+ * Smile packs are shop items (kind EMOJI). The classic pack is the emoji above and is free;
+ * a picture pack is a set of stickers «pack:NN» drawn from /emoji/<pack>/NN.webp.
+ */
+export const EMOJI_PACKS = {
+  emoji_pack_basic: { title: 'Классические смайлы', stickers: null },
+  emoji_pack_panda: { title: 'Смайлы «Панда»', stickers: { prefix: 'panda', count: 30 } },
+} as const;
+export type EmojiPackKey = keyof typeof EMOJI_PACKS;
+export const DEFAULT_EMOJI_PACK: EmojiPackKey = 'emoji_pack_basic';
+
+function stickerIds(prefix: string, count: number): string[] {
+  return Array.from({ length: count }, (_, i) => `${prefix}:${String(i + 1).padStart(2, '0')}`);
+}
+export const STICKERS = Object.values(EMOJI_PACKS).flatMap((p) => (p.stickers ? stickerIds(p.stickers.prefix, p.stickers.count) : []));
+
+/** Everything a player may send: a classic emoji or a sticker from a pack. */
+export const SMILES = [...EMOJIS, ...STICKERS] as [string, ...string[]];
+export type Emoji = string;
+
+/** The smiles a pack offers, in picker order. */
+export function smilesOf(pack: string): string[] {
+  const def = EMOJI_PACKS[pack as EmojiPackKey] ?? EMOJI_PACKS[DEFAULT_EMOJI_PACK];
+  return def.stickers ? stickerIds(def.stickers.prefix, def.stickers.count) : [...EMOJIS];
+}
+
+/** The pack a sticker belongs to, or null for a classic emoji (free for everyone). */
+export function packOfSmile(smile: string): EmojiPackKey | null {
+  const prefix = smile.includes(':') ? smile.split(':')[0] : null;
+  if (!prefix) return null;
+  for (const [key, def] of Object.entries(EMOJI_PACKS)) if (def.stickers?.prefix === prefix) return key as EmojiPackKey;
+  return null;
+}
+
+/** Picture of a sticker, or null for a classic emoji. */
+export function stickerUrl(smile: string): string | null {
+  const [prefix, n] = smile.split(':');
+  return n ? `/emoji/${prefix}/${n}.webp` : null;
+}

@@ -4,7 +4,7 @@
  */
 import { z } from 'zod';
 import { isCardId, type CardId } from '@arena/game-engine';
-import { EMOJIS, STAKE_OPTIONS } from './lobby.js';
+import { SMILES, STAKE_OPTIONS } from './lobby.js';
 
 export const roomSettingsSchema = z.object({
   stake: z.number().int().refine((v) => (STAKE_OPTIONS as readonly number[]).includes(v), 'stake'),
@@ -66,7 +66,7 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('UNDO_MOVE'), rid, gameId: z.string() }),
   /** «Подсветка» / «Напомнить отбой» (coins, until the end of the game). */
   z.object({ type: z.literal('USE_FEATURE'), rid, gameId: z.string(), feature: z.enum(['hints', 'discardReminder']) }),
-  z.object({ type: z.literal('SEND_EMOJI'), rid, gameId: z.string(), emoji: z.enum(EMOJIS) }),
+  z.object({ type: z.literal('SEND_EMOJI'), rid, gameId: z.string(), emoji: z.enum(SMILES) }),
   /** A smile while the table is still gathering (or between deals). */
-  z.object({ type: z.literal('ROOM_EMOJI'), rid, roomId: z.string(), emoji: z.enum(EMOJIS) }),
+  z.object({ type: z.literal('ROOM_EMOJI'), rid, roomId: z.string(), emoji: z.enum(SMILES) }),
 ]);

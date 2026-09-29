@@ -322,7 +322,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
               bubble={p.status === 'active' ? bubbleOf(p.id) : null}
               note={notes[p.id] ?? null}
               onOpen={() => setProfileOf(p.id)}
-              emoji={emojis[p.id] || null}
+              emoji={emojis[p.id] ?? null}
               dim={p.status !== 'active'}
               offline={infoOf(p.id)?.connected === false}
             />
@@ -386,7 +386,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
                 progress={myTurn ? progress : null}
                 label={mine.status === 'active' ? null : labelOf(mine)}
                 bubble={mine.status === 'active' ? bubbleOf(mine.id) : null}
-                emoji={emojis[me.id] || null}
+                emoji={emojis[me.id] ?? null}
               />
             )}
           </button>
@@ -431,7 +431,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
         </div>
       </BottomSheet>
 
-      <EmojiSheet open={sheet === 'emoji'} onClose={() => setSheet(null)} onPick={(emoji) => void send({ type: 'SEND_EMOJI', gameId, emoji })} />
+      <EmojiSheet open={sheet === 'emoji'} pack={me.equipped.emoji} onClose={() => setSheet(null)} onPick={(emoji) => void send({ type: 'SEND_EMOJI', gameId, emoji })} />
 
       <BottomSheet open={sheet === 'discard'} title={`Отбой · ${view.discardCount}`} onClose={() => setSheet(null)}>
         <div className="discard-grid">

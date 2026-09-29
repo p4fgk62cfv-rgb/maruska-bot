@@ -61,7 +61,8 @@ export const ITEMS: ItemSeed[] = [
   { key: 'frame_silver', kind: 'FRAME', name: 'Серебряная рамка', rarity: 'RARE', price: 60, currency: 'COINS' },
   { key: 'frame_gold', kind: 'FRAME', name: 'Золотая рамка', rarity: 'EPIC', price: 200, currency: 'COINS' },
   { key: 'crown_ruby', kind: 'CROWN', name: 'Рубиновая корона', rarity: 'LEGENDARY', price: 1000, currency: 'COINS' },
-  { key: 'emoji_pack_basic', kind: 'EMOJI', name: 'Базовые эмоции', rarity: 'COMMON', price: 0, currency: 'COINS' },
+  { key: 'emoji_pack_basic', kind: 'EMOJI', name: 'Классические смайлы', rarity: 'COMMON', price: 0, currency: 'COINS' },
+  { key: 'emoji_pack_panda', kind: 'EMOJI', name: 'Смайлы «Панда»', rarity: 'RARE', price: 59, currency: 'COINS' },
   { key: 'effect_sparks', kind: 'EFFECT', name: 'Искры победы', rarity: 'EPIC', price: 120, currency: 'COINS' },
 ];
 

@@ -34,6 +34,8 @@ export interface PendingMove {
 }
 
 const DISCARD_TILT = [-18, 12, -6, 24, -26, 4];
+const SUIT_SIGN = { S: '♠', H: '♥', D: '♦', C: '♣' } as const;
+const SUIT_RU = { S: 'пики', H: 'червы', D: 'бубны', C: 'трефы' } as const;
 
 /** Felt with the stock + trump on the left, the discard on the right and up to six pairs in the middle. */
 export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot, back, hover, dragging, pending }: TableProps) {
@@ -65,8 +67,13 @@ export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot
       data-drop="table"
       style={{ ['--card-w' as string]: `${cardWidth}px` }}
     >
-      <div className="felt__deck" data-anchor="deck" aria-label={`В колоде ${view.deckCount}`}>
-        {trumpCard ? (
+      <div className="felt__deck" data-anchor="deck" aria-label={`В колоде ${view.deckCount}, козырь ${SUIT_RU[view.trump.suit]}`}>
+        {/* The trump suit lies under the stock: once the deck is gone, it stays in sight. */}
+        <span className={`felt__suit felt__suit--${view.trump.suit}${trumpCard ? '' : ' felt__suit--open'}`}>
+          <span>{SUIT_SIGN[view.trump.suit]}</span>
+          {!trumpCard && <small>козырь</small>}
+        </span>
+        {trumpCard && (
           <>
             <span className="felt__trump" {...(view.deckCount === 1 ? { 'data-anchor': 'deck-card' } : {})}>
               <PlayingCard card={trumpCard} width={cardWidth * 0.9} trump />
@@ -78,8 +85,6 @@ export function Table({ view, cardWidth, targets, onPair, onReport, transferSlot
             )}
             <span className="felt__deck-count">{view.deckCount}</span>
           </>
-        ) : (
-          <span className={`felt__suit felt__suit--${view.trump.suit}`}>{{ S: '♠', H: '♥', D: '♦', C: '♣' }[view.trump.suit]}</span>
         )}
       </div>
 
