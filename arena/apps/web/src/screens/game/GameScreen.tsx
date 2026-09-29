@@ -481,6 +481,8 @@ export function GameScreen({ game }: { game: LiveGame }) {
           result={result}
           players={game.players}
           onAgain={room && !room.tournament ? dismissGame : null}
+          againDeadline={room && !room.tournament ? room.readyDeadline : null}
+          now={now}
           onClose={() => {
             // Leaving the table frees the chair for someone else; the result closes either way.
             if (room && !room.tournament) void leaveRoom().catch(() => undefined).finally(dismissGame);

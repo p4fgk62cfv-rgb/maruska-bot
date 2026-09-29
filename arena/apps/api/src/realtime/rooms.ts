@@ -27,8 +27,8 @@ import type { Room, RoomConfig, Seat } from './types.js';
 export const READY_TIMEOUT_MS = 30_000;
 /** A player who drops out of a waiting room keeps the seat this long. */
 export const WAITING_GRACE_MS = 30_000;
-/** After a deal the same company has this long to press «Готов» for the next one. */
-export const REMATCH_READY_MS = 60_000;
+/** After a deal the same company has this long to press «Готов» for the next one (the result screen eats some of it). */
+export const REMATCH_READY_MS = 180_000;
 const EMOJI_COOLDOWN_MS = 1500;
 
 /** Callbacks into the tournament service for match rooms. */
