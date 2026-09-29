@@ -666,3 +666,5 @@ select.app-input { appearance: none; }
 .pack-row__radio--on { opacity: 1; border-color: var(--gold); background: radial-gradient(circle, var(--gold) 0 45%, transparent 50%); }
 .emoji-grid__cell { display: grid; place-items: center; aspect-ratio: 1; padding: 4px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); }
 .emoji-grid__cell .smile-img { width: 100%; height: 100%; object-fit: contain; }
+/* Prices on ivory buttons: the light coin colour is meant for dark backgrounds */
+.ui-btn--primary .ui-balance--coins, .ui-btn--primary .ui-balance--credits { color: #8a5a00; }

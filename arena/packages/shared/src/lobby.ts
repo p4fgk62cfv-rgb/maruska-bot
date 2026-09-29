@@ -141,6 +141,11 @@ export const EMOJIS = [
 export const EMOJI_PACKS = {
   emoji_pack_basic: { title: 'Классические смайлы', stickers: null },
   emoji_pack_panda: { title: 'Смайлы «Панда»', stickers: { prefix: 'panda', count: 25 } },
+  emoji_pack_santa: { title: 'Смайлы «Новогодняя панда»', stickers: { prefix: 'santa', count: 25 } },
+  emoji_pack_smile: { title: 'Смайлы «Колобок»', stickers: { prefix: 'smile', count: 25 } },
+  emoji_pack_horse: { title: 'Смайлы «Лошадка»', stickers: { prefix: 'horse', count: 25 } },
+  emoji_pack_fox: { title: 'Смайлы «Лисёнок»', stickers: { prefix: 'fox', count: 20 } },
+  emoji_pack_raccoon: { title: 'Смайлы «Енот»', stickers: { prefix: 'raccoon', count: 20 } },
 } as const;
 export type EmojiPackKey = keyof typeof EMOJI_PACKS;
 export const DEFAULT_EMOJI_PACK: EmojiPackKey = 'emoji_pack_basic';
