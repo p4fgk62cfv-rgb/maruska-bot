@@ -668,3 +668,5 @@ select.app-input { appearance: none; }
 .emoji-grid__cell .smile-img { width: 100%; height: 100%; object-fit: contain; }
 /* Prices on ivory buttons: the light coin colour is meant for dark backgrounds */
 .ui-btn--primary .ui-balance--coins, .ui-btn--primary .ui-balance--credits { color: #8a5a00; }
+.settings__volume { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; padding: 4px 4px 8px 40px; font-size: 14px; }
+.settings__volume input { width: 100%; accent-color: var(--gold-deep, #d9901a); }

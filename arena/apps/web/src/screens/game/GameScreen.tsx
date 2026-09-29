@@ -78,12 +78,16 @@ export function GameScreen({ game }: { game: LiveGame }) {
         director.prepare(events, me.id);
         let sfx: Parameters<typeof play>[0] | null = null;
         for (const e of events) {
-          if (e.type === 'CARD_PLAYED' || e.type === 'CARD_TRANSFERRED') sfx = 'card';
+          // Mine already clicked when it was dropped (optimistic move).
+          if ((e.type === 'CARD_PLAYED' || e.type === 'CARD_TRANSFERRED') && e.playerId !== me.id) sfx = 'card';
           else if (e.type === 'CARDS_TAKEN') sfx = 'take';
           else if (e.type === 'ROUND_FINISHED' && e.outcome === 'beaten') sfx = 'discard';
+          else if (e.type === 'CARDS_DRAWN' && !sfx) sfx = 'draw';
           else if (e.type === 'PLAYER_TURN' && e.playerId === me.id && !sfx) sfx = 'turn';
         }
         if (sfx) play(sfx);
+        // Cards drawn after a bout: their flick follows the «бито»/«беру» sound.
+        if (sfx && sfx !== 'draw' && events.some((e) => e.type === 'CARDS_DRAWN')) window.setTimeout(() => play('draw'), 380);
       }),
     [onEvents, director, me.id],
   );
@@ -171,6 +175,8 @@ export function GameScreen({ game }: { game: LiveGame }) {
       if (el) from[c] = el.getBoundingClientRect();
     }
     setPending({ cards, target, from, version: view.version });
+    // My own card sounds the moment it lands, not when the server confirms it.
+    play('card');
     const ok = await send(msg);
     if (!ok) {
       // Remember where the cards were shown so they glide back into the hand.

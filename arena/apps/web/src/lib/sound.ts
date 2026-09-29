@@ -1,12 +1,31 @@
 import { settings } from './settings.js';
 
 /**
- * Tiny synthesised sound effects: no audio files to download, instant on slow networks.
- * The AudioContext is created on the first user gesture (required by iOS WebViews).
+ * Game sounds: short recorded-style effects from /sfx (≈80 KB in all), decoded once and played
+ * through WebAudio so they overlap and start instantly. Until a file is loaded the tiny synth
+ * below stands in. The AudioContext is created on the first touch (required by iOS WebViews).
  */
-export type Sfx = 'card' | 'deal' | 'take' | 'discard' | 'turn' | 'tick' | 'win' | 'lose' | 'emoji' | 'error';
+export type Sfx = 'card' | 'deal' | 'draw' | 'take' | 'discard' | 'turn' | 'tick' | 'win' | 'lose' | 'emoji' | 'error';
+
+const FILES: Sfx[] = ['card', 'deal', 'draw', 'take', 'discard', 'turn', 'tick', 'win', 'lose', 'emoji', 'error'];
 
 let ctx: AudioContext | null = null;
+let master: GainNode | null = null;
+const buffers = new Map<Sfx, AudioBuffer>();
+let loading = false;
+
+function load(ac: AudioContext): void {
+  if (loading) return;
+  loading = true;
+  for (const name of FILES) {
+    fetch(`/sfx/${name}.mp3`)
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+      // Old Safari only has the callback form of decodeAudioData.
+      .then((data) => new Promise<AudioBuffer>((resolve, reject) => ac.decodeAudioData(data, resolve, reject)))
+      .then((buffer) => buffers.set(name, buffer))
+      .catch(() => undefined);
+  }
+}
 
 function audio(): AudioContext | null {
   if (!settings.get().sound) return null;
@@ -14,9 +33,17 @@ function audio(): AudioContext | null {
     const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) return null;
     ctx = new Ctor();
+    master = ctx.createGain();
+    master.connect(ctx.destination);
+    load(ctx);
   }
   if (ctx.state === 'suspended') void ctx.resume();
+  if (master) master.gain.value = settings.get().volume;
   return ctx;
+}
+
+function out(ac: AudioContext): AudioNode {
+  return master ?? ac.destination;
 }
 
 /** Call from any tap handler once, so later sounds are allowed to play. */
@@ -32,7 +59,7 @@ function tone(ac: AudioContext, freq: number, start: number, duration: number, t
   g.gain.setValueAtTime(0, start);
   g.gain.linearRampToValueAtTime(gain, start + 0.01);
   g.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  osc.connect(g).connect(ac.destination);
+  osc.connect(g).connect(out(ac));
   osc.start(start);
   osc.stop(start + duration + 0.02);
 }
@@ -49,13 +76,23 @@ function noise(ac: AudioContext, start: number, duration: number, freq: number, 
   filter.frequency.value = freq;
   const g = ac.createGain();
   g.gain.value = gain;
-  src.connect(filter).connect(g).connect(ac.destination);
+  src.connect(filter).connect(g).connect(out(ac));
   src.start(start);
 }
 
 export function play(sfx: Sfx): void {
   const ac = audio();
   if (!ac) return;
+  const buffer = buffers.get(sfx);
+  if (buffer) {
+    const src = ac.createBufferSource();
+    src.buffer = buffer;
+    // A touch of pitch variety so a run of cards does not sound like a machine gun.
+    if (sfx === 'card' || sfx === 'draw') src.playbackRate.value = 0.94 + Math.random() * 0.12;
+    src.connect(out(ac));
+    src.start();
+    return;
+  }
   const t = ac.currentTime;
   switch (sfx) {
     case 'card':
@@ -63,6 +100,9 @@ export function play(sfx: Sfx): void {
       break;
     case 'deal':
       for (let i = 0; i < 4; i++) noise(ac, t + i * 0.06, 0.05, 2800, 0.18);
+      break;
+    case 'draw':
+      noise(ac, t, 0.05, 2800, 0.15);
       break;
     case 'take':
       noise(ac, t, 0.25, 700, 0.3);
