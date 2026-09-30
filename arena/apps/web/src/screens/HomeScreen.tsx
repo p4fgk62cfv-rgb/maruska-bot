@@ -63,7 +63,7 @@ export function HomeScreen() {
   };
 
   return (
-    <div className="home">
+    <div className={`home${settings.get().homeDesign === "premium" ? " home--premium" : ""}`}>
       <HomeBar />
 
       <section className="arena-hero" aria-label="Маруська Арена">
