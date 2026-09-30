@@ -694,7 +694,7 @@ select.app-input { appearance: none; }
 
 
 /* Premium purple-and-gold Arena home refresh */
-.home {
+html[data-home-design="premium"] .home {
   background:
     radial-gradient(ellipse at 50% 15%, rgba(110, 38, 160, 0.25), transparent 52%),
     linear-gradient(180deg, #100d1c 0%, #151024 46%, #0e0c18 100%);
