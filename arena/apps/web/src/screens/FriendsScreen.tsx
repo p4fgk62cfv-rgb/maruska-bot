@@ -12,7 +12,7 @@ import { QueryView, ScreenHeader } from './common.js';
 
 export default function FriendsScreen() {
   const { requestCount } = useRealtime();
-  const [tab, setTab] = useState<'friends' | 'requests' | 'recent'>(requestCount ? 'requests' : 'friends');
+  const [tab, setTab] = useState<'friends' | 'mutual' | 'requests' | 'recent'>(requestCount ? 'requests' : 'friends');
   const [searching, setSearching] = useState(false);
   return (
     <div className="app-stack people">
@@ -30,12 +30,14 @@ export default function FriendsScreen() {
         onChange={setTab}
         items={[
           { value: 'friends', label: 'Друзья' },
+          { value: 'mutual', label: 'Друзья друзей' },
           { value: 'requests', label: requestCount ? `Заявки · ${requestCount}` : 'Заявки' },
           { value: 'recent', label: 'Недавние' },
         ]}
       />
       {tab === 'friends' && <FriendsTab />}
-      {tab === 'requests' && <RequestsTab />}
+      {tab === 'mutual' && <FriendsOfFriendsTab />}
+      {tab === 'requests' && <RequestsTab />
       {tab === 'recent' && <RecentTab />}
     </div>
   );
@@ -153,6 +155,32 @@ function FriendsTab() {
         )}
       </BottomSheet>
     </>
+  );
+}
+
+type FriendOfFriendDto = { id: string; name: string; username: string | null; photoUrl: string | null; rating: number; mutualFriends: string[]; relation: Relation };
+
+function FriendsOfFriendsTab() {
+  const query = useQuery<FriendOfFriendDto[]>('/friends/of-friends');
+  return (
+    <QueryView query={query}>
+      {(list) => list.length === 0 ? (
+        <EmptyState icon="users" title="Пока никого" text="Здесь появятся игроки, которые дружат с твоими друзьями." />
+      ) : (
+        <div className="people-list">
+          {list.map((person) => (
+            <PersonRow
+              key={person.id}
+              user={person}
+              relation={person.relation}
+              hint={person.mutualFriends.length === 1
+                ? `Общий друг: ${person.mutualFriends[0]}`
+                : `Общие друзья: ${person.mutualFriends.slice(0, 3).join(', ')}${person.mutualFriends.length > 3 ? ` и ещё ${person.mutualFriends.length - 3}` : ''}`}
+            />
+          ))}
+        </div>
+      )}
+    </QueryView>
   );
 }
 
