@@ -74,7 +74,8 @@ export function applyTheme(): void {
   const system = tg?.colorScheme ?? (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   const theme = current.theme === 'system' ? system : current.theme;
   document.documentElement.dataset.theme = theme;
-  document.documentElement.dataset.homeDesign = current.homeDesign ?? 'classic';\n  document.documentElement.dataset.gameDesign = current.homeDesign ?? 'classic';
+  document.documentElement.dataset.homeDesign = current.homeDesign ?? 'classic';
+  document.documentElement.dataset.gameDesign = current.homeDesign ?? 'classic';
 }
 
 if (typeof window !== 'undefined') applyTheme();
