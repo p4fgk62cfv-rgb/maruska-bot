@@ -1134,3 +1134,24 @@ html[data-home-design="premium"] .friends-play__arrow { color: #d7b6ff; font-siz
 @media (prefers-reduced-motion: reduce) {
   :root[data-game-design="daylight"] .grid-tile { animation: none !important; }
 }
+
+:root[data-game-design="daylight"] .ui-nav {
+  background: rgba(255, 255, 255, 0.97);
+  color: #5b7890;
+  box-shadow: 0 -4px 18px rgba(35, 104, 157, 0.12);
+  border-top: 1px solid rgba(47, 121, 177, 0.14);
+}
+:root[data-game-design="daylight"] .ui-nav__item--on {
+  color: #176bc3;
+}
+:root[data-game-design="daylight"] .ui-nav__item--on .ui-nav__icon {
+  color: #176bc3;
+  background: #e4f3ff;
+  box-shadow: inset 0 0 0 1px rgba(39, 137, 237, 0.15);
+}
+:root[data-game-design="daylight"] .ui-nav__item--accent .ui-nav__icon,
+:root[data-game-design="daylight"] .ui-nav__item--accent.ui-nav__item--on .ui-nav__icon {
+  color: #ffffff;
+  background: linear-gradient(135deg, #2789ed, #1767c6);
+  box-shadow: 0 4px 12px rgba(39, 137, 237, 0.24);
+}
