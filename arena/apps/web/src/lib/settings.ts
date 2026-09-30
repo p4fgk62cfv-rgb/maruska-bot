@@ -22,7 +22,7 @@ export interface Settings {
   rewardAnimations: boolean;
   theme: Theme;
   /** Home screen visual style. Classic preserves the original design. */
-  homeDesign: 'classic' | 'premium';
+  homeDesign: 'classic' | 'daylight';
 }
 
 const KEY = 'arena.settings';
@@ -42,6 +42,7 @@ const DEFAULTS: Settings = {
 };
 
 let current: Settings = { ...DEFAULTS, ...safeStorage.get<Partial<Settings>>(KEY, {}) };
+// Migrate the previous experimental theme to the safe classic default.\nif ((current.homeDesign as string) !== 'classic' && (current.homeDesign as string) !== 'daylight') current.homeDesign = 'classic';
 const listeners = new Set<() => void>();
 
 /** Per-device preferences (sound, vibration, animations, hand sorting). */
@@ -73,7 +74,7 @@ export function applyTheme(): void {
   const system = tg?.colorScheme ?? (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   const theme = current.theme === 'system' ? system : current.theme;
   document.documentElement.dataset.theme = theme;
-  document.documentElement.dataset.homeDesign = current.homeDesign ?? 'classic';
+  document.documentElement.dataset.homeDesign = current.homeDesign ?? 'classic';\n  document.documentElement.dataset.gameDesign = current.homeDesign ?? 'classic';
 }
 
 if (typeof window !== 'undefined') applyTheme();
