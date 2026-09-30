@@ -447,9 +447,10 @@ select.app-input { appearance: none; }
 .room-wallet .ui-balance--coins { color: #a7790e; }
 
 .emoji-picker-overlay {
-  position: fixed; inset: auto 0 calc(env(safe-area-inset-bottom, 0px) + 150px);
-  z-index: 70; display: flex; justify-content: center; padding: 0 8px;
-  pointer-events: none; animation: ui-fade 0.12s ease;
+  position: fixed; inset: 0; z-index: 70;
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 0 8px calc(env(safe-area-inset-bottom, 0px) + 150px);
+  pointer-events: none;
 }
 .emoji-picker {
   pointer-events: auto; width: min(84vw, 340px); max-height: none; overflow: visible;
