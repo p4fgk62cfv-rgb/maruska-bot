@@ -37,7 +37,7 @@ export default function FriendsScreen() {
       />
       {tab === 'friends' && <FriendsTab />}
       {tab === 'mutual' && <FriendsOfFriendsTab />}
-      {tab === 'requests' && <RequestsTab />
+      {tab === 'requests' && <RequestsTab />}
       {tab === 'recent' && <RecentTab />}
     </div>
   );
