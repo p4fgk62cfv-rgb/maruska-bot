@@ -447,12 +447,12 @@ select.app-input { appearance: none; }
 .room-wallet .ui-balance--coins { color: #a7790e; }
 
 .emoji-picker-overlay {
-  position: fixed; inset: auto 0 calc(env(safe-area-inset-bottom, 0px) + 82px);
+  position: fixed; inset: auto 0 calc(env(safe-area-inset-bottom, 0px) + 150px);
   z-index: 70; display: flex; justify-content: center; padding: 0 10px;
   pointer-events: none; animation: ui-fade 0.12s ease;
 }
 .emoji-picker {
-  pointer-events: auto; width: min(86vw, 420px); max-height: min(44dvh, 440px); overflow: hidden;
+  pointer-events: auto; width: min(86vw, 420px); max-height: min(48dvh, 440px); overflow: hidden;
   display: flex; flex-direction: column; gap: 6px; padding: 8px;
   border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 18px;
   background: var(--paper-2); color: var(--ink);
@@ -465,7 +465,7 @@ select.app-input { appearance: none; }
   display: grid; place-items: center; flex: none; width: 28px; height: 28px;
   border-radius: 50%; background: rgba(128, 128, 128, 0.16); font-size: 22px; line-height: 1;
 }
-.emoji-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; font-size: 30px; min-height: 0; max-height: min(36dvh, 350px); overflow-y: auto; overscroll-behavior: contain; }
+.emoji-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; font-size: 30px; min-height: 0; max-height: min(40dvh, 350px); overflow-y: auto; overscroll-behavior: contain; }
 .emoji-grid button { display: grid; place-items: center; height: 44px; min-width: 0; border-radius: 10px; background: rgba(128, 128, 128, 0.09); }
 .emoji-grid--stickers { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; overflow-y: auto; }
 .emoji-grid--stickers button { height: auto; aspect-ratio: 1; max-height: 62px; padding: 3px; }
