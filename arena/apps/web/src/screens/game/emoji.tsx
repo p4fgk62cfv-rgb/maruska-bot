@@ -1,5 +1,4 @@
 import { EMOJI_PACKS, smilesOf, stickerUrl, type EmojiPackKey } from '@arena/shared';
-import { BottomSheet } from '@arena/ui';
 import { useEffect, useRef, useState } from 'react';
 import { play } from '../../lib/sound.js';
 import { settings } from '../../lib/settings.js';
@@ -40,20 +39,33 @@ export function useSeatEmojis(myId: string): Record<string, SeatSmile | null> {
   return emojis;
 }
 
-/** The picker shows the pack chosen in «Предметы». */
+/** Compact picker: only the chooser shrinks; the smile shown over a player's portrait does not. */
 export function EmojiSheet({ open, pack, onClose, onPick }: { open: boolean; pack: string; onClose: () => void; onPick: (smile: string) => void }) {
   const def = EMOJI_PACKS[pack as EmojiPackKey] ?? EMOJI_PACKS.emoji_pack_basic;
   const smiles = smilesOf(pack);
+  if (!open) return null;
   return (
-    <BottomSheet open={open} title={def.title} onClose={onClose}>
-      <div className={`emoji-grid${def.stickers ? ' emoji-grid--stickers' : ''}`}>
-        {smiles.map((s) => (
-          <button key={s} type="button" onClick={() => (onClose(), onPick(s))}>
-            <Smile smile={s} />
-          </button>
-        ))}
-      </div>
-      <p className="emoji-hint">Другие наборы смайлов — в «Предметах»</p>
-    </BottomSheet>
+    <div className="emoji-picker-overlay" onClick={onClose}>
+      <section
+        className="emoji-picker"
+        role="dialog"
+        aria-modal="true"
+        aria-label={def.title}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="emoji-picker__header">
+          <strong>{def.title}</strong>
+          <button type="button" className="emoji-picker__close" onClick={onClose} aria-label="Закрыть">×</button>
+        </header>
+        <div className={`emoji-grid${def.stickers ? ' emoji-grid--stickers' : ''}`}>
+          {smiles.map((s) => (
+            <button key={s} type="button" onClick={() => { onClose(); onPick(s); }}>
+              <Smile smile={s} />
+            </button>
+          ))}
+        </div>
+        <p className="emoji-hint">Другие наборы смайлов — в «Предметах»</p>
+      </section>
+    </div>
   );
 }
