@@ -19,7 +19,9 @@ const FACE_URL = '/cards/';
 /** Illustrated backs (public/backs/<name>.webp); the rest are CSS-drawn. */
 const ART_BACKS = new Set(['tartan', 'celtic', 'emerald', 'amethyst', 'frost', 'mandala', 'crystal', 'ruby', 'moon', 'starburst', 'wolf', 'spider']);
 
-/** Card face from the illustrated set when there is one, otherwise a CSS card. */
+/** Card face from the unified 52-card sprite. Sprite order is 2…A, suits S/H/D/C. */
+const SPRITE_RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'] as const;
+const SPRITE_SUITS = ['S', 'H', 'D', 'C'] as const;
 export const PlayingCard = memo(function PlayingCard({ card, faceDown, selected, playable, trump, width = 64, back = 'classic', onClick }: PlayingCardProps) {
   const style = { width, height: width * 1.42, fontSize: width * 0.28 };
   if (faceDown || !card) {
@@ -34,7 +36,9 @@ export const PlayingCard = memo(function PlayingCard({ card, faceDown, selected,
   const suit = suitOf(card);
   const rank = RANK_LABEL_RU[rankOf(card)];
   const red = suit === 'H' || suit === 'D';
-  const art = ILLUSTRATED.has(rankOf(card));
+  const art = true;
+  const spriteCol = SPRITE_RANKS.indexOf(rankOf(card));
+  const spriteRow = SPRITE_SUITS.indexOf(suit);
   const classes = [
     'ui-card',
     art && 'ui-card--art',
@@ -45,20 +49,12 @@ export const PlayingCard = memo(function PlayingCard({ card, faceDown, selected,
   ]
     .filter(Boolean)
     .join(' ');
-  const content = art ? (
-    <img className="ui-card__art" src={`${FACE_URL}${card}.webp`} alt="" draggable={false} decoding="sync" />
-  ) : (
-    <>
-      <span className="ui-card__corner">
-        <span>{rank}</span>
-        <span>{SUIT_SYMBOL[suit]}</span>
-      </span>
-      <span className="ui-card__pip">{SUIT_SYMBOL[suit]}</span>
-      <span className="ui-card__corner ui-card__corner--bottom">
-        <span>{rank}</span>
-        <span>{SUIT_SYMBOL[suit]}</span>
-      </span>
-    </>
+  const content = (
+    <span
+      className="ui-card__art-sprite"
+      style={{ backgroundPosition: `${(spriteCol / 12) * 100}% `${(spriteRow / 3) * 100}%`, backgroundSize: '1300% 400%' }}
+      aria-hidden="true"
+    />
   );
   return onClick ? (
     <button type="button" className={classes} style={style} onClick={onClick} aria-label={`${rank}${SUIT_SYMBOL[suit]}`} aria-pressed={selected}>
