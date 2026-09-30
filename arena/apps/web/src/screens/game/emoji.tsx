@@ -45,7 +45,7 @@ export function EmojiSheet({ open, pack, onClose, onPick }: { open: boolean; pac
   const smiles = smilesOf(pack);
   if (!open) return null;
   return (
-    <div className="emoji-picker-overlay" onClick={onClose}>
+    <div className="emoji-picker-overlay">
       <section
         className="emoji-picker"
         role="dialog"
