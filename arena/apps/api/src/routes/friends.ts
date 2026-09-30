@@ -12,6 +12,7 @@ export async function friendRoutes(app: FastifyInstance, ctx: Context): Promise<
   const me = (request: Parameters<typeof sessionOf>[0]) => sessionOf(request).sub;
 
   app.get('/friends', auth, async (request) => friends.list(me(request)));
+  app.get('/friends/of-friends', auth, async (request) => friends.friendsOfFriends(me(request)));
   app.get('/friends/requests', auth, async (request) => friends.requests(me(request)));
   app.get('/friends/recent', auth, async (request) => friends.recent(me(request)));
 
