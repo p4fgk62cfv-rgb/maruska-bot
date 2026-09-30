@@ -886,3 +886,5 @@ select.app-input { appearance: none; }
   .arena-hero { margin: 0 8px; padding-top: 17px; }
   .tile-grid { padding: 0 8px; gap: 6px; }
 }
+
+.friends-play__arrow { color: #d7b6ff; font-size: 26px; line-height: 1; padding-left: 4px; }
