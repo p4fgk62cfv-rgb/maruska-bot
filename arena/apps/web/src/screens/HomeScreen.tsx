@@ -86,7 +86,7 @@ export function HomeScreen() {
       <button type="button" className="friends-play" onClick={() => push('friends')}>
         <span className="friends-play__icon"><Icon name="users" size={22} /></span>
         <span><strong>Играть с друзьями</strong><small>Пригласи знакомых за свой стол</small></span>
-        <Icon name="chevronRight" size={20} />
+        <span className="friends-play__arrow" aria-hidden="true">›</span>
       </button>
 
       <div className="home-section-label"><span>ТВОЯ АРЕНА</span><i /></div>
