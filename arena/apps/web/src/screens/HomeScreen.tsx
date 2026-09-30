@@ -66,12 +66,30 @@ export function HomeScreen() {
     <div className="home">
       <HomeBar />
 
+      <section className="arena-hero" aria-label="Маруська Арена">
+        <div className="arena-hero__ornament" aria-hidden="true">
+          <span className="arena-card arena-card--left">A<span>♥</span></span>
+          <span className="arena-card arena-card--back">✦</span>
+          <span className="arena-card arena-card--right">K<span>♠</span></span>
+        </div>
+        <p className="arena-hero__eyebrow">ТВОЙ КАРТОЧНЫЙ КЛУБ</p>
+        <h1 className="arena-hero__title">МАРУСЬКА <span>АРЕНА</span></h1>
+        <p className="arena-hero__subtitle">Собирай друзей. Играй красиво. Побеждай.</p>
+      </section>
+
       <button type="button" className="quick-play" onClick={quickGame} disabled={finding} aria-busy={finding}>
         <span className="quick-play__icon">{finding ? <span className="ui-spinner" /> : <Icon name="play" size={30} />}</span>
         <span className="quick-play__title">Быстрая игра</span>
         <span className="quick-play__hint">Подберём стол по вашей ставке</span>
       </button>
 
+      <button type="button" className="friends-play" onClick={() => push('friends')}>
+        <span className="friends-play__icon"><Icon name="users" size={22} /></span>
+        <span><strong>Играть с друзьями</strong><small>Пригласи знакомых за свой стол</small></span>
+        <Icon name="chevronRight" size={20} />
+      </button>
+
+      <div className="home-section-label"><span>ТВОЯ АРЕНА</span><i /></div>
       <div className="tile-grid">
         {TILES.map((tile) => {
           const count = counter(tile);
