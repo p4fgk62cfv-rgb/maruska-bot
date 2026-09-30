@@ -88,6 +88,7 @@ export function HomeScreen() {
       </button>
 
       {homeDesign === 'premium' && (
+        <>
       <button type="button" className="friends-play" onClick={() => push('friends')}>
         <span className="friends-play__icon"><Icon name="users" size={22} /></span>
         <span><strong>Играть с друзьями</strong><small>Пригласи знакомых за свой стол</small></span>
@@ -95,6 +96,7 @@ export function HomeScreen() {
       </button>
 
       <div className="home-section-label"><span>ТВОЯ АРЕНА</span><i /></div>
+        </>
       )}
       <div className="tile-grid">
         {TILES.map((tile) => {
