@@ -166,7 +166,7 @@ export class MotionDirector {
     const animation = node.animate(
       [
         { translate: '0px 0px', scale: '1', opacity: 1 },
-        { translate: `${dx}px ${dy}px`, scale: `${Math.min(scale, 1)}`, opacity: 0.2 },
+        { translate: `${dx}px ${dy}px`, scale: `${Math.min(scale, 1)}`, opacity: 1 },
       ],
       { duration: DURATION + 60, delay, easing: EASE, fill: 'both' },
     );
@@ -175,17 +175,31 @@ export class MotionDirector {
   }
 }
 
+/** Keep only one FLIP animation per live card node; overlapping animations can make cards flicker. */
+const activeFlights = new WeakMap<HTMLElement, Animation>();
+
 /** FLIP: the element already sits at `to`; start it at `from` and let it glide home. */
 export function fly(el: HTMLElement, from: DOMRect, to: DOMRect, delay: number): void {
   const dx = from.left + from.width / 2 - (to.left + to.width / 2);
   const dy = from.top + from.height / 2 - (to.top + to.height / 2);
   const scale = to.width ? from.width / to.width : 1;
+  const previous = activeFlights.get(el);
+  if (previous) {
+    previous.cancel();
+    activeFlights.delete(el);
+  }
   if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(scale - 1) < 0.01) return;
-  el.animate(
+  const animation = el.animate(
     [
       { translate: `${dx}px ${dy}px`, scale: `${scale}` },
       { translate: '0px 0px', scale: '1' },
     ],
     { duration: DURATION, delay, easing: EASE, fill: 'backwards' },
   );
+  activeFlights.set(el, animation);
+  const clear = () => {
+    if (activeFlights.get(el) === animation) activeFlights.delete(el);
+  };
+  animation.onfinish = clear;
+  animation.oncancel = clear;
 }
