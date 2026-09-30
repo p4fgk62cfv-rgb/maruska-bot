@@ -150,6 +150,21 @@ export default function SettingsScreen() {
         />
       </section>
 
+      <section className="settings__section">
+        <h3 className="script-title">Дизайн главного экрана</h3>
+        <Tabs<'classic' | 'premium'>
+          value={s.homeDesign}
+          onChange={(homeDesign) => settings.set({ homeDesign })}
+          items={[
+            { value: 'classic', label: 'старый' },
+            { value: 'premium', label: 'новый' },
+          ]}
+        />
+        <p className="app-muted" style={{ textAlign: 'center', marginTop: 8 }}>
+          По умолчанию используется старый дизайн. Выбор сохраняется на этом устройстве.
+        </p>
+      </section>
+
       <div className="settings__checks">
         {flag('sound', 'Включить звуки', (on) => {
           unlockAudio();
