@@ -5,9 +5,9 @@ import { settings } from './settings.js';
  * through WebAudio so they overlap and start instantly. Until a file is loaded the tiny synth
  * below stands in. The AudioContext is created on the first touch (required by iOS WebViews).
  */
-export type Sfx = 'card' | 'deal' | 'draw' | 'take' | 'discard' | 'transfer' | 'pass' | 'turn' | 'tick' | 'win' | 'lose' | 'emoji' | 'error';
+export type Sfx = 'card' | 'deal' | 'draw' | 'take' | 'discard' | 'transfer' | 'pass' | 'timeout' | 'turn' | 'tick' | 'win' | 'lose' | 'emoji' | 'error';
 
-const FILES: Sfx[] = ['card', 'deal', 'draw', 'take', 'discard', 'transfer', 'pass', 'turn', 'tick', 'win', 'lose', 'emoji', 'error'];
+const FILES: Sfx[] = ['card', 'deal', 'draw', 'take', 'discard', 'transfer', 'pass', 'timeout', 'turn', 'tick', 'win', 'lose', 'emoji', 'error'];
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -118,13 +118,9 @@ export function play(sfx: Sfx): void {
       tone(ac, 520, t, 0.08, 'sine', 0.055);
       tone(ac, 390, t + 0.06, 0.1, 'sine', 0.045);
       break;
-    case 'transfer':
-      noise(ac, t, 0.055, 2600, 0.17);
-      tone(ac, 740, t + 0.045, 0.11, 'triangle', 0.07);
-      break;
-    case 'pass':
-      tone(ac, 520, t, 0.08, 'sine', 0.055);
-      tone(ac, 390, t + 0.06, 0.1, 'sine', 0.045);
+    case 'timeout':
+      tone(ac, 880, t, 0.13, 'square', 0.055);
+      tone(ac, 660, t + 0.13, 0.18, 'square', 0.055);
       break;
     case 'turn':
       tone(ac, 660, t, 0.18);
