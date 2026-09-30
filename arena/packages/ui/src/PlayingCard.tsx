@@ -25,7 +25,7 @@ export const PlayingCard = memo(function PlayingCard({ card, faceDown, selected,
   if (faceDown || !card) {
     return ART_BACKS.has(back) ? (
       <span className="ui-card ui-card--back ui-card--back-art" style={style} aria-label="Карта рубашкой вверх">
-        <img className="ui-card__art" src={`/backs/${back}.webp`} alt="" draggable={false} decoding="async" />
+        <img className="ui-card__art" src={`/backs/${back}.webp`} alt="" draggable={false} decoding="sync" />
       </span>
     ) : (
       <span className={`ui-card ui-card--back ui-card--back-${back}`} style={style} aria-label="Карта рубашкой вверх" />
@@ -46,7 +46,7 @@ export const PlayingCard = memo(function PlayingCard({ card, faceDown, selected,
     .filter(Boolean)
     .join(' ');
   const content = art ? (
-    <img className="ui-card__art" src={`${FACE_URL}${card}.webp`} alt="" draggable={false} decoding="async" />
+    <img className="ui-card__art" src={`${FACE_URL}${card}.webp`} alt="" draggable={false} decoding="sync" />
   ) : (
     <>
       <span className="ui-card__corner">
