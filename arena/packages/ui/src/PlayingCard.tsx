@@ -13,7 +13,6 @@ export interface PlayingCardProps {
   onClick?: () => void;
 }
 
-/** Illustrated faces exist for the 36-card deck (6…A); 2–5 of the 52-card deck stay CSS-drawn. */
 /** Illustrated backs (public/backs/<name>.webp); the rest are CSS-drawn. */
 const ART_BACKS = new Set(['tartan', 'celtic', 'emerald', 'amethyst', 'frost', 'mandala', 'crystal', 'ruby', 'moon', 'starburst', 'wolf', 'spider']);
 
@@ -34,12 +33,11 @@ export const PlayingCard = memo(function PlayingCard({ card, faceDown, selected,
   const suit = suitOf(card);
   const rank = RANK_LABEL_RU[rankOf(card)];
   const red = suit === 'H' || suit === 'D';
-  const art = true;
   const spriteCol = SPRITE_RANKS.indexOf(rankOf(card));
   const spriteRow = SPRITE_SUITS.indexOf(suit);
   const classes = [
     'ui-card',
-    art && 'ui-card--art',
+    'ui-card--art',
     red ? 'ui-card--red' : 'ui-card--black',
     selected && 'ui-card--selected',
     playable && 'ui-card--playable',
