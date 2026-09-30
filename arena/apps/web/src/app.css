@@ -892,6 +892,7 @@ html[data-home-design="premium"] .friends-play__arrow { color: #d7b6ff; font-siz
 /* ── Optional daylight-blue theme: scoped to the entire app, classic remains untouched ── */
 :root[data-game-design="daylight"] {
   color-scheme: light;
+  --font-script: var(--font);
   --felt-hi: #d9f2ff;
   --felt: #edf8ff;
   --felt-lo: #d8edff;
