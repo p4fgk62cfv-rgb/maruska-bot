@@ -62,6 +62,33 @@ export class FriendService {
       .sort((a, b) => order[a.presence] - order[b.presence] || a.name.localeCompare(b.name, 'ru'));
   }
 
+  /** Second-degree connections, excluding myself and existing friends. Shows only mutual-friend names. */
+  async friendsOfFriends(me: string): Promise<(PublicUserDto & { mutualFriends: string[]; relation: Relation })[]> {
+    const direct = await this.db.friend.findMany({ where: { userId: me }, select: { friendId: true } });
+    if (!direct.length) return [];
+    const directIds = direct.map((r) => r.friendId);
+    const second = await this.db.friend.findMany({
+      where: { userId: { in: directIds }, friendId: { notIn: [me, ...directIds] } },
+      include: { friend: { include: { profile: true } }, user: { include: { profile: true } } },
+    });
+    const byUser = new Map<string, { user: (typeof second)[number]['friend']; mutual: Map<string, string> }>();
+    for (const edge of second) {
+      if (!edge.friend.profile || isBanned(edge.friend)) continue;
+      const entry = byUser.get(edge.friendId) ?? { user: edge.friend, mutual: new Map<string, string>() };
+      if (edge.user.profile && !isBanned(edge.user)) entry.mutual.set(edge.userId, publicUser(edge.user, edge.user.profile).name);
+      byUser.set(edge.friendId, entry);
+    }
+    return [...byUser.values()]
+      .filter((entry) => entry.mutual.size > 0)
+      .sort((a, b) => b.mutual.size - a.mutual.size || a.user.profile!.name.localeCompare(b.user.profile!.name, 'ru'))
+      .slice(0, 100)
+      .map((entry) => ({
+        ...publicUser(entry.user, entry.user.profile!),
+        mutualFriends: [...entry.mutual.values()],
+        relation: 'none' as const,
+      }));
+  }
+
   async requests(me: string): Promise<FriendRequestsDto> {
     const include = { from: { include: { profile: true } }, to: { include: { profile: true } } } as const;
     const [incoming, outgoing] = await Promise.all([
