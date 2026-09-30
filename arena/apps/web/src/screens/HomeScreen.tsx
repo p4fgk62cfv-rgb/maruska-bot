@@ -2,6 +2,7 @@ import { Avatar, Balance, Icon, RatingBadge, type IconName } from '@arena/ui';
 import { DAILY_CREDITS, type MyRoomDto } from '@arena/shared';
 import { useState } from 'react';
 import { ringOf } from '../lib/cosmetics.js';
+import { useSettings } from '../lib/settings.js';
 import { ApiError, api } from '../lib/api.js';
 import { haptic, tg } from '../lib/telegram.js';
 import { useNav, type Page } from '../navigation.js';
@@ -31,6 +32,7 @@ const TILES: Tile[] = [
 
 export function HomeScreen() {
   const me = useMe();
+  const homeDesign = useSettings().homeDesign;
   const { push } = useNav();
   const toast = useToast();
   const { enterRoom, requestCount } = useRealtime();
@@ -63,7 +65,7 @@ export function HomeScreen() {
   };
 
   return (
-    <div className={`home${settings.get().homeDesign === "premium" ? " home--premium" : ""}`}>
+    <div className={`home${homeDesign === "premium" ? " home--premium" : ""}`}>
       <HomeBar />
 
       <section className="arena-hero" aria-label="Маруська Арена">
