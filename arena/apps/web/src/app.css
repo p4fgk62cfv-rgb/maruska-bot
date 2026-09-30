@@ -452,8 +452,8 @@ select.app-input { appearance: none; }
   animation: ui-fade 0.16s ease;
 }
 .emoji-picker {
-  width: min(100%, 410px); max-height: min(68dvh, 560px); overflow: hidden;
-  display: flex; flex-direction: column; gap: 10px; padding: 12px;
+  width: min(88vw, 410px); max-height: min(38dvh, 420px); overflow: hidden;
+  display: flex; flex-direction: column; gap: 8px; padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 22px;
   background: var(--paper-2); color: var(--ink);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.48);
@@ -465,7 +465,7 @@ select.app-input { appearance: none; }
   display: grid; place-items: center; flex: none; width: 30px; height: 30px;
   border-radius: 50%; background: rgba(128, 128, 128, 0.16); font-size: 23px; line-height: 1;
 }
-.emoji-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; font-size: 30px; min-height: 0; max-height: 48dvh; overflow-y: auto; overscroll-behavior: contain; }
+.emoji-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; font-size: 30px; min-height: 0; max-height: min(28dvh, 310px); overflow-y: auto; overscroll-behavior: contain; }
 .emoji-grid button { display: grid; place-items: center; height: 48px; min-width: 0; border-radius: 12px; background: rgba(128, 128, 128, 0.09); }
 .emoji-grid--stickers { grid-template-columns: repeat(5, 1fr); }
 .emoji-grid--stickers button { height: auto; aspect-ratio: 1; padding: 4px; }
