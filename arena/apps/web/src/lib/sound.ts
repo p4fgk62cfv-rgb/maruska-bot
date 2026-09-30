@@ -118,6 +118,14 @@ export function play(sfx: Sfx): void {
       tone(ac, 520, t, 0.08, 'sine', 0.055);
       tone(ac, 390, t + 0.06, 0.1, 'sine', 0.045);
       break;
+    case 'transfer':
+      noise(ac, t, 0.055, 2600, 0.17);
+      tone(ac, 740, t + 0.045, 0.11, 'triangle', 0.07);
+      break;
+    case 'pass':
+      tone(ac, 520, t, 0.08, 'sine', 0.055);
+      tone(ac, 390, t + 0.06, 0.1, 'sine', 0.045);
+      break;
     case 'turn':
       tone(ac, 660, t, 0.18);
       tone(ac, 990, t + 0.09, 0.22);
