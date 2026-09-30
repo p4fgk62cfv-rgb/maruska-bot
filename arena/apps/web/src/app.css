@@ -887,3 +887,166 @@ html[data-home-design="premium"] .arena-hero { margin: 0 8px; padding-top: 17px;
 html[data-home-design="premium"] .tile-grid { padding: 0 8px; gap: 6px; }
 }
 html[data-home-design="premium"] .friends-play__arrow { color: #d7b6ff; font-size: 26px; line-height: 1; padding-left: 4px; }
+
+
+/* ── Optional daylight-blue theme: scoped to the entire app, classic remains untouched ── */
+:root[data-game-design="daylight"] {
+  color-scheme: light;
+  --felt-hi: #d9f2ff;
+  --felt: #edf8ff;
+  --felt-lo: #d8edff;
+  --paper: #ffffff;
+  --paper-2: #eaf5ff;
+  --ink: #16344d;
+  --ink-2: #54738d;
+  --line: rgba(30, 95, 145, 0.16);
+  --bg-0: #edf8ff;
+  --bg-1: #e1f2ff;
+  --bg-2: #d2ebff;
+  --surface: rgba(255, 255, 255, 0.88);
+  --surface-strong: rgba(255, 255, 255, 0.98);
+  --stroke: rgba(47, 121, 177, 0.18);
+  --stroke-strong: rgba(35, 130, 213, 0.4);
+  --text: #173b5b;
+  --text-2: #426984;
+  --text-3: #6d8ca3;
+  --violet: #2678e8;
+  --violet-hi: #5ba8ff;
+  --purple: #6a8cff;
+  --cyan: #17a7d7;
+  --gold: #ffd36a;
+  --gold-deep: #247bd1;
+  --green: #18875c;
+  --red: #d93850;
+  --felt-1: #2385c9;
+  --felt-2: #145b9a;
+  --shadow: 0 8px 24px rgba(40, 105, 160, 0.14);
+  --glow-violet: 0 0 0 1px rgba(38, 120, 232, 0.2), 0 8px 24px rgba(38, 120, 232, 0.16);
+  --glow-cyan: 0 0 0 1px rgba(23, 167, 215, 0.22), 0 8px 24px rgba(23, 167, 215, 0.14);
+  --glow-gold: 0 0 0 1px rgba(255, 211, 106, 0.5), 0 8px 24px rgba(255, 211, 106, 0.2);
+}
+:root[data-game-design="daylight"] body {
+  background: linear-gradient(160deg, #f7fcff 0%, #e8f5ff 55%, #d8edff 100%);
+  background-attachment: fixed;
+  color: var(--text);
+}
+:root[data-game-design="daylight"] .app-header,
+:root[data-game-design="daylight"] .home-bar,
+:root[data-game-design="daylight"] .table-dock,
+:root[data-game-design="daylight"] .settings__bar,
+:root[data-game-design="daylight"] .navigation-bar {
+  background: rgba(255, 255, 255, 0.96);
+  color: #16344d;
+  box-shadow: 0 4px 18px rgba(35, 104, 157, 0.1);
+  border-color: rgba(47, 121, 177, 0.14);
+}
+:root[data-game-design="daylight"] .app-screen {
+  color: #173b5b;
+}
+:root[data-game-design="daylight"] .app-header h1,
+:root[data-game-design="daylight"] .home-bar__who strong,
+:root[data-game-design="daylight"] .settings__section h3,
+:root[data-game-design="daylight"] .app-section {
+  color: #163b5d;
+  text-shadow: none;
+}
+:root[data-game-design="daylight"] .ui-panel,
+:root[data-game-design="daylight"] .ui-tile,
+:root[data-game-design="daylight"] .ui-chip,
+:root[data-game-design="daylight"] .filter-band,
+:root[data-game-design="daylight"] .settings__name,
+:root[data-game-design="daylight"] .settings__outline,
+:root[data-game-design="daylight"] .segmented,
+:root[data-game-design="daylight"] .check-tile,
+:root[data-game-design="daylight"] .pair-card {
+  background-color: rgba(255, 255, 255, 0.88);
+  color: #173b5b;
+  box-shadow: inset 0 0 0 1px rgba(47, 121, 177, 0.16), 0 4px 14px rgba(35, 104, 157, 0.06);
+}
+:root[data-game-design="daylight"] .ui-btn--primary {
+  color: #163b5d;
+  background: linear-gradient(180deg, #ffffff, #eaf5ff);
+  box-shadow: 0 4px 14px rgba(35, 104, 157, 0.12), inset 0 -2px 0 rgba(35, 104, 157, 0.06);
+}
+:root[data-game-design="daylight"] .ui-btn--gold {
+  color: #ffffff;
+  background: linear-gradient(135deg, #2789ed, #1767c6);
+  box-shadow: 0 6px 18px rgba(39, 137, 237, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+:root[data-game-design="daylight"] .ui-btn--ghost,
+:root[data-game-design="daylight"] .ui-icon-btn {
+  color: #27628f;
+  background: rgba(36, 125, 202, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(47, 121, 177, 0.18);
+}
+:root[data-game-design="daylight"] .ui-chip--on,
+:root[data-game-design="daylight"] .segmented__item--on,
+:root[data-game-design="daylight"] .check-tile--on,
+:root[data-game-design="daylight"] .pair-card__half--on {
+  color: #ffffff;
+  background: linear-gradient(135deg, #2789ed, #1767c6);
+}
+:root[data-game-design="daylight"] .quick-play {
+  color: #163b5d;
+  border-color: rgba(47, 121, 177, 0.16);
+  background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(231,245,255,0.94));
+}
+:root[data-game-design="daylight"] .quick-play__title,
+:root[data-game-design="daylight"] .grid-tile__title,
+:root[data-game-design="daylight"] .script-title {
+  color: #1c5e9a;
+  text-shadow: none;
+}
+:root[data-game-design="daylight"] .grid-tile {
+  border-color: rgba(47, 121, 177, 0.13);
+  background: linear-gradient(145deg, rgba(255,255,255,0.98), rgba(235,247,255,0.95));
+  box-shadow: 0 4px 16px rgba(35, 104, 157, 0.07);
+}
+:root[data-game-design="daylight"] .grid-tile:nth-child(odd) { border-right-color: rgba(47, 121, 177, 0.13); }
+:root[data-game-design="daylight"] .grid-tile__icon { color: #267bd0; }
+:root[data-game-design="daylight"] .home-bar__money .ui-balance--credits { color: #ad6c09; }
+:root[data-game-design="daylight"] .home-bar__money .ui-balance--coins { color: #97700e; }
+:root[data-game-design="daylight"] .home-bar__money .ui-balance--diamonds { color: #1785b8; }
+:root[data-game-design="daylight"] .settings__checks,
+:root[data-game-design="daylight"] .settings__section,
+:root[data-game-design="daylight"] .app-list > *,
+:root[data-game-design="daylight"] .app-row {
+  color: #173b5b;
+}
+:root[data-game-design="daylight"] input,
+:root[data-game-design="daylight"] textarea,
+:root[data-game-design="daylight"] select {
+  color: #173b5b;
+  background-color: #ffffff;
+  border-color: rgba(47, 121, 177, 0.22);
+}
+:root[data-game-design="daylight"] .ui-card--playable {
+  box-shadow: 0 0 0 2px #2389ee, 0 4px 16px rgba(35, 137, 238, 0.28);
+}
+:root[data-game-design="daylight"] .ui-card--selected {
+  box-shadow: 0 0 0 2px #247bd1, 0 10px 26px rgba(36, 123, 209, 0.32);
+}
+/* Rich but short interactions; CSS is scoped to the optional theme only. */
+@keyframes daylight-pop-in {
+  0% { opacity: 0; transform: translateY(14px) scale(0.97); }
+  70% { opacity: 1; transform: translateY(-2px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes daylight-button-glow {
+  0%, 100% { box-shadow: 0 5px 14px rgba(39, 137, 237, 0.14); }
+  50% { box-shadow: 0 7px 22px rgba(39, 137, 237, 0.3); }
+}
+:root[data-game-design="daylight"] .app-screen > * {
+  animation: daylight-pop-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+:root[data-game-design="daylight"] .ui-btn--gold,
+:root[data-game-design="daylight"] .quick-play__icon {
+  animation: daylight-button-glow 2.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-game-design="daylight"] .app-screen > *,
+  :root[data-game-design="daylight"] .ui-btn--gold,
+  :root[data-game-design="daylight"] .quick-play__icon {
+    animation: none !important;
+  }
+}
