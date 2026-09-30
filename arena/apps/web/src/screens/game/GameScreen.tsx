@@ -103,6 +103,15 @@ export function GameScreen({ game }: { game: LiveGame }) {
 
   // Last five seconds of my turn: a tick every second and a nudge.
   const secondsLeft = left !== null ? Math.ceil(left / 1000) : null;
+  const timeoutNotified = useRef<string | null>(null);
+  useEffect(() => {
+    if (view.currentPlayer !== me.id || secondsLeft !== 0 || !view.turnDeadline) return;
+    const turnKey = `${view.gameId}:${view.turnDeadline}`;
+    if (timeoutNotified.current === turnKey) return;
+    timeoutNotified.current = turnKey;
+    play('timeout');
+    haptic.warning();
+  }, [secondsLeft, view.currentPlayer, view.turnDeadline, view.gameId, me.id]);
   useEffect(() => {
     if (view.currentPlayer !== me.id || secondsLeft === null || secondsLeft > 5 || secondsLeft === 0) return;
     play('tick');
