@@ -14,8 +14,6 @@ export interface PlayingCardProps {
 }
 
 /** Illustrated faces exist for the 36-card deck (6…A); 2–5 of the 52-card deck stay CSS-drawn. */
-const ILLUSTRATED = new Set(['6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']);
-const FACE_URL = '/cards/';
 /** Illustrated backs (public/backs/<name>.webp); the rest are CSS-drawn. */
 const ART_BACKS = new Set(['tartan', 'celtic', 'emerald', 'amethyst', 'frost', 'mandala', 'crystal', 'ruby', 'moon', 'starburst', 'wolf', 'spider']);
 
@@ -52,7 +50,7 @@ export const PlayingCard = memo(function PlayingCard({ card, faceDown, selected,
   const content = (
     <span
       className="ui-card__art-sprite"
-      style={{ backgroundPosition: `${(spriteCol / 12) * 100}% `${(spriteRow / 3) * 100}%`, backgroundSize: '1300% 400%' }}
+      style={{ backgroundPosition: `${(spriteCol / 12) * 100}% ${(spriteRow / 3) * 100}%`, backgroundSize: '1300% 400%' }}
       aria-hidden="true"
     />
   );
