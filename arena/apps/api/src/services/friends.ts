@@ -80,7 +80,7 @@ export class FriendService {
     }
     return [...byUser.values()]
       .filter((entry) => entry.mutual.size > 0)
-      .sort((a, b) => b.mutual.size - a.mutual.size || a.user.profile!.name.localeCompare(b.user.profile!.name, 'ru'))
+      .sort((a, b) => b.mutual.size - a.mutual.size || publicUser(a.user, a.user.profile!).name.localeCompare(publicUser(b.user, b.user.profile!).name, 'ru'))
       .slice(0, 100)
       .map((entry) => ({
         ...publicUser(entry.user, entry.user.profile!),
