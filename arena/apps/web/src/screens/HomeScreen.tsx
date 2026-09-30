@@ -65,10 +65,10 @@ export function HomeScreen() {
   };
 
   return (
-    <div className={`home${homeDesign === "premium" ? " home--premium" : ""}`}>
+    <div className={`home${homeDesign === "daylight" ? " home--premium" : ""}`}>
       <HomeBar />
 
-      {homeDesign === 'premium' && (
+      {homeDesign === 'daylight' && (
       <section className="arena-hero" aria-label="Маруська Арена">
         <div className="arena-hero__ornament" aria-hidden="true">
           <span className="arena-card arena-card--left">A<span>♥</span></span>
@@ -87,7 +87,7 @@ export function HomeScreen() {
         <span className="quick-play__hint">Подберём стол по вашей ставке</span>
       </button>
 
-      {homeDesign === 'premium' && (
+      {homeDesign === 'daylight' && (
         <>
       <button type="button" className="friends-play" onClick={() => push('friends')}>
         <span className="friends-play__icon"><Icon name="users" size={22} /></span>
