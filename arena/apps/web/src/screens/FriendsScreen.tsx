@@ -121,7 +121,9 @@ function FriendsTab() {
                     <PeopleAvatar user={f} />
                     <span className="people-row__text">
                       <strong>{f.name}</strong>
-                      <span className={`people-row__sub people-row__sub--${f.presence}`}>{f.username ? `@${f.username} · ` : ''}{f.presence === 'offline' && f.lastSeenAt ? lastSeenText(f.lastSeenAt) : PRESENCE_TEXT[f.presence]}</span>
+                      {/* Status on its own line so «был(а) сегодня в 05:12» is never cut by a long @username. */}
+                      {f.username && <span className="people-row__sub">@{f.username}</span>}
+                      <span className={`people-row__sub people-row__sub--${f.presence}`}>{f.presence === 'offline' && f.lastSeenAt ? lastSeenText(f.lastSeenAt) : PRESENCE_TEXT[f.presence]}</span>
                     </span>
                   </button>
                   <button type="button" className="people-row__btn" aria-label={`Удалить ${f.name} из друзей`} onClick={() => setRemoving(f)}>
