@@ -144,6 +144,8 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
     await app.register(fastifyStatic, {
       root: webDist,
       wildcard: false,
+      // Our own Cache-Control below; otherwise the plugin overwrites it with «max-age=0».
+      cacheControl: false,
       setHeaders: (res, path) => {
         // Hashed bundles are immutable; index.html must always be fresh. Card faces, backs, the
         // table, smiles and sounds keep for a week (re-checked after that), so a card moving from
