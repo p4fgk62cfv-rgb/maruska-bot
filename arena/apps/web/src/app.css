@@ -366,7 +366,7 @@ select.app-input { appearance: none; }
 }
 
 .felt { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; }
-.felt__deck, .felt__discard { position: absolute; top: 14%; width: calc(var(--card-w) * 0.9); height: calc(var(--card-w) * 1.28); }
+.felt__deck, .felt__discard { position: absolute; top: 14%; width: calc(var(--card-w) * 0.9); height: calc(var(--card-w) * 1.44); }
 .felt__deck { left: calc(var(--card-w) * -0.42); }
 .felt__discard { right: calc(var(--card-w) * -0.5); }
 .felt__trump { position: absolute; left: calc(var(--card-w) * 0.34); top: calc(var(--card-w) * 0.2); rotate: 90deg; z-index: 0; }
@@ -385,7 +385,7 @@ select.app-input { appearance: none; }
 .felt__discard-pile { position: absolute; inset: 0; }
 .felt__discard-pile > span { position: absolute; left: 0; top: 0; }
 .felt__pairs { display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 16px 20px; max-width: calc(var(--card-w) * 3 + 70px); padding: 0 8px; }
-.pair { position: relative; width: var(--card-w); height: calc(var(--card-w) * 1.42 + 18px); }
+.pair { position: relative; width: var(--card-w); height: calc(var(--card-w) * 1.6 + 18px); }
 .pair > span { position: absolute; left: 0; top: 0; }
 .pair__attack { rotate: -3deg; }
 .pair__defense { transform: translate(14px, 16px) rotate(7deg); }
@@ -492,7 +492,7 @@ select.app-input { appearance: none; }
 
 /* Stage 4: seats on an arc, transfer slot, turn cue, win/lose effects */
 .transfer-slot {
-  width: var(--card-w); height: calc(var(--card-w) * 1.42); border-radius: 10px;
+  width: var(--card-w); height: calc(var(--card-w) * 1.6); border-radius: 10px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   border: 2.5px dashed rgba(255, 255, 255, 0.6); color: rgba(255, 255, 255, 0.7); font-size: 11px; font-weight: 800;
 }

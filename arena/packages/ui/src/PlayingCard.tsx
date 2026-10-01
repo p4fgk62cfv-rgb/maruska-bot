@@ -19,7 +19,9 @@ const ART_BACKS = new Set(['tartan', 'celtic', 'emerald', 'amethyst', 'frost', '
 /** Card face from the unified 52-card sprite. Sprite order is 2…A, suits S/H/D/C. */
 const SPRITE_RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'] as const;
 const SPRITE_SUITS = ['S', 'H', 'D', 'C'] as const;
-const DECK_URL = '/cards/deck.svg';
+const DECK_URL = '/cards/deck.webp';
+/** Height / width of every card (faces and backs) — the illustrated deck is a tall one. */
+export const CARD_RATIO = 1.6;
 
 /**
  * Downloads and decodes the deck sprite (and the chosen back) once, keeping them in memory so
@@ -40,7 +42,7 @@ export function preloadCardArt(back?: string): void {
 }
 
 export const PlayingCard = memo(function PlayingCard({ card, faceDown, selected, playable, trump, width = 64, back = 'classic', onClick }: PlayingCardProps) {
-  const style = { width, height: width * 1.42, fontSize: width * 0.28 };
+  const style = { width, height: width * CARD_RATIO, fontSize: width * 0.28 };
   if (faceDown || !card) {
     return ART_BACKS.has(back) ? (
       <span className="ui-card ui-card--back ui-card--back-art" style={style} aria-label="Карта рубашкой вверх">
