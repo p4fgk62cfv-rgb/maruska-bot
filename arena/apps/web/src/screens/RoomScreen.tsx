@@ -112,7 +112,7 @@ export function RoomScreen({ room }: { room: RoomDto }) {
           )
         }
         me={
-          <button type="button" className="table-dock__avatar" onClick={() => setSmiles(true)} aria-label="Отправить смайлик">
+          <button type="button" className="table-dock__avatar" onClick={() => setSmiles((v) => !v)} data-emoji-toggle aria-label="Отправить смайлик" aria-expanded={smiles}>
             <SeatTile
               seat={{ id: me.id, name: me.name, photoUrl: me.photoUrl, frame: me.equipped.frame, crown: me.equipped.crown }}
               size={56}

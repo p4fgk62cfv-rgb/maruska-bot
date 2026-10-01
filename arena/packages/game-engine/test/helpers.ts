@@ -34,7 +34,8 @@ export function arranged(opts: {
   state.players.forEach((p, i) => (p.hand = [...(opts.hands[i] ?? [])]));
   state.deck = opts.deck ? [...opts.deck, opts.trump] : [];
   state.trump = { suit: opts.trump.slice(-1) as GameState['trump']['suit'], card: opts.trump };
-  state.discard = [];
+  // Past the first «бито» the discard holds something; before it the first-bout cap (5) applies.
+  state.discard = opts.firstBout ? [] : ['6S'];
   const attacker = opts.attacker ?? 'p1';
   const seat = state.players.find((p) => p.id === attacker)!.seat;
   state.attacker = attacker;

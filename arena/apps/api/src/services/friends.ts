@@ -252,10 +252,15 @@ export class FriendService {
       hub.send(friendId, { type: 'ROOM_INVITE', from, room: this.deps.realtime.rooms.dto(room), invite: code });
       return;
     }
-    const link = roomDeepLink(this.deps.config.BOT_USERNAME, this.deps.config.MINI_APP_SHORT_NAME || null, room.id, code);
+    // The button opens the arena by its own address (a web_app button in the private chat with the
+    // bot), so the invite works whatever the Mini App in BotFather points to.
+    const base = publicUrl(this.deps.config);
+    const startapp = `game_${room.id}_${code}`;
     await this.deps.outbox.enqueue(friendId, 'room_invite', {
       text: `🃏 <b>${escapeHtml(from.name)}</b> зовёт вас сыграть в дурака. Ставка ${room.settings.stake}.`,
-      button: { text: '🎮 Играть', url: link },
+      button: base
+        ? { text: '🎮 Играть', webApp: `${base}/?start=${startapp}` }
+        : { text: '🎮 Играть', url: roomDeepLink(this.deps.config.BOT_USERNAME, this.deps.config.MINI_APP_SHORT_NAME || null, room.id, code) },
     });
   }
 
@@ -263,6 +268,12 @@ export class FriendService {
     const user = await this.db.user.findUniqueOrThrow({ where: { id: userId }, include: { profile: true } });
     return publicUser(user, user.profile!);
   }
+}
+
+/** https://… address of this server, without a trailing slash; empty when unknown. */
+export function publicUrl(config: { PUBLIC_URL: string; RAILWAY_PUBLIC_DOMAIN: string }): string {
+  const raw = config.PUBLIC_URL || (config.RAILWAY_PUBLIC_DOMAIN ? `https://${config.RAILWAY_PUBLIC_DOMAIN}` : '');
+  return raw.replace(/\/+$/, '');
 }
 
 function escapeHtml(text: string): string {

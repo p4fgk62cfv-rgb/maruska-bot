@@ -383,7 +383,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
             ))
         }
         me={
-          <button type="button" className="table-dock__avatar" onClick={() => setSheet('emoji')} aria-label="Отправить смайлик">
+          <button type="button" className="table-dock__avatar" onClick={() => setSheet((s) => (s === 'emoji' ? null : 'emoji'))} data-emoji-toggle aria-label="Отправить смайлик" aria-expanded={sheet === 'emoji'}>
             {mine && (
               <SeatTile
                 seat={seatOf(me.id)}

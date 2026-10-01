@@ -4,8 +4,8 @@ import type { Prisma } from '../generated/prisma/client.js';
 
 export interface BotMessage {
   text: string;
-  /** Inline button that opens a link (the Mini App deep link). */
-  button?: { text: string; url: string };
+  /** Inline button: a link (the Mini App deep link) or the Mini App itself by its address (private chats only). */
+  button?: { text: string; url: string } | { text: string; webApp: string };
 }
 
 export type SendOutcome = 'ok' | 'blocked' | 'retry';
@@ -24,7 +24,19 @@ export class TelegramBot {
       text: message.text,
       parse_mode: 'HTML',
       disable_web_page_preview: true,
-      ...(message.button ? { reply_markup: { inline_keyboard: [[{ text: message.button.text, url: message.button.url }]] } } : {}),
+      ...(message.button
+        ? {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  'webApp' in message.button
+                    ? { text: message.button.text, web_app: { url: message.button.webApp } }
+                    : { text: message.button.text, url: message.button.url },
+                ],
+              ],
+            },
+          }
+        : {}),
     };
     try {
       const res = await this.http(`${this.apiUrl}/bot${this.token}/sendMessage`, {

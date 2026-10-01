@@ -1,4 +1,5 @@
-import { Button, EmptyState, NavigationBar, type NavItem } from '@arena/ui';
+import { Button, EmptyState, NavigationBar, preloadCardArt, type NavItem } from '@arena/ui';
+import { backOf } from './lib/cosmetics.js';
 import { lazy, Suspense, useState } from 'react';
 import { NavigationProvider, useNav, type Page, type Tab } from './navigation.js';
 import { HomeScreen } from './screens/HomeScreen.js';
@@ -80,6 +81,12 @@ function PageScreen({ page }: { page: Page }) {
 function Shell() {
   const { tab, stack, setTab } = useNav();
   const { room, game, result, requestCount } = useRealtime();
+  const { state: session } = useSession();
+  const myBack = session.status === 'ready' ? session.me.equipped.cardBack : null;
+  // Card pictures are fetched and decoded in the lobby, well before the first deal.
+  useEffect(() => {
+    if (session.status === 'ready') preloadCardArt(backOf(myBack));
+  }, [session.status, myBack]);
   const items = TABS.map((t) => (t.key === 'home' ? { ...t, badge: requestCount } : t));
   const page = stack[stack.length - 1];
   const passwordPrompt = useDeepLink();
@@ -119,7 +126,10 @@ function useDeepLink() {
   const toast = useToast();
   const handled = useRef(false);
   const [needPassword, setNeedPassword] = useState<string | null>(null);
-  const startParam = state.status === 'ready' ? state.startParam : null;
+  // From a t.me link Telegram passes start_param; an invite button from the bot opens the arena
+  // directly with ?start=… in the address instead.
+  const startParam =
+    state.status === 'ready' ? state.startParam ?? new URLSearchParams(window.location.search).get('start') : null;
 
   const { push } = useNav();
   useEffect(() => {
