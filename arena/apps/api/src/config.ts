@@ -15,6 +15,8 @@ const schema = z.object({
   BOT_USERNAME: z.string().default(''),
   /** Short name of the Mini App in BotFather (/newapp). Empty = the bot's main Mini App. */
   MINI_APP_SHORT_NAME: z.string().default(''),
+  /** Telegram IDs (comma separated) of the game's owners: in-app announcements and gifts. Same list as the bot's OWNER_IDS. */
+  OWNER_IDS: z.string().default(''),
   /** Public https address of the arena; invites from the bot open it directly. Railway's own domain when unset. */
   PUBLIC_URL: z.string().default(''),
   RAILWAY_PUBLIC_DOMAIN: z.string().default(''),

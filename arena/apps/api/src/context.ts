@@ -38,9 +38,14 @@ export function createContext(config: Config, db: Db): BaseContext {
     config,
     db,
     ledger,
-    users: new UserService(db, ledger, config.SIGNUP_BONUS_CREDITS, items),
+    users: new UserService(db, ledger, config.SIGNUP_BONUS_CREDITS, items, ownerIds(config.OWNER_IDS)),
     wallets: new WalletService(db, ledger),
     items,
     moderation: new ModerationService(db, ledger),
   };
+}
+
+/** «111, 222;333» → {111n, 222n, 333n}; anything that is not a number is ignored. */
+export function ownerIds(raw: string): Set<bigint> {
+  return new Set(raw.split(/[,;\s]+/).filter((x) => /^-?\d+$/.test(x)).map((x) => BigInt(x)));
 }

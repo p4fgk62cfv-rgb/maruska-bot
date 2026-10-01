@@ -13,7 +13,8 @@ export type Page =
   | 'servers'
   | 'leaderboard'
   | 'news'
-  | 'settings';
+  | 'settings'
+  | 'owner';
 
 interface Navigation {
   tab: Tab;

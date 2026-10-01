@@ -99,7 +99,7 @@ export function HomeScreen() {
         </>
       )}
       <div className="tile-grid">
-        {TILES.map((tile) => {
+        {(me.owner ? [...TILES, { icon: 'crown', title: 'Управление', page: 'owner' } as Tile] : TILES).map((tile) => {
           const count = counter(tile);
           return (
             <button key={tile.title} type="button" className="grid-tile" onClick={() => (tile.action === 'share' ? share() : tile.page && push(tile.page))}>

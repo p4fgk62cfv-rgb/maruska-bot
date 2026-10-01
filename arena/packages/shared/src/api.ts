@@ -52,6 +52,8 @@ export interface MeDto extends PublicUserDto {
   equipped: EquippedDto;
   bonus: BonusDto;
   dailyCredits: { available: boolean; availableAt: string | null };
+  /** Game owner (OWNER_IDS): sees «Управление» — the announcement and gifts. */
+  owner: boolean;
 }
 
 export type LeaderboardBy = 'rating' | 'winnings' | 'wins';
@@ -227,3 +229,21 @@ export const REPORT_REASON_RU: Record<ReportReasonDto, string> = {
   insult: 'Оскорбительные имя или фото',
   other: 'Другое',
 };
+
+/** Pop-up on the start screen for everyone who opens the game; `id` changes with every new text. */
+export interface AnnouncementDto {
+  id: string;
+  title: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface OwnerPlayerDto {
+  id: string;
+  telegramId: string;
+  name: string;
+  username: string | null;
+  photoUrl: string | null;
+  credits: number;
+  coins: number;
+}

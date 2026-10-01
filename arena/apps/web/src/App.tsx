@@ -7,6 +7,7 @@ import { SessionProvider, useSession } from './session.js';
 import { ToastProvider, useToast } from './toast.js';
 import { RealtimeProvider, useRealtime } from './realtime.js';
 import { RoomScreen } from './screens/RoomScreen.js';
+import { AnnouncementPopup } from './screens/AnnouncementPopup.js';
 import { ApiError, api } from './lib/api.js';
 import { parseRoomStartParam, type MyRoomDto } from '@arena/shared';
 import { BottomSheet } from '@arena/ui';
@@ -27,6 +28,7 @@ const SoonScreen = lazy(() => import('./screens/SoonScreen.js'));
 const LeaderboardScreen = lazy(() => import('./screens/LeaderboardScreen.js'));
 const CreateGameScreen = lazy(() => import('./screens/CreateGameScreen.js'));
 const SettingsScreen = lazy(() => import('./screens/SettingsScreen.js'));
+const OwnerScreen = lazy(() => import('./screens/OwnerScreen.js'));
 // The table is the most important screen: it loads as soon as the app starts, not on first use.
 const gameModule = import('./screens/game/GameScreen.js');
 const GameScreen = lazy(() => gameModule.then((m) => ({ default: m.GameScreen })));
@@ -75,6 +77,8 @@ function PageScreen({ page }: { page: Page }) {
       return <SoonScreen title="Новости" text="Здесь будут обновления Арены, турниры и события." />;
     case 'settings':
       return <SettingsScreen />;
+    case 'owner':
+      return <OwnerScreen />;
   }
 }
 
@@ -111,6 +115,7 @@ function Shell() {
     <>
       {passwordPrompt}
       <InviteSheet />
+      <AnnouncementPopup />
       <main className="app-screen" key={page ?? tab}>
         <Suspense fallback={<ScreenFallback />}>{page ? <PageScreen page={page} /> : <TabScreen tab={tab} />}</Suspense>
       </main>

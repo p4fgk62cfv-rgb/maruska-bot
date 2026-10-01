@@ -626,3 +626,15 @@ model UserAvatar {
   @@map("user_avatars")
   @@schema("arena")
 }
+
+/// Pop-up for everyone on the start screen, set by the game owner from the app. One row at most.
+model Announcement {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  title     String   @db.VarChar(80)
+  text      String   @db.VarChar(1500)
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("announcements")
+  @@schema("arena")
+}

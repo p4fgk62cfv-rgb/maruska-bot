@@ -26,7 +26,12 @@ export class UserService {
     private readonly ledger: Ledger,
     private readonly signupBonus: number,
     private readonly items: { equipped(userId: string): Promise<EquippedDto> },
+    private readonly owners: ReadonlySet<bigint> = new Set(),
   ) {}
+
+  isOwnerTelegram(telegramId: bigint): boolean {
+    return this.owners.has(telegramId);
+  }
 
   /** Creates or refreshes the account from verified Telegram data. Safe to call on every login. */
   async upsertFromTelegram(tg: TelegramUser): Promise<User> {
@@ -117,6 +122,7 @@ export class UserService {
         availableAt: bonusReady && bonusReady > now ? new Date(bonusReady).toISOString() : null,
         streak: bonusReset ? 0 : profile.bonusStreak,
       },
+      owner: this.owners.has(user.telegramId),
       dailyCredits: {
         available: wallet.credits < DAILY_CREDITS.belowBalance && (!dailyReady || dailyReady <= now),
         availableAt: dailyReady && dailyReady > now ? new Date(dailyReady).toISOString() : null,
