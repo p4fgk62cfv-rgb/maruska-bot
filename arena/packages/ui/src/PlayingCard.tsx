@@ -21,7 +21,7 @@ const SPRITE_RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K
 const SPRITE_SUITS = ['S', 'H', 'D', 'C'] as const;
 const DECK_URL = '/cards/deck.webp';
 /** Height / width of every card (faces and backs) — the illustrated deck is a tall one. */
-export const CARD_RATIO = 1.6;
+export const CARD_RATIO = 1.4;
 
 /**
  * Downloads and decodes the deck sprite (and the chosen back) once, keeping them in memory so
