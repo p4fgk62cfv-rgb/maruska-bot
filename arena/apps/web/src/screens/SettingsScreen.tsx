@@ -150,6 +150,21 @@ export default function SettingsScreen() {
         />
       </section>
 
+      <section className="settings__section">
+        <h3 className="script-title">Дизайн игры</h3>
+        <Tabs<'classic' | 'daylight'>
+          value={s.homeDesign}
+          onChange={(homeDesign) => settings.set({ homeDesign })}
+          items={[
+            { value: 'classic', label: 'старый' },
+            { value: 'daylight', label: 'светлый' },
+          ]}
+        />
+        <p className="app-muted" style={{ textAlign: 'center', marginTop: 8 }}>
+          Старый дизайн используется по умолчанию. Светлый стиль меняет оформление всех экранов. Выбор сохраняется на устройстве.
+        </p>
+      </section>
+
       <div className="settings__checks">
         {flag('sound', 'Включить звуки', (on) => {
           unlockAudio();

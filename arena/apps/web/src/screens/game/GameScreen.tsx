@@ -103,6 +103,15 @@ export function GameScreen({ game }: { game: LiveGame }) {
 
   // Last five seconds of my turn: a tick every second and a nudge.
   const secondsLeft = left !== null ? Math.ceil(left / 1000) : null;
+  const timeoutNotified = useRef<string | null>(null);
+  useEffect(() => {
+    if (view.currentPlayer !== me.id || secondsLeft !== 0 || !view.turnDeadline) return;
+    const turnKey = `${view.gameId}:${view.turnDeadline}`;
+    if (timeoutNotified.current === turnKey) return;
+    timeoutNotified.current = turnKey;
+    play('timeout');
+    haptic.warning();
+  }, [secondsLeft, view.currentPlayer, view.turnDeadline, view.gameId, me.id]);
   useEffect(() => {
     if (view.currentPlayer !== me.id || secondsLeft === null || secondsLeft > 5 || secondsLeft === 0) return;
     play('tick');
@@ -121,8 +130,11 @@ export function GameScreen({ game }: { game: LiveGame }) {
       if (!reply.ok) {
         play('error');
         toast(reply.message, 'error');
+      } else {
+        if (msg.type === 'SEND_EMOJI') play('emoji');
+        else if (msg.type === 'PASS') play('pass');
+        setSelected([]);
       }
-      else setSelected([]);
       return reply.ok;
     },
     [socket, toast],
@@ -168,7 +180,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
    * Optimistic move: the card lands on the felt at once instead of waiting a round trip for the
    * server. The server's state replaces it (same spot, so nothing jumps); a refusal sends it back.
    */
-  const playNow = async (msg: Parameters<typeof send>[0], cards: CardId[], target: number | null): Promise<boolean> => {
+  const playNow = async (msg: Parameters<typeof send>[0], cards: CardId[], target: number | null, sound: Parameters<typeof play>[0] = 'card'): Promise<boolean> => {
     const from: Record<string, DOMRect> = {};
     for (const c of cards) {
       const el = rootRef.current?.querySelector<HTMLElement>(`.hand [data-card="${c}"]`);
@@ -176,7 +188,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
     }
     setPending({ cards, target, from, version: view.version });
     // My own card sounds the moment it lands, not when the server confirms it.
-    play('card');
+    play(sound);
     const ok = await send(msg);
     if (!ok) {
       // Remember where the cards were shown so they glide back into the hand.
@@ -202,7 +214,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
     return pair && !pair.defense && beats(card, pair.attack, view.trump.suit) ? playNow(msg, [card], target) : send(msg);
   };
 
-  const transfer = (card: CardId) => playNow({ type: 'TRANSFER', gameId, card }, [card], null);
+  const transfer = (card: CardId) => playNow({ type: 'TRANSFER', gameId, card }, [card], null, 'transfer');
 
   const doubleTap = (card: CardId) => {
     if (isDefender && undefended.length === 1) void defend(card, undefended[0]!);
