@@ -58,7 +58,7 @@ export class FriendService {
     const order = { in_game: 0, online: 1, offline: 2 } as const;
     return rows
       .filter((r) => r.friend.profile)
-      .map((r) => ({ ...publicUser(r.friend, r.friend.profile!), presence: presence[r.friendId] ?? 'offline' }))
+      .map((r) => ({ ...publicUser(r.friend, r.friend.profile!), presence: presence[r.friendId] ?? 'offline', lastSeenAt: r.friend.lastSeenAt.toISOString() }))
       .sort((a, b) => order[a.presence] - order[b.presence] || a.name.localeCompare(b.name, 'ru'));
   }
 

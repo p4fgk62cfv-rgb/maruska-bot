@@ -86,8 +86,14 @@ export class Realtime {
     }
   }
 
+  /** «Был в сети»: friends see when someone was last here — refreshed on entry and on leaving. */
+  private touch(userId: string): void {
+    this.deps.db.user.update({ where: { id: userId }, data: { lastSeenAt: new Date() } }).catch(() => undefined);
+  }
+
   async connect(userId: string, socket: WebSocket): Promise<Client> {
     const client = this.hub.attach(userId, socket);
+    this.touch(userId);
     const room = await this.rooms.connected(userId);
     if (room) {
       const game = room.gameId ? this.games.get(room.gameId) : undefined;
@@ -98,7 +104,10 @@ export class Realtime {
   }
 
   async disconnect(client: Client): Promise<void> {
-    if (this.hub.detach(client)) await this.rooms.disconnected(client.userId);
+    if (this.hub.detach(client)) {
+      this.touch(client.userId);
+      await this.rooms.disconnected(client.userId);
+    }
   }
 
   async message(client: Client, raw: string): Promise<void> {

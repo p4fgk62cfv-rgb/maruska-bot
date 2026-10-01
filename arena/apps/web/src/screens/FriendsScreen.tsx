@@ -45,6 +45,24 @@ export default function FriendsScreen() {
 
 const PRESENCE_TEXT = { online: 'в сети', in_game: 'в игре', offline: 'не в сети' } as const;
 
+const TIME = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' });
+const DATE = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' });
+const DATE_YEAR = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+
+/** Like Telegram: «был(а) сегодня в 20:41», «вчера в 9:05», «28 сентября в 21:10», «только что». */
+export function lastSeenText(iso: string, now = new Date()): string {
+  const at = new Date(iso);
+  const minutes = Math.floor((now.getTime() - at.getTime()) / 60_000);
+  if (minutes < 2) return 'был(а) только что';
+  if (minutes < 60) return `был(а) ${minutes} мин назад`;
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((day(now) - day(at)) / 86_400_000);
+  const time = TIME.format(at);
+  if (days === 0) return `был(а) сегодня в ${time}`;
+  if (days === 1) return `был(а) вчера в ${time}`;
+  return `был(а) ${(at.getFullYear() === now.getFullYear() ? DATE : DATE_YEAR).format(at)} в ${time}`;
+}
+
 /** Square portrait with the league mark in the corner, as at the table. */
 function PeopleAvatar({ user }: { user: { id: string; name: string; photoUrl: string | null; rating: number } }) {
   const badge = ratingBadge(user.rating);
@@ -103,7 +121,7 @@ function FriendsTab() {
                     <PeopleAvatar user={f} />
                     <span className="people-row__text">
                       <strong>{f.name}</strong>
-                      <span className={`people-row__sub people-row__sub--${f.presence}`}>{f.username ? `@${f.username} · ` : ''}{PRESENCE_TEXT[f.presence]}</span>
+                      <span className={`people-row__sub people-row__sub--${f.presence}`}>{f.username ? `@${f.username} · ` : ''}{f.presence === 'offline' && f.lastSeenAt ? lastSeenText(f.lastSeenAt) : PRESENCE_TEXT[f.presence]}</span>
                     </span>
                   </button>
                   <button type="button" className="people-row__btn" aria-label={`Удалить ${f.name} из друзей`} onClick={() => setRemoving(f)}>

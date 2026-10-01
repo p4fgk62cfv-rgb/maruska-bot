@@ -140,6 +140,8 @@ export type Presence = 'online' | 'in_game' | 'offline';
 
 export interface FriendDto extends PublicUserDto {
   presence: Presence;
+  /** When they were last in the game (ISO); shown as «был(а) в 20:41» while offline. */
+  lastSeenAt: string;
 }
 
 export interface FriendRequestDto {
