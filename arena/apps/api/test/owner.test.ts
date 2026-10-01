@@ -26,6 +26,8 @@ describe.skipIf(!url)('«Управление»: announcement and gifts, owner o
   });
 
   afterAll(async () => {
+    // The welcome gift lives in the shared test database: leave it to the other suites' defaults.
+    await db.setting.deleteMany({ where: { key: 'welcome_gift' } });
     await db.announcement.deleteMany({});
     await handle?.app.close();
     await db?.$disconnect();
@@ -91,4 +93,35 @@ describe.skipIf(!url)('«Управление»: announcement and gifts, owner o
     const after = (await call(owner, 'GET', `/owner/players/${player.id}/items`)).json() as { key: string; owned: boolean }[];
     expect(after.find((i) => i.key === 'back_wolf')?.owned).toBe(false);
   });
+
+  it('welcome gift for newcomers: toggle and amounts, new accounts only', async () => {
+    const owner = await login('Стас', OWNER_TG);
+    expect((await call(owner, 'PUT', '/owner/welcome', { enabled: true, credits: 1_000_000, coins: 500 })).statusCode).toBe(200);
+    const fresh = await login('Новичок');
+    expect((await call(fresh, 'GET', '/me')).json().wallet).toMatchObject({ credits: 1_000_000, coins: 500 });
+    // Logging in again does not pay twice.
+    const again = await login('Новичок', Number((await db.user.findUniqueOrThrow({ where: { id: fresh.id } })).telegramId));
+    expect((await call(again, 'GET', '/me')).json().wallet).toMatchObject({ credits: 1_000_000, coins: 500 });
+
+    await call(owner, 'PUT', '/owner/welcome', { enabled: false, credits: 1_000_000, coins: 500 });
+    const late = await login('Опоздавший');
+    expect((await call(late, 'GET', '/me')).json().wallet).toMatchObject({ credits: 0, coins: 0 });
+    expect((await call(late, 'PUT', '/owner/welcome', { enabled: true, credits: 1, coins: 1 })).statusCode).toBe(403);
+    await call(owner, 'PUT', '/owner/welcome', { enabled: true, credits: 1_450, coins: 0 });
+  });
+
+  it('gives everyone short of credits a gift once per batch', async () => {
+    const owner = await login('Стас', OWNER_TG);
+    await call(owner, 'PUT', '/owner/welcome', { enabled: true, credits: 1_450, coins: 0 });
+    const poor = await login('Бедняк');
+    const rich = await login('Богач');
+    await call(owner, 'POST', `/owner/players/${rich.id}/wallet`, { currency: 'CREDITS', amount: 10_000, requestId: `rich-${RUN}` });
+    const batch = { below: 2_000, credits: 1_000_000, coins: 500, requestId: `grant-${RUN}` };
+    const res = (await call(owner, 'POST', '/owner/grant', batch)).json();
+    expect(res.players).toBeGreaterThanOrEqual(1);
+    await call(owner, 'POST', '/owner/grant', batch); // a double tap pays nobody twice
+    expect((await call(poor, 'GET', '/me')).json().wallet).toMatchObject({ credits: 1_001_450, coins: 500 });
+    expect((await call(rich, 'GET', '/me')).json().wallet).toMatchObject({ credits: 11_450, coins: 0 });
+    expect((await call(poor, 'POST', '/owner/grant', { ...batch, requestId: `x-${RUN}-hack` })).statusCode).toBe(403);
+  }, 180_000);
 });

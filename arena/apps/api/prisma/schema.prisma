@@ -638,3 +638,13 @@ model Announcement {
   @@map("announcements")
   @@schema("arena")
 }
+
+/// Small owner-editable game settings (key → JSON), e.g. the welcome gift for newcomers.
+model Setting {
+  key       String   @id @db.VarChar(64)
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+  @@schema("arena")
+}

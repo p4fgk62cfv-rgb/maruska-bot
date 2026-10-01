@@ -373,6 +373,19 @@ export async function adminRoutes(app: FastifyInstance, ctx: Context, check: (r:
   });
 
   // ── rules and economy, read-only (changed through Railway variables) ──
+  /** The same one-off gift as in «Управление», for the bot's panel. */
+  app.post('/internal/admin/grant', opts, async (request) => {
+    const body = z
+      .object({
+        below: z.number().int().min(1).max(1_000_000_000),
+        credits: z.number().int().min(0).max(1_000_000_000),
+        coins: z.number().int().min(0).max(1_000_000_000),
+        requestId: z.string().min(8).max(64),
+      })
+      .parse(request.body);
+    return ctx.welcome.grantToPoor({ below: body.below, credits: body.credits, coins: body.coins, batch: body.requestId, by: 'panel' });
+  });
+
   app.get('/internal/admin/settings', opts, async () => ({
     signupBonus: ctx.config.SIGNUP_BONUS_CREDITS,
     rakePercent: ctx.config.RAKE_PERCENT,

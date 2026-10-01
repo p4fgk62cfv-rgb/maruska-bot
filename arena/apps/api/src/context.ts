@@ -1,3 +1,4 @@
+import { WelcomeService } from './services/welcome.js';
 import type { Config } from './config.js';
 import type { Db } from './db.js';
 import type { Realtime } from './realtime/realtime.js';
@@ -20,6 +21,7 @@ export interface BaseContext {
   wallets: WalletService;
   items: ItemService;
   moderation: ModerationService;
+  welcome: WelcomeService;
 }
 
 /** Explicit dependency container: routes receive what they need, nothing is a hidden global. */
@@ -34,11 +36,13 @@ export interface Context extends BaseContext {
 export function createContext(config: Config, db: Db): BaseContext {
   const ledger = new Ledger(db);
   const items = new ItemService(db, ledger);
+  const welcome = new WelcomeService(db, ledger, { enabled: true, credits: config.SIGNUP_BONUS_CREDITS, coins: config.SIGNUP_BONUS_COINS });
   return {
     config,
     db,
     ledger,
-    users: new UserService(db, ledger, config.SIGNUP_BONUS_CREDITS, items, ownerIds(config.OWNER_IDS)),
+    users: new UserService(db, ledger, welcome, items, ownerIds(config.OWNER_IDS)),
+    welcome,
     wallets: new WalletService(db, ledger),
     items,
     moderation: new ModerationService(db, ledger),

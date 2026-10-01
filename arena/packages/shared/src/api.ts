@@ -249,3 +249,10 @@ export interface OwnerPlayerDto {
   credits: number;
   coins: number;
 }
+
+/** Gift for every newcomer, set by the owner in «Управление». */
+export interface WelcomeGiftDto {
+  enabled: boolean;
+  credits: number;
+  coins: number;
+}

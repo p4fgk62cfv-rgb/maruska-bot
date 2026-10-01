@@ -1,5 +1,5 @@
-import type { AnnouncementDto, OwnerPlayerDto } from '@arena/shared';
-import { Avatar, Balance, BottomSheet, Button, Panel, Tabs } from '@arena/ui';
+import type { AnnouncementDto, OwnerPlayerDto, WelcomeGiftDto } from '@arena/shared';
+import { Avatar, Balance, BottomSheet, Button, Panel, Tabs, Toggle } from '@arena/ui';
 import { useEffect, useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
 import { useQuery } from '../lib/useQuery.js';
@@ -7,7 +7,7 @@ import { useSession } from '../session.js';
 import { useToast } from '../toast.js';
 import { ScreenHeader } from './common.js';
 
-type Section = 'announcement' | 'gifts';
+type Section = 'announcement' | 'gifts' | 'bonus';
 interface GiftItem { key: string; name: string; kind: string; owned: boolean }
 
 const KIND_RU: Record<string, string> = { CARD_BACK: 'Рубашка', FRAME: 'Рамка', CROWN: 'Корона', EFFECT: 'Эффект', EMOJI: 'Смайлы', TABLE: 'Стол', AVATAR: 'Аватар' };
@@ -19,8 +19,8 @@ export default function OwnerScreen() {
   return (
     <div className="app-stack owner">
       <ScreenHeader title="Управление" subtitle="Видно только владельцу" />
-      <Tabs<Section> value={section} onChange={setSection} items={[{ value: 'announcement', label: 'Объявление' }, { value: 'gifts', label: 'Подарки' }]} />
-      {section === 'announcement' ? <AnnouncementEditor /> : <Gifts />}
+      <Tabs<Section> value={section} onChange={setSection} items={[{ value: 'announcement', label: 'Объявление' }, { value: 'gifts', label: 'Подарки' }, { value: 'bonus', label: 'Бонусы' }]} />
+      {section === 'announcement' ? <AnnouncementEditor /> : section === 'gifts' ? <Gifts /> : <Bonuses />}
     </div>
   );
 }
@@ -188,5 +188,103 @@ function GiftSheet({ player, onDone }: { player: OwnerPlayerDto; onDone: () => v
         ))}
       </div>
     </div>
+  );
+}
+
+const num = (v: string) => Math.max(0, Math.round(Number(v.replace(/\s/g, '')) || 0));
+const fmt = (n: number) => n.toLocaleString('ru-RU');
+
+/** Welcome gift for newcomers (toggle + amounts) and a one-off gift to everyone short of credits. */
+function Bonuses() {
+  const toast = useToast();
+  const { refreshMe } = useSession();
+  const current = useQuery<WelcomeGiftDto>('/owner/welcome');
+  const [enabled, setEnabled] = useState(true);
+  const [credits, setCredits] = useState('');
+  const [coins, setCoins] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [below, setBelow] = useState('2000');
+  const [gCredits, setGCredits] = useState('1000000');
+  const [gCoins, setGCoins] = useState('500');
+  useEffect(() => {
+    if (current.data) {
+      setEnabled(current.data.enabled);
+      setCredits(String(current.data.credits));
+      setCoins(String(current.data.coins));
+    }
+  }, [current.data]);
+
+  const save = async (next: WelcomeGiftDto) => {
+    setBusy('welcome');
+    try {
+      await api('/owner/welcome', { method: 'PUT', body: next });
+      current.reload();
+      toast(next.enabled ? `Новички получат ${fmt(next.credits)} кредитов и ${fmt(next.coins)} монет` : 'Подарок новичкам выключен', 'success');
+    } catch (e) {
+      toast(errText(e), 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+  const grant = async () => {
+    const body = { below: num(below), credits: num(gCredits), coins: num(gCoins), requestId: crypto.randomUUID() };
+    if (!body.below || (!body.credits && !body.coins)) return toast('Укажите суммы', 'error');
+    if (!window.confirm(`Начислить ${fmt(body.credits)} кредитов и ${fmt(body.coins)} монет всем, у кого меньше ${fmt(body.below)} кредитов?`)) return;
+    setBusy('grant');
+    try {
+      const r = await api<{ players: number }>('/owner/grant', { method: 'POST', body });
+      toast(`Начислено игрокам: ${fmt(r.players)}`, 'success');
+      void refreshMe();
+    } catch (e) {
+      toast(errText(e), 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <>
+      <Panel className="owner-card">
+        <h3 className="owner-sub">Подарок новичкам</h3>
+        <p className="app-muted">Начисляется один раз, когда человек впервые заходит в игру.</p>
+        <Toggle
+          label={enabled ? 'Включён' : 'Выключен'}
+          checked={enabled}
+          onChange={(v) => {
+            setEnabled(v);
+            void save({ enabled: v, credits: num(credits), coins: num(coins) });
+          }}
+        />
+        <label className="owner-field">
+          <span>Кредиты</span>
+          <input inputMode="numeric" value={credits} onChange={(e) => setCredits(e.target.value)} />
+        </label>
+        <label className="owner-field">
+          <span>Монеты</span>
+          <input inputMode="numeric" value={coins} onChange={(e) => setCoins(e.target.value)} />
+        </label>
+        <Button block variant="gold" loading={busy === 'welcome'} onClick={() => void save({ enabled, credits: num(credits), coins: num(coins) })}>
+          Сохранить
+        </Button>
+      </Panel>
+      <Panel className="owner-card">
+        <h3 className="owner-sub">Раздать всем, у кого мало</h3>
+        <label className="owner-field">
+          <span>У кого меньше, кредитов</span>
+          <input inputMode="numeric" value={below} onChange={(e) => setBelow(e.target.value)} />
+        </label>
+        <label className="owner-field">
+          <span>Начислить кредитов</span>
+          <input inputMode="numeric" value={gCredits} onChange={(e) => setGCredits(e.target.value)} />
+        </label>
+        <label className="owner-field">
+          <span>Начислить монет</span>
+          <input inputMode="numeric" value={gCoins} onChange={(e) => setGCoins(e.target.value)} />
+        </label>
+        <Button block variant="gold" loading={busy === 'grant'} onClick={() => void grant()}>
+          Начислить
+        </Button>
+      </Panel>
+    </>
   );
 }

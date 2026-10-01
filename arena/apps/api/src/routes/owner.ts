@@ -1,4 +1,4 @@
-import type { AnnouncementDto, OwnerPlayerDto } from '@arena/shared';
+import type { AnnouncementDto, OwnerPlayerDto, WelcomeGiftDto } from '@arena/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireSession, sessionOf } from '../auth/plugin.js';
@@ -135,5 +135,36 @@ export async function ownerRoutes(app: FastifyInstance, ctx: Context): Promise<v
         update: {},
       });
     return { ok: true };
+  });
+
+  // ── welcome gift for newcomers, and a one-off gift to everyone short of credits ──
+  const welcomeBody = z.object({
+    enabled: z.boolean(),
+    credits: z.number().int().min(0).max(1_000_000_000),
+    coins: z.number().int().min(0).max(1_000_000_000),
+  });
+
+  app.get('/owner/welcome', auth, async (request): Promise<WelcomeGiftDto> => {
+    await owner(request);
+    return ctx.welcome.get();
+  });
+
+  app.put('/owner/welcome', auth, async (request): Promise<WelcomeGiftDto> => {
+    await owner(request);
+    return ctx.welcome.set(welcomeBody.parse(request.body));
+  });
+
+  app.post('/owner/grant', auth, async (request) => {
+    const me = await owner(request);
+    const body = z
+      .object({
+        below: z.number().int().min(1).max(1_000_000_000),
+        credits: z.number().int().min(0).max(1_000_000_000),
+        coins: z.number().int().min(0).max(1_000_000_000),
+        requestId: z.string().min(8).max(64),
+      })
+      .refine((b) => b.credits > 0 || b.coins > 0)
+      .parse(request.body);
+    return ctx.welcome.grantToPoor({ below: body.below, credits: body.credits, coins: body.coins, batch: body.requestId, by: me });
   });
 }

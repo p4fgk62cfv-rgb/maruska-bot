@@ -20,11 +20,14 @@ export function avatarUrl(user: Pick<User, 'id' | 'photoUrl'>, profile: Pick<Pro
   return profile.avatarVersion ? `/api/avatars/${user.id}?v=${profile.avatarVersion}` : user.photoUrl;
 }
 
+/** An account this young still gets the welcome gift (covers simultaneous first logins). */
+const NEW_ACCOUNT_MS = 10 * 60_000;
+
 export class UserService {
   constructor(
     private readonly db: Db,
     private readonly ledger: Ledger,
-    private readonly signupBonus: number,
+    private readonly welcome: { give(userId: string): Promise<void> },
     private readonly items: { equipped(userId: string): Promise<EquippedDto> },
     private readonly owners: ReadonlySet<bigint> = new Set(),
   ) {}
@@ -51,16 +54,10 @@ export class UserService {
       data: CURRENCIES.map((currency) => ({ userId: user.id, currency })),
       skipDuplicates: true,
     });
-    if (this.signupBonus > 0) {
-      await this.ledger.post({
-        userId: user.id,
-        currency: 'CREDITS',
-        amount: BigInt(this.signupBonus),
-        type: 'SIGNUP_BONUS',
-        source: 'signup',
-        idempotencyKey: `signup:${user.id}`,
-      });
-    }
+    // The welcome gift goes to brand-new accounts only, at the amounts set in «Управление».
+    // Every login in the first minutes calls it (it is idempotent), so simultaneous first logins
+    // all come back with the gift already on the balance.
+    if (Date.now() - user.createdAt.getTime() < NEW_ACCOUNT_MS) await this.welcome.give(user.id);
     return user;
   }
 

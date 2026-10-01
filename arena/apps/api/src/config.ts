@@ -28,6 +28,7 @@ const schema = z.object({
   /** Shared secret for bot → arena calls on /internal/*. */
   INTERNAL_API_SECRET: z.string().min(16).optional(),
   SIGNUP_BONUS_CREDITS: z.coerce.number().int().nonnegative().default(1_450),
+  SIGNUP_BONUS_COINS: z.coerce.number().int().nonnegative().default(0),
   /** Seconds tournament players have to press «Готов» before a no-show loss. */
   MATCH_READY_SECONDS: z.coerce.number().int().positive().default(90),
   /** Logins per minute from one IP (raise only for load tests from a single machine). */
