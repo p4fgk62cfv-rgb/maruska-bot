@@ -19,7 +19,8 @@ const ART_BACKS = new Set(['tartan', 'celtic', 'emerald', 'amethyst', 'frost', '
 /** Card face from the unified 52-card sprite. Sprite order is 2…A, suits S/H/D/C. */
 const SPRITE_RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'] as const;
 const SPRITE_SUITS = ['S', 'H', 'D', 'C'] as const;
-const DECK_URL = '/cards/deck.webp';
+// Bump ?v= whenever deck.webp changes: phones keep card art for a week.
+const DECK_URL = '/cards/deck.webp?v=3';
 /** Height / width of every card (faces and backs) — the illustrated deck is a tall one. */
 export const CARD_RATIO = 1.4;
 
