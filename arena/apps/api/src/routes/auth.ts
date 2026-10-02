@@ -11,7 +11,7 @@ import { signInitData, verifyInitData } from '../telegram/initData.js';
 const bodySchema = z.object({ initData: z.string().min(1).max(8192) });
 /** How long after expiry a session can still be renewed. */
 const REFRESH_GRACE_MS = 7 * 24 * 3600_000;
-const devSchema = z.object({ id: z.number().int().positive(), name: z.string().min(1).max(64) });
+const devSchema = z.object({ id: z.number().int().positive(), name: z.string().min(1).max(64), startParam: z.string().max(64).optional() });
 
 export async function authRoutes(app: FastifyInstance, ctx: Context): Promise<void> {
   const { config } = ctx;
@@ -22,6 +22,8 @@ export async function authRoutes(app: FastifyInstance, ctx: Context): Promise<vo
 
     const user = await ctx.users.upsertFromTelegram(verified.data.user);
     if (isBanned(user)) throw new AppError('BANNED');
+    // Opened by a friend's «ref_…» link: tie the newcomer to the inviter. Never blocks the login.
+    await ctx.referrals.attach(user, verified.data.startParam).catch(() => undefined);
 
     const expiresAt = Date.now() + config.SESSION_TTL_HOURS * 3600_000;
     const token = issueSession(
@@ -63,6 +65,7 @@ export async function authRoutes(app: FastifyInstance, ctx: Context): Promise<vo
         {
           auth_date: String(Math.floor(Date.now() / 1000)),
           user: JSON.stringify({ id: body.id, first_name: body.name, language_code: 'ru' }),
+          ...(body.startParam ? { start_param: body.startParam } : {}),
         },
         config.BOT_TOKEN,
       );

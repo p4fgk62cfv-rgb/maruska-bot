@@ -61,7 +61,9 @@ export type ServerMessage =
   | { type: 'FRIEND_FREE'; friend: PublicUserDto; presence: Presence }
   /** A friend calls you to their table; `invite` lets you in without the password. */
   | { type: 'ROOM_INVITE'; from: PublicUserDto; room: RoomDto; invite: string }
-  | { type: 'TOURNAMENT_MATCH'; tournamentId: string; title: string; round: number; roomId: string };
+  | { type: 'TOURNAMENT_MATCH'; tournamentId: string; title: string; round: number; roomId: string }
+  /** Coins for an invite: `invitee` — I came by `friend`'s link; otherwise `friend` came by mine. */
+  | { type: 'REFERRAL_REWARD'; friend: PublicUserDto; coins: number; invitee: boolean };
 
 export interface GameResultDto {
   kind: 'loser' | 'draw';

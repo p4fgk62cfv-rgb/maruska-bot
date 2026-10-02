@@ -8,7 +8,7 @@ import { RedisStore, type SnapshotStore } from '../src/realtime/store.js';
 import { seedCatalog } from '../src/services/catalog.js';
 import { signInitData } from '../src/telegram/initData.js';
 import { Bot } from './bots.js';
-import type { RoomSettings } from '@arena/shared';
+import { parseRoomStartParam, type RoomSettings } from '@arena/shared';
 
 const url = process.env.TEST_DATABASE_URL;
 const redisUrl = process.env.TEST_REDIS_URL;
@@ -501,12 +501,13 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     const roomId: string = created.room.id;
     const guesser = await player('Guesser', 10);
     for (let i = 0; i < 8; i++) {
-      expect((await api(guesser, 'POST', `/rooms/${roomId}/join`, { password: String(1000 + i) })).json().error).toBe('WRONG_PASSWORD');
+      const res = await api(guesser, 'POST', `/rooms/${roomId}/join`, { password: String(1000 + i) });
+      expect(res.json().error, res.body).toBe('WRONG_PASSWORD');
     }
     // Even the right PIN is refused now…
     expect((await api(guesser, 'POST', `/rooms/${roomId}/join`, { password: '4321' })).json().error).toBe('RATE_LIMITED');
     // …but a friend with the invite link gets in.
-    const invite = new URL(created.invite.link).searchParams.get('startapp')!.split('_')[2]!;
+    const invite = parseRoomStartParam(new URL(created.invite.link).searchParams.get('startapp'))!.invite!;
     const friend = await player('Friend', 10);
     expect((await api(friend, 'POST', `/rooms/${roomId}/join`, { invite })).statusCode).toBe(200);
   });

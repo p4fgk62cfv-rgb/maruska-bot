@@ -26,6 +26,8 @@ model User {
   isPremium    Boolean   @default(false) @map("is_premium")
   /// Bot opponent account (fills empty seats): never logs in, never in rankings or friend lists.
   isBot        Boolean   @default(false) @map("is_bot")
+  /// The player's invite code: t.me/<bot>/<app>?startapp=ref_<code>. Created on first use.
+  refCode      String?   @unique @map("ref_code") @db.VarChar(16)
   /// Moderation: bannedAt set + bannedUntil null = permanent ban (repeat offence).
   bannedAt     DateTime? @map("banned_at")
   bannedUntil  DateTime? @map("banned_until")
@@ -55,6 +57,8 @@ model User {
   reportsSent        PlayerReport[]    @relation("ReportFrom")
   reportsReceived    PlayerReport[]    @relation("ReportAbout")
   avatar             UserAvatar?
+  invitedBy          Referral?         @relation("ReferralInvitee")
+  invited            Referral[]        @relation("ReferralReferrer")
 
   @@map("users")
   @@schema("arena")
@@ -122,6 +126,8 @@ enum TransactionType {
   ADMIN
   /// Moderator clawback of credits/coins obtained by deliberate losing or paid transfers.
   MODERATION
+  /// Coins for inviting a friend (and for coming by an invite).
+  REFERRAL
 
   @@schema("arena")
 }
@@ -664,5 +670,23 @@ model Favorite {
 
   @@id([ownerId, targetId])
   @@map("favorites")
+  @@schema("arena")
+}
+
+/// Who invited whom. Both get coins once the newcomer finishes a first game with other people.
+model Referral {
+  inviteeId     String    @id @map("invitee_id") @db.Uuid
+  referrerId    String    @map("referrer_id") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at")
+  rewardedAt    DateTime? @map("rewarded_at")
+  inviteeCoins  Int       @default(0) @map("invitee_coins")
+  referrerCoins Int       @default(0) @map("referrer_coins")
+
+  invitee  User @relation("ReferralInvitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+  referrer User @relation("ReferralReferrer", fields: [referrerId], references: [id], onDelete: Cascade)
+
+  @@index([referrerId, createdAt])
+  @@index([referrerId, rewardedAt])
+  @@map("referrals")
   @@schema("arena")
 }

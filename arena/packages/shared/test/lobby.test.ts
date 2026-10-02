@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_FILTER, matchesFilter, type RoomDto } from '../src/index.js';
+import { EMPTY_FILTER, matchesFilter, type RoomDto, parseRoomStartParam, roomDeepLink } from '../src/index.js';
 
 const room = (patch: Partial<RoomDto['settings']> = {}): Pick<RoomDto, 'settings' | 'server'> => ({
   server: 'almaz',
@@ -20,5 +20,14 @@ describe('lobby filter', () => {
     expect(matchesFilter(room(), range)).toBe(true);
     expect(matchesFilter(room({ stake: 250_000 }), range)).toBe(false);
     expect(matchesFilter(room({ stake: 5_000 }), range)).toBe(false);
+  });
+});
+
+describe('room start parameter', () => {
+  it('reads the room and the invite code, which may contain «_» and «-» (base64url)', () => {
+    expect(parseRoomStartParam('game_AB12CD34')).toEqual({ roomId: 'AB12CD34', invite: null });
+    expect(parseRoomStartParam('game_AB12CD34_aB_c-9xYz_01')).toEqual({ roomId: 'AB12CD34', invite: 'aB_c-9xYz_01' });
+    expect(parseRoomStartParam(roomDeepLink('bot', 'app', 'AB12CD34', '_x_y_z-1234').split('startapp=')[1])).toEqual({ roomId: 'AB12CD34', invite: '_x_y_z-1234' });
+    expect(parseRoomStartParam('ref_abc')).toBeNull();
   });
 });

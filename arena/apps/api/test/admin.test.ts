@@ -102,6 +102,8 @@ describe.skipIf(!url)('admin panel API («🃏 Арена» in the bot)', () => 
     expect((await admin('POST', `/tournaments/${tid}/cancel`)).statusCode).toBe(404);
 
     const year = 2100 + (nextTg % 500);
+    // Earlier runs against the same database may have left a season in that year.
+    await db.season.deleteMany({ where: { startsAt: { gte: new Date(`${year}-01-01T00:00:00Z`), lt: new Date(`${year + 1}-01-01T00:00:00Z`) } } });
     const season = await admin('POST', '/seasons', { title: `Сезон ${year}`, startsAt: `${year}-01-01T00:00:00Z`, endsAt: `${year}-03-01T00:00:00Z` });
     expect(season.json().id).toBeTruthy();
     expect((await admin('POST', '/seasons', { title: 'Наложение', startsAt: `${year}-02-01T00:00:00Z`, endsAt: `${year}-04-01T00:00:00Z` })).statusCode).toBe(400);

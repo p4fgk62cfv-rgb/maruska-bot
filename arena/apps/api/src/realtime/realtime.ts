@@ -1,5 +1,5 @@
 import { clientMessageSchema } from '@arena/shared/schemas';
-import type { AppErrorCode, ClientMessage } from '@arena/shared';
+import type { AppErrorCode, ClientMessage, GameResultDto } from '@arena/shared';
 import type { FastifyBaseLogger } from 'fastify';
 import type { WebSocket } from 'ws';
 import type { Config } from '../config.js';
@@ -34,6 +34,8 @@ export class Realtime {
   private sweeper: NodeJS.Timeout | null = null;
   /** Requests by «user + request id»: the outcome of each, finished or still running. */
   private readonly presenceListeners = new Set<(userIds: string[]) => void>();
+  /** Settled games (casual and tournament): referral rewards and the like. */
+  readonly finishedListeners = new Set<(result: GameResultDto) => void>();
   private readonly replies = new Map<string, { at: number; done: Promise<AppErrorCode | null> }>();
   readonly hub = new Hub();
   readonly rooms: RoomManager;
@@ -50,7 +52,10 @@ export class Realtime {
       ledger: deps.ledger,
       settlement: this.settlement,
       log: deps.log,
-      onFinished: (roomId, result) => this.rooms.finished(roomId, result),
+      onFinished: (roomId, result) => {
+        this.rooms.finished(roomId, result);
+        if (result) for (const l of this.finishedListeners) l(result);
+      },
       onPresence: (ids) => this.emitPresence(ids),
       botLevel: () => deps.bots.level(),
     });

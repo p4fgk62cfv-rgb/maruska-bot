@@ -169,6 +169,25 @@ export async function ownerRoutes(app: FastifyInstance, ctx: Context): Promise<v
     return ctx.bots.setSettings(body);
   });
 
+  /** Referral program: on/off, coins for both sides, how many invites a day pay the inviter. */
+  app.get('/owner/referrals', auth, async (request) => {
+    await owner(request);
+    return ctx.referrals.settings();
+  });
+
+  app.put('/owner/referrals', auth, async (request) => {
+    await owner(request);
+    const body = z
+      .object({
+        enabled: z.boolean(),
+        inviteeCoins: z.number().int().min(0).max(1_000_000),
+        referrerCoins: z.number().int().min(0).max(1_000_000),
+        dailyLimit: z.number().int().min(1).max(1000),
+      })
+      .parse(request.body);
+    return ctx.referrals.setSettings(body);
+  });
+
   app.post('/owner/grant', auth, async (request) => {
     const me = await owner(request);
     const body = z

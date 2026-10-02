@@ -9,7 +9,7 @@ import { RealtimeProvider, useRealtime } from './realtime.js';
 import { RoomScreen } from './screens/RoomScreen.js';
 import { AnnouncementPopup } from './screens/AnnouncementPopup.js';
 import { ApiError, api } from './lib/api.js';
-import { parseRoomStartParam, type MyRoomDto } from '@arena/shared';
+import { parseRoomStartParam, type MyRoomDto, type ReferralInfoDto } from '@arena/shared';
 import { BottomSheet } from '@arena/ui';
 import { useEffect, useRef } from 'react';
 import { ScreenFallback } from './screens/common.js';
@@ -30,6 +30,7 @@ const LeaderboardScreen = lazy(() => import('./screens/LeaderboardScreen.js'));
 const CreateGameScreen = lazy(() => import('./screens/CreateGameScreen.js'));
 const SettingsScreen = lazy(() => import('./screens/SettingsScreen.js'));
 const OwnerScreen = lazy(() => import('./screens/OwnerScreen.js'));
+const InviteScreen = lazy(() => import('./screens/InviteScreen.js'));
 const PlayerScreen = lazy(() => import('./screens/player/PlayerScreen.js'));
 // The table is the most important screen: it loads as soon as the app starts, not on first use.
 const gameModule = import('./screens/game/GameScreen.js');
@@ -83,6 +84,8 @@ function PageScreen({ page }: { page: Page }) {
       return <OwnerScreen />;
     case 'player':
       return <PlayerScreen />;
+    case 'invite':
+      return <InviteScreen />;
   }
 }
 
@@ -145,6 +148,18 @@ function useDeepLink() {
     if (startParam === 'friends' && !handled.current) {
       handled.current = true;
       push('friends');
+      return;
+    }
+    if (startParam?.startsWith('ref_') && !handled.current) {
+      // Came by a friend's invite: tell the newcomer what the first game with people brings.
+      handled.current = true;
+      api<ReferralInfoDto>('/referrals')
+        .then((info) => {
+          if (info.invitedBy?.pending && info.invitedBy.coins > 0) {
+            toast(`${info.invitedBy.name} пригласил(а) вас в Арену! Сыграйте первую партию с живыми соперниками — получите ${info.invitedBy.coins} монет 🎁`, 'success');
+          }
+        })
+        .catch(() => undefined);
       return;
     }
     const link = parseRoomStartParam(startParam);

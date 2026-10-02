@@ -15,6 +15,7 @@ export type Page =
   | 'news'
   | 'settings'
   | 'owner'
+  | 'invite'
   | 'player';
 
 interface Navigation {

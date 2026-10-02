@@ -20,6 +20,8 @@ import { websocketRoutes } from './realtime/ws.js';
 import { RealtimePresence } from './services/presence.js';
 import { FriendService } from './services/friends.js';
 import { ProfileService } from './services/profiles.js';
+import { ReferralService } from './services/referrals.js';
+import { referralRoutes } from './routes/referrals.js';
 import { Outbox, TelegramBot } from './services/notifier.js';
 import { playerRoutes } from './routes/players.js';
 import { ownerRoutes } from './routes/owner.js';
@@ -68,7 +70,11 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   const friends = new FriendService({ ...base, outbox, presence, realtime });
   const tournaments = new TournamentService({ ...base, outbox, realtime, log: app.log });
   const profiles = new ProfileService({ db: base.db, items: base.items, presence, friends: () => friends });
-  const ctx: Context = { ...base, realtime, presence, outbox, friends, profiles, tournaments };
+  const referrals = new ReferralService({ ...base, outbox, realtime, log: app.log });
+  realtime.finishedListeners.add((result) => {
+    referrals.onGame(result).catch((error: unknown) => app.log.error({ err: error }, 'referral reward failed'));
+  });
+  const ctx: Context = { ...base, realtime, presence, outbox, friends, profiles, tournaments, referrals };
   await base.moderation.loadBans();
   useBanList(base.moderation);
   await base.bots.ensurePool();
@@ -138,6 +144,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
       await roomRoutes(api, ctx);
       await friendRoutes(api, ctx);
       await playerRoutes(api, ctx);
+      await referralRoutes(api, ctx);
       await ownerRoutes(api, ctx);
       await tournamentRoutes(api, ctx);
       await internalRoutes(api, ctx);

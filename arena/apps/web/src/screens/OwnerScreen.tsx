@@ -1,4 +1,4 @@
-import type { AnnouncementDto, BotSettingsDto, OwnerPlayerDto, WelcomeGiftDto } from '@arena/shared';
+import type { AnnouncementDto, BotSettingsDto, OwnerPlayerDto, ReferralSettingsDto, WelcomeGiftDto } from '@arena/shared';
 import { Avatar, Balance, BottomSheet, Button, Panel, Tabs, Toggle } from '@arena/ui';
 import { useEffect, useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
@@ -267,6 +267,7 @@ function Bonuses() {
           Сохранить
         </Button>
       </Panel>
+      <Referrals />
       <Panel className="owner-card">
         <h3 className="owner-sub">Раздать всем, у кого мало</h3>
         <label className="owner-field">
@@ -289,6 +290,72 @@ function Bonuses() {
   );
 }
 
+/** Referral program: coins for the inviter and the newcomer after the newcomer's first game with people. */
+function Referrals() {
+  const toast = useToast();
+  const current = useQuery<ReferralSettingsDto>('/owner/referrals');
+  const [enabled, setEnabled] = useState(true);
+  const [invitee, setInvitee] = useState('');
+  const [referrer, setReferrer] = useState('');
+  const [limit, setLimit] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (current.data) {
+      setEnabled(current.data.enabled);
+      setInvitee(String(current.data.inviteeCoins));
+      setReferrer(String(current.data.referrerCoins));
+      setLimit(String(current.data.dailyLimit));
+    }
+  }, [current.data]);
+
+  const save = async (next: ReferralSettingsDto) => {
+    if (next.dailyLimit < 1) return toast('Лимит в день — от 1', 'error');
+    setBusy(true);
+    try {
+      await api('/owner/referrals', { method: 'PUT', body: next });
+      current.reload();
+      toast(next.enabled ? `Приглашения: ${fmt(next.referrerCoins)} пригласившему, ${fmt(next.inviteeCoins)} новичку` : 'Награды за приглашения выключены', 'success');
+    } catch (e) {
+      toast(errText(e), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const draft = (on = enabled): ReferralSettingsDto => ({ enabled: on, inviteeCoins: num(invitee), referrerCoins: num(referrer), dailyLimit: num(limit) });
+
+  return (
+    <Panel className="owner-card">
+      <h3 className="owner-sub">Приглашения друзей</h3>
+      <p className="app-muted">
+        Монеты получают оба, когда приглашённый сыграет первую партию с живыми соперниками (партии с ботами не считаются). Лимит защищает от
+        накрутки фейковыми аккаунтами: сверх него новичок награду получает, а пригласивший — нет.
+      </p>
+      <Toggle
+        label={enabled ? 'Включены' : 'Выключены'}
+        checked={enabled}
+        onChange={(v) => {
+          setEnabled(v);
+          void save(draft(v));
+        }}
+      />
+      <label className="owner-field">
+        <span>Монет пригласившему</span>
+        <input inputMode="numeric" value={referrer} onChange={(e) => setReferrer(e.target.value)} />
+      </label>
+      <label className="owner-field">
+        <span>Монет новичку</span>
+        <input inputMode="numeric" value={invitee} onChange={(e) => setInvitee(e.target.value)} />
+      </label>
+      <label className="owner-field">
+        <span>Оплачиваемых приглашений в сутки</span>
+        <input inputMode="numeric" value={limit} onChange={(e) => setLimit(e.target.value)} />
+      </label>
+      <Button block variant="gold" loading={busy} onClick={() => void save(draft())}>
+        Сохранить
+      </Button>
+    </Panel>
+  );
+}
 
 const LEVELS: { value: BotSettingsDto['level']; label: string; hint: string }[] = [
   { value: 'easy', label: 'Лёгкий', hint: 'Часто ошибается — новичкам приятно выигрывать' },
