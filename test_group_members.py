@@ -30,7 +30,7 @@ def expect(label, got, want):
 async def with_database():
     from database.database import engine, init_db, session_scope
     from database.models import GroupMember
-    from database.repository import ensure_member, list_known_chats, mark_member_left, members_page, remember_chat, save_message
+    from database.repository import ensure_member, list_known_chats, mark_chat_gone, mark_member_left, members_page, remember_chat, save_message
     from sqlalchemy import delete
 
     await init_db()
@@ -75,8 +75,16 @@ async def with_database():
     expect("новая группа известна панели", NEW in known, True)
     expect("название группы", known.get(NEW, {}).get("title"), "Пример теста")
 
-    from database.models import GroupSettings
+    # Мару удалили из группы — группа пропадает из панели; вернули — снова видна.
+    await mark_chat_gone(NEW)
+    await mark_chat_gone(NEW)
+    expect("удалённая группа скрыта", NEW in {c["chat_id"] for c in await list_known_chats()}, False)
+    await remember_chat(NEW, "Пример теста")
+    expect("вернули — видна", NEW in {c["chat_id"] for c in await list_known_chats()}, True)
+
+    from database.models import GoneChat, GroupSettings
     async with session_scope() as session:
+        await session.execute(delete(GoneChat).where(GoneChat.chat_id == NEW))
         await session.execute(delete(GroupMember).where(GroupMember.chat_id.in_([CHAT, NEW])))
         await session.execute(delete(GroupSettings).where(GroupSettings.chat_id == NEW))
         await session.commit()

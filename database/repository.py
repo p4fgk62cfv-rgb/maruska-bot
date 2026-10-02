@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy import (
     select,
+    delete,
     desc,
     func,
     update,
@@ -1844,8 +1845,10 @@ async def get_blocked_ids(chat_id: int) -> set[int]:
 
 async def list_known_chats() -> list[dict]:
     """
-    Все группы, где бот кого-то видел.
+    Все группы, где бот кого-то видел — кроме тех, откуда Мару удалили.
     """
+    from database.models import GoneChat
+
     async with session_scope() as session:
         result = await session.execute(
             select(
@@ -1853,6 +1856,7 @@ async def list_known_chats() -> list[dict]:
                 func.count(GroupMember.id),
                 func.max(GroupMember.updated_at),
             )
+            .where(GroupMember.chat_id.not_in(select(GoneChat.chat_id)))
             .group_by(GroupMember.chat_id)
             .order_by(desc(func.max(GroupMember.updated_at)))
         )
@@ -3094,8 +3098,21 @@ async def set_member_vip(chat_id: int, telegram_id: int, vip: bool) -> bool:
         return (result.rowcount or 0) > 0
 
 
+async def mark_chat_gone(chat_id: int, gone: bool = True) -> None:
+    """Мару удалили из группы (или группы нет) — убрать её из панели; вернули — показать снова."""
+    from database.models import GoneChat
+
+    async with session_scope() as session:
+        if gone:
+            await session.execute(pg_insert(GoneChat).values(chat_id=chat_id, gone_at=utcnow()).on_conflict_do_nothing())
+        else:
+            await session.execute(delete(GoneChat).where(GoneChat.chat_id == chat_id))
+        await session.commit()
+
+
 async def remember_chat(chat_id: int, title: str | None) -> None:
     """Группа, куда добавили Мару: название — для списка групп в панели."""
+    await mark_chat_gone(chat_id, False)
     async with session_scope() as session:
         item = (await session.execute(select(GroupSettings).where(GroupSettings.chat_id == chat_id))).scalar_one_or_none()
         if item is None:

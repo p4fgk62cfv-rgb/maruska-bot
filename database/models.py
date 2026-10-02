@@ -1348,3 +1348,16 @@ class FishingCatch(Base):
     location: Mapped[str] = mapped_column(String(20))
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class GoneChat(Base):
+    """
+    Группа, где Мары больше нет: её удалили или группу удалили. Такие группы
+    не показываются в панели; если Мару вернут — запись снимается.
+    """
+
+    __tablename__ = "gone_chats"
+
+    chat_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+
+    gone_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

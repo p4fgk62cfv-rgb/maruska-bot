@@ -263,6 +263,15 @@ async def bot_added(event: ChatMemberUpdated):
     if event.chat.type not in ("group", "supergroup"):
         return
     now = event.new_chat_member.status
+    if now in ("left", "kicked"):
+        # Мару удалили — группа пропадает из панели (вернут — появится снова)
+        from database.repository import mark_chat_gone
+
+        try:
+            await mark_chat_gone(event.chat.id)
+        except Exception as error:
+            logger.warning("BOT REMOVED: %s", error)
+        return
     if now not in ("member", "administrator"):
         return
 
