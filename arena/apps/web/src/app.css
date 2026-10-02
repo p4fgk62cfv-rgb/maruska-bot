@@ -1520,3 +1520,14 @@ button.seat-tile--free { padding: 0; border: 0; background: transparent; color: 
 .choice-dialog__buttons .choice-dialog__main { font-weight: 700; }
 .choice-dialog__buttons button:active { background: rgba(0, 0, 0, 0.06); }
 @keyframes choice-in { from { opacity: 0; } }
+
+/* PIN entry: a dialog at the top of the screen, never under the keyboard. */
+.pin__input--button { min-width: 76px; text-align: left; cursor: pointer; }
+.pin-dialog { position: fixed; inset: 0; z-index: 70; display: flex; justify-content: center; align-items: flex-start; padding: calc(var(--tg-safe-top, 0px) + 12vh) 16px 16px; background: rgba(0, 0, 0, 0.45); }
+.pin-dialog__box { width: min(320px, 100%); display: flex; flex-direction: column; gap: 10px; padding: 18px 16px 14px; border-radius: 18px; background: var(--paper, #f6f1e7); color: var(--ink, #1d1d1f); box-shadow: 0 14px 40px rgba(0, 0, 0, 0.4); }
+.pin-dialog__title { font-size: 17px; text-align: center; }
+.pin-dialog__input { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 2px solid #d9a441; border-radius: 12px; background: #fff; color: #1d1d1f; font: inherit; font-size: 30px; font-weight: 800; letter-spacing: 0.3em; text-align: center; }
+.pin-dialog__input:focus { outline: none; box-shadow: 0 0 0 3px rgba(217, 164, 65, 0.35); }
+.pin-dialog__hint { font-size: 12.5px; line-height: 1.35; color: #6b6458; text-align: center; }
+.pin-dialog__ok { padding: 11px; border: 0; border-radius: 12px; background: linear-gradient(#ffd56b, #e5a531); color: #3a2506; font: inherit; font-size: 17px; font-weight: 800; cursor: pointer; }
+.pin-dialog__ok:disabled { opacity: 0.5; }

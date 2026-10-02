@@ -46,6 +46,7 @@ export default function CreateGameScreen() {
     return { ...saved, stake: affordable.includes(saved.stake as never) ? saved.stake : affordable[affordable.length - 1]! };
   });
   const [password, setPassword] = useState(randomPin);
+  const [editingPin, setEditingPin] = useState(false);
   const [busy, setBusy] = useState(false);
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
   const maxPlayers = draft.deckSize === 24 ? 4 : 6;
@@ -165,18 +166,29 @@ export default function CreateGameScreen() {
 
       <div className="create-foot">
         <label className={`pin${draft.isPrivate ? ' pin--on' : ''}`}>
-          <input type="checkbox" checked={draft.isPrivate} onChange={(e) => set('isPrivate', e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={draft.isPrivate}
+            onChange={(e) => {
+              set('isPrivate', e.target.checked);
+              if (e.target.checked) setEditingPin(true);
+            }}
+          />
           <span className="pin__box" aria-hidden="true" />
           <span className="pin__label">Пароль:</span>
           {draft.isPrivate ? (
-            <input
-              className="pin__input"
-              inputMode="numeric"
-              maxLength={32}
-              value={password}
-              aria-label="Пароль"
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            // Typing happens in a dialog at the top: down here the keyboard would cover the field.
+            <button
+              type="button"
+              className="pin__input pin__input--button"
+              aria-label="Изменить пароль"
+              onClick={(e) => {
+                e.preventDefault();
+                setEditingPin(true);
+              }}
+            >
+              {password || '····'}
+            </button>
           ) : (
             <span className="pin__off">нет</span>
           )}
@@ -185,6 +197,41 @@ export default function CreateGameScreen() {
           Создать
         </Button>
       </div>
+      {editingPin && <PinDialog value={password} onDone={(v) => (setPassword(v), setEditingPin(false))} />}
+    </div>
+  );
+}
+
+/** PIN entry near the top of the screen, above the phone keyboard, with large digits. */
+function PinDialog({ value, onDone }: { value: string; onDone: (value: string) => void }) {
+  const [draft, setDraft] = useState(value);
+  const done = () => onDone(draft.trim() || value);
+  return (
+    <div className="pin-dialog" role="dialog" aria-modal="true" aria-label="Пароль стола" onClick={done}>
+      <form
+        className="pin-dialog__box"
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => {
+          e.preventDefault();
+          done();
+        }}
+      >
+        <strong className="pin-dialog__title">Пароль стола</strong>
+        <input
+          className="pin-dialog__input"
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={32}
+          value={draft}
+          autoFocus
+          onFocus={(e) => e.currentTarget.select()}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        <span className="pin-dialog__hint">Его нужно будет ввести тем, кого вы зовёте за стол (или отправьте им ссылку — она пускает без пароля).</span>
+        <button type="submit" className="pin-dialog__ok" disabled={!draft.trim()}>
+          Готово
+        </button>
+      </form>
     </div>
   );
 }
