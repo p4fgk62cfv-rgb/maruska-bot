@@ -104,7 +104,7 @@ async def track_join(chat_id: int, users) -> list:
     """
     import audit
     from features.automod import remember_join
-    from database.repository import mark_member_left
+    from database.repository import ensure_member
 
     people = [
         user for user in users
@@ -125,7 +125,8 @@ async def track_join(chat_id: int, users) -> list:
                 username=user.username,
                 first_name=user.first_name,
             )
-            await mark_member_left(chat_id, user.id, False)
+            # Сразу в список участников — не дожидаясь первого сообщения
+            await ensure_member(chat_id, user.id, user.first_name or user.username)
         except Exception as error:
             logger.warning("JOIN SAVE: %s", error)
 

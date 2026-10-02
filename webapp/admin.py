@@ -432,7 +432,19 @@ async def chat_admin_ids(bot, chat_ids: list[int]) -> set[int]:
             admins = await bot.get_chat_administrators(chat_id)
             ids = {m.user.id for m in admins if not m.user.is_bot}
         except Exception:
+            admins = []
             ids = set()
+
+        # Админов Telegram отдаёт всегда — пусть они будут в списке, даже если молчат
+        from database.repository import ensure_member
+
+        for m in admins:
+            if m.user.is_bot:
+                continue
+            try:
+                await ensure_member(chat_id, m.user.id, m.user.first_name or m.user.username)
+            except Exception:
+                pass
 
         _admins_cache[chat_id] = (time.monotonic(), ids)
         result |= ids
@@ -461,7 +473,30 @@ async def api_users(request: web.Request):
     page = await members_page(chat_ids, query=query, flt=flt, sort=sort,
                               admin_ids=admin_ids, limit=40, offset=offset)
 
+    # Сколько людей в группах на самом деле: ботам Telegram не отдаёт список всех,
+    # только число — панель показывает «известно N из M».
+    page["chat_total"] = await chat_member_total(request.app["bot"], chat_ids)
+
     return web.json_response(page)
+
+
+_count_cache: dict[int, tuple[float, int]] = {}
+
+
+async def chat_member_total(bot, chat_ids: list[int]) -> int | None:
+    total = 0
+    for chat_id in chat_ids:
+        cached = _count_cache.get(chat_id)
+        if cached and time.monotonic() - cached[0] < 300:
+            total += cached[1]
+            continue
+        try:
+            count = await bot.get_chat_member_count(chat_id)
+        except Exception:
+            return None
+        _count_cache[chat_id] = (time.monotonic(), count)
+        total += count
+    return total
 
 
 async def api_user(request: web.Request):

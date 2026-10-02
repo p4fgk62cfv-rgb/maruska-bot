@@ -7,6 +7,7 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import IntegrityError
 
 from database.database import session_scope, utcnow
 
@@ -3093,6 +3094,41 @@ async def set_member_vip(chat_id: int, telegram_id: int, vip: bool) -> bool:
         return (result.rowcount or 0) > 0
 
 
+async def ensure_member(chat_id: int, telegram_id: int, display_name: str | None = None) -> bool:
+    """
+    Человек в группе, даже если ещё ничего не писал: зашёл по ссылке или он админ.
+    Создаёт запись участника, если её нет; вернувшемуся снимает отметку «вышел».
+    Возвращает True, если запись создана.
+    """
+    async with session_scope() as session:
+        member = (
+            await session.execute(
+                select(GroupMember).where(GroupMember.chat_id == chat_id, GroupMember.telegram_id == telegram_id)
+            )
+        ).scalar_one_or_none()
+
+        if member is None:
+            session.add(GroupMember(chat_id=chat_id, telegram_id=telegram_id, display_name=display_name, messages_count=0))
+            try:
+                await session.commit()
+            except IntegrityError:
+                # Тот же человек пришёл параллельно (событие входа и сообщение) — запись уже есть
+                await session.rollback()
+                return False
+            return True
+
+        changed = False
+        if member.left_at is not None:
+            member.left_at = None
+            changed = True
+        if display_name and not member.display_name:
+            member.display_name = display_name
+            changed = True
+        if changed:
+            await session.commit()
+        return False
+
+
 async def mark_member_left(chat_id: int, telegram_id: int, left: bool) -> None:
     async with session_scope() as session:
         await session.execute(
@@ -3242,7 +3278,9 @@ async def members_page(
         item["vip"] = item["vip"] or bool(row.vip)
         item["left"] = item["left"] and row.left_at is not None
 
-        if row.updated_at and (item["last_seen"] is None or row.updated_at > item["last_seen"]):
+        # Запись есть, но человек ещё ничего не делал в группе: «был в сети» не знаем
+        active = (row.messages_count or 0) > 0 or (row.actions_count or 0) > 0
+        if active and row.updated_at and (item["last_seen"] is None or row.updated_at > item["last_seen"]):
             item["last_seen"] = row.updated_at
             item["name"] = row.display_name or item["name"]
 
