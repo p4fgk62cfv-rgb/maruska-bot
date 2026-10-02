@@ -81,7 +81,8 @@ export class Realtime {
    * seconds: wait until it hands the lease over (it does so when it stops), then load.
    */
   async start(): Promise<void> {
-    const deadline = Date.now() + HANDOVER_MAX_MS;
+    const began = Date.now();
+    const deadline = began + HANDOVER_MAX_MS;
     while (!(await this.deps.store.acquireLease(this.instance, LEASE_TTL_MS))) {
       if (Date.now() > deadline) {
         this.deps.log.warn('previous server did not hand over the games in time; taking over');
@@ -98,6 +99,7 @@ export class Realtime {
     this.leaseTimer.unref();
     await this.recover();
     this.markReady();
+    this.deps.log.info({ waitedMs: Date.now() - began, rooms: this.rooms.list().length, games: this.games.count() }, 'took over the tables');
   }
 
   /**
@@ -315,7 +317,10 @@ export class Realtime {
     if (this.leaseTimer) clearInterval(this.leaseTimer);
     this.rooms.shutdown();
     await this.games.shutdown();
-    if (!this.crashOnShutdown) await this.deps.store.releaseLease(this.instance).catch(() => undefined);
+    if (!this.crashOnShutdown) {
+      await this.deps.store.releaseLease(this.instance).catch(() => undefined);
+      this.deps.log.info('handed the tables over to the next server');
+    }
     this.hub.closeAll();
     await this.deps.store.close();
   }
