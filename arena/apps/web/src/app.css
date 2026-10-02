@@ -1564,3 +1564,4 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 .install-hint__steps { margin: 0; padding: 4px 16px 12px 34px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .install-hint__steps svg { vertical-align: -3px; }
 .install-hint--compact { width: auto; margin: 0 2px; }
+.home-shortcut__img { flex: none; border-radius: 10px; }

@@ -12,6 +12,8 @@ export function isStandalone(): boolean {
   return window.matchMedia?.('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
 }
 
+export const isAndroid = /android/i.test(navigator.userAgent);
+
 export const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 /** «Android · Chrome», «iPhone · Safari» — shown by the bot before the sign-in is confirmed. */
@@ -84,14 +86,14 @@ if (!inTelegram) {
 }
 
 /** What install help to show: a real «Установить» button, the iPhone steps, or nothing. */
-export function useInstall(): { mode: 'prompt' | 'ios' | null; install: () => Promise<void> } {
+export function useInstall(): { mode: 'prompt' | 'ios' | 'android' | null; install: () => Promise<void> } {
   const [, tick] = useState(0);
   useEffect(() => {
     const l = () => tick((n) => n + 1);
     listeners.add(l);
     return () => void listeners.delete(l);
   }, []);
-  const mode = inTelegram || isStandalone() ? null : deferred ? 'prompt' : isIOS ? 'ios' : null;
+  const mode = inTelegram || isStandalone() ? null : deferred ? 'prompt' : isIOS ? 'ios' : isAndroid ? 'android' : null;
   return {
     mode,
     install: async () => {

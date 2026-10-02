@@ -26,11 +26,18 @@ export function InstallHint({ compact = false }: { compact?: boolean }) {
       <button type="button" className="install-hint__head" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
         <img src="/icons/icon-192.png" alt="" width={36} height={36} />
         <span>
-          <strong>Установить на iPhone</strong>
-          <small>{open ? 'Два шага в Safari' : 'Значок «Арена» на экране — нажмите, покажу как'}</small>
+          <strong>{mode === 'ios' ? 'Установить на iPhone' : 'Установить на телефон'}</strong>
+          <small>{open ? 'Два шага в браузере' : 'Значок «Арена» на экране — нажмите, покажу как'}</small>
         </span>
       </button>
-      {open && (
+      {open && mode === 'android' && (
+        <ol className="install-hint__steps">
+          <li>Откройте меню браузера ⋮ (вверху справа)</li>
+          <li>Выберите «Установить приложение» или «Добавить на главный экран»</li>
+          <li>Откройте Арену значком на экране</li>
+        </ol>
+      )}
+      {open && mode === 'ios' && (
         <ol className="install-hint__steps">
           <li>
             Внизу Safari нажмите «Поделиться» <Icon name="share" size={18} />
