@@ -12,6 +12,8 @@ export type AppErrorCode =
   | 'INSUFFICIENT_FUNDS'
   | 'DUPLICATE_REQUEST'
   | 'ROOM_FULL'
+  | 'SEAT_TAKEN'
+  | 'SERVER_RESTARTING'
   | 'ROOM_CLOSED'
   | 'GAME_ALREADY_STARTED'
   | 'WRONG_PASSWORD'
@@ -45,6 +47,8 @@ export const ERROR_TEXT_RU: Record<AppErrorCode, string> = {
   INSUFFICIENT_FUNDS: 'Недостаточно средств.',
   DUPLICATE_REQUEST: 'Запрос уже обработан.',
   ROOM_FULL: 'Комната заполнена.',
+  SEAT_TAKEN: 'Это место уже заняли.',
+  SERVER_RESTARTING: 'Сервер перезапускается для обновления. Через несколько секунд всё заработает.',
   ROOM_CLOSED: 'Комната закрыта.',
   GAME_ALREADY_STARTED: 'Игра уже началась.',
   WRONG_PASSWORD: 'Неверный пароль.',

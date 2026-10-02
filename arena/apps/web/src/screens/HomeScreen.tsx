@@ -4,17 +4,17 @@ import { useState } from 'react';
 import { ringOf } from '../lib/cosmetics.js';
 import { useSettings } from '../lib/settings.js';
 import { ApiError, api } from '../lib/api.js';
-import { haptic, tg } from '../lib/telegram.js';
+import { haptic } from '../lib/telegram.js';
 import { useNav, type Page } from '../navigation.js';
 import { useRealtime } from '../realtime.js';
 import { useMe, useSession } from '../session.js';
 import { useToast } from '../toast.js';
+import { InstallHint } from './InstallHint.js';
 
 interface Tile {
   icon: IconName;
   title: string;
   page?: Page;
-  action?: 'share';
 }
 
 const TILES: Tile[] = [
@@ -25,7 +25,7 @@ const TILES: Tile[] = [
   { icon: 'crown', title: 'Доска почёта', page: 'leaderboard' },
   { icon: 'star', title: 'Достижения', page: 'achievements' },
   { icon: 'settings', title: 'Настройки', page: 'settings' },
-  { icon: 'share', title: 'Поделиться', action: 'share' },
+  { icon: 'share', title: 'Пригласить', page: 'invite' },
   { icon: 'book', title: 'Правила', page: 'rules' },
   { icon: 'server', title: 'Серверы', page: 'servers' },
 ];
@@ -45,17 +45,6 @@ export function HomeScreen() {
       .then(enterRoom)
       .catch((e: unknown) => toast(e instanceof ApiError ? e.message : 'Ошибка', 'error'))
       .finally(() => setFinding(false));
-  };
-
-  const share = () => {
-    api<{ link: string }>('/app-link')
-      .then(({ link }) => {
-        const text = 'Го в дурака! Подкидной, переводной, турниры — прямо в Telegram 🃏';
-        const url = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
-        if (tg) tg.openTelegramLink(url);
-        else void navigator.clipboard?.writeText(link).then(() => toast('Ссылка скопирована', 'success'));
-      })
-      .catch((e: unknown) => toast(e instanceof ApiError ? e.message : 'Ошибка', 'error'));
   };
 
   const counter = (tile: Tile): string | number | null => {
@@ -87,6 +76,8 @@ export function HomeScreen() {
         <span className="quick-play__hint">Подберём стол по вашей ставке</span>
       </button>
 
+      <InstallHint compact />
+
       {homeDesign === 'daylight' && (
         <>
       <button type="button" className="friends-play" onClick={() => push('friends')}>
@@ -102,7 +93,7 @@ export function HomeScreen() {
         {(me.owner ? [...TILES, { icon: 'crown', title: 'Управление', page: 'owner' } as Tile] : TILES).map((tile) => {
           const count = counter(tile);
           return (
-            <button key={tile.title} type="button" className="grid-tile" onClick={() => (tile.action === 'share' ? share() : tile.page && push(tile.page))}>
+            <button key={tile.title} type="button" className="grid-tile" onClick={() => tile.page && push(tile.page)}>
               <span className="grid-tile__icon">
                 <Icon name={tile.icon} size={36} />
                 {count !== null && <span className={`grid-tile__count${typeof count === 'number' ? ' grid-tile__count--alert' : ''}`}>{count}</span>}

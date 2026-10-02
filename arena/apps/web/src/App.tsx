@@ -9,10 +9,11 @@ import { RealtimeProvider, useRealtime } from './realtime.js';
 import { RoomScreen } from './screens/RoomScreen.js';
 import { AnnouncementPopup } from './screens/AnnouncementPopup.js';
 import { ApiError, api } from './lib/api.js';
-import { parseRoomStartParam, type MyRoomDto } from '@arena/shared';
+import { parseRoomStartParam, type MyRoomDto, type ReferralInfoDto } from '@arena/shared';
 import { BottomSheet } from '@arena/ui';
 import { useEffect, useRef } from 'react';
 import { ScreenFallback } from './screens/common.js';
+import { AppLogin } from './screens/AppLogin.js';
 import { ConnectionBanner } from './screens/ConnectionBanner.js';
 
 // Home ships in the main bundle; everything else loads on first visit.
@@ -30,6 +31,7 @@ const LeaderboardScreen = lazy(() => import('./screens/LeaderboardScreen.js'));
 const CreateGameScreen = lazy(() => import('./screens/CreateGameScreen.js'));
 const SettingsScreen = lazy(() => import('./screens/SettingsScreen.js'));
 const OwnerScreen = lazy(() => import('./screens/OwnerScreen.js'));
+const InviteScreen = lazy(() => import('./screens/InviteScreen.js'));
 const PlayerScreen = lazy(() => import('./screens/player/PlayerScreen.js'));
 // The table is the most important screen: it loads as soon as the app starts, not on first use.
 const gameModule = import('./screens/game/GameScreen.js');
@@ -83,6 +85,8 @@ function PageScreen({ page }: { page: Page }) {
       return <OwnerScreen />;
     case 'player':
       return <PlayerScreen />;
+    case 'invite':
+      return <InviteScreen />;
   }
 }
 
@@ -145,6 +149,18 @@ function useDeepLink() {
     if (startParam === 'friends' && !handled.current) {
       handled.current = true;
       push('friends');
+      return;
+    }
+    if (startParam?.startsWith('ref_') && !handled.current) {
+      // Came by a friend's invite: tell the newcomer what the first game with people brings.
+      handled.current = true;
+      api<ReferralInfoDto>('/referrals')
+        .then((info) => {
+          if (info.invitedBy?.pending && info.invitedBy.coins > 0) {
+            toast(`${info.invitedBy.name} пригласил(а) вас в Арену! Сыграйте первую партию с живыми соперниками — получите ${info.invitedBy.coins} монет 🎁`, 'success');
+          }
+        })
+        .catch(() => undefined);
       return;
     }
     const link = parseRoomStartParam(startParam);
@@ -214,13 +230,13 @@ function PasswordPrompt({ roomId, onDone }: { roomId: string; onDone: () => void
   );
 }
 
-function DevLogin() {
+/** Outside Telegram: sign in by confirming in the bot (the installed app «Арена»). */
+function SignedOut() {
   const { devLogin } = useSession();
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
   const login = (id: number, name: string) => {
     setBusy(true);
-    devLogin(id, name).catch(() => setFailed(true)).finally(() => setBusy(false));
+    devLogin(id, name).catch(() => undefined).finally(() => setBusy(false));
   };
   // Development only: ?dev=3 signs in as «Игрок 3» — handy for testing tables of up to six.
   const auto = import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('dev')) : 0;
@@ -229,28 +245,23 @@ function DevLogin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auto]);
   return (
-    <div className="app-center">
-      <EmptyState
-        icon="lock"
-        title="Откройте игру из Telegram"
-        text={failed ? 'Локальный вход выключен на сервере (DEV_AUTH).' : 'Арена работает внутри бота Маруська. Для разработки можно войти тестовым игроком.'}
-        action={
-          import.meta.env.DEV ? (
-            <div className="app-row">
-              <Button size="sm" loading={busy} onClick={() => login(1001, 'Игрок 1')}>Игрок 1</Button>
-              <Button size="sm" variant="ghost" loading={busy} onClick={() => login(1002, 'Игрок 2')}>Игрок 2</Button>
-            </div>
-          ) : undefined
-        }
-      />
-    </div>
+    <AppLogin
+      dev={
+        import.meta.env.DEV ? (
+          <div className="app-row">
+            <Button size="sm" loading={busy} onClick={() => login(1001, 'Игрок 1')}>Игрок 1</Button>
+            <Button size="sm" variant="ghost" loading={busy} onClick={() => login(1002, 'Игрок 2')}>Игрок 2</Button>
+          </div>
+        ) : undefined
+      }
+    />
   );
 }
 
 function Gate() {
   const { state, retry } = useSession();
   if (state.status === 'loading') return <ScreenFallback fullscreen />;
-  if (state.status === 'outside-telegram') return <DevLogin />;
+  if (state.status === 'outside-telegram') return <SignedOut />;
   if (state.status === 'error') {
     return (
       <div className="app-center">

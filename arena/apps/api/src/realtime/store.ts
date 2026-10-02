@@ -11,6 +11,13 @@ export interface SnapshotStore {
   saveGame(game: GameSnapshot): Promise<void>;
   deleteGame(id: string): Promise<void>;
   loadAll(): Promise<{ rooms: Room[]; games: GameSnapshot[] }>;
+  /**
+   * Who runs the live games. During a deploy the old and the new server overlap for a few
+   * seconds; only the holder of this lease may load and run games, so they never run twice.
+   */
+  acquireLease(owner: string, ttlMs: number): Promise<boolean>;
+  renewLease(owner: string, ttlMs: number): Promise<boolean>;
+  releaseLease(owner: string): Promise<void>;
   /** Survives restarts: true when this store is shared/persistent (Redis). */
   readonly durable: boolean;
   ping(): Promise<void>;
@@ -37,6 +44,13 @@ export class MemoryStore implements SnapshotStore {
   async loadAll() {
     return { rooms: [...this.rooms.values()], games: [...this.games.values()] };
   }
+  async acquireLease() {
+    return true;
+  }
+  async renewLease() {
+    return true;
+  }
+  async releaseLease() {}
   async ping() {}
   async close() {}
 }
@@ -45,6 +59,7 @@ const ROOMS = 'arena:rooms';
 const GAMES = 'arena:games';
 /** Snapshots of abandoned rooms/games expire on their own. */
 const TTL_SECONDS = 24 * 3600;
+const LEASE = 'arena:lease';
 
 export class RedisStore implements SnapshotStore {
   readonly durable = true;
@@ -76,6 +91,16 @@ export class RedisStore implements SnapshotStore {
       return values.filter((v): v is string => Boolean(v)).map((v) => JSON.parse(v) as T);
     };
     return { rooms: await load<Room>(ROOMS, 'arena:room:'), games: await load<GameSnapshot>(GAMES, 'arena:game:') };
+  }
+  async acquireLease(owner: string, ttlMs: number) {
+    return (await this.redis.set(LEASE, owner, 'PX', ttlMs, 'NX')) === 'OK';
+  }
+  async renewLease(owner: string, ttlMs: number) {
+    const done = await this.redis.eval("if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('pexpire', KEYS[1], ARGV[2]) else return 0 end", 1, LEASE, owner, String(ttlMs));
+    return done === 1;
+  }
+  async releaseLease(owner: string) {
+    await this.redis.eval("if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end", 1, LEASE, owner);
   }
   async ping() {
     await this.redis.ping();

@@ -2,6 +2,7 @@ import type { AuthResponse, MeDto } from '@arena/shared';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ApiError, api, getToken, setToken, setUnauthorizedHandler } from './lib/api.js';
 import { tg } from './lib/telegram.js';
+import { savedSession } from './lib/app.js';
 
 type SessionState =
   | { status: 'loading' }
@@ -16,6 +17,10 @@ interface SessionApi {
   devLogin: (id: number, name: string) => Promise<void>;
   /** New token for the current session; false when it cannot be renewed (banned, too old). */
   renew: () => Promise<boolean>;
+  /** The installed app: a session confirmed in the bot. */
+  signIn: (auth: AuthResponse) => void;
+  /** The installed app: forget the session on this phone. */
+  signOut: () => void;
 }
 
 /** Renew the session when less than this is left (the app checks on a timer and on coming back). */
@@ -31,13 +36,34 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const accept = useCallback((auth: AuthResponse) => {
     setToken(auth.token);
     expiresAt.current = auth.expiresAt;
+    // Outside Telegram nothing proves who you are on the next launch: remember the session.
+    if (!tg) savedSession.set({ token: auth.token, expiresAt: auth.expiresAt });
     setState({ status: 'ready', me: auth.me, startParam: auth.startParam });
   }, []);
 
 
   useEffect(() => {
     if (!tg) {
-      setState({ status: 'outside-telegram' });
+      // The installed app: come back with the remembered session (renewed if it is old).
+      const saved = savedSession.get();
+      if (!saved) {
+        setState({ status: 'outside-telegram' });
+        return;
+      }
+      setToken(saved.token);
+      expiresAt.current = saved.expiresAt;
+      setState({ status: 'loading' });
+      void (async () => {
+        if (saved.expiresAt - Date.now() < RENEW_BEFORE_MS && !(await renewRef.current())) throw new ApiError('UNAUTHORIZED', '', 401);
+        const me = await api<MeDto>('/me');
+        setState({ status: 'ready', me, startParam: new URLSearchParams(location.search).get('start') });
+      })().catch((error: unknown) => {
+        if (error instanceof ApiError && (error.code === 'UNAUTHORIZED' || error.code === 'BANNED')) {
+          savedSession.clear();
+          setToken(null);
+          setState({ status: 'outside-telegram' });
+        } else setState({ status: 'error', error: error instanceof ApiError ? error : new ApiError('NO_CONNECTION', 'Нет соединения', 0) });
+      });
       return;
     }
     setState({ status: 'loading' });
@@ -56,6 +82,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         const next = (await res.json()) as { token: string; expiresAt: number };
         setToken(next.token);
         expiresAt.current = next.expiresAt;
+        if (!tg) savedSession.set(next);
         return true;
       })
       .catch(() => false)
@@ -64,6 +91,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       });
     return renewing.current;
   }, []);
+
+  const renewRef = useRef(renew);
+  renewRef.current = renew;
 
   // A 401 means the session ran out: renew it quietly; sign in again only if that fails.
   useEffect(() => {
@@ -103,7 +133,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <SessionContext.Provider value={{ state, refreshMe, retry: () => setAttempt((n) => n + 1), devLogin, renew }}>
+    <SessionContext.Provider
+      value={{
+        state,
+        refreshMe,
+        retry: () => setAttempt((n) => n + 1),
+        devLogin,
+        renew,
+        signIn: accept,
+        signOut: () => {
+          savedSession.clear();
+          setToken(null);
+          setState({ status: 'outside-telegram' });
+        },
+      }}
+    >
       {children}
     </SessionContext.Provider>
   );

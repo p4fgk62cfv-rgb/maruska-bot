@@ -140,7 +140,8 @@ function Hero({ card, presence, atTable, onChange }: { card: PlayerProfileDto; p
         </span>
       )}
 
-      {!self && (
+      {card.bot && <span className="pcard__chip">🤖 Бот-соперник · играет на кредиты, в рейтинг не идёт</span>}
+      {!self && !card.bot && (
         <div className="pcard__actions">
           {card.relation === 'none' ? (
             <Button size="sm" icon="userPlus" loading={busy === 'friend'} onClick={() => void addFriend()}>В друзья</Button>

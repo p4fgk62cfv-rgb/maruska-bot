@@ -59,6 +59,10 @@ describe.skipIf(!url)('admin panel API («🃏 Арена» in the bot)', () => 
     expect(found).toHaveLength(1);
     expect(found[0]).toMatchObject({ telegramId: String(p.tg), name: 'Проверка', credits: 1450 });
     expect((await admin('GET', `/players?q=@u${p.tg}`)).json()[0].telegramId).toBe(String(p.tg));
+    // Bot opponents are not players to manage: never in the list.
+    const listed = (await admin('GET', '/players?limit=100')).json() as { telegramId: string }[];
+    expect(listed.some((x) => BigInt(x.telegramId) >= 9_000_000_000_000n)).toBe(false);
+    expect((await admin('GET', '/players?q=9000000000000')).json()).toEqual([]);
 
     const credit = await admin('POST', `/players/${p.tg}/wallet`, { currency: 'CREDITS', amount: 5000, reason: 'компенсация', requestId: `req-${p.tg}-1`, admin: 'Owner' });
     expect(credit.json()).toEqual({ balance: 6450 });
@@ -102,6 +106,8 @@ describe.skipIf(!url)('admin panel API («🃏 Арена» in the bot)', () => 
     expect((await admin('POST', `/tournaments/${tid}/cancel`)).statusCode).toBe(404);
 
     const year = 2100 + (nextTg % 500);
+    // Earlier runs against the same database may have left a season in that year.
+    await db.season.deleteMany({ where: { startsAt: { gte: new Date(`${year}-01-01T00:00:00Z`), lt: new Date(`${year + 1}-01-01T00:00:00Z`) } } });
     const season = await admin('POST', '/seasons', { title: `Сезон ${year}`, startsAt: `${year}-01-01T00:00:00Z`, endsAt: `${year}-03-01T00:00:00Z` });
     expect(season.json().id).toBeTruthy();
     expect((await admin('POST', '/seasons', { title: 'Наложение', startsAt: `${year}-02-01T00:00:00Z`, endsAt: `${year}-04-01T00:00:00Z` })).statusCode).toBe(400);

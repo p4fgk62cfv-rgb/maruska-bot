@@ -23,6 +23,7 @@ export interface PlayerInfo {
   frame: string | null;
   crown: string | null;
   connected: boolean;
+  bot?: boolean;
 }
 
 export type ServerMessage =
@@ -60,7 +61,14 @@ export type ServerMessage =
   | { type: 'FRIEND_FREE'; friend: PublicUserDto; presence: Presence }
   /** A friend calls you to their table; `invite` lets you in without the password. */
   | { type: 'ROOM_INVITE'; from: PublicUserDto; room: RoomDto; invite: string }
-  | { type: 'TOURNAMENT_MATCH'; tournamentId: string; title: string; round: number; roomId: string };
+  | { type: 'TOURNAMENT_MATCH'; tournamentId: string; title: string; round: number; roomId: string }
+  /** Coins for an invite: `invitee` — I came by `friend`'s link; otherwise `friend` came by mine. */
+  | { type: 'REFERRAL_REWARD'; friend: PublicUserDto; coins: number; invitee: boolean }
+  /** Someone at my table asks to swap chairs with me (before the deal). */
+  | { type: 'SEAT_SWAP_ASKED'; roomId: string; from: { userId: string; name: string; seat: number } }
+  | { type: 'SEAT_SWAP_DECLINED'; roomId: string; by: { userId: string; name: string } }
+  /** The server is going down for an update; `refunded`: running games were cancelled with stakes returned. */
+  | { type: 'SERVER_RESTART'; refunded: boolean };
 
 export interface GameResultDto {
   kind: 'loser' | 'draw';

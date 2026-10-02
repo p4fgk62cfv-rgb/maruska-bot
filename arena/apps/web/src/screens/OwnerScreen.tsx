@@ -1,4 +1,4 @@
-import type { AnnouncementDto, OwnerPlayerDto, WelcomeGiftDto } from '@arena/shared';
+import type { AnnouncementDto, BotSettingsDto, OwnerPlayerDto, ReferralSettingsDto, WelcomeGiftDto } from '@arena/shared';
 import { Avatar, Balance, BottomSheet, Button, Panel, Tabs, Toggle } from '@arena/ui';
 import { useEffect, useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
@@ -7,7 +7,7 @@ import { useSession } from '../session.js';
 import { useToast } from '../toast.js';
 import { ScreenHeader } from './common.js';
 
-type Section = 'announcement' | 'gifts' | 'bonus';
+type Section = 'announcement' | 'gifts' | 'bonus' | 'bots';
 interface GiftItem { key: string; name: string; kind: string; owned: boolean }
 
 const KIND_RU: Record<string, string> = { CARD_BACK: 'Рубашка', FRAME: 'Рамка', CROWN: 'Корона', EFFECT: 'Эффект', EMOJI: 'Смайлы', TABLE: 'Стол', AVATAR: 'Аватар' };
@@ -19,8 +19,8 @@ export default function OwnerScreen() {
   return (
     <div className="app-stack owner">
       <ScreenHeader title="Управление" subtitle="Видно только владельцу" />
-      <Tabs<Section> value={section} onChange={setSection} items={[{ value: 'announcement', label: 'Объявление' }, { value: 'gifts', label: 'Подарки' }, { value: 'bonus', label: 'Бонусы' }]} />
-      {section === 'announcement' ? <AnnouncementEditor /> : section === 'gifts' ? <Gifts /> : <Bonuses />}
+      <Tabs<Section> value={section} onChange={setSection} items={[{ value: 'announcement', label: 'Объявление' }, { value: 'gifts', label: 'Подарки' }, { value: 'bonus', label: 'Бонусы' }, { value: 'bots', label: 'Боты' }]} />
+      {section === 'announcement' ? <AnnouncementEditor /> : section === 'gifts' ? <Gifts /> : section === 'bots' ? <Bots /> : <Bonuses />}
     </div>
   );
 }
@@ -267,6 +267,7 @@ function Bonuses() {
           Сохранить
         </Button>
       </Panel>
+      <Referrals />
       <Panel className="owner-card">
         <h3 className="owner-sub">Раздать всем, у кого мало</h3>
         <label className="owner-field">
@@ -286,5 +287,131 @@ function Bonuses() {
         </Button>
       </Panel>
     </>
+  );
+}
+
+/** Referral program: coins for the inviter and the newcomer after the newcomer's first game with people. */
+function Referrals() {
+  const toast = useToast();
+  const current = useQuery<ReferralSettingsDto>('/owner/referrals');
+  const [enabled, setEnabled] = useState(true);
+  const [invitee, setInvitee] = useState('');
+  const [referrer, setReferrer] = useState('');
+  const [limit, setLimit] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (current.data) {
+      setEnabled(current.data.enabled);
+      setInvitee(String(current.data.inviteeCoins));
+      setReferrer(String(current.data.referrerCoins));
+      setLimit(String(current.data.dailyLimit));
+    }
+  }, [current.data]);
+
+  const save = async (next: ReferralSettingsDto) => {
+    if (next.dailyLimit < 1) return toast('Лимит в день — от 1', 'error');
+    setBusy(true);
+    try {
+      await api('/owner/referrals', { method: 'PUT', body: next });
+      current.reload();
+      toast(next.enabled ? `Приглашения: ${fmt(next.referrerCoins)} пригласившему, ${fmt(next.inviteeCoins)} новичку` : 'Награды за приглашения выключены', 'success');
+    } catch (e) {
+      toast(errText(e), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const draft = (on = enabled): ReferralSettingsDto => ({ enabled: on, inviteeCoins: num(invitee), referrerCoins: num(referrer), dailyLimit: num(limit) });
+
+  return (
+    <Panel className="owner-card">
+      <h3 className="owner-sub">Приглашения друзей</h3>
+      <p className="app-muted">
+        Монеты получают оба, когда приглашённый сыграет первую партию с живыми соперниками (партии с ботами не считаются). Лимит защищает от
+        накрутки фейковыми аккаунтами: сверх него новичок награду получает, а пригласивший — нет.
+      </p>
+      <Toggle
+        label={enabled ? 'Включены' : 'Выключены'}
+        checked={enabled}
+        onChange={(v) => {
+          setEnabled(v);
+          void save(draft(v));
+        }}
+      />
+      <label className="owner-field">
+        <span>Монет пригласившему</span>
+        <input inputMode="numeric" value={referrer} onChange={(e) => setReferrer(e.target.value)} />
+      </label>
+      <label className="owner-field">
+        <span>Монет новичку</span>
+        <input inputMode="numeric" value={invitee} onChange={(e) => setInvitee(e.target.value)} />
+      </label>
+      <label className="owner-field">
+        <span>Оплачиваемых приглашений в сутки</span>
+        <input inputMode="numeric" value={limit} onChange={(e) => setLimit(e.target.value)} />
+      </label>
+      <Button block variant="gold" loading={busy} onClick={() => void save(draft())}>
+        Сохранить
+      </Button>
+    </Panel>
+  );
+}
+
+const LEVELS: { value: BotSettingsDto['level']; label: string; hint: string }[] = [
+  { value: 'easy', label: 'Минимальный', hint: 'Часто ошибается — новичкам приятно выигрывать' },
+  { value: 'normal', label: 'Средний', hint: 'Как обычный игрок, иногда ошибается' },
+  { value: 'hard', label: 'Максимальный', hint: 'Без ошибок, считает вышедшие карты, точно доигрывает концовку' },
+];
+const DELAYS = [5, 10, 15, 30, 60];
+
+/** Bot opponents: they take empty seats at public tables when no person comes. */
+function Bots() {
+  const toast = useToast();
+  const current = useQuery<BotSettingsDto>('/owner/bots');
+  const [draft, setDraft] = useState<BotSettingsDto | null>(null);
+  useEffect(() => {
+    if (current.data) setDraft(current.data);
+  }, [current.data]);
+
+  const save = async (next: BotSettingsDto) => {
+    setDraft(next);
+    try {
+      await api('/owner/bots', { method: 'PUT', body: next });
+      toast(next.enabled ? 'Настройки ботов сохранены' : 'Боты выключены', 'success');
+    } catch (e) {
+      toast(errText(e), 'error');
+      current.reload();
+    }
+  };
+
+  if (!draft) return <p className="app-muted">Загрузка…</p>;
+  return (
+    <Panel className="owner-card">
+      <h3 className="owner-sub">Боты-соперники</h3>
+      <p className="app-muted">
+        Боты садятся за столы «Быстрой игры» и за те, где создатель поставил галочку «Добавить ботов», если за указанное время никто
+        новый не пришёл. Играют на кредиты; в рейтинг и сезон такие партии не идут, в турниры боты не садятся. Выключатель здесь
+        убирает ботов отовсюду.
+      </p>
+      <Toggle label={draft.enabled ? 'Включены' : 'Выключены'} checked={draft.enabled} onChange={(v) => void save({ ...draft, enabled: v })} />
+      <h3 className="owner-sub">Через сколько садятся</h3>
+      <div className="owner-chips">
+        {DELAYS.map((d) => (
+          <button key={d} type="button" className={`owner-chip${draft.delaySec === d ? ' owner-chip--on' : ''}`} onClick={() => void save({ ...draft, delaySec: d })}>
+            {d} с
+          </button>
+        ))}
+      </div>
+      <h3 className="owner-sub">Уровень для «Быстрой игры»</h3>
+      <p className="app-muted">За своими столами игроки выбирают уровень сами.</p>
+      <div className="owner-levels">
+        {LEVELS.map((l) => (
+          <button key={l.value} type="button" className={`owner-level${draft.level === l.value ? ' owner-level--on' : ''}`} onClick={() => void save({ ...draft, level: l.value })}>
+            <strong>{l.label}</strong>
+            <span>{l.hint}</span>
+          </button>
+        ))}
+      </div>
+    </Panel>
   );
 }

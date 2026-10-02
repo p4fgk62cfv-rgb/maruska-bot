@@ -11,6 +11,10 @@ export interface Seat {
   crown: string | null;
   ready: boolean;
   connected: boolean;
+  /** Bot opponent: always ready and connected. */
+  bot?: boolean;
+  /** Chair number at the table (0-based); fixed while seated, so a free chair can be taken. */
+  place?: number;
 }
 
 export type RoomConfig = Omit<RoomSettings, 'password' | 'isPrivate' | 'server'>;
@@ -50,6 +54,8 @@ export interface GameSnapshot {
   startedAt: number;
   /** Reconnect reserve left per player (ms); missing means the full reserve. */
   reserve?: Record<string, number>;
+  /** How the bots at this table play (from the room); the owner's default when missing. */
+  botLevel?: 'easy' | 'normal' | 'hard';
   /** The player whose turn ran out while offline and is being waited for. */
   grace?: { userId: string; since: number } | null;
 }

@@ -139,6 +139,26 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
             setPresence((map) => ({ ...map, [msg.friend.id]: msg.presence }));
             toast(`${msg.friend.name} закончил(а) партию — можно звать в игру`, 'success');
             return;
+          case 'SERVER_RESTART':
+            haptic.warning();
+            toast(
+              msg.refunded
+                ? 'Сервер перезапускается для обновления. Партия отменена, ставки возвращены всем игрокам — через несколько секунд можно играть снова.'
+                : 'Сервер перезапускается для обновления. Через несколько секунд всё заработает.',
+              'info',
+            );
+            void refreshMe();
+            return;
+          case 'REFERRAL_REWARD':
+            haptic.success();
+            toast(
+              msg.invitee
+                ? `+${msg.coins} монет за приглашение от ${msg.friend.name} 🎁`
+                : `${msg.friend.name} сыграл(а) первую партию по вашему приглашению: +${msg.coins} монет 🎁`,
+              'success',
+            );
+            void refreshMe();
+            return;
           case 'TOURNAMENT_MATCH':
             haptic.success();
             toast(`${msg.title}: ваш матч начинается — нажмите «Готов»`, 'success');

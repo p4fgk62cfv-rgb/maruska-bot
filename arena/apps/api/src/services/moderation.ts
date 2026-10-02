@@ -41,7 +41,7 @@ export class ModerationService {
     return false;
   }
 
-  async suspiciousPairs(days = 7, minGames = 5, minCredits = 1000): Promise<SuspiciousPair[]> {
+  async suspiciousPairs(days = 7, minGames = 5, minCredits = 1000, userId?: string): Promise<SuspiciousPair[]> {
     const rows = await this.db.$queryRaw<
       { a: string; b: string; games: bigint; lost: bigint; gave_up: bigint; flow: bigint | null }[]
     >(Prisma.sql`
@@ -63,6 +63,7 @@ export class ModerationService {
       )
       SELECT a, b, games, lost, gave_up, flow FROM together
       WHERE games >= ${minGames}::int AND lost >= 0.8 * games AND coalesce(flow, 0) >= ${minCredits}::bigint
+        AND (${userId ?? null}::uuid IS NULL OR a = ${userId ?? null}::uuid OR b = ${userId ?? null}::uuid)
       ORDER BY flow DESC
       LIMIT 50`);
     if (!rows.length) return [];

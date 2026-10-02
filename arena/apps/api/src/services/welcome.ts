@@ -47,7 +47,7 @@ export class WelcomeService {
    */
   async grantToPoor(opts: { below: number; credits: number; coins: number; batch: string; by: string }): Promise<{ players: number }> {
     const poor = await this.db.wallet.findMany({
-      where: { currency: 'CREDITS', balance: { lt: BigInt(opts.below) }, user: { profile: { isNot: null }, bannedAt: null } },
+      where: { currency: 'CREDITS', balance: { lt: BigInt(opts.below) }, user: { profile: { isNot: null }, isBot: false, bannedAt: null } },
       select: { userId: true },
     });
     for (const { userId } of poor) {

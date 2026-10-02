@@ -20,6 +20,8 @@ import { websocketRoutes } from './realtime/ws.js';
 import { RealtimePresence } from './services/presence.js';
 import { FriendService } from './services/friends.js';
 import { ProfileService } from './services/profiles.js';
+import { ReferralService } from './services/referrals.js';
+import { referralRoutes } from './routes/referrals.js';
 import { Outbox, TelegramBot } from './services/notifier.js';
 import { playerRoutes } from './routes/players.js';
 import { ownerRoutes } from './routes/owner.js';
@@ -37,6 +39,8 @@ export interface AppOptions {
   store?: SnapshotStore;
   /** Replaces the Telegram HTTP client (tests). */
   bot?: TelegramBot | null;
+  /** Take over the games in the background (production: the old server may still hold them). */
+  background?: boolean;
   /** Where logs go (tests capture them to check nothing secret is written). */
   logStream?: { write(line: string): void };
 }
@@ -68,14 +72,27 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   const friends = new FriendService({ ...base, outbox, presence, realtime });
   const tournaments = new TournamentService({ ...base, outbox, realtime, log: app.log });
   const profiles = new ProfileService({ db: base.db, items: base.items, presence, friends: () => friends });
-  const ctx: Context = { ...base, realtime, presence, outbox, friends, profiles, tournaments };
+  const referrals = new ReferralService({ ...base, outbox, realtime, log: app.log });
+  realtime.finishedListeners.add((result) => {
+    referrals.onGame(result).catch((error: unknown) => app.log.error({ err: error }, 'referral reward failed'));
+  });
+  const ctx: Context = { ...base, realtime, presence, outbox, friends, profiles, tournaments, referrals };
   await base.moderation.loadBans();
   useBanList(base.moderation);
-  await realtime.recover();
+  await base.bots.ensurePool();
+  await base.bots.settings();
+  // During a deploy the previous server hands the games over only when it stops, which can be
+  // after this one starts listening: in production the take-over runs in the background and
+  // requests that touch tables wait for it (see the hook below).
+  if (options.background) realtime.start().catch((error: unknown) => app.log.error({ err: error }, 'could not take over the games'));
+  else await realtime.start();
   if (config.NODE_ENV !== 'test') {
     outbox.start();
-    tournaments.start();
+    void realtime.ready.then(() => tournaments.start());
   }
+  app.addHook('onRequest', async (request) => {
+    if (request.url.startsWith('/api/rooms') || request.url.startsWith('/api/friends') || request.url.startsWith('/api/tournaments')) await realtime.ready;
+  });
   app.addHook('onClose', async () => {
     outbox.stop();
     tournaments.stop();
@@ -136,6 +153,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
       await roomRoutes(api, ctx);
       await friendRoutes(api, ctx);
       await playerRoutes(api, ctx);
+      await referralRoutes(api, ctx);
       await ownerRoutes(api, ctx);
       await tournamentRoutes(api, ctx);
       await internalRoutes(api, ctx);

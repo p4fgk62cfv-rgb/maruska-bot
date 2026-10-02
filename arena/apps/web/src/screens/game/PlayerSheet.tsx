@@ -181,6 +181,9 @@ export function PlayerSheet({ userId, gameId, onClose, onNote }: { userId: strin
             </div>
           )}
 
+          {card.bot ? (
+            <p className="app-muted">🤖 Бот-соперник: садится за стол, когда живых игроков нет. Играет на кредиты, в рейтинг и сезон такие партии не идут.</p>
+          ) : (
           <div className="player-card__actions">
             {card.relation === 'none' ? (
               <Button icon="userPlus" loading={busy} onClick={() => void addFriend()}>В друзья</Button>
@@ -191,6 +194,7 @@ export function PlayerSheet({ userId, gameId, onClose, onNote }: { userId: strin
             )}
             <Button variant="danger" icon="flag" onClick={() => setMode('report')}>Пожаловаться</Button>
           </div>
+          )}
           <Button block variant="ghost" icon="user" onClick={() => setMode('full')}>
             Полный профиль и история
           </Button>

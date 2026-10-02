@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto';
 import {
   applyAction,
   applyTimeout,
+  chooseBotMove,
+  solveEndgame,
+  type BotLevel,
   createGame,
   toPlayerView,
   undoLastMove,
@@ -49,6 +52,8 @@ export interface GameDeps {
   onFinished: (roomId: string, result: GameResultDto | null) => void;
   /** These players sat down to a game or got up from one. */
   onPresence?: (userIds: string[]) => void;
+  /** How well bot opponents play (owner's setting). */
+  botLevel?: () => BotLevel;
 }
 
 /** One live game: the only place where its GameState changes. */
@@ -58,13 +63,23 @@ export class GameRunner {
   private moves: Prisma.GameMoveCreateManyInput[] = [];
   private flushTimer: NodeJS.Timeout | null = null;
   private lastEmoji = new Map<string, number>();
+  /** Bot opponents at this table and their pending moves. */
+  private readonly bots: Set<string>;
+  private readonly botTimers = new Map<string, NodeJS.Timeout>();
+  private readonly botStuck = new Map<string, number>();
   result: GameResultDto | null = null;
 
   constructor(
     private snap: GameSnapshot,
     private readonly players: PlayerInfo[],
     private readonly deps: GameDeps,
-  ) {}
+  ) {
+    this.bots = new Set(players.filter((p) => p.bot).map((p) => p.userId));
+  }
+
+  get botIds(): string[] {
+    return [...this.bots];
+  }
 
   get id(): string {
     return this.snap.gameId;
@@ -224,7 +239,7 @@ export class GameRunner {
   private async waitFor(userId: string, now: number): Promise<boolean> {
     if (this.snap.grace) this.spendGrace(now);
     const left = this.reserveOf(userId);
-    if (this.deps.hub.isOnline(userId) || left < 1000) return false;
+    if (this.bots.has(userId) || this.deps.hub.isOnline(userId) || left < 1000) return false;
     this.snap.grace = { userId, since: now };
     this.snap.state = { ...this.snap.state, turnDeadline: now + left };
     metrics.inc('arena_reconnect_waits_total', 'Turns stretched for an offline player');
@@ -259,6 +274,7 @@ export class GameRunner {
 
   private async finish(): Promise<void> {
     if (this.timer) clearTimeout(this.timer);
+    this.stopBots();
     await this.flushMoves();
     try {
       this.result = await this.settle();
@@ -281,7 +297,7 @@ export class GameRunner {
 
   /** Settlement is idempotent, so a transient database error is retried a few times. */
   private async settle(): Promise<GameResultDto> {
-    const input = { gameId: this.id, stake: this.snap.stake, state: this.snap.state, startedAt: this.snap.startedAt, transfers: this.snap.transfers };
+    const input = { gameId: this.id, stake: this.snap.stake, state: this.snap.state, startedAt: this.snap.startedAt, transfers: this.snap.transfers, bots: this.botIds };
     for (let attempt = 1; ; attempt++) {
       try {
         return await this.deps.settlement.finish(input);
@@ -308,10 +324,11 @@ export class GameRunner {
     };
   }
 
-  /** Moderator stop: everyone gets the stake back, the game ends as «cancelled». */
-  async adminAbort(): Promise<void> {
+  /** Moderator stop (or a server restart): everyone gets the stake back, the game ends as «cancelled». */
+  async adminAbort(why: 'moderator' | 'restart' = 'moderator'): Promise<void> {
     if (this.result) return;
     if (this.timer) clearTimeout(this.timer);
+    this.stopBots();
     await this.flushMoves();
     await this.deps.settlement.abort(this.id);
     this.result = {
@@ -323,7 +340,7 @@ export class GameRunner {
       payouts: this.players.map((p) => ({ userId: p.userId, net: 0, place: null, ratingGain: 0, bonusMultiplier: 1 })),
     };
     metrics.inc('arena_games_aborted_total', 'Abandoned games refunded');
-    this.deps.log.warn({ gameId: this.id }, 'game cancelled by a moderator, stakes refunded');
+    this.deps.log.warn({ gameId: this.id, why }, why === 'restart' ? 'game cancelled for a server restart, stakes refunded' : 'game cancelled by a moderator, stakes refunded');
     for (const p of this.players) this.deps.hub.send(p.userId, { type: 'GAME_FINISHED', gameId: this.id, result: this.result });
     await this.deps.store.deleteGame(this.id).catch(() => undefined);
     this.deps.onFinished(this.roomId, this.result);
@@ -362,7 +379,63 @@ export class GameRunner {
   }
 
   private broadcastState(): void {
-    for (const p of this.players) this.sendState(p.userId);
+    for (const p of this.players) if (!this.bots.has(p.userId)) this.sendState(p.userId);
+    this.driveBots();
+  }
+
+  // ── bot opponents ──────────────────────────────────────────
+
+  /**
+   * Every bot with something to do gets a move after a human-like pause. It decides from its
+   * own player view only (its hand, the table, the trump), like a person at the table.
+   */
+  /**
+   * The bot's move from its own view. The hard bot remembers the beaten-off cards; at the end of
+   * a two-player game that pins down the opponent's hand, and it plays the end exactly.
+   */
+  private botMove(id: string, level: BotLevel) {
+    const state = this.snap.state;
+    if (level === 'hard' && state.deck.length === 0 && state.players.length === 2) {
+      const exact = solveEndgame(state, id);
+      if (exact) return exact;
+    }
+    return chooseBotMove(toPlayerView(state, id, { hints: true, discard: level === 'hard' }), level);
+  }
+
+  private driveBots(): void {
+    if (!this.bots.size || this.result || this.snap.state.status !== 'playing') return;
+    const level = this.snap.botLevel ?? this.deps.botLevel?.() ?? 'normal';
+    for (const id of this.bots) {
+      if (this.botTimers.has(id) || this.botStuck.get(id) === this.snap.state.version) continue;
+      if (!this.botMove(id, level)) continue;
+      const delay = 800 + Math.random() * 1400;
+      this.botTimers.set(
+        id,
+        setTimeout(() => {
+          this.botTimers.delete(id);
+          this.queue
+            .run(async () => {
+              if (this.result || this.snap.state.status !== 'playing') return;
+              const move = this.botMove(id, level);
+              if (!move) return;
+              try {
+                await this.act(id, move);
+              } catch (error) {
+                // The table moved on in between; do not retry the same position.
+                this.botStuck.set(id, this.snap.state.version);
+                this.deps.log.debug({ err: error, gameId: this.id, bot: id }, 'bot move refused');
+              }
+            })
+            .catch((error) => this.deps.log.error({ err: error, gameId: this.id }, 'bot move failed'))
+            .finally(() => this.driveBots());
+        }, delay),
+      );
+    }
+  }
+
+  private stopBots(): void {
+    for (const t of this.botTimers.values()) clearTimeout(t);
+    this.botTimers.clear();
   }
 
   private broadcastEvents(events: GameEvent[]): void {
@@ -371,7 +444,7 @@ export class GameRunner {
   }
 
   playerInfo(): PlayerInfo[] {
-    return this.players.map((p) => ({ ...p, connected: this.deps.hub.isOnline(p.userId) }));
+    return this.players.map((p) => ({ ...p, connected: p.bot ? true : this.deps.hub.isOnline(p.userId) }));
   }
 
   // ── persistence ────────────────────────────────────────────
@@ -399,6 +472,7 @@ export class GameRunner {
   dispose(): void {
     if (this.timer) clearTimeout(this.timer);
     if (this.flushTimer) clearTimeout(this.flushTimer);
+    this.stopBots();
   }
 }
 
@@ -443,8 +517,12 @@ export class GameManager {
       frame: s.frame,
       crown: s.crown,
       connected: true,
+      bot: Boolean(s.bot),
     }));
-    const snapshot: GameSnapshot = { gameId, roomId: room.id, stake: room.settings.stake, state, previous: null, features: {}, transfers: {}, startedAt: now };
+    const snapshot: GameSnapshot = {
+      gameId, roomId: room.id, stake: room.settings.stake, state, previous: null, features: {}, transfers: {}, startedAt: now,
+      ...(room.settings.botLevel ? { botLevel: room.settings.botLevel } : {}),
+    };
     const runner = this.add(snapshot, players);
     await this.deps.store.saveGame(snapshot);
     metrics.inc('arena_games_started_total', 'Games dealt', { players: String(players.length), stake: String(room.settings.stake) });
@@ -493,6 +571,28 @@ export class GameManager {
     const runner = this.runners.get(msg.gameId);
     if (!runner || !runner.hasPlayer(userId)) throw new AppError('NOT_FOUND');
     await runner.queue.run(() => runner.handle(userId, msg));
+  }
+
+  /** Running casual (non-tournament) games. */
+  liveCasual(rooms?: { get(id: string): Room | undefined }): number {
+    let n = 0;
+    for (const runner of this.runners.values()) if (!runner.result && !rooms?.get(runner.roomId)?.tournament) n++;
+    return n;
+  }
+
+  /** Server restart: every casual game ends as «cancelled» and all its stakes go back. */
+  async cancelForRestart(rooms: { get(id: string): Room | undefined }): Promise<number> {
+    let cancelled = 0;
+    for (const runner of [...this.runners.values()]) {
+      if (runner.result || rooms.get(runner.roomId)?.tournament) continue;
+      try {
+        await runner.queue.run(() => runner.adminAbort('restart'));
+        cancelled++;
+      } catch (error) {
+        this.deps.log.error({ err: error, gameId: runner.id }, 'could not cancel a game for the restart');
+      }
+    }
+    return cancelled;
   }
 
   async shutdown(): Promise<void> {

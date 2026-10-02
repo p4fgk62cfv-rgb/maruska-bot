@@ -26,15 +26,23 @@ export function createGame(input: CreateGameInput): { state: GameState; events: 
   }
 
   const rules = resolveRules(input.settings);
-  const deck = shuffle(createDeck(rules.deckSize), input.random);
-  const trumpCard = deck[deck.length - 1] as CardId;
-
   const players: PlayerState[] = input.playerIds.map((id, seat) => ({ id, seat, hand: [], status: 'active', place: null }));
   const events: GameEvent[] = [];
 
-  // Deal one card at a time, as at a real table.
-  for (let round = 0; round < rules.handSize; round++) {
-    for (const player of players) player.hand.push(deck.shift() as CardId);
+  // Shuffle and deal one card at a time, as at a real table. Five or more cards of one suit in
+  // a hand is a misdeal: the whole deck is reshuffled and dealt again (a fresh shuffle, so every
+  // allowed deal stays equally likely and the trump stays random).
+  let deck: CardId[] = [];
+  let trumpCard: CardId;
+  for (let attempt = 0; ; attempt++) {
+    deck = shuffle(createDeck(rules.deckSize), input.random);
+    // The bottom card is the trump (with a full deal it ends up in the last hand).
+    trumpCard = deck[deck.length - 1] as CardId;
+    for (const player of players) player.hand = [];
+    for (let round = 0; round < rules.handSize; round++) {
+      for (const player of players) player.hand.push(deck.shift() as CardId);
+    }
+    if (!players.some((p) => isMisdeal(p.hand)) || attempt >= MAX_REDEALS) break;
   }
   for (const player of players) events.push({ type: 'CARDS_DRAWN', playerId: player.id, count: player.hand.length });
 
@@ -71,6 +79,22 @@ export function createGame(input: CreateGameInput): { state: GameState; events: 
   startBout(state, firstAttacker(state, input.random));
   setTurn(state, input.now, events);
   return { state, events };
+}
+
+/** A misdeal never repeats this often in practice (each deal is fine ~90%+ of the time). */
+const MAX_REDEALS = 1000;
+/** Cards of one suit in one starting hand that force a redeal. */
+export const MISDEAL_SAME_SUIT = 5;
+
+/** «Пересдача»: five (or six) cards of one suit in a starting hand. */
+export function isMisdeal(hand: readonly CardId[]): boolean {
+  const counts = new Map<string, number>();
+  for (const card of hand) {
+    const n = (counts.get(suitOf(card)) ?? 0) + 1;
+    if (n >= MISDEAL_SAME_SUIT) return true;
+    counts.set(suitOf(card), n);
+  }
+  return false;
 }
 
 /** Lowest trump leads; if nobody has a trump, a random player does. */

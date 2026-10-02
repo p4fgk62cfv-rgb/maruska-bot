@@ -31,6 +31,8 @@ export interface RoomSeatDto {
   crown: string | null;
   ready: boolean;
   connected: boolean;
+  /** A bot opponent (shown with a «бот» badge). */
+  bot?: boolean;
 }
 
 export interface RoomDto {
@@ -94,7 +96,7 @@ export function roomDeepLink(botUsername: string, appShortName: string | null, r
 }
 
 export function parseRoomStartParam(value: string | null | undefined): { roomId: string; invite: string | null } | null {
-  const match = /^game_([A-Z0-9]{8})(?:_([A-Za-z0-9-]{6,24}))?$/.exec(value ?? '');
+  const match = /^game_([A-Z0-9]{8})(?:_([A-Za-z0-9_-]{6,24}))?$/.exec(value ?? '');
   return match ? { roomId: match[1]!, invite: match[2] ?? null } : null;
 }
 

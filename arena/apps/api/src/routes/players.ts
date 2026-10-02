@@ -59,6 +59,7 @@ export async function playerRoutes(app: FastifyInstance, ctx: Context): Promise<
       achievements: badges.map((b) => b.achievement),
       relation: relations[userId] ?? 'none',
       note: note?.text ?? null,
+      bot: user.isBot,
     };
   });
 

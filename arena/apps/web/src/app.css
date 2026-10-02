@@ -311,9 +311,13 @@ select.app-input { appearance: none; }
 .table-top__stake span svg { color: var(--gold); }
 .table-top__stake small { font-size: 11px; color: rgba(255, 255, 255, 0.7); }
 
-.game__opponents { display: flex; justify-content: space-around; align-items: flex-start; gap: 4px; padding: 4px 6px 0; min-height: 96px; }
-.game__opponents--4, .game__opponents--5 { justify-content: space-between; }
-.game__opp { translate: 0 var(--arc, 0px); min-width: 0; }
+.game__opponents { display: flex; justify-content: space-around; align-items: flex-start; gap: 2px; padding: 4px 8px 0; min-height: 96px; }
+/* Equal columns: the outer players keep half a gap from the screen edge, whatever their labels say. */
+.game__opp { flex: 1 1 0; display: flex; justify-content: center; translate: 0 var(--arc, 0px); min-width: 0; }
+.game__opponents--4 .game__opp:first-child .seat-tile__label, .game__opponents--5 .game__opp:first-child .seat-tile__label { justify-self: start; }
+.game__opponents--4 .game__opp:last-child .seat-tile__label, .game__opponents--5 .game__opp:last-child .seat-tile__label { justify-self: end; }
+.game__opponents--5 .seat-tile__label { font-size: 9px; padding: 1px 4px; letter-spacing: 0.02em; }
+.game__opponents--5 .seat-tile__count { right: -6px; }
 
 .seat-tile { position: relative; display: grid; justify-items: center; gap: 4px; width: calc(var(--tile) + 12px); transition: opacity 0.3s; }
 .seat-tile--dim { opacity: 0.5; }
@@ -1460,3 +1464,103 @@ html[data-home-design="premium"] .friends-play__arrow { color: #d7b6ff; font-siz
   .pcard__overview { grid-template-columns: 1fr; justify-items: center; }
   .pcard__tiles { width: 100%; }
 }
+/* Bot opponent badge */
+.seat-tile__bot { position: absolute; left: -4px; top: -4px; z-index: 2; padding: 1px 6px; border-radius: 8px; font-size: 10px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #fff; background: #5b6b7a; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); }
+.owner-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.owner-chip { padding: 8px 14px; border-radius: 999px; font-weight: 700; color: var(--text); background: var(--surface); box-shadow: inset 0 0 0 1px var(--stroke); }
+.owner-chip--on { color: #1a1300; background: var(--gold); box-shadow: none; }
+.owner-levels { display: grid; gap: 8px; }
+.owner-level { display: grid; gap: 2px; padding: 10px 12px; border-radius: 14px; text-align: left; color: var(--text); background: var(--surface); box-shadow: inset 0 0 0 1px var(--stroke); }
+.owner-level span { font-size: 12px; color: var(--text-2); }
+.owner-level--on { box-shadow: inset 0 0 0 2px var(--gold); background: color-mix(in srgb, var(--gold) 14%, var(--surface)); }
+
+/* ── «Пригласить друга» ── */
+.invite-hero { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.invite-hero__icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #f7d774, #c8902c); color: #3a2506; box-shadow: 0 6px 18px rgba(200, 144, 44, 0.35); }
+.invite-hero__title { font-size: 19px; line-height: 1.25; }
+.invite-hero__rewards { display: flex; gap: 12px; justify-content: center; width: 100%; }
+.invite-hero__rewards > span { flex: 1; max-width: 150px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px; border-radius: 14px; background: rgba(247, 215, 116, 0.12); border: 1px solid rgba(247, 215, 116, 0.35); }
+.invite-hero__rewards small { font-size: 12px; opacity: 0.75; text-transform: uppercase; letter-spacing: 0.06em; }
+.invite-hero__rewards .ui-balance { font-size: 20px; font-weight: 800; }
+.invite-hero__actions { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.invite-link { display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; padding: 8px 12px; border: 1px dashed var(--line); border-radius: 12px; background: transparent; color: inherit; font: inherit; font-size: 13px; opacity: 0.85; cursor: pointer; }
+.invite-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.invite-by { display: flex; align-items: center; gap: 12px; }
+.invite-by__body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.invite-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.invite-stats > * { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+.invite-stats strong { font-size: 22px; }
+.invite-row { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.invite-row:last-child { border-bottom: 0; }
+
+/* ── «Добавить ботов» on the create screen ── */
+.bots-pick { display: flex; flex-direction: column; gap: 8px; }
+.bots-pick__title { font-family: var(--font-script); font-size: 26px; }
+.bots-pick__hint { font-size: 13px; color: var(--text-2); }
+.bots-pick__levels { display: flex; flex-direction: column; gap: 8px; }
+.bots-pick__level { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 14px; border: 0; border-radius: 14px; background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 0 0 1px var(--stroke); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.bots-pick__level span { font-size: 13px; color: var(--text-2); }
+.bots-pick__level--on { background: rgba(247, 215, 116, 0.18); box-shadow: inset 0 0 0 2px #e9b949; }
+
+/* ── chairs before the deal: tap a free one to move, a player to ask for a swap ── */
+.seat-tap { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.seat-tap:disabled { cursor: default; }
+button.seat-tile--free { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.seat-tile--free .seat-tile__frame { box-shadow: inset 0 0 0 2px rgba(247, 215, 116, 0.7); animation: seat-free 1.8s ease-in-out infinite; }
+@keyframes seat-free { 50% { box-shadow: inset 0 0 0 2px rgba(247, 215, 116, 0.25); } }
+@media (prefers-reduced-motion: reduce) { .seat-tile--free .seat-tile__frame { animation: none; } }
+
+/* Small two-button question over the table («Поменяться» / «Посмотреть»). */
+.choice-dialog { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, 0.35); animation: choice-in 0.15s ease-out; }
+.choice-dialog__box { width: min(300px, 100%); border-radius: 16px; overflow: hidden; background: rgba(242, 242, 247, 0.96); color: #111; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35); }
+.choice-dialog__text { margin: 0; padding: 18px 16px 14px; font-size: 15px; line-height: 1.35; text-align: center; }
+.choice-dialog__buttons { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid rgba(60, 60, 67, 0.25); }
+.choice-dialog__buttons button { padding: 12px 8px; border: 0; background: transparent; font: inherit; font-size: 17px; color: #0a7aff; cursor: pointer; }
+.choice-dialog__buttons button + button { border-left: 1px solid rgba(60, 60, 67, 0.25); }
+.choice-dialog__buttons .choice-dialog__main { font-weight: 700; }
+.choice-dialog__buttons button:active { background: rgba(0, 0, 0, 0.06); }
+@keyframes choice-in { from { opacity: 0; } }
+
+/* PIN entry: a dialog at the top of the screen, never under the keyboard. */
+.pin__input--button { min-width: 76px; text-align: left; cursor: pointer; }
+.pin-dialog { position: fixed; inset: 0; z-index: 70; display: flex; justify-content: center; align-items: flex-start; padding: calc(var(--tg-safe-top, 0px) + 12vh) 16px 16px; background: rgba(0, 0, 0, 0.45); }
+.pin-dialog__box { width: min(320px, 100%); display: flex; flex-direction: column; gap: 10px; padding: 18px 16px 14px; border-radius: 18px; background: var(--paper, #f6f1e7); color: var(--ink, #1d1d1f); box-shadow: 0 14px 40px rgba(0, 0, 0, 0.4); }
+.pin-dialog__title { font-size: 17px; text-align: center; }
+.pin-dialog__input { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 2px solid #d9a441; border-radius: 12px; background: #fff; color: #1d1d1f; font: inherit; font-size: 30px; font-weight: 800; letter-spacing: 0.3em; text-align: center; }
+.pin-dialog__input:focus { outline: none; box-shadow: 0 0 0 3px rgba(217, 164, 65, 0.35); }
+.pin-dialog__hint { font-size: 12.5px; line-height: 1.35; color: #6b6458; text-align: center; }
+.pin-dialog__ok { padding: 11px; border: 0; border-radius: 12px; background: linear-gradient(#ffd56b, #e5a531); color: #3a2506; font: inherit; font-size: 17px; font-weight: 800; cursor: pointer; }
+.pin-dialog__ok:disabled { opacity: 0.5; }
+
+/* «Арена на главный экран» card on the home screen. */
+.home-shortcut { display: flex; align-items: stretch; gap: 0; margin: 0 2px; border-radius: 16px; background: rgba(255, 255, 255, 0.1); box-shadow: inset 0 0 0 1px rgba(247, 215, 116, 0.45); overflow: hidden; }
+.home-shortcut__main { flex: 1; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.home-shortcut__main:active { background: rgba(255, 255, 255, 0.06); }
+.home-shortcut__icon { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 11px; background: linear-gradient(135deg, #f7d774, #c8902c); color: #3a2506; }
+.home-shortcut__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.home-shortcut__text strong { font-size: 15px; }
+.home-shortcut__text small { font-size: 12px; opacity: 0.75; }
+.home-shortcut__close { flex: none; width: 40px; border: 0; background: transparent; color: inherit; opacity: 0.6; cursor: pointer; }
+
+/* ── the installed app: sign-in and «Установить» ── */
+.app-login { min-height: 100dvh; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: calc(var(--tg-safe-top, 0px) + 24px) 20px 32px; text-align: center; background: radial-gradient(circle at 50% 30%, #1f8a5b, #0f5a3a 55%, #06301f); color: #fff; }
+.app-login__logo { width: 112px; height: 112px; border-radius: 26px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); }
+.app-login__title { margin: 4px 0 0; font-size: 28px; }
+.app-login__sub { margin: 0; max-width: 300px; opacity: 0.8; }
+.app-login__tg { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: min(320px, 100%); padding: 15px 18px; border-radius: 16px; background: #2aabee; color: #fff; font-size: 18px; font-weight: 800; text-decoration: none; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3); }
+.app-login__tg:active { transform: scale(0.98); }
+.app-login__tg--off { opacity: 0.6; pointer-events: none; }
+.app-login__wait { display: flex; flex-direction: column; align-items: center; gap: 8px; width: min(320px, 100%); padding: 16px; border-radius: 16px; background: rgba(0, 0, 0, 0.25); }
+.app-login__wait span:not(.ui-spinner) { font-size: 14px; opacity: 0.85; }
+.app-login__again { color: #9fd9ff; font-weight: 700; }
+.app-login__error { margin: 0; max-width: 320px; color: #ffd0c8; }
+.app-login__note { margin: 6px 0 0; max-width: 300px; font-size: 13px; opacity: 0.7; }
+.install-hint { display: flex; flex-direction: column; width: min(340px, 100%); padding: 0; border: 0; border-radius: 16px; background: rgba(255, 255, 255, 0.1); box-shadow: inset 0 0 0 1px rgba(247, 215, 116, 0.45); color: inherit; font: inherit; text-align: left; cursor: pointer; overflow: hidden; }
+button.install-hint, .install-hint__head { display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 10px 12px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; width: 100%; }
+.install-hint img { flex: none; border-radius: 9px; }
+.install-hint span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.install-hint strong { font-size: 15px; }
+.install-hint small { font-size: 12px; opacity: 0.75; }
+.install-hint__steps { margin: 0; padding: 4px 16px 12px 34px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.install-hint__steps svg { vertical-align: -3px; }
+.install-hint--compact { width: auto; margin: 0 2px; }

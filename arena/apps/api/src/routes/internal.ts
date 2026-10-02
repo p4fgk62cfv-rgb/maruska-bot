@@ -52,9 +52,17 @@ export async function internalRoutes(app: FastifyInstance, ctx: Context): Promis
 
   app.get('/internal/integrity/suspicious', { preHandler: check }, async (request) => {
     const q = z
-      .object({ days: z.coerce.number().int().min(1).max(90).default(7), minGames: z.coerce.number().int().min(2).default(5), minCredits: z.coerce.number().int().min(0).default(1000) })
+      .object({
+        days: z.coerce.number().int().min(1).max(90).default(7),
+        minGames: z.coerce.number().int().min(2).default(5),
+        minCredits: z.coerce.number().int().min(0).default(1000),
+        /** Only pairs with this player (Telegram ID). */
+        telegramId: z.coerce.bigint().optional(),
+      })
       .parse(request.query);
-    return ctx.moderation.suspiciousPairs(q.days, q.minGames, q.minCredits);
+    const user = q.telegramId ? await ctx.db.user.findUnique({ where: { telegramId: q.telegramId }, select: { id: true } }) : null;
+    if (q.telegramId && !user) return [];
+    return ctx.moderation.suspiciousPairs(q.days, q.minGames, q.minCredits, user?.id);
   });
 
   app.post('/internal/moderation/ban', { preHandler: check }, async (request) => {

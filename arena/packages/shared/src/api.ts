@@ -230,6 +230,7 @@ export interface PlayerCardDto extends PublicUserDto {
   relation: Relation;
   /** «+добавить метку» — only the viewer ever sees it. */
   note: string | null;
+  bot?: boolean;
 }
 
 export type MatchOutcome = 'win' | 'loss' | 'draw' | 'left';
@@ -269,6 +270,8 @@ export interface PlayerProfileDto extends PublicUserDto {
   presence: Presence;
   lastSeenAt: string;
   memberSince: string;
+  /** A bot opponent: no friends, favourites or messages. */
+  bot: boolean;
   relation: Relation;
   favorite: boolean;
   /** The rarest achievement, worn as a title under the name. */
@@ -321,6 +324,46 @@ export interface OwnerPlayerDto {
   photoUrl: string | null;
   credits: number;
   coins: number;
+}
+
+/** Bot opponents: they fill empty seats at public tables after `delaySec` without a person. */
+export interface BotSettingsDto {
+  enabled: boolean;
+  delaySec: number;
+  level: 'easy' | 'normal' | 'hard';
+}
+
+/** Referral program, set by the owner in «Управление». */
+export interface ReferralSettingsDto {
+  enabled: boolean;
+  /** Coins for the newcomer who came by an invite. */
+  inviteeCoins: number;
+  /** Coins for whoever invited them. */
+  referrerCoins: number;
+  /** Rewarded invites per referrer per day: stops farming with fake accounts. */
+  dailyLimit: number;
+}
+
+export interface ReferralFriendDto extends PublicUserDto {
+  joinedAt: string;
+  /** Null until the newcomer finished a first game with other people. */
+  rewardedAt: string | null;
+  coins: number;
+}
+
+/** «Пригласить друга»: my link, what it pays and whom I brought. */
+export interface ReferralInfoDto {
+  enabled: boolean;
+  /** Mini App link with my code, or null when the bot/app name is not configured. */
+  link: string | null;
+  inviteeCoins: number;
+  referrerCoins: number;
+  invited: number;
+  rewarded: number;
+  earned: number;
+  friends: ReferralFriendDto[];
+  /** Who brought me, while my own reward is still waiting for the first game. */
+  invitedBy: (PublicUserDto & { pending: boolean; coins: number }) | null;
 }
 
 /** Gift for every newcomer, set by the owner in «Управление». */

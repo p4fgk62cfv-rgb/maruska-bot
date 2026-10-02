@@ -57,9 +57,15 @@ export function ConnectionBanner() {
     <div className={`conn${offline ? ' conn--offline' : ''}`} role="alert">
       <span className="conn__spinner" aria-hidden="true" />
       <span className="conn__text">
-        <span className="conn__title">{offline ? 'Нет интернета' : 'Переподключение…'}</span>
+        <span className="conn__title">{offline ? 'Нет интернета' : socket.restarting ? 'Сервер обновляется…' : 'Переподключение…'}</span>
         <span className="conn__sub">
-          {playing ? 'Партия и ставка сохранены — вернём вас за стол' : offline ? 'Ждём, когда появится сеть' : 'Восстанавливаем связь с сервером'}
+          {socket.restarting
+            ? 'Через несколько секунд всё заработает'
+            : playing
+              ? 'Партия и ставка сохранены — вернём вас за стол'
+              : offline
+                ? 'Ждём, когда появится сеть'
+                : 'Восстанавливаем связь с сервером'}
           {!offline && socket.attempt > 1 ? ` · попытка ${socket.attempt}` : ''}
         </span>
       </span>

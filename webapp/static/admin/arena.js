@@ -16,7 +16,7 @@
     SIGNUP_BONUS: "Бонус за регистрацию", DAILY_BONUS: "Ежедневные кредиты", GAME_STAKE: "Ставка", GAME_PAYOUT: "Выигрыш",
     GAME_REFUND: "Возврат ставки", PURCHASE: "Покупка", PURCHASE_REFUND: "Возврат за предмет", TOURNAMENT_FEE: "Взнос за турнир",
     TOURNAMENT_PRIZE: "Приз турнира", TOURNAMENT_REFUND: "Возврат взноса", ACHIEVEMENT_REWARD: "Достижение", EXCHANGE: "Обмен",
-    ADMIN: "Правка админа", MODERATION: "Изъятие модератором"
+    ADMIN: "Правка админа", MODERATION: "Изъятие модератором", REFERRAL: "Приглашение друга"
   };
   var REPORT = { CHEATING: "жульничает", COLLUSION: "сговор", INSULT: "имя/фото", OTHER: "другое" };
   var T_STATUS = { ANNOUNCED: "анонс", REGISTRATION: "регистрация", RUNNING: "идёт", FINISHED: "завершён", CANCELLED: "отменён" };

@@ -18,6 +18,7 @@ const TX_LABEL: Record<string, string> = {
   TOURNAMENT_FEE: 'Взнос за турнир',
   TOURNAMENT_PRIZE: 'Приз турнира',
   ACHIEVEMENT_REWARD: 'Награда за достижение',
+  REFERRAL: 'Приглашение друга',
   EXCHANGE: 'Обмен',
   ADMIN: 'Начисление',
 };

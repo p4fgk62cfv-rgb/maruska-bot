@@ -1,4 +1,5 @@
 import { WelcomeService } from './services/welcome.js';
+import { BotService } from './services/bots.js';
 import type { Config } from './config.js';
 import type { Db } from './db.js';
 import type { Realtime } from './realtime/realtime.js';
@@ -7,6 +8,7 @@ import { ModerationService } from './services/moderation.js';
 import { Ledger } from './services/ledger.js';
 import type { FriendService } from './services/friends.js';
 import type { ProfileService } from './services/profiles.js';
+import type { ReferralService } from './services/referrals.js';
 import type { TournamentService } from './services/tournaments.js';
 import type { Outbox } from './services/notifier.js';
 import type { Presence } from './services/presence.js';
@@ -23,6 +25,7 @@ export interface BaseContext {
   items: ItemService;
   moderation: ModerationService;
   welcome: WelcomeService;
+  bots: BotService;
 }
 
 /** Explicit dependency container: routes receive what they need, nothing is a hidden global. */
@@ -32,6 +35,7 @@ export interface Context extends BaseContext {
   outbox: Outbox;
   friends: FriendService;
   profiles: ProfileService;
+  referrals: ReferralService;
   tournaments: TournamentService;
 }
 
@@ -45,6 +49,7 @@ export function createContext(config: Config, db: Db): BaseContext {
     ledger,
     users: new UserService(db, ledger, welcome, items, ownerIds(config.OWNER_IDS)),
     welcome,
+    bots: new BotService(db, ledger),
     wallets: new WalletService(db, ledger),
     items,
     moderation: new ModerationService(db, ledger),

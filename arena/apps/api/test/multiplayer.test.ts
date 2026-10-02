@@ -8,7 +8,7 @@ import { RedisStore, type SnapshotStore } from '../src/realtime/store.js';
 import { seedCatalog } from '../src/services/catalog.js';
 import { signInitData } from '../src/telegram/initData.js';
 import { Bot } from './bots.js';
-import type { RoomSettings } from '@arena/shared';
+import { parseRoomStartParam, type RoomSettings } from '@arena/shared';
 
 const url = process.env.TEST_DATABASE_URL;
 const redisUrl = process.env.TEST_REDIS_URL;
@@ -286,6 +286,105 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     expect(internals(gameId).snap.state.version).toBe(v2 + 1);
   }, 30_000);
 
+  it('bots fill a table only when asked, at the table\'s level, play for credits, and leave with the people', async () => {
+    await handle.ctx.bots.setSettings({ enabled: true, delaySec: 1, level: 'hard' });
+    try {
+      const human = await player('Solo', 10);
+      const created = (await api(human, 'POST', '/rooms', { ...SETTINGS, players: 2, bots: true, botLevel: 'easy' })).json();
+      const roomId: string = created.room.id;
+      expect(created.room.settings).toMatchObject({ bots: true, botLevel: 'easy' });
+      const before = (await api(human, 'GET', '/me')).json();
+
+      // Without the tick a table waits for people only — public or private.
+      const otherHost = await player('NoBotsHost', 10);
+      const noBots = (await api(otherHost, 'POST', '/rooms', { ...SETTINGS, players: 6 })).json().room.id;
+      const friendHost = await player('PrivateHost', 10);
+      const privateRoom = (await api(friendHost, 'POST', '/rooms', { ...SETTINGS, players: 2, isPrivate: true, password: '1234' })).json().room.id;
+
+      // Nobody comes in → a bot takes the seat, already ready.
+      const joined = await human.waitFor((m) => m.type === 'ROOM_UPDATED' && m.room.id === roomId && m.room.seats.some((x) => x.bot), 5000);
+      const seats = (joined as { room: { seats: { bot?: boolean; ready: boolean }[] } }).room.seats;
+      expect(seats.filter((x) => x.bot)).toHaveLength(1);
+      expect(seats.find((x) => x.bot)!.ready).toBe(true);
+      expect(handle.ctx.realtime.rooms.get(privateRoom)!.seats).toHaveLength(1);
+      await new Promise((r) => setTimeout(r, 1200));
+      expect(handle.ctx.realtime.rooms.get(noBots)!.seats).toHaveLength(1);
+
+      expect((await human.send({ type: 'READY', roomId, ready: true })).type).toBe('ACK');
+      const started = await human.waitFor((m) => m.type === 'GAME_STARTED');
+      const gameId = (started as { gameId: string }).gameId;
+      expect((started as { players: { bot?: boolean }[] }).players.some((x) => x.bot)).toBe(true);
+      // The table's level, not the owner's default («hard»).
+      expect((handle.ctx.realtime.games.get(gameId) as unknown as { snap: { botLevel?: string } }).snap.botLevel).toBe('easy');
+
+      // The person plays; the bot answers on its own.
+      expect((await human.send({ type: 'USE_FEATURE', gameId, feature: 'hints' })).type).toBe('ACK');
+      human.autoplay = true;
+      await human.send({ type: 'RECONNECT', roomId });
+      await human.waitFor((m) => m.type === 'GAME_FINISHED', 90_000);
+      const result = human.result!;
+      expect(result.reason).not.toBe('timeout');
+
+      // Credits moved like in any game; rating stayed.
+      const after = (await api(human, 'GET', '/me')).json();
+      const mine = result.payouts.find((p) => p.userId === human.userId)!;
+      expect(after.rating).toBe(before.rating);
+      expect(mine.ratingGain).toBe(0);
+      expect(after.wallet.credits - before.wallet.credits).toBe(mine.net);
+
+      // The person leaves the table → the bot leaves too and the table closes.
+      await new Promise((r) => setTimeout(r, 300));
+      expect((await api(human, 'POST', `/rooms/${roomId}/leave`)).statusCode).toBe(200);
+      expect(handle.ctx.realtime.rooms.get(roomId)).toBeUndefined();
+
+      // Bots are not in the leaderboard and cannot be friended.
+      const board = (await api(human, 'GET', '/leaderboard?by=rating')).json() as { id: string }[];
+      const botId = result.payouts.find((p) => p.userId !== human.userId)!.userId;
+      expect(board.some((r) => r.id === botId)).toBe(false);
+      expect((await api(human, 'POST', '/friends/requests', { userId: botId })).json().error).toBe('NOT_FOUND');
+    } finally {
+      await handle.ctx.bots.setSettings({ enabled: false, delaySec: 12, level: 'normal' });
+    }
+  }, 120_000);
+
+  it('chairs before the deal: move to a free one, ask to swap, accept or decline; the deal follows the chairs', async () => {
+    const a = await player('Аня', 10);
+    const roomId: string = (await api(a, 'POST', '/rooms', { ...SETTINGS, players: 3 })).json().room.id;
+    const b = await player('Борис', 10);
+    expect((await api(b, 'POST', `/rooms/${roomId}/join`, {})).statusCode).toBe(200);
+    const chairs = () => Object.fromEntries(handle.ctx.realtime.rooms.dto(handle.ctx.realtime.rooms.get(roomId)!).seats.map((s) => [s.userId, s.seat]));
+    expect(chairs()).toEqual({ [a.userId]: 0, [b.userId]: 1 });
+
+    // A free chair: just sit there. A taken one: refused.
+    expect((await a.send({ type: 'MOVE_SEAT', roomId, seat: 2 })).type).toBe('ACK');
+    expect(chairs()).toEqual({ [a.userId]: 2, [b.userId]: 1 });
+    expect(await b.send({ type: 'MOVE_SEAT', roomId, seat: 2 })).toMatchObject({ type: 'ERROR', code: 'SEAT_TAKEN' });
+
+    // Asking to swap: the other side decides.
+    expect((await b.send({ type: 'SEAT_SWAP', roomId, userId: a.userId })).type).toBe('ACK');
+    const ask = await a.waitFor((m) => m.type === 'SEAT_SWAP_ASKED');
+    expect(ask).toMatchObject({ from: { userId: b.userId, name: 'Борис', seat: 1 } });
+    expect((await a.send({ type: 'SEAT_SWAP_ANSWER', roomId, userId: b.userId, accept: false })).type).toBe('ACK');
+    await b.waitFor((m) => m.type === 'SEAT_SWAP_DECLINED');
+    expect(chairs()).toEqual({ [a.userId]: 2, [b.userId]: 1 });
+    // An answer without a question does nothing.
+    expect(await a.send({ type: 'SEAT_SWAP_ANSWER', roomId, userId: b.userId, accept: true })).toMatchObject({ type: 'ERROR', code: 'NOT_FOUND' });
+
+    expect((await b.send({ type: 'SEAT_SWAP', roomId, userId: a.userId })).type).toBe('ACK');
+    await a.waitFor((m) => m.type === 'SEAT_SWAP_ASKED');
+    expect((await a.send({ type: 'SEAT_SWAP_ANSWER', roomId, userId: b.userId, accept: true })).type).toBe('ACK');
+    expect(chairs()).toEqual({ [a.userId]: 1, [b.userId]: 2 });
+
+    // A newcomer takes the free chair 0; the deal goes in chair order.
+    const c = await player('Вера', 10);
+    expect((await api(c, 'POST', `/rooms/${roomId}/join`, {})).statusCode).toBe(200);
+    expect(chairs()).toEqual({ [c.userId]: 0, [a.userId]: 1, [b.userId]: 2 });
+    const gameId = await startGame([a, b, c], roomId);
+    expect(handle.ctx.realtime.games.get(gameId)!.playerInfo().map((p) => p.userId)).toEqual([c.userId, a.userId, b.userId]);
+    // No more chair changes once the cards are out.
+    expect(await a.send({ type: 'MOVE_SEAT', roomId, seat: 0 })).toMatchObject({ type: 'ERROR' });
+  });
+
   it('rejects cheating and foreign actions, and «Сдаться» is a loss', async () => {
     const { players, roomId } = await table(2);
     const gameId = await startGame(players, roomId);
@@ -369,7 +468,49 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     }
   });
 
-  it.skipIf(!redisUrl)('a running game survives a server restart through Redis', async () => {
+  it.skipIf(!redisUrl)('an update restart: everyone is told, the game is cancelled with stakes back, the table stays', async () => {
+    const redis = new Redis(redisUrl!);
+    await redis.flushdb();
+    await redis.quit();
+    await handle.app.close();
+    await start(new RedisStore(redisUrl!));
+
+    const { players, roomId } = await table(2);
+    const before = await Promise.all(players.map(async (p) => (await api(p, 'GET', '/me')).json().wallet.credits as number));
+    const gameId = await startGame(players, roomId);
+    await players[0]!.waitFor((m) => m.type === 'GAME_STATE');
+
+    // What main.ts does on SIGTERM.
+    await handle.ctx.realtime.stopForRestart();
+    for (const p of players) {
+      expect(await p.waitFor((m) => m.type === 'SERVER_RESTART')).toMatchObject({ refunded: true });
+      expect(await p.waitFor((m) => m.type === 'GAME_FINISHED')).toMatchObject({ result: { reason: 'cancelled' } });
+    }
+    // Nothing more is applied on the old server.
+    expect(await players[0]!.send({ type: 'PASS', gameId })).toMatchObject({ type: 'ERROR', code: 'SERVER_RESTARTING' });
+    for (const p of players) p.close();
+    await handle.app.close();
+
+    // The next server: same table, both seated, nothing running, stakes back.
+    await start(new RedisStore(redisUrl!));
+    expect(handle.ctx.realtime.games.get(gameId)).toBeUndefined();
+    const room = handle.ctx.realtime.rooms.get(roomId)!;
+    expect(room.status).toBe('waiting');
+    expect(room.seats.map((s) => s.userId).sort()).toEqual(players.map((p) => p.userId).sort());
+    const game = await handle.ctx.db.game.findUnique({ where: { id: gameId } });
+    expect(game?.status).not.toBe('PLAYING');
+    for (const [i, p] of players.entries()) {
+      p.inbox = [];
+      (p as unknown as { base: string }).base = address;
+      await p.connect((p as unknown as { authToken: string }).authToken);
+      expect((await api(p, 'GET', '/me')).json().wallet.credits).toBe(before[i]);
+    }
+    // They can play the next deal right away.
+    const next = await startGame(players, roomId);
+    expect(next).not.toBe(gameId);
+  }, 90_000);
+
+  it.skipIf(!redisUrl)('a running game survives a server crash through Redis', async () => {
     const redis = new Redis(redisUrl!);
     await redis.flushdb();
     await redis.quit();
@@ -382,6 +523,8 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     const version = handle.ctx.realtime.games.get(gameId)!.state.version;
 
     for (const p of players) p.close();
+    // A crash: no goodbye, the lease simply lapses.
+    handle.ctx.realtime.crashOnShutdown = true;
     await handle.app.close();
     await start(new RedisStore(redisUrl!));
     expect(handle.ctx.realtime.games.get(gameId)?.state.version).toBe(version);
@@ -447,12 +590,13 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     const roomId: string = created.room.id;
     const guesser = await player('Guesser', 10);
     for (let i = 0; i < 8; i++) {
-      expect((await api(guesser, 'POST', `/rooms/${roomId}/join`, { password: String(1000 + i) })).json().error).toBe('WRONG_PASSWORD');
+      const res = await api(guesser, 'POST', `/rooms/${roomId}/join`, { password: String(1000 + i) });
+      expect(res.json().error, res.body).toBe('WRONG_PASSWORD');
     }
     // Even the right PIN is refused now…
     expect((await api(guesser, 'POST', `/rooms/${roomId}/join`, { password: '4321' })).json().error).toBe('RATE_LIMITED');
     // …but a friend with the invite link gets in.
-    const invite = new URL(created.invite.link).searchParams.get('startapp')!.split('_')[2]!;
+    const invite = parseRoomStartParam(new URL(created.invite.link).searchParams.get('startapp'))!.invite!;
     const friend = await player('Friend', 10);
     expect((await api(friend, 'POST', `/rooms/${roomId}/join`, { invite })).statusCode).toBe(200);
   });

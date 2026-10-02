@@ -247,7 +247,7 @@ export class FriendService {
   async send(me: string, targetId: string): Promise<SendRequestResult> {
     if (me === targetId) throw new AppError('VALIDATION_FAILED');
     const target = await this.db.user.findUnique({ where: { id: targetId }, include: { profile: true } });
-    if (!target?.profile || isBanned(target)) throw new AppError('NOT_FOUND');
+    if (!target?.profile || isBanned(target) || target.isBot) throw new AppError('NOT_FOUND');
 
     if (await this.db.friend.findUnique({ where: { userId_friendId: { userId: me, friendId: targetId } } })) {
       return { status: 'already_friends' };
@@ -360,7 +360,7 @@ export class FriendService {
     }
     const relations = await this.relations(me, [...byUser.keys()]);
     return [...byUser.values()]
-      .filter((e) => e.user.profile && !isBanned(e.user))
+      .filter((e) => e.user.profile && !isBanned(e.user) && !e.user.isBot)
       .sort((a, b) => b.last.getTime() - a.last.getTime())
       .slice(0, 30)
       .map((e) => ({
@@ -376,7 +376,7 @@ export class FriendService {
     const q = query.trim().replace(/^@/, '');
     if (q.length < 3) return [];
     const users = await this.db.user.findMany({
-      where: { username: { startsWith: q, mode: 'insensitive' }, bannedAt: null, id: { not: me } },
+      where: { username: { startsWith: q, mode: 'insensitive' }, isBot: false, bannedAt: null, id: { not: me } },
       include: { profile: true },
       take: 20,
     });

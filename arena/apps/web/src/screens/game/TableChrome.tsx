@@ -66,11 +66,13 @@ export interface SeatTileProps {
   bubble?: { text: string; tone: 'take' | 'pass' } | null;
   /** My private label about this player. */
   note?: string | null;
+  /** A bot opponent: a small «бот» badge on the portrait. */
+  bot?: boolean;
   onOpen?: () => void;
 }
 
 /** A player at the table: square portrait with the name on it, cards fanned behind, status below. */
-export const SeatTile = memo(function SeatTile({ seat, cards = 0, back = 'classic', active, progress = null, label, number, emoji, dim, offline, anchor, size = 58, bubble, note, onOpen }: SeatTileProps) {
+export const SeatTile = memo(function SeatTile({ seat, cards = 0, back = 'classic', active, progress = null, label, number, emoji, dim, offline, anchor, size = 58, bubble, note, bot, onOpen }: SeatTileProps) {
   const fan = Math.min(cards, 7);
   return (
     <div
@@ -95,6 +97,7 @@ export const SeatTile = memo(function SeatTile({ seat, cards = 0, back = 'classi
       <span className="seat-tile__frame" {...(anchor ? { 'data-seat': seat.id } : {})}>
         <Avatar id={seat.id} name={seat.name} photoUrl={seat.photoUrl} size={size} ring={ringOf(seat.frame)} crown={Boolean(seat.crown)} status={offline ? 'offline' : undefined} />
         <span className="seat-tile__name">{seat.name}</span>
+        {bot && <span className="seat-tile__bot">бот</span>}
         {cards > 0 && <span className="seat-tile__count">{cards}</span>}
         {emoji && (
           <span className="seat__emoji" key={emoji.n} aria-hidden="true">
@@ -121,13 +124,23 @@ export const SeatTile = memo(function SeatTile({ seat, cards = 0, back = 'classi
 });
 
 /** An empty chair while the room fills up. */
-export function EmptySeat({ number, size = 58 }: { number: number; size?: number }) {
-  return (
-    <div className="seat-tile seat-tile--empty" style={{ ['--tile' as string]: `${size}px` }}>
+export function EmptySeat({ number, size = 58, onClick }: { number: number; size?: number; onClick?: () => void }) {
+  const body = (
+    <>
       <span className="seat-tile__frame">
-        <Icon name="hourglass" size={size * 0.45} />
+        <Icon name={onClick ? 'plus' : 'hourglass'} size={size * 0.45} />
       </span>
       <span className="seat-tile__number">{number}</span>
+    </>
+  );
+  // Before the deal a free chair can be taken with a tap.
+  return onClick ? (
+    <button type="button" className="seat-tile seat-tile--empty seat-tile--free" style={{ ['--tile' as string]: `${size}px` }} onClick={onClick} aria-label={`Пересесть на место ${number}`}>
+      {body}
+    </button>
+  ) : (
+    <div className="seat-tile seat-tile--empty" style={{ ['--tile' as string]: `${size}px` }}>
+      {body}
     </div>
   );
 }

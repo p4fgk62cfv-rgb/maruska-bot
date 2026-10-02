@@ -6,6 +6,8 @@ import { settings } from './settings.js';
  */
 interface SafeAreaInset { top: number; bottom: number; left: number; right: number }
 
+export type HomeScreenStatus = 'unsupported' | 'unknown' | 'added' | 'missed';
+
 interface TelegramWebApp {
   initData: string;
   initDataUnsafe: { start_param?: string };
@@ -26,8 +28,12 @@ interface TelegramWebApp {
   disableClosingConfirmation(): void;
   lockOrientation?(): void;
   openTelegramLink(url: string): void;
-  onEvent(event: string, handler: () => void): void;
-  offEvent(event: string, handler: () => void): void;
+  openLink?(url: string, options?: { try_instant_view?: boolean }): void;
+  onEvent(event: string, handler: (payload?: unknown) => void): void;
+  offEvent(event: string, handler: (payload?: unknown) => void): void;
+  /** Bot API 8.0: a shortcut to the Mini App on the phone's home screen. */
+  addToHomeScreen?(): void;
+  checkHomeScreenStatus?(callback?: (status: HomeScreenStatus) => void): void;
   BackButton: { show(): void; hide(): void; onClick(cb: () => void): void; offClick(cb: () => void): void };
   HapticFeedback: {
     impactOccurred(style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft'): void;
