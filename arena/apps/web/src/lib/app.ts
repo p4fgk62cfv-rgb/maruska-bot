@@ -24,6 +24,21 @@ export function deviceName(): string {
   return `${os} · ${browser}${isStandalone() ? ' · приложение' : ''}`;
 }
 
+/**
+ * «Установить приложение» from inside Telegram: the install page must open in a real browser —
+ * Telegram's own window cannot install apps. Chrome shows a one-tap «Установить».
+ */
+export function openInstallPage(): void {
+  const url = `${location.origin}/?install=1`;
+  tg?.openLink?.(url, isAndroid ? { try_browser: 'chrome' } : undefined);
+}
+
+/** Android: leave an in-app browser for Chrome (or the default browser when there is no Chrome). */
+export function androidBrowserLink(): string {
+  const url = `${location.origin}/?install=1`;
+  return `intent://${location.host}/?install=1#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
+}
+
 // ── remembered sign-in (outside Telegram only) ──
 
 const SESSION_KEY = 'arena.appSession';

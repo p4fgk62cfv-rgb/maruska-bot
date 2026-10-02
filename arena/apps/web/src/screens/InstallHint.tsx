@@ -1,6 +1,6 @@
 import { Icon } from '@arena/ui';
 import { useState } from 'react';
-import { useInstall } from '../lib/app.js';
+import { androidBrowserLink, useInstall } from '../lib/app.js';
 
 /**
  * «Установить Арену»: on Android (and desktop Chrome) a real install button; on iPhone the two
@@ -34,8 +34,8 @@ export function InstallHint({ compact = false }: { compact?: boolean }) {
       </button>
       {open && mode === 'android' && (
         <>
-          <a className="install-hint__browser" href={`intent://${location.host}/?install=1#Intent;scheme=https;end`}>
-            Открыть в браузере телефона
+          <a className="install-hint__browser" href={androidBrowserLink()}>
+            Открыть в Chrome
           </a>
           <ol className="install-hint__steps">
             <li>
