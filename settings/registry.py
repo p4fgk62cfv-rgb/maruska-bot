@@ -20,6 +20,13 @@
 import os
 from dataclasses import dataclass
 
+# Список по умолчанию — общий с features/antimat.py
+ANTIMAT_DEFAULT_WORDS = (
+    "хуй*, хуя*, хуе*, хуё*, хули, *пизд*, бля, бляд*, блять, блядь, "
+    "ебать, ебал*, ебан*, ебну*, ебло, ебуч*, *уеб*, "
+    "сука, суки, мудак*, мудил*, пидор*, пидар*, гандон*, шлюх*, долбоеб*"
+)
+
 
 @dataclass(frozen=True)
 class Feature:
@@ -239,6 +246,22 @@ FEATURES: tuple[Feature, ...] = (
         description="Крокодил и будущие игры",
         group="Развлечения",
         default=False,
+    ),
+    Feature(
+        key="antimat",
+        title="Антимат",
+        emoji="🤬",
+        description="Мара предупреждает за мат из списка ниже, а после последнего предупреждения даёт мут",
+        default=False,
+        group="Антимат",
+    ),
+    Feature(
+        key="antimat_delete",
+        title="Удалять сообщения с матом",
+        emoji="🗑",
+        description="Сообщение с матом исчезает, в чате остаётся только предупреждение Мары",
+        default=True,
+        group="Антимат",
     ),
 )
 
@@ -859,6 +882,23 @@ NUMBERS: tuple[Number, ...] = (
         env="HINT_COOLDOWN", unit="сек",
         group="Развлечения",
     ),
+    Number(
+        key="antimat_warnings",
+        title="Предупреждений до мута",
+        emoji="⚠️",
+        description="Сколько словесных предупреждений за мат, прежде чем мут",
+        default=3, minimum=1, maximum=10, step=1,
+        group="Антимат",
+    ),
+    Number(
+        key="antimat_mute_minutes",
+        title="Мут за мат",
+        emoji="🔇",
+        description="На сколько минут мут после последнего предупреждения. 0 — только предупреждения, без мута",
+        default=0, minimum=0, maximum=43200, step=5,
+        unit="мин",
+        group="Антимат",
+    ),
 )
 
 
@@ -990,6 +1030,16 @@ TEXTS: tuple[Text, ...] = (
         default=DEFAULT_GREETING_HINT,
         max_length=800,
         group="Сообщество",
+    ),
+    Text(
+        key="antimat_words",
+        title="Запрещённые слова",
+        emoji="🤬",
+        description="Через запятую или с новой строки. «сука» — только это слово; «хуй*» — все слова с этого начала (и «нахуй»); «*пизд*» — где угодно в слове",
+        default=ANTIMAT_DEFAULT_WORDS,
+        max_length=3000,
+        group="Антимат",
+        allow_empty=True,
     ),
 )
 

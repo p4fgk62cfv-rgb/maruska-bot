@@ -10,7 +10,7 @@
   // НАСТРОЙКИ (весь список или один раздел)
   // =========================================================
 
-  var SECTION_PERMISSION = { "Общение": "content", "Сообщество": "settings", "Модерация": "moderation", "Развлечения": "games" };
+  var SECTION_PERMISSION = { "Общение": "content", "Сообщество": "settings", "Модерация": "moderation", "Антимат": "moderation", "Развлечения": "games" };
 
   M.screen("settings", function (only) {
     if (!M.state.chat) {
@@ -102,6 +102,26 @@
         var mi = row.querySelector("[data-minus]"), pl = row.querySelector("[data-plus]");
         if (mi) mi.onclick = function () { step(-it.step); };
         if (pl) pl.onclick = function () { step(it.step); };
+        // Нажатие на число — ввести своё значение (например, 1440 минут), а не листать по шагу
+        if (v && it.kind === "number") v.onclick = function () {
+          if (v.querySelector("input")) return;
+          var input = document.createElement("input");
+          input.type = "number"; input.inputMode = "numeric";
+          input.min = it.min; input.max = it.max; input.value = it.value;
+          input.style.cssText = "width:90px;text-align:center;padding:4px;margin:0";
+          v.textContent = ""; v.appendChild(input); input.focus(); input.select();
+          var done = false;
+          var finish = function () {
+            if (done) return; done = true;
+            var n = parseInt(input.value, 10);
+            if (isNaN(n)) { v.textContent = it.value + (it.unit ? " " + it.unit : ""); return; }
+            n = Math.max(it.min, Math.min(it.max, n));
+            v.textContent = n + (it.unit ? " " + it.unit : "");
+            if (n !== it.value) { it.value = n; save(n); }
+          };
+          input.onblur = finish;
+          input.onkeydown = function (e) { if (e.key === "Enter") input.blur(); };
+        };
 
         var st = row.querySelector("[data-save-text]");
         if (st) st.onclick = function () { save(row.querySelector("[data-text]").value); };

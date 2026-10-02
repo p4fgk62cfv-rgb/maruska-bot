@@ -136,16 +136,20 @@
       section.items.forEach(function (i) { byKey[i.key] = i; });
 
       var val = function (k) { return byKey[k] ? byKey[k].value : null; };
+      // Антимат — свой раздел настроек
+      var mat = {};
+      ((res[0].sections.filter(function (s) { return s.name === "Антимат"; })[0] || { items: [] }).items).forEach(function (i) { mat[i.key] = i.value; });
+      var matWords = String(mat.antimat_words || "").split(/[,\n;]+/).filter(function (w) { return w.trim(); }).length;
       var on = val("automod");
       var rights = M.state.me.bot_rights || {};
       var canEdit = M.can("moderation");
       var canRestrict = !!rights.restrict;
       var canDelete = !!rights.delete;
 
-      var TILE_ICONS = { "🌊": "wind", "🔁": "repeat", "🔗": "link", "🚫": "ban", "🔣": "alert", "🎭": "image" };
+      var TILE_ICONS = { "🌊": "wind", "🔁": "repeat", "🔗": "link", "🚫": "ban", "🔣": "alert", "🎭": "image", "🤬": "alert" };
 
-      var tile = function (icon, title, active, state) {
-        return '<div class="menu-tile" data-open="settings" data-arg="Модерация">' + M.tile(TILE_ICONS[icon] || "shield", active ? "purple" : "blue", 19)
+      var tile = function (icon, title, active, state, section) {
+        return '<div class="menu-tile" data-open="settings" data-arg="' + (section || "Модерация") + '">' + M.tile(TILE_ICONS[icon] || "shield", active ? "purple" : "blue", 19)
           + '<div class="t">' + title + '</div><div class="s" style="color:' + (active ? "var(--green)" : "var(--dim)") + '">'
           + state + "</div></div>";
       };
@@ -176,6 +180,9 @@
         + tile("🌊", "Антифлуд", true, val("flood_messages") + " за " + val("flood_seconds") + " сек")
         + tile("🔁", "Антиспам", val("automod_repeats"), val("automod_repeats") ? "Повторы: ON" : "OFF")
         + tile("🔗", "Ссылки", val("link_policy") !== "allow", linkState[val("link_policy")] || "")
+        + tile("🤬", "Антимат", mat.antimat, mat.antimat
+            ? matWords + " слов · " + (mat.antimat_mute_minutes ? "мут " + mat.antimat_mute_minutes + " мин" : "только предупр.")
+            : "OFF", "Антимат")
         + tile("🚫", "Стоп-слова", words > 0, words + " слов")
         + tile("🔣", "Символы", val("automod_symbols"), val("automod_symbols") ? "ON" : "OFF")
         + tile("🤖", "Капча", val("captcha"), val("captcha") ? val("captcha_minutes") + " мин на ответ" : "OFF")

@@ -42,6 +42,7 @@ from features.digest import digest_loop, router as digest_router
 from features.fortune import router as fortune_router
 from features.greeting import router as greeting_router
 from features.automod import router as automod_router
+from features.antimat import router as antimat_router
 from features.captcha import router as captcha_router
 from images_library import router as library_router
 from features.autoreplies import router as autoreplies_router
@@ -123,6 +124,8 @@ dp.include_router(greeting_router)
 
 # Автомодерация раньше всего остального: нарушение удаляется
 # до того, как на него отреагируют действия или разговор
+# Антимат — своё предупреждение и мут за мат, до общей автомодерации
+dp.include_router(antimat_router)
 dp.include_router(automod_router)
 dp.include_router(captcha_router)
 

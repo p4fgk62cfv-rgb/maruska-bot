@@ -2480,6 +2480,35 @@ async def count_warnings(chat_id: int, telegram_id: int, days: int = 30) -> int:
         ).scalar() or 0
 
 
+async def count_warnings_by_reason(chat_id: int, telegram_id: int, reason: str, days: int = 30) -> int:
+    """Предупреждения одного вида (например, за мат) — у антимата свой счёт."""
+    since = utcnow() - timedelta(days=days)
+
+    async with session_scope() as session:
+        return (
+            await session.execute(
+                select(func.count(ChatWarning.id)).where(
+                    ChatWarning.chat_id == chat_id,
+                    ChatWarning.telegram_id == telegram_id,
+                    ChatWarning.reason == reason,
+                    ChatWarning.created_at >= since,
+                )
+            )
+        ).scalar() or 0
+
+
+async def clear_warnings_by_reason(chat_id: int, telegram_id: int, reason: str) -> None:
+    async with session_scope() as session:
+        await session.execute(
+            ChatWarning.__table__.delete().where(
+                ChatWarning.chat_id == chat_id,
+                ChatWarning.telegram_id == telegram_id,
+                ChatWarning.reason == reason,
+            )
+        )
+        await session.commit()
+
+
 async def clear_warnings(chat_id: int, telegram_id: int) -> None:
     async with session_scope() as session:
         await session.execute(
