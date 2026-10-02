@@ -10,6 +10,7 @@ import { useMe } from '../session.js';
 import { useToast } from '../toast.js';
 import { DockAction, EmptySeat, SeatTile, TableDock, TableTop } from './game/TableChrome.js';
 import { EmojiSheet, useSeatEmojis } from './game/emoji.js';
+import { PlayerSheet } from './game/PlayerSheet.js';
 
 /** Waiting room: the same felt as the game — chairs fill up live, everyone presses «Готов», the server deals. */
 export function RoomScreen({ room }: { room: RoomDto }) {
@@ -28,6 +29,7 @@ export function RoomScreen({ room }: { room: RoomDto }) {
   // Chairs can change only while the table gathers.
   const seating = room.status === 'waiting' && !room.tournament;
   const [askTarget, setAskTarget] = useState<{ userId: string; name: string } | null>(null);
+  const [profileOf, setProfileOf] = useState<string | null>(null);
   const [asked, setAsked] = useState<{ userId: string; name: string; seat: number } | null>(null);
 
   useEffect(
@@ -85,9 +87,8 @@ export function RoomScreen({ room }: { room: RoomDto }) {
             <button
               type="button"
               className="seat-tap"
-              disabled={!seating}
-              aria-label={`Поменяться местами с ${seat.name}`}
-              onClick={() => setAskTarget({ userId: seat.userId, name: seat.name })}
+              aria-label={seating ? `${seat.name}: поменяться местами или посмотреть` : `Профиль: ${seat.name}`}
+              onClick={() => (seating ? setAskTarget({ userId: seat.userId, name: seat.name }) : setProfileOf(seat.userId))}
             >
               <SeatTile
                 seat={{ id: seat.userId, name: seat.name, photoUrl: seat.photoUrl, frame: seat.frame, crown: seat.crown }}
@@ -178,25 +179,37 @@ export function RoomScreen({ room }: { room: RoomDto }) {
           })
         }
       />
-      <BottomSheet open={askTarget !== null} title="Поменяться местами?" onClose={() => setAskTarget(null)}>
-        {askTarget && (
-          <div className="app-stack">
-            <p className="app-muted">Попросим {askTarget.name} уступить место — вы поменяетесь стульями, если согласится.</p>
-            <Button
-              block
-              variant="gold"
-              onClick={() => {
-                const target = askTarget;
-                setAskTarget(null);
-                const bot = room.seats.find((s) => s.userId === target.userId)?.bot;
-                void send({ type: 'SEAT_SWAP', roomId: room.id, userId: target.userId }, bot ? undefined : `Просьба отправлена: ${target.name}`);
-              }}
-            >
-              Попросить
-            </Button>
+      {askTarget && (
+        <div className="choice-dialog" role="dialog" aria-modal="true" onClick={() => setAskTarget(null)}>
+          <div className="choice-dialog__box" onClick={(e) => e.stopPropagation()}>
+            <p className="choice-dialog__text">Хотите поменяться местами или посмотреть информацию об игроке?</p>
+            <div className="choice-dialog__buttons">
+              <button
+                type="button"
+                className="choice-dialog__main"
+                onClick={() => {
+                  const target = askTarget;
+                  setAskTarget(null);
+                  const bot = room.seats.find((s) => s.userId === target.userId)?.bot;
+                  void send({ type: 'SEAT_SWAP', roomId: room.id, userId: target.userId }, bot ? undefined : `Просьба отправлена: ${target.name}`);
+                }}
+              >
+                Поменяться
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setProfileOf(askTarget.userId);
+                  setAskTarget(null);
+                }}
+              >
+                Посмотреть
+              </button>
+            </div>
           </div>
-        )}
-      </BottomSheet>
+        </div>
+      )}
+      <PlayerSheet userId={profileOf} onClose={() => setProfileOf(null)} onNote={() => undefined} />
       <BottomSheet open={asked !== null} title="Поменяться местами?" onClose={() => setAsked(null)}>
         {asked && (
           <div className="app-stack">
