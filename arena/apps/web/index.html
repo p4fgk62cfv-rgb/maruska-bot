@@ -13,9 +13,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Арена" />
-    <!-- Not «black-translucent»: in an installed app iOS then measures the screen wrong (the bottom
-         bar floats above the edge, the top goes under the notch). An opaque bar avoids both. -->
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <!-- The app draws under the status bar. iOS then reports a screen shorter by the status bar
+         height in the installed app; lib/app.ts measures that gap and stretches the layout. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
