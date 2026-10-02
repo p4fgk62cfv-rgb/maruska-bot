@@ -8,6 +8,7 @@ import { play } from '../../lib/sound.js';
 import { useMe } from '../../session.js';
 import { useSettings } from '../../lib/settings.js';
 import { useCountdown } from '../../lib/hooks.js';
+import { ProfileSheet } from '../player/ProfileSheet.js';
 
 const REASON: Record<string, string> = {
   cards: 'остался с картами',
@@ -73,6 +74,7 @@ export function ResultView({
   now?: () => number;
 }) {
   const left = useCountdown(againDeadline, now);
+  const [profile, setProfile] = useState<string | null>(null);
   const rewards = useSettings().rewardAnimations;
   const me = useMe();
   const mine = result.payouts.find((p) => p.userId === me.id);
@@ -126,13 +128,15 @@ export function ResultView({
             )}
           </div>
         )}
-        <div className="result__list">
+        <div className="result__list" aria-label="Нажмите на игрока, чтобы открыть профиль">
           {result.payouts.map((p) => {
             const info = players.find((x) => x.userId === p.userId);
             return (
               <div key={p.userId} className="result__row">
-                <Avatar id={p.userId} name={info?.name ?? '?'} photoUrl={info?.photoUrl} size={30} />
-                <span>{p.userId === me.id ? 'Вы' : info?.name}</span>
+                <button type="button" className="result__who" aria-label={`Профиль: ${info?.name ?? 'игрок'}`} onClick={() => setProfile(p.userId)}>
+                  <Avatar id={p.userId} name={info?.name ?? '?'} photoUrl={info?.photoUrl} size={30} />
+                  <span>{p.userId === me.id ? 'Вы' : info?.name}</span>
+                </button>
                 <span className={p.net >= 0 ? 'tx-plus' : 'tx-minus'}>{p.net >= 0 ? `+${p.net}` : `−${Math.abs(p.net)}`}</span>
                 {p.userId !== me.id ? <AddFriend userId={p.userId} /> : <span />}
               </div>
@@ -159,6 +163,7 @@ export function ResultView({
           </Button>
         )}
       </div>
+      <ProfileSheet userId={profile} onClose={() => setProfile(null)} />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { ItemService } from './services/items.js';
 import { ModerationService } from './services/moderation.js';
 import { Ledger } from './services/ledger.js';
 import type { FriendService } from './services/friends.js';
+import type { ProfileService } from './services/profiles.js';
 import type { TournamentService } from './services/tournaments.js';
 import type { Outbox } from './services/notifier.js';
 import type { Presence } from './services/presence.js';
@@ -30,6 +31,7 @@ export interface Context extends BaseContext {
   presence: Presence;
   outbox: Outbox;
   friends: FriendService;
+  profiles: ProfileService;
   tournaments: TournamentService;
 }
 

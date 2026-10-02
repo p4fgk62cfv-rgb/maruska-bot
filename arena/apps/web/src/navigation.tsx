@@ -14,7 +14,8 @@ export type Page =
   | 'leaderboard'
   | 'news'
   | 'settings'
-  | 'owner';
+  | 'owner'
+  | 'player';
 
 interface Navigation {
   tab: Tab;
@@ -22,6 +23,9 @@ interface Navigation {
   setTab: (tab: Tab) => void;
   push: (page: Page) => void;
   back: () => void;
+  /** Whose card the «player» page shows. */
+  playerId: string | null;
+  openPlayer: (userId: string) => void;
 }
 
 const NavContext = createContext<Navigation | null>(null);
@@ -41,10 +45,17 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
     setStack((s) => [...s, page]);
   }, []);
   const back = useCallback(() => setStack((s) => s.slice(0, -1)), []);
+  const [playerId, setPlayerId] = useState<string | null>(null);
+  const openPlayer = useCallback((userId: string) => {
+    haptic.tap();
+    setPlayerId(userId);
+    // One player card at a time: a card opened from a card replaces it.
+    setStack((s) => (s[s.length - 1] === 'player' ? s : [...s, 'player']));
+  }, []);
 
   useEffect(() => setBackButton(stack.length ? back : null), [stack.length, back]);
 
-  const value = useMemo(() => ({ tab, stack, setTab, push, back }), [tab, stack, setTab, push, back]);
+  const value = useMemo(() => ({ tab, stack, setTab, push, back, playerId, openPlayer }), [tab, stack, setTab, push, back, playerId, openPlayer]);
   return <NavContext.Provider value={value}>{children}</NavContext.Provider>;
 }
 

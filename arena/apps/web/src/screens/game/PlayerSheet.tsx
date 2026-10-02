@@ -5,6 +5,7 @@ import { ACHIEVEMENT_ICON } from '../../lib/achievements.js';
 import { ringOf } from '../../lib/cosmetics.js';
 import { ApiError, api } from '../../lib/api.js';
 import { useToast } from '../../toast.js';
+import { PlayerProfileView } from '../player/PlayerProfile.js';
 
 /**
  * Tap on a portrait at the table: who this is (this season and overall), their badges,
@@ -13,7 +14,7 @@ import { useToast } from '../../toast.js';
 export function PlayerSheet({ userId, gameId, onClose, onNote }: { userId: string | null; gameId?: string; onClose: () => void; onNote: (userId: string, note: string | null) => void }) {
   const toast = useToast();
   const [card, setCard] = useState<PlayerCardDto | null>(null);
-  const [mode, setMode] = useState<'card' | 'note' | 'report'>('card');
+  const [mode, setMode] = useState<'card' | 'note' | 'report' | 'full'>('card');
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -87,6 +88,10 @@ export function PlayerSheet({ userId, gameId, onClose, onNote }: { userId: strin
         <div className="app-stack" aria-busy="true">
           <Skeleton height={72} radius={16} />
           <Skeleton height={120} radius={16} />
+        </div>
+      ) : mode === 'full' ? (
+        <div className="profile-sheet">
+          <PlayerProfileView userId={card.id} atTable />
         </div>
       ) : mode === 'report' ? (
         <div className="app-list">
@@ -186,6 +191,9 @@ export function PlayerSheet({ userId, gameId, onClose, onNote }: { userId: strin
             )}
             <Button variant="danger" icon="flag" onClick={() => setMode('report')}>Пожаловаться</Button>
           </div>
+          <Button block variant="ghost" icon="user" onClick={() => setMode('full')}>
+            Полный профиль и история
+          </Button>
         </div>
       )}
     </BottomSheet>

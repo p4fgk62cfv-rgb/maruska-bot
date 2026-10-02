@@ -484,7 +484,7 @@ select.app-input { appearance: none; }
 .result__mine .ui-balance { color: inherit; }
 .result__rating { font-size: 14px; color: var(--violet-hi); }
 .result__list { width: 100%; display: flex; flex-direction: column; gap: 6px; }
-.result__row { display: grid; grid-template-columns: auto 1fr auto 28px; align-items: center; gap: 10px; font-size: 14px; }
+.result__row { display: grid; grid-template-columns: minmax(0, 1fr) auto 28px; align-items: center; gap: 10px; font-size: 14px; }
 .result__add { width: 28px; height: 28px; border-radius: 50%; background: rgba(240, 169, 46, 0.25); color: var(--violet-hi); font-weight: 900; font-size: 18px; line-height: 28px; }
 .result__added { color: var(--green); font-weight: 900; text-align: center; }
 
@@ -1335,3 +1335,128 @@ html[data-home-design="premium"] .friends-play__arrow { color: #d7b6ff; font-siz
 @keyframes conn-out { to { opacity: 0; transform: translateY(-8px); } }
 @media (prefers-reduced-motion: reduce) { .conn, .conn--ok { animation: none; } .conn__spinner { animation-duration: 2.4s; } }
 .game__wait { position: absolute; left: 16px; right: 16px; top: 42%; z-index: 6; margin: 0; padding: 8px 12px; border-radius: 12px; text-align: center; font-size: 13px; font-weight: 600; color: #fff; background: rgba(10, 16, 48, 0.82); pointer-events: none; }
+
+/* ── Player card («Профиль» and anyone's profile) ── */
+.pcard { display: grid; gap: 12px; }
+.pcard__hero {
+  position: relative; overflow: hidden; display: grid; justify-items: center; gap: 6px; padding: 22px 16px 16px; border-radius: 24px; text-align: center;
+  background: linear-gradient(165deg, color-mix(in srgb, var(--league, var(--gold)) 34%, var(--surface-strong)), var(--surface-strong) 62%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--league, var(--gold)) 45%, transparent), var(--shadow);
+}
+.pcard__glow { position: absolute; inset: -40% -20% auto; height: 220px; background: radial-gradient(closest-side, color-mix(in srgb, var(--league, var(--gold)) 40%, transparent), transparent); pointer-events: none; }
+.pcard__portrait { position: relative; z-index: 1; padding: 4px; border-radius: 50%; background: conic-gradient(from 210deg, var(--league, var(--gold)), transparent 40%, var(--league, var(--gold)) 70%, transparent); }
+.pcard__level {
+  position: absolute; right: -4px; top: 2px; min-width: 28px; height: 24px; padding: 0 7px; border-radius: 12px; font-size: 13px; font-weight: 800; line-height: 24px;
+  color: #1a1300; background: var(--league, var(--gold)); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.pcard__name { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; margin: 4px 0 0; font-size: 24px; line-height: 1.15; color: var(--text); overflow-wrap: anywhere; }
+.pcard__name svg { color: var(--gold); }
+.pcard__title { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 0.02em; }
+.pcard__title--rare { color: #bfe8ff; background: rgba(56, 150, 230, 0.28); box-shadow: inset 0 0 0 1px rgba(120, 200, 255, 0.45); }
+.pcard__title--epic { color: #ead2ff; background: rgba(150, 80, 230, 0.3); box-shadow: inset 0 0 0 1px rgba(200, 150, 255, 0.5); }
+.pcard__title--legendary { color: #2a1a00; background: linear-gradient(90deg, #ffd36a, #ffb347, #ffd36a); box-shadow: 0 0 14px rgba(255, 200, 90, 0.55); }
+.pcard__sub { position: relative; z-index: 1; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 10px; font-size: 13px; color: var(--text-2); }
+.pcard__presence--online { color: var(--green); }
+.pcard__presence--in_game { color: var(--gold); }
+.pcard__season { position: relative; z-index: 1; font-size: 12px; color: var(--text-3); }
+.pcard__actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; margin-top: 8px; }
+.pcard__chip { padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; color: var(--text-2); background: var(--surface); }
+.pcard__chip--friend { color: var(--green); }
+.pcard__icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; color: var(--text); background: var(--surface); box-shadow: inset 0 0 0 1px var(--stroke); }
+.pcard__icon--on { color: #1a1300; background: var(--gold); box-shadow: none; }
+.pcard__icon:active { transform: scale(0.92); }
+.pcard__remove { position: relative; z-index: 1; margin-top: 2px; font-size: 12px; color: var(--text-3); text-decoration: underline; }
+.pcard__remove--sure { color: var(--red); }
+
+.pcard__panel { display: grid; gap: 10px; padding: 14px; border-radius: 20px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--stroke); }
+.pcard__panel h3 { display: flex; align-items: baseline; gap: 8px; margin: 0; font-size: 15px; color: var(--text); }
+.pcard__panel h3 small { font-size: 12px; font-weight: 600; color: var(--text-3); }
+.pcard__link { margin-left: auto; font-size: 13px; font-weight: 700; color: var(--gold); }
+
+.pcard__overview { grid-template-columns: 104px minmax(0, 1fr); align-items: center; gap: 12px; }
+.pcard__ring { position: relative; display: grid; place-items: center; width: 104px; height: 104px; }
+.pcard__ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.pcard__ring circle { fill: none; stroke-width: 8; }
+.pcard__ring-bg { stroke: var(--stroke); }
+.pcard__ring-fg { stroke: var(--league, var(--gold)); stroke-linecap: round; transition: stroke-dasharray 0.8s var(--ease, ease); }
+.pcard__ring strong { margin-top: 10px; font-size: 24px; line-height: 1; color: var(--text); }
+.pcard__ring span { margin-top: -22px; font-size: 11px; color: var(--text-3); }
+.pcard__tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.pcard__tile { display: grid; gap: 1px; padding: 8px 4px; border-radius: 12px; text-align: center; background: var(--surface); }
+.pcard__tile strong { font-size: 17px; color: var(--text); white-space: nowrap; }
+.pcard__tile span { font-size: 10.5px; color: var(--text-3); line-height: 1.15; }
+
+.pcard__dots { display: flex; flex-wrap: wrap; gap: 6px; }
+.pcard__dot { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; font-size: 12px; font-weight: 800; color: #fff; }
+.pcard__dot--W { background: #2f9e62; }
+.pcard__dot--L { background: #c9474b; }
+.pcard__dot--D { background: #6c7a83; }
+
+.pcard__fav { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; background: color-mix(in srgb, var(--league, var(--gold)) 16%, transparent); color: var(--text); }
+.pcard__fav > svg { flex: none; color: var(--gold); }
+.pcard__fav div { display: grid; gap: 2px; min-width: 0; }
+.pcard__fav strong { font-size: 15px; }
+.pcard__fav span { font-size: 12px; color: var(--text-2); }
+.pcard__bars { display: grid; gap: 6px; }
+.pcard__bar { display: grid; grid-template-columns: minmax(0, 1fr) 70px 34px; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); }
+.pcard__bar span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pcard__bar i { display: block; height: 6px; border-radius: 3px; background: var(--league, var(--gold)); opacity: 0.8; }
+.pcard__bar small { text-align: right; color: var(--text-3); }
+
+.pcard__score { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; color: var(--text-2); font-size: 13px; }
+.pcard__score span:first-child { text-align: right; }
+.pcard__score span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pcard__score strong { font-size: 28px; color: var(--text); letter-spacing: 0.04em; }
+.pcard__duel { height: 8px; border-radius: 4px; overflow: hidden; background: #c9474b; }
+.pcard__duel i { display: block; height: 100%; background: #2f9e62; }
+
+.pcard__titles { display: grid; gap: 6px; }
+.pcard__rare { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; text-align: left; color: var(--text); }
+.pcard__rare span { display: grid; min-width: 0; }
+.pcard__rare strong { font-size: 14px; }
+.pcard__rare small { font-size: 11px; color: var(--text-2); }
+.pcard__rare--rare { background: rgba(56, 150, 230, 0.16); }
+.pcard__rare--rare svg { color: #79c2ff; }
+.pcard__rare--epic { background: rgba(150, 80, 230, 0.18); }
+.pcard__rare--epic svg { color: #c99bff; }
+.pcard__rare--legendary { background: linear-gradient(90deg, rgba(255, 200, 90, 0.28), rgba(255, 170, 60, 0.12)); }
+.pcard__rare--legendary svg { color: var(--gold); }
+.pcard__badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.pcard__badge { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; color: var(--text-2); background: var(--surface); box-shadow: inset 0 0 0 1px var(--stroke); }
+.pcard__badge--rare { color: #79c2ff; box-shadow: inset 0 0 0 1.5px rgba(120, 200, 255, 0.6); }
+.pcard__badge--epic { color: #c99bff; box-shadow: inset 0 0 0 1.5px rgba(200, 150, 255, 0.65); }
+.pcard__badge--legendary { color: #2a1a00; background: var(--gold); box-shadow: 0 0 10px rgba(255, 200, 90, 0.5); }
+.pcard__about { margin: 0; font-size: 13px; color: var(--text-2); }
+
+.pcard__matches { display: grid; gap: 6px; }
+.match { display: grid; grid-template-columns: 4px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 8px 10px 8px 0; border-radius: 12px; background: var(--surface); overflow: hidden; }
+.match__mark { align-self: stretch; }
+.match--win .match__mark { background: #2f9e62; }
+.match--loss .match__mark, .match--left .match__mark { background: #c9474b; }
+.match--draw .match__mark { background: #6c7a83; }
+.match__main { display: grid; gap: 1px; min-width: 0; }
+.match__main strong { font-size: 14px; color: var(--text); }
+.match__main span { font-size: 11px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.match__people { display: flex; }
+.match__opp { margin-left: -8px; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface-strong); }
+.match__opp:first-child { margin-left: 0; }
+.match__money { display: grid; justify-items: end; gap: 1px; }
+.match__money strong { font-size: 14px; }
+.match__money span { font-size: 10.5px; color: var(--text-3); white-space: nowrap; }
+
+.profile-sheet { max-height: 72vh; overflow-y: auto; margin: 0 -4px; padding: 0 4px 8px; }
+.challenge__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.challenge__row strong { display: inline-flex; align-items: center; gap: 4px; font-size: 18px; }
+.result__who { display: flex; align-items: center; gap: 10px; min-width: 0; text-align: left; color: inherit; }
+.result__who span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: underline dotted rgba(255, 255, 255, 0.35); text-underline-offset: 3px; }
+
+/* Friends: favourites first, live presence, one-tap call */
+.people-list__head { display: flex; align-items: center; gap: 6px; margin: 14px 16px 2px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-2); }
+.people-list__head svg { color: var(--gold); }
+.people-list__head small { margin-left: auto; font-size: 12px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--text-3); }
+.people-row__btn--on { color: #1a1300; background: var(--gold); }
+.people-row__btn--play { color: #1a1300; background: var(--gold); }
+@media (max-width: 360px) {
+  .pcard__overview { grid-template-columns: 1fr; justify-items: center; }
+  .pcard__tiles { width: 100%; }
+}

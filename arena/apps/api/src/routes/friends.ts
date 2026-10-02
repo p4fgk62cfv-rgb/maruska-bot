@@ -15,6 +15,10 @@ export async function friendRoutes(app: FastifyInstance, ctx: Context): Promise<
   app.get('/friends/of-friends', auth, async (request) => friends.friendsOfFriends(me(request)));
   app.get('/friends/requests', auth, async (request) => friends.requests(me(request)));
   app.get('/friends/recent', auth, async (request) => friends.recent(me(request)));
+  app.get('/friends/favorites', auth, async (request) => friends.favorites(me(request)));
+  /** «Сообщить, когда освободится». */
+  app.post('/friends/:userId/watch', auth, async (request) => friends.watch(me(request), userParam.parse(request.params).userId, true));
+  app.delete('/friends/:userId/watch', auth, async (request) => friends.watch(me(request), userParam.parse(request.params).userId, false));
 
   app.post('/friends/requests', { ...auth, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request) => {
     const { userId } = userParam.parse(request.body);

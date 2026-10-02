@@ -1,5 +1,7 @@
 import type {
+  FavoriteDto,
   FriendDto,
+  Presence as PresenceState,
   FriendRequestsDto,
   PublicUserDto,
   RecentPlayerDto,
@@ -23,9 +25,15 @@ import { isBanned, publicUser } from './users.js';
 const LIMIT = 200;
 /** One invite per friend per this interval: invites also go out as bot messages. */
 const INVITE_COOLDOWN_MS = 30_000;
+/** «Избранные» per player. */
+const FAVORITES_LIMIT = 100;
 
 export class FriendService {
   private lastInvite = new Map<string, number>();
+  /** Last presence told to friends, so a reconnect blink is not announced twice. */
+  private told = new Map<string, PresenceState>();
+  /** «Сообщить, когда освободится»: player in a game → who wants to know. One-shot, kept in memory. */
+  private watchers = new Map<string, Set<string>>();
 
   constructor(
     private readonly deps: {
@@ -36,7 +44,11 @@ export class FriendService {
       presence: Presence;
       realtime: Realtime;
     },
-  ) {}
+  ) {
+    deps.realtime.onPresence((ids) => {
+      void this.presenceChanged(ids).catch(() => undefined);
+    });
+  }
 
   private get db(): Db {
     return this.deps.db;
@@ -54,12 +66,125 @@ export class FriendService {
       include: { friend: { include: { profile: true } } },
       take: LIMIT,
     });
-    const presence = await this.deps.presence.lookup(rows.map((r) => r.friendId));
-    const order = { in_game: 0, online: 1, offline: 2 } as const;
+    const ids = rows.map((r) => r.friendId);
+    const [presence, favorites] = await Promise.all([this.deps.presence.lookup(ids), this.favoriteSet(me, ids)]);
     return rows
       .filter((r) => r.friend.profile)
-      .map((r) => ({ ...publicUser(r.friend, r.friend.profile!), presence: presence[r.friendId] ?? 'offline', lastSeenAt: r.friend.lastSeenAt.toISOString() }))
-      .sort((a, b) => order[a.presence] - order[b.presence] || a.name.localeCompare(b.name, 'ru'));
+      .map((r) => ({
+        ...publicUser(r.friend, r.friend.profile!),
+        presence: presence[r.friendId] ?? 'offline',
+        lastSeenAt: r.friend.lastSeenAt.toISOString(),
+        favorite: favorites.has(r.friendId),
+        watching: this.watchers.get(r.friendId)?.has(me) ?? false,
+      }))
+      .sort(byPresence);
+  }
+
+  // ── «Избранные игроки» ─────────────────────────────────────
+
+  private async favoriteSet(me: string, ids: string[]): Promise<Set<string>> {
+    if (!ids.length) return new Set();
+    const rows = await this.db.favorite.findMany({ where: { ownerId: me, targetId: { in: ids } }, select: { targetId: true } });
+    return new Set(rows.map((r) => r.targetId));
+  }
+
+  async isFavorite(me: string, targetId: string): Promise<boolean> {
+    return (await this.db.favorite.count({ where: { ownerId: me, targetId } })) > 0;
+  }
+
+  async favorites(me: string): Promise<FavoriteDto[]> {
+    const rows = await this.db.favorite.findMany({
+      where: { ownerId: me },
+      include: { target: { include: { profile: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: FAVORITES_LIMIT,
+    });
+    const live = rows.filter((r) => r.target.profile && !isBanned(r.target));
+    const ids = live.map((r) => r.targetId);
+    const [presence, relations] = await Promise.all([this.deps.presence.lookup(ids), this.relations(me, ids)]);
+    return live
+      .map((r) => ({
+        ...publicUser(r.target, r.target.profile!),
+        presence: presence[r.targetId] ?? 'offline',
+        lastSeenAt: r.target.lastSeenAt.toISOString(),
+        favorite: true,
+        watching: this.watchers.get(r.targetId)?.has(me) ?? false,
+        relation: relations[r.targetId] ?? 'none',
+      }))
+      .sort(byPresence);
+  }
+
+  async setFavorite(me: string, targetId: string, on: boolean): Promise<{ favorite: boolean }> {
+    if (me === targetId) throw new AppError('VALIDATION_FAILED');
+    if (!on) {
+      await this.db.favorite.deleteMany({ where: { ownerId: me, targetId } });
+      return { favorite: false };
+    }
+    const target = await this.db.user.findUnique({ where: { id: targetId }, select: { id: true, bannedAt: true } });
+    if (!target || target.bannedAt) throw new AppError('NOT_FOUND');
+    if ((await this.db.favorite.count({ where: { ownerId: me } })) >= FAVORITES_LIMIT) throw new AppError('FRIEND_LIMIT');
+    await this.db.favorite.upsert({ where: { ownerId_targetId: { ownerId: me, targetId } }, create: { ownerId: me, targetId }, update: {} });
+    return { favorite: true };
+  }
+
+  // ── presence: «в сети», «в игре», «освободился» ────────────
+
+  /** «Сообщить, когда освободится» for a friend or a favourite who is playing right now. */
+  async watch(me: string, targetId: string, on: boolean): Promise<{ watching: boolean; presence: PresenceState }> {
+    const [friend, favorite] = await Promise.all([
+      this.db.friend.count({ where: { userId: me, friendId: targetId } }),
+      this.db.favorite.count({ where: { ownerId: me, targetId } }),
+    ]);
+    if (!friend && !favorite) throw new AppError('NOT_FRIENDS');
+    const presence = (await this.deps.presence.lookup([targetId]))[targetId] ?? 'offline';
+    const set = this.watchers.get(targetId) ?? new Set<string>();
+    if (on && presence === 'in_game') {
+      set.add(me);
+      this.watchers.set(targetId, set);
+    } else {
+      set.delete(me);
+      if (!set.size) this.watchers.delete(targetId);
+    }
+    return { watching: set.has(me), presence };
+  }
+
+  /** Who should hear about this player's presence: their friends and those who keep them in favourites. */
+  private async audience(userId: string): Promise<string[]> {
+    const [friends, fans] = await Promise.all([
+      this.db.friend.findMany({ where: { userId }, select: { friendId: true } }),
+      this.db.favorite.findMany({ where: { targetId: userId }, select: { ownerId: true } }),
+    ]);
+    return [...new Set([...friends.map((f) => f.friendId), ...fans.map((f) => f.ownerId)])];
+  }
+
+  async presenceChanged(ids: string[]): Promise<void> {
+    const hub = this.deps.realtime.hub;
+    const now = await this.deps.presence.lookup(ids);
+    for (const id of ids) {
+      const presence = now[id] ?? 'offline';
+      const before = this.told.get(id);
+      if (before === presence) continue;
+      if (presence === 'offline') this.told.delete(id);
+      else this.told.set(id, presence);
+
+      const audience = (await this.audience(id)).filter((u) => hub.isOnline(u));
+      for (const u of audience) hub.send(u, { type: 'FRIEND_PRESENCE', userId: id, presence });
+
+      const waiting = this.watchers.get(id);
+      if (before === 'in_game' && presence !== 'in_game' && waiting?.size) {
+        this.watchers.delete(id);
+        const friend = await this.publicOf(id);
+        for (const watcher of waiting) {
+          if (hub.isOnline(watcher)) hub.send(watcher, { type: 'FRIEND_FREE', friend, presence });
+          else {
+            await this.deps.outbox.enqueue(watcher, 'friend_free', {
+              text: `🟢 <b>${escapeHtml(friend.name)}</b> закончил(а) партию — самое время позвать в игру.`,
+              button: { text: 'Открыть', url: this.appLink('friends') },
+            });
+          }
+        }
+      }
+    }
   }
 
   /** Second-degree connections, excluding myself and existing friends. Shows only mutual-friend names. */
@@ -295,6 +420,13 @@ export class FriendService {
     const user = await this.db.user.findUniqueOrThrow({ where: { id: userId }, include: { profile: true } });
     return publicUser(user, user.profile!);
   }
+}
+
+const PRESENCE_ORDER = { in_game: 0, online: 1, offline: 2 } as const;
+
+/** Favourites first, then who is playing, who is online, and by name. */
+function byPresence(a: FriendDto, b: FriendDto): number {
+  return Number(b.favorite) - Number(a.favorite) || PRESENCE_ORDER[a.presence] - PRESENCE_ORDER[b.presence] || a.name.localeCompare(b.name, 'ru');
 }
 
 /** https://… address of this server, without a trailing slash; empty when unknown. */

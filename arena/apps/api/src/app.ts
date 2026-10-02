@@ -19,6 +19,7 @@ import { MemoryStore, type SnapshotStore } from './realtime/store.js';
 import { websocketRoutes } from './realtime/ws.js';
 import { RealtimePresence } from './services/presence.js';
 import { FriendService } from './services/friends.js';
+import { ProfileService } from './services/profiles.js';
 import { Outbox, TelegramBot } from './services/notifier.js';
 import { playerRoutes } from './routes/players.js';
 import { ownerRoutes } from './routes/owner.js';
@@ -66,7 +67,8 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   const outbox = new Outbox(base.db, bot, app.log);
   const friends = new FriendService({ ...base, outbox, presence, realtime });
   const tournaments = new TournamentService({ ...base, outbox, realtime, log: app.log });
-  const ctx: Context = { ...base, realtime, presence, outbox, friends, tournaments };
+  const profiles = new ProfileService({ db: base.db, items: base.items, presence, friends: () => friends });
+  const ctx: Context = { ...base, realtime, presence, outbox, friends, profiles, tournaments };
   await base.moderation.loadBans();
   useBanList(base.moderation);
   await realtime.recover();

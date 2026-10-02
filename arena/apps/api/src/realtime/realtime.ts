@@ -31,6 +31,7 @@ const REPLY_TTL_MS = 5 * 60_000;
 export class Realtime {
   private sweeper: NodeJS.Timeout | null = null;
   /** Requests by «user + request id»: the outcome of each, finished or still running. */
+  private readonly presenceListeners = new Set<(userIds: string[]) => void>();
   private readonly replies = new Map<string, { at: number; done: Promise<AppErrorCode | null> }>();
   readonly hub = new Hub();
   readonly rooms: RoomManager;
@@ -48,6 +49,7 @@ export class Realtime {
       settlement: this.settlement,
       log: deps.log,
       onFinished: (roomId, result) => this.rooms.finished(roomId, result),
+      onPresence: (ids) => this.emitPresence(ids),
     });
   }
 
@@ -90,14 +92,32 @@ export class Realtime {
     }
   }
 
+  /** Friends' lists follow who is online, playing or gone. */
+  onPresence(listener: (userIds: string[]) => void): () => void {
+    this.presenceListeners.add(listener);
+    return () => this.presenceListeners.delete(listener);
+  }
+
+  private emitPresence(userIds: string[]): void {
+    for (const l of this.presenceListeners) {
+      try {
+        l(userIds);
+      } catch (error) {
+        this.deps.log.error({ err: error }, 'presence listener failed');
+      }
+    }
+  }
+
   /** «Был в сети»: friends see when someone was last here — refreshed on entry and on leaving. */
   private touch(userId: string): void {
     this.deps.db.user.update({ where: { id: userId }, data: { lastSeenAt: new Date() } }).catch(() => undefined);
   }
 
   async connect(userId: string, socket: WebSocket): Promise<Client> {
+    const wasOnline = this.hub.isOnline(userId);
     const client = this.hub.attach(userId, socket);
     this.touch(userId);
+    if (!wasOnline) this.emitPresence([userId]);
     const room = await this.rooms.connected(userId);
     if (room) {
       const game = room.gameId ? this.games.get(room.gameId) : undefined;
@@ -111,6 +131,7 @@ export class Realtime {
   async disconnect(client: Client): Promise<void> {
     if (this.hub.detach(client)) {
       this.touch(client.userId);
+      this.emitPresence([client.userId]);
       await this.rooms.disconnected(client.userId);
       const game = this.games.forUser(client.userId);
       if (game) await game.queue.run(() => game.presence(client.userId));

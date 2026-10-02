@@ -47,6 +47,8 @@ export interface GameDeps {
   settlement: SettlementService;
   log: FastifyBaseLogger;
   onFinished: (roomId: string, result: GameResultDto | null) => void;
+  /** These players sat down to a game or got up from one. */
+  onPresence?: (userIds: string[]) => void;
 }
 
 /** One live game: the only place where its GameState changes. */
@@ -274,6 +276,7 @@ export class GameRunner {
     for (const p of this.players) this.deps.hub.send(p.userId, { type: 'GAME_FINISHED', gameId: this.id, result: this.result });
     await this.deps.store.deleteGame(this.id).catch(() => undefined);
     this.deps.onFinished(this.roomId, this.result);
+    this.deps.onPresence?.(this.players.map((p) => p.userId));
   }
 
   /** Settlement is idempotent, so a transient database error is retried a few times. */
@@ -324,6 +327,7 @@ export class GameRunner {
     for (const p of this.players) this.deps.hub.send(p.userId, { type: 'GAME_FINISHED', gameId: this.id, result: this.result });
     await this.deps.store.deleteGame(this.id).catch(() => undefined);
     this.deps.onFinished(this.roomId, this.result);
+    this.deps.onPresence?.(this.players.map((p) => p.userId));
   }
 
   /** Settles a game that was already over when the process restarted. */
@@ -447,6 +451,7 @@ export class GameManager {
     this.deps.log.info({ gameId, roomId: room.id, players: players.length, stake: room.settings.stake }, 'game started');
     for (const p of players) this.deps.hub.send(p.userId, { type: 'GAME_STARTED', roomId: room.id, gameId, players: runner.playerInfo() });
     runner.resume();
+    this.deps.onPresence?.(players.map((p) => p.userId));
     return runner;
   }
 

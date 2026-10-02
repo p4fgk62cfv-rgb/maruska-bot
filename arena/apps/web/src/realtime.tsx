@@ -1,5 +1,5 @@
 import type { GameEvent, PlayerView } from '@arena/game-engine';
-import type { FriendRequestsDto, GameResultDto, MyRoomDto, PlayerInfo, PublicUserDto, RoomDto, ServerMessage } from '@arena/shared';
+import type { FriendRequestsDto, GameResultDto, MyRoomDto, PlayerInfo, Presence, PublicUserDto, RoomDto, ServerMessage } from '@arena/shared';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, getToken } from './lib/api.js';
 import { GameSocket, type SocketStatus } from './lib/socket.js';
@@ -36,6 +36,8 @@ interface RealtimeValue {
   requestCount: number;
   refreshRequests: () => void;
   invites: RoomInvite[];
+  /** Live presence of friends and favourites, newer than any list fetched before. */
+  presence: Record<string, Presence>;
   dismissInvite: (roomId: string) => void;
   /** Subscribe to animation events and emoji. */
   onEvents: (listener: (events: GameEvent[]) => void) => () => void;
@@ -56,6 +58,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   const [result, setResult] = useState<GameResultDto | null>(null);
   const [requestCount, setRequestCount] = useState(0);
   const [invites, setInvites] = useState<RoomInvite[]>([]);
+  const [presence, setPresence] = useState<Record<string, Presence>>({});
   const eventListeners = useRef(new Set<(e: GameEvent[]) => void>());
   const emojiListeners = useRef(new Set<(u: string, e: string) => void>());
   const myId = session.status === 'ready' ? session.me.id : null;
@@ -128,6 +131,14 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           case 'FRIEND_ACCEPTED':
             toast(`${msg.friend.name} теперь ваш друг`, 'success');
             return;
+          case 'FRIEND_PRESENCE':
+            setPresence((map) => ({ ...map, [msg.userId]: msg.presence }));
+            return;
+          case 'FRIEND_FREE':
+            haptic.success();
+            setPresence((map) => ({ ...map, [msg.friend.id]: msg.presence }));
+            toast(`${msg.friend.name} закончил(а) партию — можно звать в игру`, 'success');
+            return;
           case 'TOURNAMENT_MATCH':
             haptic.success();
             toast(`${msg.title}: ваш матч начинается — нажмите «Готов»`, 'success');
@@ -179,9 +190,9 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       socket, status, room, invite, game, result, enterRoom, leaveRoom, dismissGame, onEvents, onEmoji,
-      requestCount, refreshRequests, invites, dismissInvite,
+      requestCount, refreshRequests, invites, dismissInvite, presence,
     }),
-    [socket, status, room, invite, game, result, enterRoom, leaveRoom, dismissGame, onEvents, onEmoji, requestCount, refreshRequests, invites, dismissInvite],
+    [socket, status, room, invite, game, result, enterRoom, leaveRoom, dismissGame, onEvents, onEmoji, requestCount, refreshRequests, invites, dismissInvite, presence],
   );
   return <RealtimeContext.Provider value={value}>{children}</RealtimeContext.Provider>;
 }
