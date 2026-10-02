@@ -71,6 +71,14 @@ class ModerationError(Exception):
 
 def _explain(error: Exception) -> ModerationError:
     text = str(error).lower()
+    logger.warning("MODERATION Telegram: %s", error)
+
+    if "supergroup" in text:
+        return ModerationError(
+            "В обычной группе Telegram не даёт мутить и банить на время. "
+            "Сделайте её супергруппой: настройки группы → «История чата» → «Видна» "
+            "(или публичная ссылка) — настройки Мары перенесутся сами."
+        )
 
     if "not enough rights" in text or "need administrator" in text:
         return ModerationError(

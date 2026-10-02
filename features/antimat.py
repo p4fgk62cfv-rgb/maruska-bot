@@ -198,7 +198,7 @@ async def on_swear(message: Message):
     except ModerationError as error:
         logger.warning("ANTIMAT mute: %s", error)
         why = ("Telegram не даёт ограничивать администраторов — только предупреждение."
-               if admin else "Замутить не могу — нет права ограничивать участников.")
+               if admin else f"Замутить не получилось: {error}")
         await message.answer(f"🤬 {who}, без мата! Предупреждение {limit}/{limit}. {why}")
         return
 

@@ -294,3 +294,22 @@ async def bot_added(event: ChatMemberUpdated):
             drop_access_cache(user.id)
     except Exception as error:
         logger.warning("BOT ADDED: %s", error)
+
+
+@router.message(F.migrate_to_chat_id)
+async def group_upgraded(message: Message):
+    """
+    Обычную группу сделали супергруппой (история чата, публичная ссылка…).
+    Telegram даёт ей новый ID — переносим всё, что Мара о ней знает.
+    """
+    from database.repository import move_chat
+    from settings import store
+
+    old_id, new_id = message.chat.id, message.migrate_to_chat_id
+    try:
+        await move_chat(old_id, new_id)
+        store.forget(old_id)
+        store.forget(new_id)
+        logger.info("Группа %s стала супергруппой %s — настройки перенесены", old_id, new_id)
+    except Exception as error:
+        logger.warning("MIGRATE %s → %s: %s", old_id, new_id, error)

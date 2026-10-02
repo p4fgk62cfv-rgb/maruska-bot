@@ -30,7 +30,7 @@ def expect(label, got, want):
 async def with_database():
     from database.database import engine, init_db, session_scope
     from database.models import GroupMember
-    from database.repository import ensure_member, list_known_chats, mark_chat_gone, mark_member_left, members_page, remember_chat, save_message
+    from database.repository import ensure_member, list_known_chats, mark_chat_gone, move_chat, add_warning, count_warnings, mark_member_left, members_page, remember_chat, save_message
     from sqlalchemy import delete
 
     await init_db()
@@ -82,8 +82,26 @@ async def with_database():
     await remember_chat(NEW, "Пример теста")
     expect("вернули — видна", NEW in {c["chat_id"] for c in await list_known_chats()}, True)
 
-    from database.models import GoneChat, GroupSettings
+    # Группу сделали супергруппой: новый ID, всё переезжает
+    from database.repository import get_group_settings, set_group_setting
+    SUPER = -1009000000001
+    await set_group_setting(chat_id=NEW, key="antimat", value=True)
+    await add_warning(NEW, 601, "Мат")
+    await move_chat(NEW, SUPER)
+    known = {c["chat_id"] for c in await list_known_chats()}
+    expect("старая группа скрыта", NEW in known, False)
+    expect("новая видна", SUPER in known, True)
+    expect("настройки переехали", (await get_group_settings(SUPER)).get("antimat"), True)
+    expect("предупреждения переехали", await count_warnings(SUPER, 601), 1)
+    await move_chat(NEW, SUPER)
+    expect("повторный переезд безопасен", SUPER in {c["chat_id"] for c in await list_known_chats()}, True)
+
+    from database.models import ChatWarning, GoneChat, GroupSettings
     async with session_scope() as session:
+        await session.execute(delete(GroupMember).where(GroupMember.chat_id == SUPER))
+        await session.execute(delete(GroupSettings).where(GroupSettings.chat_id == SUPER))
+        await session.execute(delete(ChatWarning).where(ChatWarning.chat_id.in_([NEW, SUPER])))
+        await session.execute(delete(GoneChat).where(GoneChat.chat_id.in_([NEW, SUPER])))
         await session.execute(delete(GoneChat).where(GoneChat.chat_id == NEW))
         await session.execute(delete(GroupMember).where(GroupMember.chat_id.in_([CHAT, NEW])))
         await session.execute(delete(GroupSettings).where(GroupSettings.chat_id == NEW))
