@@ -24,40 +24,6 @@ export function deviceName(): string {
   return `${os} · ${browser}${isStandalone() ? ' · приложение' : ''}`;
 }
 
-// ── iPhone installed-app height bug ──
-
-/**
- * In the installed app iOS lays the page out in a viewport shorter than the screen by the status
- * bar height, so everything pinned to the bottom (the tab bar, the table) stops short of the edge.
- * Measure the gap and hand it to CSS as --ios-gap: full-screen layers stretch by it.
- */
-function fixIOSViewport(): void {
-  if (inTelegram || !isIOS || !isStandalone()) return;
-  const probe = document.createElement('div');
-  probe.style.cssText = 'position:fixed;top:0;bottom:0;left:0;width:1px;visibility:hidden;pointer-events:none';
-  document.body.appendChild(probe);
-  const measure = () => {
-    const portrait = window.innerHeight >= window.innerWidth;
-    const screenH = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
-    const gap = Math.round(screenH - probe.getBoundingClientRect().height);
-    // Only the status-bar-sized shortfall; anything else (keyboard, split view) is real.
-    document.documentElement.style.setProperty('--ios-gap', gap > 0 && gap < 80 ? `${gap}px` : '0px');
-  };
-  measure();
-  // iOS fixes its viewport by itself a moment later (often without a resize event): follow the
-  // probe's own size, so the correction drops back to 0 as soon as the gap is gone.
-  if ('ResizeObserver' in window) new ResizeObserver(measure).observe(probe);
-  window.addEventListener('resize', measure);
-  window.addEventListener('orientationchange', () => setTimeout(measure, 300));
-  document.addEventListener('visibilitychange', () => setTimeout(measure, 100));
-  window.addEventListener('pageshow', () => setTimeout(measure, 100));
-  // And a few checks during the first seconds, in case nothing fires at all.
-  for (const ms of [100, 300, 700, 1500, 3000, 6000]) setTimeout(measure, ms);
-}
-
-if (document.body) fixIOSViewport();
-else document.addEventListener('DOMContentLoaded', fixIOSViewport);
-
 // ── remembered sign-in (outside Telegram only) ──
 
 const SESSION_KEY = 'arena.appSession';

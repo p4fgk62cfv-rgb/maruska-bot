@@ -291,7 +291,7 @@ select.app-input { appearance: none; }
 
 /* Game table: felt edge to edge, players on top, my hand over an ivory dock. */
 .game {
-  position: fixed; inset: 0 0 calc(-1 * var(--ios-gap, 0px)); display: flex; flex-direction: column;
+  position: fixed; inset: 0; display: flex; flex-direction: column;
   padding-top: calc(var(--safe-top) + 6px);
   /* One table for everyone: the «VEGAS» felt, lit from above. */
   background: #031a10 url('/table/vegas.webp') center / cover no-repeat;
@@ -451,7 +451,7 @@ select.app-input { appearance: none; }
 .room-wallet .ui-balance--coins { color: #a7790e; }
 
 .emoji-picker-overlay {
-  position: fixed; inset: 0 0 calc(-1 * var(--ios-gap, 0px)); z-index: 70;
+  position: fixed; inset: 0; z-index: 70;
   display: flex; align-items: flex-end; justify-content: center;
   padding: 0 8px calc(env(safe-area-inset-bottom, 0px) + 150px);
   pointer-events: none;
@@ -479,7 +479,7 @@ select.app-input { appearance: none; }
 .emoji-hint { margin: 3px 0 0; text-align: center; font-size: 10px; opacity: 0.6; }
 .discard-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 
-.result { position: fixed; inset: 0 0 calc(-1 * var(--ios-gap, 0px)); z-index: 40; display: grid; place-items: center; padding: 24px 16px; background: rgba(2, 4, 16, 0.72); animation: ui-fade 0.25s ease; }
+.result { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 24px 16px; background: rgba(2, 4, 16, 0.72); animation: ui-fade 0.25s ease; }
 .result__card { width: 100%; max-width: 380px; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px 18px; border-radius: 26px; background: var(--felt-texture), linear-gradient(180deg, #266577, #123845); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 0 0 1px var(--stroke-strong); animation: ui-rise 0.35s var(--ease); }
 .result__title { font-family: var(--font-script); font-size: 48px; font-weight: 400; line-height: 1.1; }
 .result--win .result__title { color: var(--gold); text-shadow: 0 0 24px rgba(245, 196, 81, 0.6); }
@@ -705,7 +705,7 @@ select.app-input { appearance: none; }
 
 /* Compact smile picker above the dock: a white balloon with a tab carrying the close button */
 .emoji-pop {
-  position: fixed; z-index: 60; left: 50%; bottom: calc(var(--dock-h) + var(--safe-bottom) + 26px - var(--ios-gap, 0px)); translate: -50% 0;
+  position: fixed; z-index: 60; left: 50%; bottom: calc(var(--dock-h) + var(--safe-bottom) + 26px); translate: -50% 0;
   width: min(250px, calc(100vw - 40px)); padding-top: 34px; color: #222;
   filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.45)); animation: emoji-pop-in 0.18s var(--ease);
 }
@@ -1313,7 +1313,7 @@ html[data-home-design="premium"] .friends-play__arrow { color: #d7b6ff; font-siz
 .owner-item__body span { font-size: 12px; opacity: 0.7; }
 
 /* Owner's pop-up on the start screen */
-.announce { position: fixed; inset: 0 0 calc(-1 * var(--ios-gap, 0px)); z-index: 90; display: grid; place-items: center; padding: 24px; background: rgba(0, 0, 0, 0.55); animation: emoji-pop-in 0.2s var(--ease); }
+.announce { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 24px; background: rgba(0, 0, 0, 0.55); animation: emoji-pop-in 0.2s var(--ease); }
 .announce__card {
   width: min(360px, 100%); display: grid; gap: 12px; justify-items: center; padding: 26px 22px 20px; border-radius: 24px; text-align: center;
   background: linear-gradient(180deg, #fffaf0, var(--paper-2, #efe6d4)); color: #2a2216; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
@@ -1511,7 +1511,7 @@ button.seat-tile--free { padding: 0; border: 0; background: transparent; color: 
 @media (prefers-reduced-motion: reduce) { .seat-tile--free .seat-tile__frame { animation: none; } }
 
 /* Small two-button question over the table («Поменяться» / «Посмотреть»). */
-.choice-dialog { position: fixed; inset: 0 0 calc(-1 * var(--ios-gap, 0px)); z-index: 60; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, 0.35); animation: choice-in 0.15s ease-out; }
+.choice-dialog { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, 0.35); animation: choice-in 0.15s ease-out; }
 .choice-dialog__box { width: min(300px, 100%); border-radius: 16px; overflow: hidden; background: rgba(242, 242, 247, 0.96); color: #111; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35); }
 .choice-dialog__text { margin: 0; padding: 18px 16px 14px; font-size: 15px; line-height: 1.35; text-align: center; }
 .choice-dialog__buttons { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid rgba(60, 60, 67, 0.25); }
@@ -1523,7 +1523,7 @@ button.seat-tile--free { padding: 0; border: 0; background: transparent; color: 
 
 /* PIN entry: a dialog at the top of the screen, never under the keyboard. */
 .pin__input--button { min-width: 76px; text-align: left; cursor: pointer; }
-.pin-dialog { position: fixed; inset: 0 0 calc(-1 * var(--ios-gap, 0px)); z-index: 70; display: flex; justify-content: center; align-items: flex-start; padding: calc(var(--tg-safe-top, 0px) + 12vh) 16px 16px; background: rgba(0, 0, 0, 0.45); }
+.pin-dialog { position: fixed; inset: 0; z-index: 70; display: flex; justify-content: center; align-items: flex-start; padding: calc(var(--tg-safe-top, 0px) + 12vh) 16px 16px; background: rgba(0, 0, 0, 0.45); }
 .pin-dialog__box { width: min(320px, 100%); display: flex; flex-direction: column; gap: 10px; padding: 18px 16px 14px; border-radius: 18px; background: var(--paper, #f6f1e7); color: var(--ink, #1d1d1f); box-shadow: 0 14px 40px rgba(0, 0, 0, 0.4); }
 .pin-dialog__title { font-size: 17px; text-align: center; }
 .pin-dialog__input { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 2px solid #d9a441; border-radius: 12px; background: #fff; color: #1d1d1f; font: inherit; font-size: 30px; font-weight: 800; letter-spacing: 0.3em; text-align: center; }
