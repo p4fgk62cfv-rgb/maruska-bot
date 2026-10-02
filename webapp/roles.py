@@ -49,6 +49,7 @@ SECTION_PERMISSION = {
     "Общение": "content",
     "Сообщество": "settings",
     "Модерация": "moderation",
+    "Антимат": "moderation",
     "Развлечения": "games",
 }
 
