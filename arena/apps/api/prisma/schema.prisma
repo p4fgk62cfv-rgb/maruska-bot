@@ -690,3 +690,21 @@ model Referral {
   @@map("referrals")
   @@schema("arena")
 }
+
+/// Sign-in outside Telegram: the app asks, the person confirms in the bot, the app takes a session.
+model LoginRequest {
+  id          String    @id @db.VarChar(32)
+  /// sha256 of the secret only the asking device holds: seeing the link is not enough to sign in.
+  secretHash  String    @map("secret_hash") @db.VarChar(64)
+  device      String?   @db.VarChar(160)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  expiresAt   DateTime  @map("expires_at")
+  userId      String?   @map("user_id") @db.Uuid
+  telegramId  BigInt?   @map("telegram_id")
+  confirmedAt DateTime? @map("confirmed_at")
+  usedAt      DateTime? @map("used_at")
+
+  @@index([expiresAt])
+  @@map("login_requests")
+  @@schema("arena")
+}

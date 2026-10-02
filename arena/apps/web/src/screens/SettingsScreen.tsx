@@ -8,6 +8,7 @@ import { haptic } from '../lib/telegram.js';
 import { useMe, useSession } from '../session.js';
 import { useToast } from '../toast.js';
 import { ScreenHeader } from './common.js';
+import { AppSettings } from './AppSettings.js';
 import { HomeBar } from './HomeScreen.js';
 
 const AVATAR_PX = 256;
@@ -136,6 +137,8 @@ export default function SettingsScreen() {
           Вернуть фото из Telegram
         </Button>
       )}
+
+      <AppSettings />
 
       <section className="settings__section">
         <h3 className="script-title">Тема</h3>

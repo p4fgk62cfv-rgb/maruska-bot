@@ -35,6 +35,7 @@ from actions.providers import available_providers
 from economy.handler import router as economy_router
 from economy.shop_handler import router as shop_router
 
+from features.arena_login import router as arena_login_router
 from features.basic import router as basic_router
 from features.cats import router as cats_router
 from features.chat import router as chat_router, set_context_size
@@ -132,7 +133,8 @@ dp.include_router(captcha_router)
 # Своя коллекция: фото владельца в личке с #тегом
 dp.include_router(library_router)
 
-# Команды
+# Команды (вход в приложение Арены — раньше общего /start)
+dp.include_router(arena_login_router)
 dp.include_router(basic_router)
 dp.include_router(chatters_router)
 dp.include_router(social_router)
