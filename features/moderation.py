@@ -264,6 +264,53 @@ def _target(message: Message):
     return reply.from_user
 
 
+def _mention_arg(message: Message) -> str | None:
+    """«/mute @vasya 30» → «@vasya»; «/ban 123456789» → ID. Короткое число — это срок, не человек."""
+    parts = (message.text or "").split()
+    if len(parts) < 2:
+        return None
+    arg = parts[1]
+    if arg.startswith("@") and len(arg) > 1:
+        return arg
+    if arg.lstrip("-").isdigit() and len(arg.lstrip("-")) >= 5:
+        return arg
+    return None
+
+
+async def _target_of(message: Message):
+    """
+    Кого наказываем: ответ на сообщение (в том числе на старое, ещё из обычной
+    группы до перехода в супергруппу), упоминание без @username или @username / ID.
+    """
+    user = _target(message)
+    if user is not None:
+        return user
+
+    # Ответ на сообщение, которое Telegram считает «внешним» (например, из истории до апгрейда группы)
+    external = getattr(message, "external_reply", None)
+    sender = getattr(getattr(external, "origin", None), "sender_user", None)
+    if sender is not None and not sender.is_bot:
+        return sender
+
+    for entity in message.entities or []:
+        if entity.type == "text_mention" and entity.user and not entity.user.is_bot:
+            return entity.user
+
+    arg = _mention_arg(message)
+    if arg:
+        from types import SimpleNamespace
+
+        from settings.owners import find_user
+
+        found = await find_user(arg)
+        if found:
+            return SimpleNamespace(
+                id=found["id"], is_bot=False, username=found["username"],
+                first_name=found["name"] or (f"@{found['username']}" if found["username"] else str(found["id"])),
+            )
+    return None
+
+
 MAX_MUTE_MINUTES = 60 * 24 * 30      # месяц
 
 DURATION_RE = re.compile(
@@ -295,6 +342,9 @@ def parse_duration(text: str) -> int | None:
 
 def _minutes(message: Message) -> int:
     parts = (message.text or "").split()
+    # «/mute @vasya 30» — срок идёт после человека
+    if _mention_arg(message):
+        parts = parts[:1] + parts[2:]
 
     # Число и единица могут быть слитно или через пробел: "2ч" и "2 ч"
     joined = " ".join(parts[1:3])
@@ -322,11 +372,11 @@ async def mute_command(message: Message):
     if not await _check(message):
         return
 
-    target = _target(message)
+    target = await _target_of(message)
 
     if target is None:
         await message.reply(
-            "🔇 Ответь на сообщение человека:\n"
+            "🔇 Ответь на сообщение человека или укажи @username:\n"
             "<code>/mute 30</code> — 30 минут\n"
             "<code>/mute 2ч</code> — 2 часа\n"
             "<code>/mute 1д</code> — сутки\n"
@@ -354,10 +404,10 @@ async def unmute_command(message: Message):
     if not await _check(message):
         return
 
-    target = _target(message)
+    target = await _target_of(message)
 
     if target is None:
-        await message.reply("🔊 Ответь на сообщение человека: <code>/unmute</code>")
+        await message.reply("🔊 Ответь на сообщение человека или укажи его: <code>/unmute @username</code>")
         return
 
     try:
@@ -378,10 +428,10 @@ async def ban_command(message: Message):
     if not await _check(message):
         return
 
-    target = _target(message)
+    target = await _target_of(message)
 
     if target is None:
-        await message.reply("⛔ Ответь на сообщение человека: <code>/ban</code>")
+        await message.reply("⛔ Ответь на сообщение человека или укажи @username: <code>/ban</code>")
         return
 
     try:
@@ -402,11 +452,11 @@ async def unban_command(message: Message):
     if not await _check(message):
         return
 
-    target = _target(message)
+    target = await _target_of(message)
 
     if target is None:
         await message.reply(
-            "✅ Ответь на сообщение человека: <code>/unban</code>\n"
+            "✅ Ответь на сообщение человека или укажи @username: <code>/unban</code>\n"
             "Или разбань из веб-панели — там есть список."
         )
         return
@@ -429,10 +479,10 @@ async def kick_command(message: Message):
     if not await _check(message):
         return
 
-    target = _target(message)
+    target = await _target_of(message)
 
     if target is None:
-        await message.reply("👢 Ответь на сообщение человека: <code>/kick</code>")
+        await message.reply("👢 Ответь на сообщение человека или укажи @username: <code>/kick</code>")
         return
 
     try:
@@ -483,17 +533,18 @@ async def warn_command(message: Message):
     if not await _check(message):
         return
 
-    target = _target(message)
+    target = await _target_of(message)
 
     if target is None:
         await message.reply(
-            "⚠️ Ответь на сообщение человека: <code>/warn причина</code>\n"
+            "⚠️ Ответь на сообщение человека или укажи @username: <code>/warn причина</code>\n"
             "После лимита предупреждений сработает наказание из настроек."
         )
         return
 
-    parts = (message.text or "").split(maxsplit=1)
-    reason = parts[1].strip()[:120] if len(parts) > 1 else "предупреждение от админа"
+    parts = (message.text or "").split(maxsplit=2 if _mention_arg(message) else 1)
+    rest = parts[-1] if len(parts) > (2 if _mention_arg(message) else 1) else ""
+    reason = rest.strip()[:120] or "предупреждение от админа"
 
     from features.automod import warn
 
@@ -510,11 +561,11 @@ async def tempban_command(message: Message):
     if not await _check(message):
         return
 
-    target = _target(message)
+    target = await _target_of(message)
 
     if target is None:
         await message.reply(
-            "⏳ Ответь на сообщение человека: <code>/tban 1д</code>\n"
+            "⏳ Ответь на сообщение человека или укажи @username: <code>/tban 1д</code>\n"
             "Бан на время — потом человек сможет вернуться."
         )
         return
