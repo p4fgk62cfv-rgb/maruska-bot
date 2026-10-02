@@ -13,6 +13,8 @@ export interface Seat {
   connected: boolean;
   /** Bot opponent: always ready and connected. */
   bot?: boolean;
+  /** Chair number at the table (0-based); fixed while seated, so a free chair can be taken. */
+  place?: number;
 }
 
 export type RoomConfig = Omit<RoomSettings, 'password' | 'isPrivate' | 'server'>;

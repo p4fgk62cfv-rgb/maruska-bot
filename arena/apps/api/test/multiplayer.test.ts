@@ -347,6 +347,44 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     }
   }, 120_000);
 
+  it('chairs before the deal: move to a free one, ask to swap, accept or decline; the deal follows the chairs', async () => {
+    const a = await player('Аня', 10);
+    const roomId: string = (await api(a, 'POST', '/rooms', { ...SETTINGS, players: 3 })).json().room.id;
+    const b = await player('Борис', 10);
+    expect((await api(b, 'POST', `/rooms/${roomId}/join`, {})).statusCode).toBe(200);
+    const chairs = () => Object.fromEntries(handle.ctx.realtime.rooms.dto(handle.ctx.realtime.rooms.get(roomId)!).seats.map((s) => [s.userId, s.seat]));
+    expect(chairs()).toEqual({ [a.userId]: 0, [b.userId]: 1 });
+
+    // A free chair: just sit there. A taken one: refused.
+    expect((await a.send({ type: 'MOVE_SEAT', roomId, seat: 2 })).type).toBe('ACK');
+    expect(chairs()).toEqual({ [a.userId]: 2, [b.userId]: 1 });
+    expect(await b.send({ type: 'MOVE_SEAT', roomId, seat: 2 })).toMatchObject({ type: 'ERROR', code: 'SEAT_TAKEN' });
+
+    // Asking to swap: the other side decides.
+    expect((await b.send({ type: 'SEAT_SWAP', roomId, userId: a.userId })).type).toBe('ACK');
+    const ask = await a.waitFor((m) => m.type === 'SEAT_SWAP_ASKED');
+    expect(ask).toMatchObject({ from: { userId: b.userId, name: 'Борис', seat: 1 } });
+    expect((await a.send({ type: 'SEAT_SWAP_ANSWER', roomId, userId: b.userId, accept: false })).type).toBe('ACK');
+    await b.waitFor((m) => m.type === 'SEAT_SWAP_DECLINED');
+    expect(chairs()).toEqual({ [a.userId]: 2, [b.userId]: 1 });
+    // An answer without a question does nothing.
+    expect(await a.send({ type: 'SEAT_SWAP_ANSWER', roomId, userId: b.userId, accept: true })).toMatchObject({ type: 'ERROR', code: 'NOT_FOUND' });
+
+    expect((await b.send({ type: 'SEAT_SWAP', roomId, userId: a.userId })).type).toBe('ACK');
+    await a.waitFor((m) => m.type === 'SEAT_SWAP_ASKED');
+    expect((await a.send({ type: 'SEAT_SWAP_ANSWER', roomId, userId: b.userId, accept: true })).type).toBe('ACK');
+    expect(chairs()).toEqual({ [a.userId]: 1, [b.userId]: 2 });
+
+    // A newcomer takes the free chair 0; the deal goes in chair order.
+    const c = await player('Вера', 10);
+    expect((await api(c, 'POST', `/rooms/${roomId}/join`, {})).statusCode).toBe(200);
+    expect(chairs()).toEqual({ [c.userId]: 0, [a.userId]: 1, [b.userId]: 2 });
+    const gameId = await startGame([a, b, c], roomId);
+    expect(handle.ctx.realtime.games.get(gameId)!.playerInfo().map((p) => p.userId)).toEqual([c.userId, a.userId, b.userId]);
+    // No more chair changes once the cards are out.
+    expect(await a.send({ type: 'MOVE_SEAT', roomId, seat: 0 })).toMatchObject({ type: 'ERROR' });
+  });
+
   it('rejects cheating and foreign actions, and «Сдаться» is a loss', async () => {
     const { players, roomId } = await table(2);
     const gameId = await startGame(players, roomId);

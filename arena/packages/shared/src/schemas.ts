@@ -73,4 +73,8 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('SEND_EMOJI'), rid, gameId: z.string(), emoji: z.enum(SMILES) }),
   /** A smile while the table is still gathering (or between deals). */
   z.object({ type: z.literal('ROOM_EMOJI'), rid, roomId: z.string(), emoji: z.enum(SMILES) }),
+  /** Before the deal: move to a free chair, ask someone to swap, answer such a request. */
+  z.object({ type: z.literal('MOVE_SEAT'), rid, roomId: z.string(), seat: z.number().int().min(0).max(5) }),
+  z.object({ type: z.literal('SEAT_SWAP'), rid, roomId: z.string(), userId: z.string() }),
+  z.object({ type: z.literal('SEAT_SWAP_ANSWER'), rid, roomId: z.string(), userId: z.string(), accept: z.boolean() }),
 ]);

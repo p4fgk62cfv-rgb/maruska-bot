@@ -1,7 +1,7 @@
 import type { FriendDto, RoomDto } from '@arena/shared';
 import { Avatar, Balance, BottomSheet, Button, EmptyState, Icon } from '@arena/ui';
 import { useQuery } from '../lib/useQuery.js';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
 import { useCountdown } from '../lib/hooks.js';
 import { haptic, tg } from '../lib/telegram.js';
@@ -25,6 +25,33 @@ export function RoomScreen({ room }: { room: RoomDto }) {
   const full = room.seats.length === room.settings.players;
   const left = useCountdown(room.readyDeadline, () => socket.now());
   const others = seatsAfter(room, me.id);
+  // Chairs can change only while the table gathers.
+  const seating = room.status === 'waiting' && !room.tournament;
+  const [askTarget, setAskTarget] = useState<{ userId: string; name: string } | null>(null);
+  const [asked, setAsked] = useState<{ userId: string; name: string; seat: number } | null>(null);
+
+  useEffect(
+    () =>
+      socket.onMessage((m) => {
+        if (m.type === 'SEAT_SWAP_ASKED' && m.roomId === room.id) {
+          haptic.success();
+          setAsked(m.from);
+        } else if (m.type === 'SEAT_SWAP_DECLINED' && m.roomId === room.id) {
+          toast(`${m.by.name} не хочет меняться местами`, 'info');
+        }
+      }),
+    [socket, room.id, toast],
+  );
+
+  const send = async (msg: Parameters<typeof socket.send>[0], ok?: string) => {
+    const reply = await socket.send(msg);
+    if (!reply.ok) toast(reply.message, 'error');
+    else if (ok) toast(ok, 'success');
+  };
+  const moveTo = (seat: number) => {
+    haptic.tap();
+    void send({ type: 'MOVE_SEAT', roomId: room.id, seat });
+  };
 
   const ready = async (value: boolean) => {
     haptic.tap();
@@ -54,19 +81,27 @@ export function RoomScreen({ room }: { room: RoomDto }) {
       <div className={`game__opponents game__opponents--${others.length}`}>
         {others.map(({ number, seat }) =>
           seat ? (
-            <SeatTile
+            <button
               key={seat.userId}
-              seat={{ id: seat.userId, name: seat.name, photoUrl: seat.photoUrl, frame: seat.frame, crown: seat.crown }}
-              size={tileSize}
-              number={number}
-              active={seat.ready}
-              offline={!seat.connected}
-              bot={seat.bot}
-              label={seat.ready ? { text: 'Готов', tone: 'ready' } : null}
-              emoji={emojis[seat.userId] ?? null}
-            />
+              type="button"
+              className="seat-tap"
+              disabled={!seating}
+              aria-label={`Поменяться местами с ${seat.name}`}
+              onClick={() => setAskTarget({ userId: seat.userId, name: seat.name })}
+            >
+              <SeatTile
+                seat={{ id: seat.userId, name: seat.name, photoUrl: seat.photoUrl, frame: seat.frame, crown: seat.crown }}
+                size={tileSize}
+                number={number}
+                active={seat.ready}
+                offline={!seat.connected}
+                bot={seat.bot}
+                label={seat.ready ? { text: 'Готов', tone: 'ready' } : null}
+                emoji={emojis[seat.userId] ?? null}
+              />
+            </button>
           ) : (
-            <EmptySeat key={`empty${number}`} number={number} size={tileSize} />
+            <EmptySeat key={`empty${number}`} number={number} size={tileSize} onClick={seating && mySeat ? () => moveTo(number - 1) : undefined} />
           ),
         )}
       </div>
@@ -140,6 +175,56 @@ export function RoomScreen({ room }: { room: RoomDto }) {
           })
         }
       />
+      <BottomSheet open={askTarget !== null} title="Поменяться местами?" onClose={() => setAskTarget(null)}>
+        {askTarget && (
+          <div className="app-stack">
+            <p className="app-muted">Попросим {askTarget.name} уступить место — вы поменяетесь стульями, если согласится.</p>
+            <Button
+              block
+              variant="gold"
+              onClick={() => {
+                const target = askTarget;
+                setAskTarget(null);
+                const bot = room.seats.find((s) => s.userId === target.userId)?.bot;
+                void send({ type: 'SEAT_SWAP', roomId: room.id, userId: target.userId }, bot ? undefined : `Просьба отправлена: ${target.name}`);
+              }}
+            >
+              Попросить
+            </Button>
+          </div>
+        )}
+      </BottomSheet>
+      <BottomSheet open={asked !== null} title="Поменяться местами?" onClose={() => setAsked(null)}>
+        {asked && (
+          <div className="app-stack">
+            <p className="app-muted">
+              {asked.name} просит вас уступить место. Вы пересядете на место {asked.seat + 1}.
+            </p>
+            <Button
+              block
+              variant="gold"
+              onClick={() => {
+                const from = asked;
+                setAsked(null);
+                void send({ type: 'SEAT_SWAP_ANSWER', roomId: room.id, userId: from.userId, accept: true });
+              }}
+            >
+              Уступить место
+            </Button>
+            <Button
+              block
+              variant="ghost"
+              onClick={() => {
+                const from = asked;
+                setAsked(null);
+                void send({ type: 'SEAT_SWAP_ANSWER', roomId: room.id, userId: from.userId, accept: false });
+              }}
+            >
+              Остаться
+            </Button>
+          </div>
+        )}
+      </BottomSheet>
       <BottomSheet open={friendsOpen} title="Позвать друга" onClose={() => setFriendsOpen(false)}>
         {friendsOpen && <FriendPicker seated={room.seats.map((s) => s.userId)} />}
       </BottomSheet>

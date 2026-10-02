@@ -124,13 +124,23 @@ export const SeatTile = memo(function SeatTile({ seat, cards = 0, back = 'classi
 });
 
 /** An empty chair while the room fills up. */
-export function EmptySeat({ number, size = 58 }: { number: number; size?: number }) {
-  return (
-    <div className="seat-tile seat-tile--empty" style={{ ['--tile' as string]: `${size}px` }}>
+export function EmptySeat({ number, size = 58, onClick }: { number: number; size?: number; onClick?: () => void }) {
+  const body = (
+    <>
       <span className="seat-tile__frame">
-        <Icon name="hourglass" size={size * 0.45} />
+        <Icon name={onClick ? 'plus' : 'hourglass'} size={size * 0.45} />
       </span>
       <span className="seat-tile__number">{number}</span>
+    </>
+  );
+  // Before the deal a free chair can be taken with a tap.
+  return onClick ? (
+    <button type="button" className="seat-tile seat-tile--empty seat-tile--free" style={{ ['--tile' as string]: `${size}px` }} onClick={onClick} aria-label={`Пересесть на место ${number}`}>
+      {body}
+    </button>
+  ) : (
+    <div className="seat-tile seat-tile--empty" style={{ ['--tile' as string]: `${size}px` }}>
+      {body}
     </div>
   );
 }

@@ -228,6 +228,12 @@ export class Realtime {
         return this.rooms.setReady(userId, msg.roomId, msg.ready);
       case 'ROOM_EMOJI':
         return this.rooms.emoji(userId, msg.roomId, msg.emoji);
+      case 'MOVE_SEAT':
+        return this.rooms.moveSeat(userId, msg.roomId, msg.seat);
+      case 'SEAT_SWAP':
+        return this.rooms.askSwap(userId, msg.roomId, msg.userId);
+      case 'SEAT_SWAP_ANSWER':
+        return this.rooms.answerSwap(userId, msg.roomId, msg.userId, msg.accept);
       default:
         return this.games.handle(userId, msg);
     }

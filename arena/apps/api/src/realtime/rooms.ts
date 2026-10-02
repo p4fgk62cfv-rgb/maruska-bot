@@ -31,6 +31,8 @@ export const WAITING_GRACE_MS = 30_000;
 /** After a deal the same company has this long to press «Готов» for the next one (the result screen eats some of it). */
 export const REMATCH_READY_MS = 180_000;
 const EMOJI_COOLDOWN_MS = 1500;
+/** How long a «поменяемся местами?» waits for the answer. */
+const SWAP_ASK_MS = 30_000;
 /** Wrong private-table PINs: after this many in the window the table stops accepting guesses. */
 const PIN_TRIES = 8;
 const PIN_WINDOW_MS = 10 * 60_000;
@@ -74,6 +76,8 @@ export class RoomManager {
   private readonly pinFails = new Map<string, { count: number; since: number }>();
   /** Seat count the bot timer of a room was armed for: a new person resets the wait, a ready toggle does not. */
   private readonly botArmed = new Map<string, number>();
+  /** «Поменяться местами» asks waiting for an answer: `${roomId}:${askedUserId}` → who asked, when. */
+  private readonly swapAsks = new Map<string, { from: string; at: number }>();
   matchHooks: MatchHooks | null = null;
 
   constructor(private readonly deps: RoomDeps) {}
@@ -101,7 +105,7 @@ export class RoomManager {
       ownerId: room.ownerId,
       isPrivate: room.isPrivate,
       settings: room.settings,
-      seats: room.seats.map((s, seat) => ({ seat, ...s })),
+      seats: room.seats.map((s, i) => ({ ...s, seat: s.place ?? i })),
       gameId: room.gameId,
       createdAt: room.createdAt,
       premium: room.seats.some((s) => s.premium),
@@ -182,7 +186,7 @@ export class RoomManager {
         ...(settings.bots ? { bots: true, ...(settings.botLevel ? { botLevel: settings.botLevel } : {}) } : {}),
       },
       status: 'waiting',
-      seats: [seat],
+      seats: [{ ...seat, place: 0 }],
       gameId: null,
       createdAt: Date.now(),
       readyDeadline: null,
@@ -239,7 +243,7 @@ export class RoomManager {
       if (room.status !== 'waiting') throw new AppError('GAME_ALREADY_STARTED');
       const elsewhere = this.roomOf(userId);
       if (elsewhere && elsewhere !== room) throw new AppError('ALREADY_IN_ROOM');
-      room.seats.push(seat);
+      this.sit(room, seat);
       if (room.seats.length === room.settings.players) this.armReadyTimer(room);
       await this.changed(room);
       for (const s of room.seats) this.deps.hub.send(s.userId, { type: 'ROOM_JOINED', room: this.dto(room), userId });
@@ -307,7 +311,7 @@ export class RoomManager {
       if (current.status !== 'waiting' || current.tournament) throw new AppError('ALREADY_IN_ROOM');
       await this.leave(userId, current.id);
     }
-    const seats = await Promise.all(userIds.map((id) => this.seatFor(id, 0)));
+    const seats = (await Promise.all(userIds.map((id) => this.seatFor(id, 0)))).map((s, place) => ({ ...s, place }));
     const room: Room = {
       id: newRoomId(),
       server: 'almaz',
@@ -385,6 +389,91 @@ export class RoomManager {
     if (this.lastEmoji.size > 5000) for (const [id, at] of this.lastEmoji) if (now - at > EMOJI_COOLDOWN_MS) this.lastEmoji.delete(id);
     await assertSmile(this.deps.db, userId, emoji);
     for (const s of room.seats) this.deps.hub.send(s.userId, { type: 'EMOJI', gameId: null, roomId, userId, emoji });
+  }
+
+  // ── chairs ─────────────────────────────────────────────────
+
+  /** Puts a newcomer on the lowest free chair; seats stay in chair order (that is the turn order). */
+  private sit(room: Room, seat: Seat): void {
+    const taken = new Set(room.seats.map((s, i) => s.place ?? i));
+    let place = 0;
+    while (taken.has(place)) place++;
+    room.seats.push({ ...seat, place });
+    this.sortSeats(room);
+  }
+
+  private sortSeats(room: Room): void {
+    room.seats.forEach((s, i) => (s.place ??= i));
+    room.seats.sort((a, b) => a.place! - b.place!);
+  }
+
+  private assertSeating(room: Room | undefined, userId: string): Room {
+    if (!room || !room.seats.some((s) => s.userId === userId)) throw new AppError('NOT_FOUND');
+    if (room.status !== 'waiting' || room.tournament) throw new AppError('GAME_ALREADY_STARTED');
+    return room;
+  }
+
+  /** Tap on an empty chair before the deal: move there. */
+  async moveSeat(userId: string, roomId: string, place: number): Promise<void> {
+    await this.queue(roomId).run(async () => {
+      const room = this.assertSeating(this.rooms.get(roomId), userId);
+      if (place < 0 || place >= room.settings.players) throw new AppError('VALIDATION_FAILED');
+      this.sortSeats(room);
+      if (room.seats.some((s) => s.place === place)) throw new AppError('SEAT_TAKEN');
+      room.seats.find((s) => s.userId === userId)!.place = place;
+      this.sortSeats(room);
+      await this.changed(room);
+    });
+  }
+
+  /** Tap on a player before the deal: ask them to swap chairs (a bot agrees at once). */
+  async askSwap(userId: string, roomId: string, targetId: string): Promise<void> {
+    await this.queue(roomId).run(async () => {
+      const room = this.assertSeating(this.rooms.get(roomId), userId);
+      const target = room.seats.find((s) => s.userId === targetId);
+      if (!target || targetId === userId) throw new AppError('NOT_FOUND');
+      if (target.bot) {
+        this.swap(room, userId, targetId);
+        await this.changed(room);
+        return;
+      }
+      const key = `${roomId}:${targetId}`;
+      const pending = this.swapAsks.get(key);
+      if (pending && pending.from !== userId && Date.now() - pending.at < SWAP_ASK_MS) throw new AppError('RATE_LIMITED');
+      this.swapAsks.set(key, { from: userId, at: Date.now() });
+      const me = room.seats.find((s) => s.userId === userId)!;
+      this.deps.hub.send(targetId, { type: 'SEAT_SWAP_ASKED', roomId, from: { userId, name: me.name, seat: me.place ?? 0 } });
+    });
+  }
+
+  /** The answer to «поменяемся местами?». */
+  async answerSwap(userId: string, roomId: string, fromId: string, accept: boolean): Promise<void> {
+    await this.queue(roomId).run(async () => {
+      const key = `${roomId}:${userId}`;
+      const ask = this.swapAsks.get(key);
+      if (!ask || ask.from !== fromId || Date.now() - ask.at > SWAP_ASK_MS) {
+        this.swapAsks.delete(key);
+        throw new AppError('NOT_FOUND');
+      }
+      this.swapAsks.delete(key);
+      const room = this.assertSeating(this.rooms.get(roomId), userId);
+      const me = room.seats.find((s) => s.userId === userId)!;
+      if (!room.seats.some((s) => s.userId === fromId)) throw new AppError('NOT_FOUND');
+      if (!accept) {
+        this.deps.hub.send(fromId, { type: 'SEAT_SWAP_DECLINED', roomId, by: { userId, name: me.name } });
+        return;
+      }
+      this.swap(room, userId, fromId);
+      await this.changed(room);
+    });
+  }
+
+  private swap(room: Room, a: string, b: string): void {
+    this.sortSeats(room);
+    const x = room.seats.find((s) => s.userId === a)!;
+    const y = room.seats.find((s) => s.userId === b)!;
+    [x.place, y.place] = [y.place, x.place];
+    this.sortSeats(room);
   }
 
   // ── connections ────────────────────────────────────────────
@@ -492,7 +581,10 @@ export class RoomManager {
   }
 
   restore(room: Room): void {
-    for (const s of room.seats) s.connected = Boolean(s.bot);
+    room.seats.forEach((s, i) => {
+      s.connected = Boolean(s.bot);
+      s.place ??= i;
+    });
     this.rooms.set(room.id, room);
     if (room.tournament && room.status === 'waiting') {
       this.armReadyTimer(room, this.deps.config.MATCH_READY_SECONDS * 1000);
@@ -631,7 +723,7 @@ export class RoomManager {
     for (const botId of await this.deps.bots.pick(missing, busy)) {
       await this.deps.bots.fund(botId, room.settings.stake);
       const seat = await this.seatFor(botId, room.settings.stake);
-      room.seats.push({ ...seat, bot: true, ready: true, connected: true });
+      this.sit(room, { ...seat, bot: true, ready: true, connected: true });
     }
     if (room.seats.length === room.settings.players) this.armReadyTimer(room);
     await this.changed(room);

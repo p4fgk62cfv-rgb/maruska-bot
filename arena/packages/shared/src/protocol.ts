@@ -63,7 +63,10 @@ export type ServerMessage =
   | { type: 'ROOM_INVITE'; from: PublicUserDto; room: RoomDto; invite: string }
   | { type: 'TOURNAMENT_MATCH'; tournamentId: string; title: string; round: number; roomId: string }
   /** Coins for an invite: `invitee` — I came by `friend`'s link; otherwise `friend` came by mine. */
-  | { type: 'REFERRAL_REWARD'; friend: PublicUserDto; coins: number; invitee: boolean };
+  | { type: 'REFERRAL_REWARD'; friend: PublicUserDto; coins: number; invitee: boolean }
+  /** Someone at my table asks to swap chairs with me (before the deal). */
+  | { type: 'SEAT_SWAP_ASKED'; roomId: string; from: { userId: string; name: string; seat: number } }
+  | { type: 'SEAT_SWAP_DECLINED'; roomId: string; by: { userId: string; name: string } };
 
 export interface GameResultDto {
   kind: 'loser' | 'draw';
