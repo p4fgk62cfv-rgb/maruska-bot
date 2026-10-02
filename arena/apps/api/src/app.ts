@@ -166,6 +166,8 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
     await app.register(fastifyStatic, {
       root: webDist,
       wildcard: false,
+      // dist carries .br/.gz copies made at build time (apps/web/scripts/compress.mjs).
+      preCompressed: true,
       // Our own Cache-Control below; otherwise the plugin overwrites it with «max-age=0».
       cacheControl: false,
       setHeaders: (res, path) => {

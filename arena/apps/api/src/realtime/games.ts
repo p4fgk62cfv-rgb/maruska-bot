@@ -5,6 +5,7 @@ import {
   chooseBotMove,
   solveEndgame,
   type BotLevel,
+  type BotMove,
   createGame,
   toPlayerView,
   undoLastMove,
@@ -67,6 +68,8 @@ export class GameRunner {
   private readonly bots: Set<string>;
   private readonly botTimers = new Map<string, NodeJS.Timeout>();
   private readonly botStuck = new Map<string, number>();
+  /** The endgame search per bot for the current position: the readiness check and the move itself share it. */
+  private readonly botSolved = new Map<string, { version: number; move: BotMove | null }>();
   result: GameResultDto | null = null;
 
   constructor(
@@ -396,8 +399,12 @@ export class GameRunner {
   private botMove(id: string, level: BotLevel) {
     const state = this.snap.state;
     if (level === 'hard' && state.deck.length === 0 && state.players.length === 2) {
-      const exact = solveEndgame(state, id);
-      if (exact) return exact;
+      let solved = this.botSolved.get(id);
+      if (solved?.version !== state.version) {
+        solved = { version: state.version, move: solveEndgame(state, id) };
+        this.botSolved.set(id, solved);
+      }
+      if (solved.move) return solved.move;
     }
     return chooseBotMove(toPlayerView(state, id, { hints: true, discard: level === 'hard' }), level);
   }
