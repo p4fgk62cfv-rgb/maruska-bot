@@ -9,6 +9,7 @@ import { metrics } from '../lib/metrics.js';
 import type { Ledger } from '../services/ledger.js';
 import { SettlementService } from '../services/settlement.js';
 import type { UserService } from '../services/users.js';
+import type { BotService } from '../services/bots.js';
 import { GameManager, wsError } from './games.js';
 import { Hub, type Client } from './hub.js';
 import { RoomManager } from './rooms.js';
@@ -21,6 +22,7 @@ export interface RealtimeDeps {
   users: UserService;
   store: SnapshotStore;
   log: FastifyBaseLogger;
+  bots: BotService;
 }
 
 /** Wires the hub, rooms and games together and speaks the WebSocket protocol. */
@@ -50,6 +52,7 @@ export class Realtime {
       log: deps.log,
       onFinished: (roomId, result) => this.rooms.finished(roomId, result),
       onPresence: (ids) => this.emitPresence(ids),
+      botLevel: () => deps.bots.level(),
     });
   }
 
@@ -64,7 +67,7 @@ export class Realtime {
       const room = rooms.find((r) => r.id === game.roomId);
       const players = (room?.seats ?? []).map((s) => ({ ...s, connected: false }));
       if (!room || players.length !== game.state.players.length) continue;
-      await this.games.restore(game, players.map(({ userId, name, photoUrl, rating, premium, frame, crown, connected }) => ({ userId, name, photoUrl, rating, premium, frame: frame ?? null, crown: crown ?? null, connected })));
+      await this.games.restore(game, players.map(({ userId, name, photoUrl, rating, premium, frame, crown, connected, bot }) => ({ userId, name, photoUrl, rating, premium, frame: frame ?? null, crown: crown ?? null, connected, bot: Boolean(bot) })));
     }
     // A table whose game could not come back (snapshot lost or expired) must not stay «playing»
     // forever: nobody could leave it or sit anywhere else. It waits for the next deal again (a

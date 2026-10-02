@@ -24,6 +24,8 @@ model User {
   photoUrl     String?   @map("photo_url")
   languageCode String?   @map("language_code") @db.VarChar(16)
   isPremium    Boolean   @default(false) @map("is_premium")
+  /// Bot opponent account (fills empty seats): never logs in, never in rankings or friend lists.
+  isBot        Boolean   @default(false) @map("is_bot")
   /// Moderation: bannedAt set + bannedUntil null = permanent ban (repeat offence).
   bannedAt     DateTime? @map("banned_at")
   bannedUntil  DateTime? @map("banned_until")

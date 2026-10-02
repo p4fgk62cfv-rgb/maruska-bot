@@ -56,10 +56,11 @@ export async function ownerRoutes(app: FastifyInstance, ctx: Context): Promise<v
     const { q } = z.object({ q: z.string().max(64).default('') }).parse(request.query);
     const query = q.trim().replace(/^@/, '');
     const where: Prisma.UserWhereInput = !query
-      ? {}
+      ? { isBot: false }
       : /^\d{3,}$/.test(query)
-        ? { telegramId: BigInt(query) }
+        ? { telegramId: BigInt(query), isBot: false }
         : {
+            isBot: false,
             OR: [
               { username: { contains: query, mode: 'insensitive' } },
               { firstName: { contains: query, mode: 'insensitive' } },
@@ -152,6 +153,20 @@ export async function ownerRoutes(app: FastifyInstance, ctx: Context): Promise<v
   app.put('/owner/welcome', auth, async (request): Promise<WelcomeGiftDto> => {
     await owner(request);
     return ctx.welcome.set(welcomeBody.parse(request.body));
+  });
+
+  /** Bot opponents: on/off, how long a table waits for a person, how well they play. */
+  app.get('/owner/bots', auth, async (request) => {
+    await owner(request);
+    return ctx.bots.settings();
+  });
+
+  app.put('/owner/bots', auth, async (request) => {
+    await owner(request);
+    const body = z
+      .object({ enabled: z.boolean(), delaySec: z.number().int().min(3).max(120), level: z.enum(['easy', 'normal', 'hard']) })
+      .parse(request.body);
+    return ctx.bots.setSettings(body);
   });
 
   app.post('/owner/grant', auth, async (request) => {

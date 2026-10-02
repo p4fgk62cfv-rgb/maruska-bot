@@ -1,4 +1,5 @@
 import { WelcomeService } from './services/welcome.js';
+import { BotService } from './services/bots.js';
 import type { Config } from './config.js';
 import type { Db } from './db.js';
 import type { Realtime } from './realtime/realtime.js';
@@ -23,6 +24,7 @@ export interface BaseContext {
   items: ItemService;
   moderation: ModerationService;
   welcome: WelcomeService;
+  bots: BotService;
 }
 
 /** Explicit dependency container: routes receive what they need, nothing is a hidden global. */
@@ -45,6 +47,7 @@ export function createContext(config: Config, db: Db): BaseContext {
     ledger,
     users: new UserService(db, ledger, welcome, items, ownerIds(config.OWNER_IDS)),
     welcome,
+    bots: new BotService(db, ledger),
     wallets: new WalletService(db, ledger),
     items,
     moderation: new ModerationService(db, ledger),

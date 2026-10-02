@@ -81,6 +81,7 @@ export class ProfileService {
       presence: viewer === userId ? 'online' : (presence[userId] ?? 'offline'),
       lastSeenAt: user.lastSeenAt.toISOString(),
       memberSince: user.createdAt.toISOString(),
+      bot: user.isBot,
       relation: relations[userId] ?? 'none',
       favorite,
       title: rare.length ? rare.reduce((best, a) => (a.rarity < best.rarity ? a : best)) : null,

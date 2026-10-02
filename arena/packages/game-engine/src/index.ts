@@ -7,3 +7,4 @@ export * from './GameEngine.js';
 export * from './PlayerView.js';
 export * from './Scoring.js';
 export * from './CheatManager.js';
+export * from './BotBrain.js';

@@ -230,6 +230,7 @@ export interface PlayerCardDto extends PublicUserDto {
   relation: Relation;
   /** «+добавить метку» — only the viewer ever sees it. */
   note: string | null;
+  bot?: boolean;
 }
 
 export type MatchOutcome = 'win' | 'loss' | 'draw' | 'left';
@@ -269,6 +270,8 @@ export interface PlayerProfileDto extends PublicUserDto {
   presence: Presence;
   lastSeenAt: string;
   memberSince: string;
+  /** A bot opponent: no friends, favourites or messages. */
+  bot: boolean;
   relation: Relation;
   favorite: boolean;
   /** The rarest achievement, worn as a title under the name. */
@@ -324,6 +327,13 @@ export interface OwnerPlayerDto {
 }
 
 /** Gift for every newcomer, set by the owner in «Управление». */
+/** Bot opponents: they fill empty seats at public tables after `delaySec` without a person. */
+export interface BotSettingsDto {
+  enabled: boolean;
+  delaySec: number;
+  level: 'easy' | 'normal' | 'hard';
+}
+
 export interface WelcomeGiftDto {
   enabled: boolean;
   credits: number;

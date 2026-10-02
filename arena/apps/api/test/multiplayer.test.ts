@@ -286,6 +286,60 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     expect(internals(gameId).snap.state.version).toBe(v2 + 1);
   }, 30_000);
 
+  it('bots fill an empty public table, play a whole game for credits, and leave with the people', async () => {
+    await handle.ctx.bots.setSettings({ enabled: true, delaySec: 1, level: 'hard' });
+    try {
+      const human = await player('Solo', 10);
+      const created = (await api(human, 'POST', '/rooms', { ...SETTINGS, players: 2 })).json();
+      const roomId: string = created.room.id;
+      const before = (await api(human, 'GET', '/me')).json();
+
+      // A private table never gets bots.
+      const friendHost = await player('PrivateHost', 10);
+      const privateRoom = (await api(friendHost, 'POST', '/rooms', { ...SETTINGS, players: 2, isPrivate: true, password: '1234' })).json().room.id;
+
+      // Nobody comes in → a bot takes the seat, already ready.
+      const joined = await human.waitFor((m) => m.type === 'ROOM_UPDATED' && m.room.id === roomId && m.room.seats.some((x) => x.bot), 5000);
+      const seats = (joined as { room: { seats: { bot?: boolean; ready: boolean }[] } }).room.seats;
+      expect(seats.filter((x) => x.bot)).toHaveLength(1);
+      expect(seats.find((x) => x.bot)!.ready).toBe(true);
+      expect(handle.ctx.realtime.rooms.get(privateRoom)!.seats).toHaveLength(1);
+
+      expect((await human.send({ type: 'READY', roomId, ready: true })).type).toBe('ACK');
+      const started = await human.waitFor((m) => m.type === 'GAME_STARTED');
+      const gameId = (started as { gameId: string }).gameId;
+      expect((started as { players: { bot?: boolean }[] }).players.some((x) => x.bot)).toBe(true);
+
+      // The person plays; the bot answers on its own.
+      expect((await human.send({ type: 'USE_FEATURE', gameId, feature: 'hints' })).type).toBe('ACK');
+      human.autoplay = true;
+      await human.send({ type: 'RECONNECT', roomId });
+      await human.waitFor((m) => m.type === 'GAME_FINISHED', 90_000);
+      const result = human.result!;
+      expect(result.reason).not.toBe('timeout');
+
+      // Credits moved like in any game; rating stayed.
+      const after = (await api(human, 'GET', '/me')).json();
+      const mine = result.payouts.find((p) => p.userId === human.userId)!;
+      expect(after.rating).toBe(before.rating);
+      expect(mine.ratingGain).toBe(0);
+      expect(after.wallet.credits - before.wallet.credits).toBe(mine.net);
+
+      // The person leaves the table → the bot leaves too and the table closes.
+      await new Promise((r) => setTimeout(r, 300));
+      expect((await api(human, 'POST', `/rooms/${roomId}/leave`)).statusCode).toBe(200);
+      expect(handle.ctx.realtime.rooms.get(roomId)).toBeUndefined();
+
+      // Bots are not in the leaderboard and cannot be friended.
+      const board = (await api(human, 'GET', '/leaderboard?by=rating')).json() as { id: string }[];
+      const botId = result.payouts.find((p) => p.userId !== human.userId)!.userId;
+      expect(board.some((r) => r.id === botId)).toBe(false);
+      expect((await api(human, 'POST', '/friends/requests', { userId: botId })).json().error).toBe('NOT_FOUND');
+    } finally {
+      await handle.ctx.bots.setSettings({ enabled: false, delaySec: 12, level: 'normal' });
+    }
+  }, 120_000);
+
   it('rejects cheating and foreign actions, and «Сдаться» is a loss', async () => {
     const { players, roomId } = await table(2);
     const gameId = await startGame(players, roomId);

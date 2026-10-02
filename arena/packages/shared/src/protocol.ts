@@ -23,6 +23,7 @@ export interface PlayerInfo {
   frame: string | null;
   crown: string | null;
   connected: boolean;
+  bot?: boolean;
 }
 
 export type ServerMessage =

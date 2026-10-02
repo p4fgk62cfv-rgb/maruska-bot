@@ -1,4 +1,4 @@
-import type { AnnouncementDto, OwnerPlayerDto, WelcomeGiftDto } from '@arena/shared';
+import type { AnnouncementDto, BotSettingsDto, OwnerPlayerDto, WelcomeGiftDto } from '@arena/shared';
 import { Avatar, Balance, BottomSheet, Button, Panel, Tabs, Toggle } from '@arena/ui';
 import { useEffect, useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
@@ -7,7 +7,7 @@ import { useSession } from '../session.js';
 import { useToast } from '../toast.js';
 import { ScreenHeader } from './common.js';
 
-type Section = 'announcement' | 'gifts' | 'bonus';
+type Section = 'announcement' | 'gifts' | 'bonus' | 'bots';
 interface GiftItem { key: string; name: string; kind: string; owned: boolean }
 
 const KIND_RU: Record<string, string> = { CARD_BACK: 'Рубашка', FRAME: 'Рамка', CROWN: 'Корона', EFFECT: 'Эффект', EMOJI: 'Смайлы', TABLE: 'Стол', AVATAR: 'Аватар' };
@@ -19,8 +19,8 @@ export default function OwnerScreen() {
   return (
     <div className="app-stack owner">
       <ScreenHeader title="Управление" subtitle="Видно только владельцу" />
-      <Tabs<Section> value={section} onChange={setSection} items={[{ value: 'announcement', label: 'Объявление' }, { value: 'gifts', label: 'Подарки' }, { value: 'bonus', label: 'Бонусы' }]} />
-      {section === 'announcement' ? <AnnouncementEditor /> : section === 'gifts' ? <Gifts /> : <Bonuses />}
+      <Tabs<Section> value={section} onChange={setSection} items={[{ value: 'announcement', label: 'Объявление' }, { value: 'gifts', label: 'Подарки' }, { value: 'bonus', label: 'Бонусы' }, { value: 'bots', label: 'Боты' }]} />
+      {section === 'announcement' ? <AnnouncementEditor /> : section === 'gifts' ? <Gifts /> : section === 'bots' ? <Bots /> : <Bonuses />}
     </div>
   );
 }
@@ -286,5 +286,63 @@ function Bonuses() {
         </Button>
       </Panel>
     </>
+  );
+}
+
+
+const LEVELS: { value: BotSettingsDto['level']; label: string; hint: string }[] = [
+  { value: 'easy', label: 'Лёгкий', hint: 'Часто ошибается — новичкам приятно выигрывать' },
+  { value: 'normal', label: 'Средний', hint: 'Играет как обычный игрок' },
+  { value: 'hard', label: 'Сильный', hint: 'Бережёт козыри, грамотно подкидывает и переводит' },
+];
+const DELAYS = [5, 10, 15, 30, 60];
+
+/** Bot opponents: they take empty seats at public tables when no person comes. */
+function Bots() {
+  const toast = useToast();
+  const current = useQuery<BotSettingsDto>('/owner/bots');
+  const [draft, setDraft] = useState<BotSettingsDto | null>(null);
+  useEffect(() => {
+    if (current.data) setDraft(current.data);
+  }, [current.data]);
+
+  const save = async (next: BotSettingsDto) => {
+    setDraft(next);
+    try {
+      await api('/owner/bots', { method: 'PUT', body: next });
+      toast(next.enabled ? 'Настройки ботов сохранены' : 'Боты выключены', 'success');
+    } catch (e) {
+      toast(errText(e), 'error');
+      current.reload();
+    }
+  };
+
+  if (!draft) return <p className="app-muted">Загрузка…</p>;
+  return (
+    <Panel className="owner-card">
+      <h3 className="owner-sub">Боты-соперники</h3>
+      <p className="app-muted">
+        Если за открытым столом никто новый не появился за указанное время, пустые места занимают боты. Играют на кредиты, в рейтинг и
+        сезон такие партии не идут, за стол с паролем и в турниры боты не садятся.
+      </p>
+      <Toggle label={draft.enabled ? 'Включены' : 'Выключены'} checked={draft.enabled} onChange={(v) => void save({ ...draft, enabled: v })} />
+      <h3 className="owner-sub">Через сколько садятся</h3>
+      <div className="owner-chips">
+        {DELAYS.map((d) => (
+          <button key={d} type="button" className={`owner-chip${draft.delaySec === d ? ' owner-chip--on' : ''}`} onClick={() => void save({ ...draft, delaySec: d })}>
+            {d} с
+          </button>
+        ))}
+      </div>
+      <h3 className="owner-sub">Как играют</h3>
+      <div className="owner-levels">
+        {LEVELS.map((l) => (
+          <button key={l.value} type="button" className={`owner-level${draft.level === l.value ? ' owner-level--on' : ''}`} onClick={() => void save({ ...draft, level: l.value })}>
+            <strong>{l.label}</strong>
+            <span>{l.hint}</span>
+          </button>
+        ))}
+      </div>
+    </Panel>
   );
 }

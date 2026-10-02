@@ -66,11 +66,13 @@ export interface SeatTileProps {
   bubble?: { text: string; tone: 'take' | 'pass' } | null;
   /** My private label about this player. */
   note?: string | null;
+  /** A bot opponent: a small «бот» badge on the portrait. */
+  bot?: boolean;
   onOpen?: () => void;
 }
 
 /** A player at the table: square portrait with the name on it, cards fanned behind, status below. */
-export const SeatTile = memo(function SeatTile({ seat, cards = 0, back = 'classic', active, progress = null, label, number, emoji, dim, offline, anchor, size = 58, bubble, note, onOpen }: SeatTileProps) {
+export const SeatTile = memo(function SeatTile({ seat, cards = 0, back = 'classic', active, progress = null, label, number, emoji, dim, offline, anchor, size = 58, bubble, note, bot, onOpen }: SeatTileProps) {
   const fan = Math.min(cards, 7);
   return (
     <div
@@ -95,6 +97,7 @@ export const SeatTile = memo(function SeatTile({ seat, cards = 0, back = 'classi
       <span className="seat-tile__frame" {...(anchor ? { 'data-seat': seat.id } : {})}>
         <Avatar id={seat.id} name={seat.name} photoUrl={seat.photoUrl} size={size} ring={ringOf(seat.frame)} crown={Boolean(seat.crown)} status={offline ? 'offline' : undefined} />
         <span className="seat-tile__name">{seat.name}</span>
+        {bot && <span className="seat-tile__bot">бот</span>}
         {cards > 0 && <span className="seat-tile__count">{cards}</span>}
         {emoji && (
           <span className="seat__emoji" key={emoji.n} aria-hidden="true">

@@ -26,7 +26,7 @@ export async function boardRoutes(app: FastifyInstance, ctx: Context): Promise<v
   app.get('/leaderboard', auth, async (request): Promise<LeaderboardRowDto[]> => {
     const { by } = z.object({ by: z.enum(['rating', 'winnings', 'wins']).default('rating') }).parse(request.query);
     const rows = await db.profile.findMany({
-      where: { gamesPlayed: { gt: 0 }, user: { bannedAt: null } },
+      where: { gamesPlayed: { gt: 0 }, user: { bannedAt: null, isBot: false } },
       orderBy: ORDER[by],
       take: 100,
       include: { user: true },

@@ -356,6 +356,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
               emoji={emojis[p.id] ?? null}
               dim={p.status !== 'active'}
               offline={infoOf(p.id)?.connected === false}
+              bot={infoOf(p.id)?.bot}
             />
           </div>
         ))}

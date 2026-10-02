@@ -31,6 +31,8 @@ export interface RoomSeatDto {
   crown: string | null;
   ready: boolean;
   connected: boolean;
+  /** A bot opponent (shown with a «бот» badge). */
+  bot?: boolean;
 }
 
 export interface RoomDto {

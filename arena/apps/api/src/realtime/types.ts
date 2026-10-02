@@ -11,6 +11,8 @@ export interface Seat {
   crown: string | null;
   ready: boolean;
   connected: boolean;
+  /** Bot opponent: always ready and connected. */
+  bot?: boolean;
 }
 
 export type RoomConfig = Omit<RoomSettings, 'password' | 'isPrivate' | 'server'>;

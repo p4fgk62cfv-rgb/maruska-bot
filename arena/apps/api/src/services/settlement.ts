@@ -25,6 +25,8 @@ export interface FinishInput {
   startedAt: number;
   /** Transfers made by each player in this game (for «Мастер перевода»). */
   transfers: Record<string, number>;
+  /** Bot opponents at the table: such games move credits but not rating, season or achievements. */
+  bots?: string[];
 }
 
 /**
@@ -109,6 +111,8 @@ export class SettlementService {
         }
 
         const profiles = await tx.profile.findMany({ where: { userId: { in: ids } } });
+        // A game against bots counts for credits and statistics, not for rating, season or achievements.
+        const withBots = (input.bots?.length ?? 0) > 0;
         const anyPremium = profiles.some((p) => isPremium(p.premiumUntil?.getTime() ?? null, now.getTime()));
         const season = await tx.season.findFirst({ where: { startsAt: { lte: now }, endsAt: { gt: now } } });
 
@@ -134,7 +138,9 @@ export class SettlementService {
             : anyPremium
               ? 'table'
               : 'none';
-          const bonus = settleBonus(
+          const bonus = withBots
+            ? { applied: 1, next: { multiplier: profile.bonusMultiplier, lastBonusAt: profile.bonusLastAt?.getTime() ?? null, streak: profile.bonusStreak } }
+            : settleBonus(
             {
               multiplier: profile.bonusMultiplier,
               lastBonusAt: profile.bonusLastAt?.getTime() ?? null,
@@ -144,7 +150,7 @@ export class SettlementService {
             now.getTime(),
             won && payout.net > 0,
           );
-          const gain = won ? ratingGain({ winnings: payout.net, rating: profile.rating, multiplier: bonus.applied, premium }) : 0;
+          const gain = won && !withBots ? ratingGain({ winnings: payout.net, rating: profile.rating, multiplier: bonus.applied, premium }) : 0;
           const winStreak = won ? profile.winStreak + 1 : result.kind === 'draw' ? profile.winStreak : 0;
 
           await tx.profile.update({
@@ -166,7 +172,7 @@ export class SettlementService {
             },
           });
 
-          if (season && (gain > 0 || payout.net > 0)) {
+          if (season && !withBots && (gain > 0 || payout.net > 0)) {
             await tx.seasonRating.upsert({
               where: { seasonId_userId: { seasonId: season.id, userId: payout.playerId } },
               create: { seasonId: season.id, userId: payout.playerId, rating: gain, wins: won ? 1 : 0, winnings: BigInt(Math.max(0, payout.net)) },
@@ -179,7 +185,7 @@ export class SettlementService {
             where: { gameId_userId: { gameId, userId: payout.playerId } },
             data: { place: player.place, outcome, payout: BigInt(payout.credit), net: BigInt(payout.net), ratingGain: gain },
           });
-          await this.progressAchievements(tx, payout.playerId, gameId, {
+          if (!withBots) await this.progressAchievements(tx, payout.playerId, gameId, {
             won,
             players: state.players.length,
             stake,

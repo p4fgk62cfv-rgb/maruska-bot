@@ -17,6 +17,7 @@ import { checkInvite, hashPassword, inviteCode, newRoomId, verifyPassword } from
 import { SerialQueue } from '../lib/serial.js';
 import { ShortOfFunds } from '../services/settlement.js';
 import type { UserService } from '../services/users.js';
+import type { BotService } from '../services/bots.js';
 import type { GameManager } from './games.js';
 import type { Hub } from './hub.js';
 import type { SnapshotStore } from './store.js';
@@ -50,6 +51,7 @@ export interface RoomDeps {
   users: UserService;
   games: () => GameManager;
   log: FastifyBaseLogger;
+  bots: BotService;
 }
 
 const QUICK_DEFAULTS = {
@@ -70,6 +72,8 @@ export class RoomManager {
   /** One table at a time: a player's create/join/quick run one after another, so a double tap cannot seat them twice. */
   private readonly userQueues = new Map<string, { queue: SerialQueue; pending: number }>();
   private readonly pinFails = new Map<string, { count: number; since: number }>();
+  /** Seat count the bot timer of a room was armed for: a new person resets the wait, a ready toggle does not. */
+  private readonly botArmed = new Map<string, number>();
   matchHooks: MatchHooks | null = null;
 
   constructor(private readonly deps: RoomDeps) {}
@@ -430,6 +434,8 @@ export class RoomManager {
     room.readyDeadline = null;
     room.status = 'playing';
     try {
+      // Bots never run short: the house tops them up before the stakes are taken.
+      for (const s of room.seats) if (s.bot) await this.deps.bots.fund(s.userId, room.settings.stake);
       const runner = await this.deps.games().start(room);
       room.gameId = runner.id;
       await this.changed(room);
@@ -469,8 +475,9 @@ export class RoomManager {
         room.gameId = null;
         room.readyDeadline = null;
         for (const s of room.seats) {
-          s.ready = false;
-          s.connected = this.deps.hub.isOnline(s.userId);
+          // Bots are ready for the next deal at once; people press «Готов» themselves.
+          s.ready = Boolean(s.bot);
+          s.connected = s.bot || this.deps.hub.isOnline(s.userId);
         }
         for (const s of room.seats) {
           if (!s.connected) this.setTimer(`grace:${s.userId}`, WAITING_GRACE_MS, () => this.queue(room.id).run(() => this.dropIfAway(room, s.userId)));
@@ -482,14 +489,14 @@ export class RoomManager {
   }
 
   restore(room: Room): void {
-    for (const s of room.seats) s.connected = false;
+    for (const s of room.seats) s.connected = Boolean(s.bot);
     this.rooms.set(room.id, room);
     if (room.tournament && room.status === 'waiting') {
       this.armReadyTimer(room, this.deps.config.MATCH_READY_SECONDS * 1000);
       return;
     }
     if (room.status === 'waiting') {
-      for (const s of room.seats) this.setTimer(`grace:${s.userId}`, WAITING_GRACE_MS, () => this.queue(room.id).run(() => this.dropIfAway(room, s.userId)));
+      for (const s of room.seats.filter((seat) => !seat.bot)) this.setTimer(`grace:${s.userId}`, WAITING_GRACE_MS, () => this.queue(room.id).run(() => this.dropIfAway(room, s.userId)));
     }
   }
 
@@ -529,6 +536,8 @@ export class RoomManager {
     const before = room.seats.length;
     room.seats = room.seats.filter((s) => s.userId !== userId);
     if (room.seats.length === before) return;
+    // Nobody left but bots: the table closes (bots never play among themselves).
+    if (room.seats.every((s) => s.bot)) room.seats = [];
     this.clearTimer(`grace:${userId}`);
     for (const s of room.seats) s.ready = false;
     this.clearTimer(`ready:${room.id}`);
@@ -553,7 +562,9 @@ export class RoomManager {
     this.rooms.delete(roomId);
     this.queues.delete(roomId);
     this.pinFails.delete(roomId);
+    this.botArmed.delete(roomId);
     this.clearTimer(`ready:${roomId}`);
+    this.clearTimer(`bots:${roomId}`);
   }
 
   private armReadyTimer(room: Room, ms = READY_TIMEOUT_MS): void {
@@ -578,6 +589,51 @@ export class RoomManager {
     const dto = this.dto(room);
     this.deps.hub.publishRoom(dto, created);
     for (const s of room.seats) this.deps.hub.send(s.userId, { type: 'ROOM_UPDATED', room: dto });
+    this.scheduleBots(room);
+  }
+
+  // ── bot opponents ──────────────────────────────────────────
+
+  /**
+   * A public table where people wait and seats are empty: if nobody new comes in for the
+   * set delay, bots take the empty seats (and are ready at once). Private tables and
+   * tournament matches never get bots.
+   */
+  private scheduleBots(room: Room): void {
+    const key = `bots:${room.id}`;
+    const humans = room.seats.filter((s) => !s.bot).length;
+    const wanted = !room.isPrivate && !room.tournament && room.status === 'waiting' && humans > 0 && room.seats.length < room.settings.players;
+    if (!wanted) {
+      this.clearTimer(key);
+      this.botArmed.delete(room.id);
+      return;
+    }
+    if (this.botArmed.get(room.id) === room.seats.length && this.timers.has(key)) return;
+    this.botArmed.set(room.id, room.seats.length);
+    void this.deps.bots.settings().then((cfg) => {
+      if (!cfg.enabled || !this.rooms.has(room.id)) return;
+      this.setTimer(key, cfg.delaySec * 1000, () => this.queue(room.id).run(() => this.seatBots(room)));
+    });
+  }
+
+  private async seatBots(room: Room): Promise<void> {
+    this.botArmed.delete(room.id);
+    const cfg = await this.deps.bots.settings();
+    const humans = room.seats.filter((s) => !s.bot).length;
+    if (!cfg.enabled || !this.rooms.has(room.id) || room.status !== 'waiting' || humans === 0) return;
+    const missing = room.settings.players - room.seats.length;
+    if (missing <= 0) return;
+    const busy = new Set<string>();
+    for (const r of this.rooms.values()) for (const s of r.seats) busy.add(s.userId);
+    for (const botId of await this.deps.bots.pick(missing, busy)) {
+      await this.deps.bots.fund(botId, room.settings.stake);
+      const seat = await this.seatFor(botId, room.settings.stake);
+      room.seats.push({ ...seat, bot: true, ready: true, connected: true });
+    }
+    if (room.seats.length === room.settings.players) this.armReadyTimer(room);
+    await this.changed(room);
+    for (const s of room.seats) this.deps.hub.send(s.userId, { type: 'ROOM_JOINED', room: this.dto(room), userId: s.userId });
+    if (room.seats.length === room.settings.players && room.seats.every((s) => s.ready)) await this.startGame(room);
   }
 
   private queue(roomId: string): SerialQueue {

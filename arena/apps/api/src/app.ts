@@ -71,6 +71,8 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   const ctx: Context = { ...base, realtime, presence, outbox, friends, profiles, tournaments };
   await base.moderation.loadBans();
   useBanList(base.moderation);
+  await base.bots.ensurePool();
+  await base.bots.settings();
   await realtime.recover();
   if (config.NODE_ENV !== 'test') {
     outbox.start();

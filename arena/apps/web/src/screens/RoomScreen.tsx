@@ -61,6 +61,7 @@ export function RoomScreen({ room }: { room: RoomDto }) {
               number={number}
               active={seat.ready}
               offline={!seat.connected}
+              bot={seat.bot}
               label={seat.ready ? { text: 'Готов', tone: 'ready' } : null}
               emoji={emojis[seat.userId] ?? null}
             />
