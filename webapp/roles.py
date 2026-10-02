@@ -9,9 +9,12 @@
 кнопка бана бессмысленна, если сам бот не умеет банить.
 """
 
+import logging
 import time
 
 from settings.handler import is_owner
+
+logger = logging.getLogger("maruska.roles")
 
 
 ROLES = {
@@ -101,13 +104,17 @@ def forget_role(chat_id: int, user_id: int) -> None:
 _rights_cache: dict[int, tuple[float, dict]] = {}
 
 
-async def _forget_chat(chat_id: int) -> None:
+async def _forget_chat(chat_id: int, reason: str) -> None:
     try:
         from database.repository import mark_chat_gone
+        from webapp.admin import _access_cache
 
         await mark_chat_gone(chat_id)
-    except Exception:
-        pass
+        # Списки групп в панели собраны заранее — пусть пересоберутся без этой группы
+        _access_cache.clear()
+        logger.info("Группа %s скрыта из панели: %s", chat_id, reason)
+    except Exception as error:
+        logger.warning("Не удалось скрыть группу %s: %s", chat_id, error)
 
 
 async def bot_rights(bot, chat_id: int) -> dict:
@@ -129,7 +136,7 @@ async def bot_rights(bot, chat_id: int) -> dict:
 
         rights["present"] = member.status not in ("left", "kicked")
         if not rights["present"]:
-            await _forget_chat(chat_id)
+            await _forget_chat(chat_id, f"статус Мары: {member.status}")
 
         if member.status in ("administrator", "creator"):
             rights = {
@@ -143,8 +150,10 @@ async def bot_rights(bot, chat_id: int) -> dict:
     except Exception as error:
         # Только однозначные ответы Telegram («группы нет», «бота выгнали»), не сбои сети
         text = str(error).lower()
-        if any(s in text for s in ("chat not found", "bot was kicked", "bot is not a member", "group chat was deactivated", "chat was deleted")):
-            await _forget_chat(chat_id)
+        if any(s in text for s in ("chat not found", "bot was kicked", "bot is not a member", "deactivated", "was deleted", "upgraded to a supergroup")):
+            await _forget_chat(chat_id, str(error))
+        else:
+            logger.warning("Права Мары в группе %s не проверить: %s", chat_id, error)
 
     _rights_cache[chat_id] = (time.monotonic(), rights)
 
