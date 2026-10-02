@@ -8,7 +8,9 @@ import { useInstall } from '../lib/app.js';
  */
 export function InstallHint({ compact = false }: { compact?: boolean }) {
   const { mode, install } = useInstall();
-  const [open, setOpen] = useState(false);
+  // Came here from «Установить приложение» in Telegram, or on Android without the browser's own
+  // prompt (often Telegram's built-in browser, which cannot install): show the steps at once.
+  const [open, setOpen] = useState(() => new URLSearchParams(location.search).has('install') || mode === 'android');
   if (!mode) return null;
   if (mode === 'prompt') {
     return (
@@ -31,11 +33,18 @@ export function InstallHint({ compact = false }: { compact?: boolean }) {
         </span>
       </button>
       {open && mode === 'android' && (
-        <ol className="install-hint__steps">
-          <li>Откройте меню браузера ⋮ (вверху справа)</li>
-          <li>Выберите «Установить приложение» или «Добавить на главный экран»</li>
-          <li>Откройте Арену значком на экране</li>
-        </ol>
+        <>
+          <a className="install-hint__browser" href={`intent://${location.host}/?install=1#Intent;scheme=https;end`}>
+            Открыть в браузере телефона
+          </a>
+          <ol className="install-hint__steps">
+            <li>
+              Если страница открыта внутри Telegram: нажмите ⋮ вверху справа → «Открыть в Samsung Browser» (или «в Chrome»)
+            </li>
+            <li>В браузере: ⋮ → «Установить приложение» или «Добавить на главный экран»</li>
+            <li>Откройте Арену значком «Арена» на экране телефона</li>
+          </ol>
+        </>
       )}
       {open && mode === 'ios' && (
         <ol className="install-hint__steps">

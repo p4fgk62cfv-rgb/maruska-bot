@@ -1565,3 +1565,4 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 .install-hint__steps svg { vertical-align: -3px; }
 .install-hint--compact { width: auto; margin: 0 2px; }
 .home-shortcut__img { flex: none; border-radius: 10px; }
+.install-hint__browser { display: block; margin: 2px 12px 6px; padding: 11px 12px; border-radius: 12px; background: #2aabee; color: #fff; font-weight: 800; text-align: center; text-decoration: none; }
