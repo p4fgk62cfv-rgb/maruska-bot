@@ -31,9 +31,9 @@ export async function adminRoutes(app: FastifyInstance, ctx: Context, check: (r:
     const today = new Date(now - (now % DAY));
     const week = new Date(now - 7 * DAY);
     const [players, newToday, active7, gamesToday, games7, stakes, bans, reports7, outbox] = await Promise.all([
-      db.profile.count(),
-      db.user.count({ where: { createdAt: { gte: today } } }),
-      db.user.count({ where: { lastSeenAt: { gte: week } } }),
+      db.profile.count({ where: { user: { isBot: false } } }),
+      db.user.count({ where: { createdAt: { gte: today }, isBot: false } }),
+      db.user.count({ where: { lastSeenAt: { gte: week }, isBot: false } }),
       db.game.count({ where: { startedAt: { gte: today } } }),
       db.game.count({ where: { startedAt: { gte: week } } }),
       db.game.aggregate({ where: { startedAt: { gte: today }, status: 'FINISHED' }, _sum: { stake: true } }),
@@ -45,7 +45,7 @@ export async function adminRoutes(app: FastifyInstance, ctx: Context, check: (r:
     const rake = await db.gamePlayer.aggregate({ where: { game: { startedAt: { gte: today }, status: 'FINISHED' } }, _sum: { net: true } });
     const top = await db.gamePlayer.groupBy({
       by: ['userId'],
-      where: { game: { startedAt: { gte: today }, status: 'FINISHED' } },
+      where: { game: { startedAt: { gte: today }, status: 'FINISHED' }, user: { isBot: false } },
       _sum: { net: true },
       orderBy: { _sum: { net: 'desc' } },
       take: 5,
@@ -89,7 +89,7 @@ export async function adminRoutes(app: FastifyInstance, ctx: Context, check: (r:
               { profile: { nickname: { contains: query, mode: 'insensitive' } } },
             ],
           };
-    const users = await db.user.findMany({ where: { ...where, profile: { isNot: null } }, include: { profile: true, wallets: true }, orderBy: { lastSeenAt: 'desc' }, take: limit });
+    const users = await db.user.findMany({ where: { ...where, isBot: false, profile: { isNot: null } }, include: { profile: true, wallets: true }, orderBy: { lastSeenAt: 'desc' }, take: limit });
     return users.map((u) => ({
       telegramId: u.telegramId.toString(),
       name: u.profile!.nickname || displayName(u),
@@ -358,7 +358,7 @@ export async function adminRoutes(app: FastifyInstance, ctx: Context, check: (r:
       .parse(request.body);
     const since = body.audience === 'all' ? null : new Date(Date.now() - (body.audience === 'active7' ? 7 : 30) * DAY);
     const users = await db.user.findMany({
-      where: { profile: { isNot: null }, bannedAt: null, ...(since ? { lastSeenAt: { gte: since } } : {}) },
+      where: { profile: { isNot: null }, isBot: false, bannedAt: null, ...(since ? { lastSeenAt: { gte: since } } : {}) },
       select: { id: true },
       take: BROADCAST_MAX,
     });

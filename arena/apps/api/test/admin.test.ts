@@ -59,6 +59,10 @@ describe.skipIf(!url)('admin panel API («🃏 Арена» in the bot)', () => 
     expect(found).toHaveLength(1);
     expect(found[0]).toMatchObject({ telegramId: String(p.tg), name: 'Проверка', credits: 1450 });
     expect((await admin('GET', `/players?q=@u${p.tg}`)).json()[0].telegramId).toBe(String(p.tg));
+    // Bot opponents are not players to manage: never in the list.
+    const listed = (await admin('GET', '/players?limit=100')).json() as { telegramId: string }[];
+    expect(listed.some((x) => BigInt(x.telegramId) >= 9_000_000_000_000n)).toBe(false);
+    expect((await admin('GET', '/players?q=9000000000000')).json()).toEqual([]);
 
     const credit = await admin('POST', `/players/${p.tg}/wallet`, { currency: 'CREDITS', amount: 5000, reason: 'компенсация', requestId: `req-${p.tg}-1`, admin: 'Owner' });
     expect(credit.json()).toEqual({ balance: 6450 });

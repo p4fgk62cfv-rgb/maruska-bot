@@ -146,7 +146,7 @@ export class ProfileService {
     if (this.rarity && Date.now() - this.rarity.at < RARITY_TTL_MS) return this.rarity.byId;
     const [counts, players] = await Promise.all([
       this.db.userAchievement.groupBy({ by: ['achievementId'], where: { unlockedAt: { not: null } }, _count: { _all: true } }),
-      this.db.profile.count({ where: { gamesPlayed: { gt: 0 } } }),
+      this.db.profile.count({ where: { gamesPlayed: { gt: 0 }, user: { isBot: false } } }),
     ]);
     const total = Math.max(1, players);
     const byId = new Map(counts.map((c) => [c.achievementId, Math.min(100, Math.round((c._count._all / total) * 1000) / 10)]));

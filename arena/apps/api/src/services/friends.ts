@@ -376,7 +376,7 @@ export class FriendService {
     const q = query.trim().replace(/^@/, '');
     if (q.length < 3) return [];
     const users = await this.db.user.findMany({
-      where: { username: { startsWith: q, mode: 'insensitive' }, bannedAt: null, id: { not: me } },
+      where: { username: { startsWith: q, mode: 'insensitive' }, isBot: false, bannedAt: null, id: { not: me } },
       include: { profile: true },
       take: 20,
     });
