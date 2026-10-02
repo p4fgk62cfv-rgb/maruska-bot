@@ -256,6 +256,14 @@ FEATURES: tuple[Feature, ...] = (
         group="Антимат",
     ),
     Feature(
+        key="antimat_admins",
+        title="Наказывать и админов",
+        emoji="👑",
+        description="Админы тоже получают предупреждения за мат. Мут админу Telegram не позволяет — им только предупреждения",
+        default=True,
+        group="Антимат",
+    ),
+    Feature(
         key="antimat_delete",
         title="Удалять сообщения с матом",
         emoji="🗑",

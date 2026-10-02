@@ -13,7 +13,8 @@
 
 Мат ловится и в маскировке: латиница вместо кириллицы («xуй», «cyka»),
 цифры («3»→з, «0»→о), растянутые буквы («хууууй»), буквы через точку,
-пробел или звёздочку («х.у.й», «х у й»). Администраторов Мара не трогает.
+пробел или звёздочку («х.у.й», «х у й»). Админов — по настройке «Наказывать
+и админов» (мут админу Telegram не позволяет: им только предупреждения).
 """
 
 import logging
@@ -148,7 +149,8 @@ async def on_swear(message: Message):
     user = message.from_user
     name = display_name_of(user)
 
-    if await _is_admin(message.bot, chat_id, user.id):
+    admin = await _is_admin(message.bot, chat_id, user.id)
+    if admin and not is_enabled(chat_id, "antimat_admins"):
         return
 
     if is_enabled(chat_id, "antimat_delete"):
@@ -195,7 +197,9 @@ async def on_swear(message: Message):
         await mute(message.bot, chat_id, user.id, minutes)
     except ModerationError as error:
         logger.warning("ANTIMAT mute: %s", error)
-        await message.answer(f"🤬 {who}, без мата! Предупреждение {limit}/{limit}. Замутить не могу — нет права ограничивать участников.")
+        why = ("Telegram не даёт ограничивать администраторов — только предупреждение."
+               if admin else "Замутить не могу — нет права ограничивать участников.")
+        await message.answer(f"🤬 {who}, без мата! Предупреждение {limit}/{limit}. {why}")
         return
 
     audit.count(chat_id, "mutes")
