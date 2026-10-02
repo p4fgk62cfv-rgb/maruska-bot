@@ -251,3 +251,37 @@ async def member_joined(event: ChatMemberUpdated):
         return
 
     await welcome(event.bot, event.chat.id, fresh)
+
+
+@router.my_chat_member()
+async def bot_added(event: ChatMemberUpdated):
+    """
+    Мару добавили в группу (или сделали админом). Группа сразу появляется в панели:
+    раньше она считалась «знакомой» только после первого сообщения, и админ новой
+    группы видел «Нет доступа».
+    """
+    if event.chat.type not in ("group", "supergroup"):
+        return
+    now = event.new_chat_member.status
+    if now not in ("member", "administrator"):
+        return
+
+    from database.repository import ensure_member, remember_chat
+    from webapp.admin import drop_access_cache
+
+    chat_id = event.chat.id
+    try:
+        await remember_chat(chat_id, event.chat.title)
+        people = []
+        if event.from_user and not event.from_user.is_bot:
+            people.append(event.from_user)
+        try:
+            admins = await event.bot.get_chat_administrators(chat_id)
+            people += [m.user for m in admins if not m.user.is_bot]
+        except Exception as error:
+            logger.warning("ADMINS on join: %s", error)
+        for user in people:
+            await ensure_member(chat_id, user.id, user.first_name or user.username)
+            drop_access_cache(user.id)
+    except Exception as error:
+        logger.warning("BOT ADDED: %s", error)

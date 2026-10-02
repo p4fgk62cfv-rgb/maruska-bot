@@ -87,6 +87,7 @@ async def visible_chats(bot, user_id: int) -> list[dict]:
         return cached[1]
 
     chats = await list_known_chats()
+    await fill_titles(bot, chats)
 
     if is_owner(user_id):
         allowed = chats
@@ -102,9 +103,35 @@ async def visible_chats(bot, user_id: int) -> list[dict]:
             if member.status in ADMIN_STATUSES:
                 allowed.append(chat)
 
-    _access_cache[user_id] = (time.monotonic(), allowed)
+    # «Нет доступа» не запоминаем: человека могли только что сделать админом
+    # или только что добавить Мару в его группу — пусть следующая попытка проверит заново.
+    if allowed:
+        _access_cache[user_id] = (time.monotonic(), allowed)
 
     return allowed
+
+
+_title_tried: set[int] = set()
+
+
+async def fill_titles(bot, chats: list[dict]) -> None:
+    """«Группа -100…» вместо названия: спрашиваем Telegram один раз и запоминаем."""
+    from database.repository import remember_chat
+
+    for chat in chats:
+        if not chat["title"].startswith("Группа ") or chat["chat_id"] in _title_tried:
+            continue
+        _title_tried.add(chat["chat_id"])
+        try:
+            info = await bot.get_chat(chat["chat_id"])
+        except Exception:
+            continue
+        if info.title:
+            chat["title"] = info.title
+            try:
+                await remember_chat(chat["chat_id"], info.title)
+            except Exception:
+                pass
 
 
 def drop_access_cache(user_id: int) -> None:

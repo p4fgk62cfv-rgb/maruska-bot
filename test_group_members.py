@@ -30,7 +30,7 @@ def expect(label, got, want):
 async def with_database():
     from database.database import engine, init_db, session_scope
     from database.models import GroupMember
-    from database.repository import ensure_member, mark_member_left, members_page, save_message
+    from database.repository import ensure_member, list_known_chats, mark_member_left, members_page, remember_chat, save_message
     from sqlalchemy import delete
 
     await init_db()
@@ -66,8 +66,19 @@ async def with_database():
     expect("после сообщения есть «был в сети»", pete["last_seen"] is not None, True)
     expect("сообщение посчитано", pete["messages"], 1)
 
+    # Мару добавили в новую группу, где ещё никто не писал: группа сразу видна панели.
+    NEW = CHAT - 1
+    await remember_chat(NEW, "Пример теста")
+    await remember_chat(NEW, "Пример теста")
+    await ensure_member(NEW, 601, "Владелец")
+    known = {c["chat_id"]: c for c in await list_known_chats()}
+    expect("новая группа известна панели", NEW in known, True)
+    expect("название группы", known.get(NEW, {}).get("title"), "Пример теста")
+
+    from database.models import GroupSettings
     async with session_scope() as session:
-        await session.execute(delete(GroupMember).where(GroupMember.chat_id == CHAT))
+        await session.execute(delete(GroupMember).where(GroupMember.chat_id.in_([CHAT, NEW])))
+        await session.execute(delete(GroupSettings).where(GroupSettings.chat_id == NEW))
         await session.commit()
     await engine.dispose()
 

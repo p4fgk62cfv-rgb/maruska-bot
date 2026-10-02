@@ -3094,6 +3094,22 @@ async def set_member_vip(chat_id: int, telegram_id: int, vip: bool) -> bool:
         return (result.rowcount or 0) > 0
 
 
+async def remember_chat(chat_id: int, title: str | None) -> None:
+    """Группа, куда добавили Мару: название — для списка групп в панели."""
+    async with session_scope() as session:
+        item = (await session.execute(select(GroupSettings).where(GroupSettings.chat_id == chat_id))).scalar_one_or_none()
+        if item is None:
+            session.add(GroupSettings(chat_id=chat_id, title=title, values={}))
+        elif title and item.title != title:
+            item.title = title
+        else:
+            return
+        try:
+            await session.commit()
+        except IntegrityError:
+            await session.rollback()
+
+
 async def ensure_member(chat_id: int, telegram_id: int, display_name: str | None = None) -> bool:
     """
     Человек в группе, даже если ещё ничего не писал: зашёл по ссылке или он админ.
