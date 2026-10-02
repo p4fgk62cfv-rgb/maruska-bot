@@ -43,7 +43,7 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
   }
 
   beforeAll(async () => {
-    config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url!, BOT_TOKEN, SESSION_SECRET: 'm'.repeat(40), WEB_DIST: '/none', RAKE_PERCENT: '5', INTERNAL_API_SECRET: 'internal-secret-multi-123' });
+    config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url!, BOT_TOKEN, SESSION_SECRET: 'm'.repeat(40), WEB_DIST: '/none', RAKE_PERCENT: '5', INTERNAL_API_SECRET: 'internal-secret-multi-123', AUTH_RATE_LIMIT: '100' });
     db = createDb(url!);
     await seedCatalog(db);
     base = createContext(config, db);
@@ -193,6 +193,99 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     await playOut(players, gameId);
     expect(p1.result).not.toBeNull();
   }, 90_000);
+
+  /** Test-only access to the runner's snapshot and timer. */
+  const internals = (gameId: string) => handle.ctx.realtime.games.get(gameId) as unknown as {
+    snap: { state: { turnDeadline: number | null; attacker: string; version: number }; reserve?: Record<string, number>; grace?: unknown };
+    schedule(): void;
+  };
+  /** Makes the current turn run out right now. */
+  const expire = (gameId: string) => {
+    const r = internals(gameId);
+    r.snap.state = { ...r.snap.state, turnDeadline: Date.now() };
+    r.schedule();
+  };
+  const token = (bot: Bot) => (bot as unknown as { authToken: string }).authToken;
+
+  it('lost connection on your turn: the table waits, the player comes back; a long absence loses the game', async () => {
+    const { players, roomId } = await table(2);
+    const gameId = await startGame(players, roomId);
+    const mover = players.find((p) => p.userId === internals(gameId).snap.state.attacker)!;
+    const other = players.find((p) => p !== mover)!;
+    await other.waitFor((m) => m.type === 'GAME_STATE');
+
+    // Offline: the opponent sees it at once.
+    other.inbox = [];
+    mover.close();
+    await other.waitFor((m) => m.type === 'GAME_STATE' && m.players.some((p) => p.userId === mover.userId && !p.connected));
+
+    // The turn runs out while offline: no loss, the table waits on the reconnect reserve.
+    expire(gameId);
+    const waiting = await other.waitFor((m) => m.type === 'GAME_STATE' && m.waiting?.userId === mover.userId);
+    const until = (waiting as { waiting: { until: number } }).waiting.until;
+    expect(until - Date.now()).toBeGreaterThan(50_000);
+    expect(handle.ctx.realtime.games.get(gameId)!.state.status).toBe('playing');
+
+    // Back: same game, the wait is over, a few seconds to look around, the reserve is partly spent.
+    await new Promise((r) => setTimeout(r, 300));
+    mover.inbox = [];
+    other.inbox = [];
+    await mover.connect(token(mover));
+    const back = await mover.waitFor((m) => m.type === 'GAME_STATE');
+    expect((back as { waiting: unknown }).waiting).toBeNull();
+    expect((back as { state: { gameId: string } }).state.gameId).toBe(gameId);
+    expect(internals(gameId).snap.state.turnDeadline! - Date.now()).toBeGreaterThan(8_000);
+    const reserve = internals(gameId).snap.reserve![mover.userId]!;
+    expect(reserve).toBeLessThan(60_000);
+    expect(reserve).toBeGreaterThan(55_000);
+    await other.waitFor((m) => m.type === 'GAME_STATE' && m.players.every((p) => p.connected));
+
+    // Gone again with the reserve used up: the next timeout loses the game and the stakes settle.
+    mover.close();
+    await other.waitFor((m) => m.type === 'GAME_STATE' && m.players.some((p) => p.userId === mover.userId && !p.connected));
+    internals(gameId).snap.reserve = { [mover.userId]: 500 };
+    expire(gameId);
+    await other.waitFor((m) => m.type === 'GAME_FINISHED');
+    expect(other.result!.reason).toBe('timeout');
+    expect(other.result!.loserId).toBe(mover.userId);
+    const game = await db.game.findUniqueOrThrow({ where: { id: gameId } });
+    expect(game.status).toBe('FINISHED');
+  }, 30_000);
+
+  it('a move resent after a reconnect (same request id, new socket) is applied once', async () => {
+    const { players, roomId } = await table(2);
+    const gameId = await startGame(players, roomId);
+    const mover = players.find((p) => p.userId === internals(gameId).snap.state.attacker)!;
+    const state = (await mover.waitFor((m) => m.type === 'GAME_STATE')) as { state: { you: { hand: string[] } } };
+    const card = state.state.you.hand[0]!;
+    const frame = JSON.stringify({ type: 'PLAY_CARD', gameId, card, rid: 'page1234:7' });
+    const ack = (bot: Bot) => bot.waitFor((m) => m.type === 'ACK' && m.rid === 'page1234:7');
+
+    mover.ws.send(frame);
+    await ack(mover);
+    const version = internals(gameId).snap.state.version;
+
+    // The answer was «lost»: the app reconnects and sends the very same request again.
+    mover.close();
+    mover.inbox = [];
+    await mover.connect(token(mover));
+    mover.ws.send(frame);
+    await ack(mover);
+    expect(internals(gameId).snap.state.version).toBe(version);
+
+    // Two copies at once (double tap): one is applied, both are answered.
+    const v2 = internals(gameId).snap.state.version;
+    const other = players.find((p) => p !== mover)!;
+    await other.waitFor((m) => m.type === 'GAME_STATE' && m.state.version === v2);
+    const take = JSON.stringify({ type: 'TAKE_CARDS', gameId, rid: 'page5678:1' });
+    other.ws.send(take);
+    other.ws.send(take);
+    await other.waitFor((m) => m.type === 'ACK' && m.rid === 'page5678:1');
+    await new Promise((r) => setTimeout(r, 200));
+    expect(other.inbox.filter((m) => m.type === 'ACK' && m.rid === 'page5678:1')).toHaveLength(2);
+    expect(other.inbox.filter((m) => m.type === 'ERROR')).toHaveLength(0);
+    expect(internals(gameId).snap.state.version).toBe(v2 + 1);
+  }, 30_000);
 
   it('rejects cheating and foreign actions, and «Сдаться» is a loss', async () => {
     const { players, roomId } = await table(2);

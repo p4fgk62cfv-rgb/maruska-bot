@@ -68,6 +68,13 @@ export function initTelegram(): void {
   for (const event of ['safeAreaChanged', 'contentSafeAreaChanged', 'viewportChanged']) tg.onEvent(event, applyInsets);
 }
 
+/** While a game runs, closing the Mini App by a stray swipe asks first. */
+export function confirmClosing(on: boolean): void {
+  if (!tg || !tg.isVersionAtLeast('6.2')) return;
+  if (on) tg.enableClosingConfirmation();
+  else tg.disableClosingConfirmation();
+}
+
 const vibrate = (fn: () => void) => {
   if (tg && settings.get().vibration) fn();
 };

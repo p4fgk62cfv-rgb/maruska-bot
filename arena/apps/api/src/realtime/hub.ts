@@ -3,12 +3,12 @@ import { EMPTY_FILTER, matchesFilter, WS_CLOSE } from '@arena/shared';
 import type { WebSocket } from 'ws';
 
 export interface Client {
+  /** Unique per connection. */
+  id: number;
   socket: WebSocket;
   userId: string;
   /** Lobby filter while the client watches the lobby, otherwise null. */
   lobby: RoomFilter | null;
-  /** Recently seen request ids: a resent message is acknowledged but not applied twice. */
-  seen: Set<string>;
   /** Token bucket against message floods. */
   tokens: number;
   refilledAt: number;
@@ -29,11 +29,12 @@ export function isListed(room: RoomDto, scope: RoomFilter['scope'] = 'open'): bo
  */
 export class Hub {
   private readonly clients = new Map<string, Client>();
+  private nextId = 1;
 
   attach(userId: string, socket: WebSocket): Client {
     const previous = this.clients.get(userId);
     if (previous && previous.socket !== socket) previous.socket.close(WS_CLOSE.REPLACED, 'replaced');
-    const client: Client = { socket, userId, lobby: null, seen: new Set(), tokens: 20, refilledAt: Date.now() };
+    const client: Client = { id: this.nextId++, socket, userId, lobby: null, tokens: 20, refilledAt: Date.now() };
     this.clients.set(userId, client);
     return client;
   }

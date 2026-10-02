@@ -37,7 +37,14 @@ export type ServerMessage =
   | { type: 'ROOM_LEFT'; room: RoomDto; userId: string }
   | { type: 'GAME_STARTED'; roomId: string; gameId: string; players: PlayerInfo[] }
   /** Full personalised snapshot; sent on start, on reconnect and after every accepted action. */
-  | { type: 'GAME_STATE'; state: PlayerView; players: PlayerInfo[]; features: { hints: boolean; discardReminder: boolean; canUndo: boolean } }
+  | {
+      type: 'GAME_STATE';
+      state: PlayerView;
+      players: PlayerInfo[];
+      features: { hints: boolean; discardReminder: boolean; canUndo: boolean };
+      /** A player lost the connection on their turn: the table waits for them until `until`. */
+      waiting?: { userId: string; until: number } | null;
+    }
   /** Engine events for animations. Already filtered: no hidden cards inside. */
   | { type: 'GAME_EVENTS'; gameId: string; version: number; events: GameEvent[] }
   | { type: 'GAME_FINISHED'; gameId: string; result: GameResultDto }

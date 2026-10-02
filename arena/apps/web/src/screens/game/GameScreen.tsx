@@ -3,7 +3,7 @@ import { FEATURE_PRICES, type RoomDto } from '@arena/shared';
 import { Balance, BottomSheet, Button, PlayingCard } from '@arena/ui';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useCountdown } from '../../lib/hooks.js';
-import { haptic } from '../../lib/telegram.js';
+import { confirmClosing, haptic } from '../../lib/telegram.js';
 import { play, unlockAudio } from '../../lib/sound.js';
 import { motionAllowed, settings, useSettings } from '../../lib/settings.js';
 import { fly, MotionDirector } from './motion.js';
@@ -25,7 +25,7 @@ type Sheet = null | 'menu' | 'emoji' | 'surrender' | 'discard' | { report: numbe
 
 export function GameScreen({ game }: { game: LiveGame }) {
   const me = useMe();
-  const { socket, result, dismissGame, leaveRoom, onEvents, status, room } = useRealtime();
+  const { socket, result, dismissGame, leaveRoom, onEvents, room } = useRealtime();
   const prefs = useSettings();
   const toast = useToast();
   const view = game.state;
@@ -56,6 +56,12 @@ export function GameScreen({ game }: { game: LiveGame }) {
 
   const now = useCallback(() => socket.now(), [socket]);
   const left = useCountdown(view.turnDeadline, now);
+  const waitLeft = useCountdown(game.waiting?.until ?? null, now);
+  const playing = view.status === 'playing';
+  useEffect(() => {
+    confirmClosing(playing);
+    return () => confirmClosing(false);
+  }, [playing]);
   const progress = left !== null ? Math.min(1, left / view.rules.turnMs) : null;
 
   // My private labels about the people at this table.
@@ -122,10 +128,16 @@ export function GameScreen({ game }: { game: LiveGame }) {
     if (view.currentPlayer === me.id) haptic.tap();
   }, [view.currentPlayer, view.version, me.id]);
 
+  // One action at a time: a double tap (or a tap while the previous move is on its way)
+  // is ignored here, and the server would not apply the same request twice anyway.
+  const inFlight = useRef(false);
   const send = useCallback(
     async (msg: Parameters<typeof socket.send>[0]) => {
+      if (inFlight.current && msg.type !== 'SEND_EMOJI') return false;
+      if (msg.type !== 'SEND_EMOJI') inFlight.current = true;
       setBusy(true);
       const reply = await socket.send(msg);
+      if (msg.type !== 'SEND_EMOJI') inFlight.current = false;
       setBusy(false);
       if (!reply.ok) {
         play('error');
@@ -181,6 +193,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
    * server. The server's state replaces it (same spot, so nothing jumps); a refusal sends it back.
    */
   const playNow = async (msg: Parameters<typeof send>[0], cards: CardId[], target: number | null, sound: Parameters<typeof play>[0] = 'card'): Promise<boolean> => {
+    if (inFlight.current) return false;
     const from: Record<string, DOMRect> = {};
     for (const c of cards) {
       const el = rootRef.current?.querySelector<HTMLElement>(`.hand [data-card="${c}"]`);
@@ -284,6 +297,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
     if (view.cheaters.includes(p.id)) return { text: 'Шулер', tone: 'alert' as const };
     if (p.status === 'out') return { text: `${p.place} место`, tone: 'muted' as const };
     if (p.status === 'left') return { text: 'Сдался', tone: 'muted' as const };
+    if (game.waiting?.userId === p.id) return { text: `Ждём ${waitLeft === null ? '' : Math.ceil(waitLeft / 1000)}`, tone: 'alert' as const };
     if (infoOf(p.id)?.connected === false) return { text: 'Нет связи', tone: 'alert' as const };
     const role = roleOf(p.id);
     return role === 'attacker' ? { text: 'Ходит', tone: 'attack' as const } : role === 'defender' ? { text: 'Отбивается', tone: 'defend' as const } : null;
@@ -321,7 +335,6 @@ export function GameScreen({ game }: { game: LiveGame }) {
   return (
     <div className="game" ref={rootRef}>
       <div className="motion-layer" ref={layerRef} />
-      {status !== 'open' && <div className="game__banner">Соединение восстанавливается…</div>}
 
       <TableTop settings={tableSettings} button={{ icon: 'menu', label: 'Меню', onClick: () => setSheet('menu') }} />
 
@@ -367,6 +380,11 @@ export function GameScreen({ game }: { game: LiveGame }) {
             : null
         }
       />
+      {game.waiting && game.waiting.userId !== me.id && waitLeft !== null && (
+        <p className="game__wait">
+          {infoOf(game.waiting.userId)?.name ?? 'Игрок'}: нет связи — ждём ещё {Math.ceil(waitLeft / 1000)} с
+        </p>
+      )}
       {isDefender && selected.length === 1 && undefended.length > 1 && !drag && <p className="game__tip">Перетащите карту на ту, которую бьёте, или нажмите на неё</p>}
 
       <Hand

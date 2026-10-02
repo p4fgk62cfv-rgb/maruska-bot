@@ -14,7 +14,7 @@ import { EmojiSheet, useSeatEmojis } from './game/emoji.js';
 /** Waiting room: the same felt as the game — chairs fill up live, everyone presses «Готов», the server deals. */
 export function RoomScreen({ room }: { room: RoomDto }) {
   const me = useMe();
-  const { socket, invite, leaveRoom, status } = useRealtime();
+  const { socket, invite, leaveRoom } = useRealtime();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
@@ -45,7 +45,6 @@ export function RoomScreen({ room }: { room: RoomDto }) {
 
   return (
     <div className="game game--room">
-      {status !== 'open' && <div className="game__banner">Соединение восстанавливается…</div>}
       <TableTop
         settings={room.settings}
         title={room.tournament ? `${room.tournament.title} · раунд ${room.tournament.round}` : undefined}

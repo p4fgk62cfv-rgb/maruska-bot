@@ -13,6 +13,7 @@ import { parseRoomStartParam, type MyRoomDto } from '@arena/shared';
 import { BottomSheet } from '@arena/ui';
 import { useEffect, useRef } from 'react';
 import { ScreenFallback } from './screens/common.js';
+import { ConnectionBanner } from './screens/ConnectionBanner.js';
 
 // Home ships in the main bundle; everything else loads on first visit.
 const LobbyScreen = lazy(() => import('./screens/LobbyScreen.js'));
@@ -263,6 +264,7 @@ function Gate() {
     <RealtimeProvider>
       <NavigationProvider>
         <Shell />
+        <ConnectionBanner />
       </NavigationProvider>
     </RealtimeProvider>
   );

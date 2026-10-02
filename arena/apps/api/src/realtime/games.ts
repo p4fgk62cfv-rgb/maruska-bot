@@ -31,6 +31,13 @@ const EMOJI_COOLDOWN_MS = 1500;
 /** Finished games stay in memory a little so late reconnects still see the result. */
 const LINGER_MS = 60_000;
 const SETTLE_ATTEMPTS = 4;
+/**
+ * Lost connection on your turn: instead of losing at once, the table waits for you, spending
+ * this per-game reserve. Once it is used up, the next timeout while offline loses the game.
+ */
+export const RECONNECT_RESERVE_MS = 60_000;
+/** Back from the network loss: at least this long to look at the table before the turn ends. */
+const RETURN_MIN_MS = 10_000;
 
 export interface GameDeps {
   db: Db;
@@ -164,6 +171,8 @@ export class GameRunner {
     action: GameAction | { type: 'UNDO' } | { type: 'TIMEOUT' },
     previous: GameState | null,
   ): Promise<void> {
+    // Somebody moved while we waited for an offline player: what was waited is spent.
+    if (this.snap.grace) this.spendGrace(Date.now());
     this.snap.state = result.state;
     this.snap.previous = previous;
     for (const event of result.events) {
@@ -193,10 +202,57 @@ export class GameRunner {
   }
 
   private async onTimeout(): Promise<void> {
-    const result = applyTimeout(this.snap.state, Date.now());
+    const now = Date.now();
+    const result = applyTimeout(this.snap.state, now);
     if (!result) return this.schedule();
     if (!result.ok) return;
+    const timedOut = result.events.find((e): e is Extract<GameEvent, { type: 'PLAYER_LEFT' }> => e.type === 'PLAYER_LEFT' && e.reason === 'timeout');
+    if (timedOut && (await this.waitFor(timedOut.playerId, now))) return;
     await this.commit(result, null, { type: 'TIMEOUT' }, null);
+  }
+
+  private reserveOf(userId: string): number {
+    return this.snap.reserve?.[userId] ?? RECONNECT_RESERVE_MS;
+  }
+
+  /**
+   * The player who had to move is offline (minimised Telegram, lost mobile network): the turn
+   * is stretched by their reconnect reserve. Returns false when there is nothing left to wait.
+   */
+  private async waitFor(userId: string, now: number): Promise<boolean> {
+    if (this.snap.grace) this.spendGrace(now);
+    const left = this.reserveOf(userId);
+    if (this.deps.hub.isOnline(userId) || left < 1000) return false;
+    this.snap.grace = { userId, since: now };
+    this.snap.state = { ...this.snap.state, turnDeadline: now + left };
+    metrics.inc('arena_reconnect_waits_total', 'Turns stretched for an offline player');
+    await this.persist();
+    this.broadcastState();
+    this.schedule();
+    return true;
+  }
+
+  private spendGrace(now: number): void {
+    const grace = this.snap.grace;
+    if (!grace) return;
+    const left = Math.max(0, this.reserveOf(grace.userId) - (now - grace.since));
+    this.snap.reserve = { ...this.snap.reserve, [grace.userId]: left };
+    this.snap.grace = null;
+  }
+
+  /** A player came or went: everybody sees it at once; a player we waited for gets the turn back. */
+  async presence(userId: string): Promise<void> {
+    const now = Date.now();
+    if (!this.result && this.snap.grace?.userId === userId && this.deps.hub.isOnline(userId)) {
+      this.spendGrace(now);
+      const deadline = this.snap.state.turnDeadline;
+      if (deadline !== null && deadline - now < RETURN_MIN_MS) {
+        this.snap.state = { ...this.snap.state, turnDeadline: now + RETURN_MIN_MS };
+        this.schedule();
+      }
+      await this.persist();
+    }
+    this.broadcastState();
   }
 
   private async finish(): Promise<void> {
@@ -296,6 +352,7 @@ export class GameRunner {
         discardReminder: features.discardReminder,
         canUndo: Boolean(this.snap.previous && move?.playerId === userId && move.version === this.snap.state.version),
       },
+      waiting: this.snap.grace && this.snap.state.turnDeadline !== null ? { userId: this.snap.grace.userId, until: this.snap.state.turnDeadline } : null,
     });
     if (this.result) this.deps.hub.send(userId, { type: 'GAME_FINISHED', gameId: this.id, result: this.result });
   }

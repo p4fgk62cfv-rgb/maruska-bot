@@ -11,6 +11,8 @@ export interface LiveGame {
   state: PlayerView;
   players: PlayerInfo[];
   features: { hints: boolean; discardReminder: boolean; canUndo: boolean };
+  /** The table waits for a player who lost the connection on their turn. */
+  waiting: { userId: string; until: number } | null;
 }
 
 export interface RoomInvite {
@@ -104,7 +106,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
             setResult(null);
             return;
           case 'GAME_STATE':
-            setGame({ state: msg.state, players: msg.players, features: msg.features });
+            setGame({ state: msg.state, players: msg.players, features: msg.features, waiting: msg.waiting ?? null });
             return;
           case 'GAME_EVENTS':
             for (const l of eventListeners.current) l(msg.events);
