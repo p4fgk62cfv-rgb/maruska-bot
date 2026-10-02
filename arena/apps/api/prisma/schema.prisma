@@ -48,6 +48,8 @@ model User {
   seasonRatings      SeasonRating[]
   notesWritten       PlayerNote[]      @relation("NoteOwner")
   notesAbout         PlayerNote[]      @relation("NoteTarget")
+  favorites          Favorite[]        @relation("FavoriteOwner")
+  favoredBy          Favorite[]        @relation("FavoriteTarget")
   reportsSent        PlayerReport[]    @relation("ReportFrom")
   reportsReceived    PlayerReport[]    @relation("ReportAbout")
   avatar             UserAvatar?
@@ -624,5 +626,41 @@ model UserAvatar {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_avatars")
+  @@schema("arena")
+}
+
+/// Pop-up for everyone on the start screen, set by the game owner from the app. One row at most.
+model Announcement {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  title     String   @db.VarChar(80)
+  text      String   @db.VarChar(1500)
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("announcements")
+  @@schema("arena")
+}
+
+/// Small owner-editable game settings (key → JSON), e.g. the welcome gift for newcomers.
+model Setting {
+  key       String   @id @db.VarChar(64)
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+  @@schema("arena")
+}
+
+/// «Избранные игроки»: anyone a player wants to keep an eye on (not only friends).
+model Favorite {
+  ownerId   String   @map("owner_id") @db.Uuid
+  targetId  String   @map("target_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  owner  User @relation("FavoriteOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  target User @relation("FavoriteTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@id([ownerId, targetId])
+  @@map("favorites")
   @@schema("arena")
 }

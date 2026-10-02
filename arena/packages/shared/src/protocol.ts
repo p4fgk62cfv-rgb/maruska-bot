@@ -2,7 +2,7 @@ import type { z } from 'zod';
 import type { GameEvent, PlayerView } from '@arena/game-engine';
 import type { clientMessageSchema } from './schemas.js';
 import type { AppErrorCode } from './errors.js';
-import type { PublicUserDto } from './api.js';
+import type { Presence, PublicUserDto } from './api.js';
 import type { RoomDto } from './lobby.js';
 
 /**
@@ -37,7 +37,14 @@ export type ServerMessage =
   | { type: 'ROOM_LEFT'; room: RoomDto; userId: string }
   | { type: 'GAME_STARTED'; roomId: string; gameId: string; players: PlayerInfo[] }
   /** Full personalised snapshot; sent on start, on reconnect and after every accepted action. */
-  | { type: 'GAME_STATE'; state: PlayerView; players: PlayerInfo[]; features: { hints: boolean; discardReminder: boolean; canUndo: boolean } }
+  | {
+      type: 'GAME_STATE';
+      state: PlayerView;
+      players: PlayerInfo[];
+      features: { hints: boolean; discardReminder: boolean; canUndo: boolean };
+      /** A player lost the connection on their turn: the table waits for them until `until`. */
+      waiting?: { userId: string; until: number } | null;
+    }
   /** Engine events for animations. Already filtered: no hidden cards inside. */
   | { type: 'GAME_EVENTS'; gameId: string; version: number; events: GameEvent[] }
   | { type: 'GAME_FINISHED'; gameId: string; result: GameResultDto }
@@ -47,6 +54,10 @@ export type ServerMessage =
   | { type: 'PLAYER_RECONNECTED'; roomId: string; userId: string }
   | { type: 'FRIEND_REQUEST'; from: PublicUserDto }
   | { type: 'FRIEND_ACCEPTED'; friend: PublicUserDto }
+  /** A friend came online, sat down to play, finished or left. */
+  | { type: 'FRIEND_PRESENCE'; userId: string; presence: Presence }
+  /** A friend I was watching has finished their game. */
+  | { type: 'FRIEND_FREE'; friend: PublicUserDto; presence: Presence }
   /** A friend calls you to their table; `invite` lets you in without the password. */
   | { type: 'ROOM_INVITE'; from: PublicUserDto; room: RoomDto; invite: string }
   | { type: 'TOURNAMENT_MATCH'; tournamentId: string; title: string; round: number; roomId: string };

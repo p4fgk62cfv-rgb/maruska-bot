@@ -1,4 +1,5 @@
-import { Button, EmptyState, NavigationBar, type NavItem } from '@arena/ui';
+import { Button, EmptyState, NavigationBar, preloadCardArt, type NavItem } from '@arena/ui';
+import { backOf } from './lib/cosmetics.js';
 import { lazy, Suspense, useState } from 'react';
 import { NavigationProvider, useNav, type Page, type Tab } from './navigation.js';
 import { HomeScreen } from './screens/HomeScreen.js';
@@ -6,11 +7,13 @@ import { SessionProvider, useSession } from './session.js';
 import { ToastProvider, useToast } from './toast.js';
 import { RealtimeProvider, useRealtime } from './realtime.js';
 import { RoomScreen } from './screens/RoomScreen.js';
+import { AnnouncementPopup } from './screens/AnnouncementPopup.js';
 import { ApiError, api } from './lib/api.js';
 import { parseRoomStartParam, type MyRoomDto } from '@arena/shared';
 import { BottomSheet } from '@arena/ui';
 import { useEffect, useRef } from 'react';
 import { ScreenFallback } from './screens/common.js';
+import { ConnectionBanner } from './screens/ConnectionBanner.js';
 
 // Home ships in the main bundle; everything else loads on first visit.
 const LobbyScreen = lazy(() => import('./screens/LobbyScreen.js'));
@@ -26,6 +29,8 @@ const SoonScreen = lazy(() => import('./screens/SoonScreen.js'));
 const LeaderboardScreen = lazy(() => import('./screens/LeaderboardScreen.js'));
 const CreateGameScreen = lazy(() => import('./screens/CreateGameScreen.js'));
 const SettingsScreen = lazy(() => import('./screens/SettingsScreen.js'));
+const OwnerScreen = lazy(() => import('./screens/OwnerScreen.js'));
+const PlayerScreen = lazy(() => import('./screens/player/PlayerScreen.js'));
 // The table is the most important screen: it loads as soon as the app starts, not on first use.
 const gameModule = import('./screens/game/GameScreen.js');
 const GameScreen = lazy(() => gameModule.then((m) => ({ default: m.GameScreen })));
@@ -74,12 +79,22 @@ function PageScreen({ page }: { page: Page }) {
       return <SoonScreen title="Новости" text="Здесь будут обновления Арены, турниры и события." />;
     case 'settings':
       return <SettingsScreen />;
+    case 'owner':
+      return <OwnerScreen />;
+    case 'player':
+      return <PlayerScreen />;
   }
 }
 
 function Shell() {
   const { tab, stack, setTab } = useNav();
   const { room, game, result, requestCount } = useRealtime();
+  const { state: session } = useSession();
+  const myBack = session.status === 'ready' ? session.me.equipped.cardBack : null;
+  // Card pictures are fetched and decoded in the lobby, well before the first deal.
+  useEffect(() => {
+    if (session.status === 'ready') preloadCardArt(backOf(myBack));
+  }, [session.status, myBack]);
   const items = TABS.map((t) => (t.key === 'home' ? { ...t, badge: requestCount } : t));
   const page = stack[stack.length - 1];
   const passwordPrompt = useDeepLink();
@@ -104,6 +119,7 @@ function Shell() {
     <>
       {passwordPrompt}
       <InviteSheet />
+      <AnnouncementPopup />
       <main className="app-screen" key={page ?? tab}>
         <Suspense fallback={<ScreenFallback />}>{page ? <PageScreen page={page} /> : <TabScreen tab={tab} />}</Suspense>
       </main>
@@ -119,7 +135,10 @@ function useDeepLink() {
   const toast = useToast();
   const handled = useRef(false);
   const [needPassword, setNeedPassword] = useState<string | null>(null);
-  const startParam = state.status === 'ready' ? state.startParam : null;
+  // From a t.me link Telegram passes start_param; an invite button from the bot opens the arena
+  // directly with ?start=… in the address instead.
+  const startParam =
+    state.status === 'ready' ? state.startParam ?? new URLSearchParams(window.location.search).get('start') : null;
 
   const { push } = useNav();
   useEffect(() => {
@@ -248,6 +267,7 @@ function Gate() {
     <RealtimeProvider>
       <NavigationProvider>
         <Shell />
+        <ConnectionBanner />
       </NavigationProvider>
     </RealtimeProvider>
   );

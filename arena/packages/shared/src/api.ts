@@ -52,6 +52,8 @@ export interface MeDto extends PublicUserDto {
   equipped: EquippedDto;
   bonus: BonusDto;
   dailyCredits: { available: boolean; availableAt: string | null };
+  /** Game owner (OWNER_IDS): sees «Управление» — the announcement and gifts. */
+  owner: boolean;
 }
 
 export type LeaderboardBy = 'rating' | 'winnings' | 'wins';
@@ -138,6 +140,17 @@ export type Presence = 'online' | 'in_game' | 'offline';
 
 export interface FriendDto extends PublicUserDto {
   presence: Presence;
+  /** When they were last in the game (ISO); shown as «был(а) в 20:41» while offline. */
+  lastSeenAt: string;
+  /** «Избранное» — shown first. */
+  favorite: boolean;
+  /** I asked to be told when they finish their game. */
+  watching: boolean;
+}
+
+/** A player in «Избранные» (not necessarily a friend). */
+export interface FavoriteDto extends FriendDto {
+  relation: Relation;
 }
 
 export interface FriendRequestDto {
@@ -219,6 +232,70 @@ export interface PlayerCardDto extends PublicUserDto {
   note: string | null;
 }
 
+export type MatchOutcome = 'win' | 'loss' | 'draw' | 'left';
+
+/** One finished game in a player's history. */
+export interface MatchDto {
+  gameId: string;
+  /** ISO time the game ended. */
+  at: string;
+  stake: number;
+  outcome: MatchOutcome;
+  /** Place among those who got rid of their cards (1 = first out). */
+  place: number | null;
+  net: number;
+  ratingGain: number;
+  durationMs: number | null;
+  mode: { variant: string; deckSize: number; speed: string; throwIn: string; players: number };
+  opponents: (PublicUserDto & { outcome: MatchOutcome })[];
+}
+
+export interface ProfileAchievementDto {
+  key: string;
+  title: string;
+  description: string;
+  icon: string;
+  unlockedAt: string;
+  /** Share of all players who have it, 0–100. */
+  rarity: number;
+  tier: 'common' | 'rare' | 'epic' | 'legendary';
+}
+
+/** The game card of a player: who they are, how they play, what they have won. */
+export interface PlayerProfileDto extends PublicUserDto {
+  frame: string | null;
+  crown: string | null;
+  premium: boolean;
+  presence: Presence;
+  lastSeenAt: string;
+  memberSince: string;
+  relation: Relation;
+  favorite: boolean;
+  /** The rarest achievement, worn as a title under the name. */
+  title: ProfileAchievementDto | null;
+  stats: {
+    games: number;
+    wins: number;
+    losses: number;
+    draws: number;
+    winRate: number;
+    streak: number;
+    bestStreak: number;
+    winnings: number;
+    rating: number;
+  };
+  /** Kinds of game, most played first (from the last 200 games). */
+  modes: { variant: string; deckSize: number; players: number; games: number; wins: number; share: number }[];
+  /** Results of the last games, oldest first: «W», «L», «D». */
+  form: ('W' | 'L' | 'D')[];
+  recent: MatchDto[];
+  achievements: ProfileAchievementDto[];
+  achievementsTotal: number;
+  /** Viewer vs this player; null on my own profile. */
+  together: { games: number; myWins: number; theirWins: number; draws: number; recent: MatchDto[] } | null;
+  season: { title: string; rating: number; wins: number } | null;
+}
+
 export type ReportReasonDto = 'cheating' | 'collusion' | 'insult' | 'other';
 
 export const REPORT_REASON_RU: Record<ReportReasonDto, string> = {
@@ -227,3 +304,28 @@ export const REPORT_REASON_RU: Record<ReportReasonDto, string> = {
   insult: 'Оскорбительные имя или фото',
   other: 'Другое',
 };
+
+/** Pop-up on the start screen for everyone who opens the game; `id` changes with every new text. */
+export interface AnnouncementDto {
+  id: string;
+  title: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface OwnerPlayerDto {
+  id: string;
+  telegramId: string;
+  name: string;
+  username: string | null;
+  photoUrl: string | null;
+  credits: number;
+  coins: number;
+}
+
+/** Gift for every newcomer, set by the owner in «Управление». */
+export interface WelcomeGiftDto {
+  enabled: boolean;
+  credits: number;
+  coins: number;
+}

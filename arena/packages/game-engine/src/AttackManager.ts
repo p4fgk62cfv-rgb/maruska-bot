@@ -55,6 +55,9 @@ export function playAttack(state: GameState, playerId: PlayerId, card: CardId, e
 export function playAttackCards(state: GameState, playerId: PlayerId, cards: CardId[], now: number, events: GameEvent[]): void {
   if (cards.length === 0 || new Set(cards).size !== cards.length) throw new EngineError('BAD_ACTION');
   if (new Set(cards.map(rankOf)).size !== 1) throw new EngineError('RANK_NOT_ON_TABLE');
+  // Validate the entire batch before changing the cloned state. In particular, the first
+  // bout is capped at five attack cards even when the opening move contains several cards.
+  if (cards.length > attackCapacity(state)) throw new EngineError('BOUT_LIMIT_REACHED');
   for (const card of cards) playAttack(state, playerId, card, events);
   settleBout(state, now, events);
   if (state.status === 'playing' && state.table.length > 0) setTurn(state, now, events);

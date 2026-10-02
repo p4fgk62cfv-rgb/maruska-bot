@@ -1,5 +1,5 @@
 import type { CardId, Suit } from '@arena/game-engine';
-import { PlayingCard } from '@arena/ui';
+import { PlayingCard, CARD_RATIO } from '@arena/ui';
 import { useRef } from 'react';
 
 export interface HandProps {
@@ -104,7 +104,7 @@ export function Hand({ cards, trump, selected, playable, cardWidth, onTap, onDou
   return (
     <div
       className="hand"
-      style={{ height: cardWidth * 1.42 + 30, width: step * Math.max(0, cards.length - 1) + cardWidth }}
+      style={{ height: cardWidth * CARD_RATIO + 30, width: step * Math.max(0, cards.length - 1) + cardWidth }}
       onTouchStart={(e) => (touch.current = e.touches[0]?.clientX ?? null)}
       onTouchEnd={(e) => {
         const start = touch.current;

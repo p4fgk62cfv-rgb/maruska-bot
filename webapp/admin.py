@@ -87,6 +87,7 @@ async def visible_chats(bot, user_id: int) -> list[dict]:
         return cached[1]
 
     chats = await list_known_chats()
+    await fill_titles(bot, chats)
 
     if is_owner(user_id):
         allowed = chats
@@ -102,9 +103,35 @@ async def visible_chats(bot, user_id: int) -> list[dict]:
             if member.status in ADMIN_STATUSES:
                 allowed.append(chat)
 
-    _access_cache[user_id] = (time.monotonic(), allowed)
+    # «Нет доступа» не запоминаем: человека могли только что сделать админом
+    # или только что добавить Мару в его группу — пусть следующая попытка проверит заново.
+    if allowed:
+        _access_cache[user_id] = (time.monotonic(), allowed)
 
     return allowed
+
+
+_title_tried: set[int] = set()
+
+
+async def fill_titles(bot, chats: list[dict]) -> None:
+    """«Группа -100…» вместо названия: спрашиваем Telegram один раз и запоминаем."""
+    from database.repository import remember_chat
+
+    for chat in chats:
+        if not chat["title"].startswith("Группа ") or chat["chat_id"] in _title_tried:
+            continue
+        _title_tried.add(chat["chat_id"])
+        try:
+            info = await bot.get_chat(chat["chat_id"])
+        except Exception:
+            continue
+        if info.title:
+            chat["title"] = info.title
+            try:
+                await remember_chat(chat["chat_id"], info.title)
+            except Exception:
+                pass
 
 
 def drop_access_cache(user_id: int) -> None:
@@ -432,7 +459,19 @@ async def chat_admin_ids(bot, chat_ids: list[int]) -> set[int]:
             admins = await bot.get_chat_administrators(chat_id)
             ids = {m.user.id for m in admins if not m.user.is_bot}
         except Exception:
+            admins = []
             ids = set()
+
+        # Админов Telegram отдаёт всегда — пусть они будут в списке, даже если молчат
+        from database.repository import ensure_member
+
+        for m in admins:
+            if m.user.is_bot:
+                continue
+            try:
+                await ensure_member(chat_id, m.user.id, m.user.first_name or m.user.username)
+            except Exception:
+                pass
 
         _admins_cache[chat_id] = (time.monotonic(), ids)
         result |= ids
@@ -461,7 +500,30 @@ async def api_users(request: web.Request):
     page = await members_page(chat_ids, query=query, flt=flt, sort=sort,
                               admin_ids=admin_ids, limit=40, offset=offset)
 
+    # Сколько людей в группах на самом деле: ботам Telegram не отдаёт список всех,
+    # только число — панель показывает «известно N из M».
+    page["chat_total"] = await chat_member_total(request.app["bot"], chat_ids)
+
     return web.json_response(page)
+
+
+_count_cache: dict[int, tuple[float, int]] = {}
+
+
+async def chat_member_total(bot, chat_ids: list[int]) -> int | None:
+    total = 0
+    for chat_id in chat_ids:
+        cached = _count_cache.get(chat_id)
+        if cached and time.monotonic() - cached[0] < 300:
+            total += cached[1]
+            continue
+        try:
+            count = await bot.get_chat_member_count(chat_id)
+        except Exception:
+            return None
+        _count_cache[chat_id] = (time.monotonic(), count)
+        total += count
+    return total
 
 
 async def api_user(request: web.Request):

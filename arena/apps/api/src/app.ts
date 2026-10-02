@@ -19,8 +19,10 @@ import { MemoryStore, type SnapshotStore } from './realtime/store.js';
 import { websocketRoutes } from './realtime/ws.js';
 import { RealtimePresence } from './services/presence.js';
 import { FriendService } from './services/friends.js';
+import { ProfileService } from './services/profiles.js';
 import { Outbox, TelegramBot } from './services/notifier.js';
 import { playerRoutes } from './routes/players.js';
+import { ownerRoutes } from './routes/owner.js';
 import { friendRoutes } from './routes/friends.js';
 import { internalRoutes } from './routes/internal.js';
 import { tournamentRoutes } from './routes/tournaments.js';
@@ -65,7 +67,8 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   const outbox = new Outbox(base.db, bot, app.log);
   const friends = new FriendService({ ...base, outbox, presence, realtime });
   const tournaments = new TournamentService({ ...base, outbox, realtime, log: app.log });
-  const ctx: Context = { ...base, realtime, presence, outbox, friends, tournaments };
+  const profiles = new ProfileService({ db: base.db, items: base.items, presence, friends: () => friends });
+  const ctx: Context = { ...base, realtime, presence, outbox, friends, profiles, tournaments };
   await base.moderation.loadBans();
   useBanList(base.moderation);
   await realtime.recover();
@@ -133,6 +136,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
       await roomRoutes(api, ctx);
       await friendRoutes(api, ctx);
       await playerRoutes(api, ctx);
+      await ownerRoutes(api, ctx);
       await tournamentRoutes(api, ctx);
       await internalRoutes(api, ctx);
     },
@@ -144,9 +148,20 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
     await app.register(fastifyStatic, {
       root: webDist,
       wildcard: false,
+      // Our own Cache-Control below; otherwise the plugin overwrites it with «max-age=0».
+      cacheControl: false,
       setHeaders: (res, path) => {
-        // Hashed bundles are immutable; index.html must always be fresh.
-        res.setHeader('Cache-Control', path.includes('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache');
+        // Hashed bundles are immutable; index.html must always be fresh. Card faces, backs, the
+        // table, smiles and sounds keep for a week (re-checked after that), so a card moving from
+        // the hand to the table never waits for the network and never shows up blank.
+        res.header(
+          'Cache-Control',
+          path.includes('/assets/')
+            ? 'public, max-age=31536000, immutable'
+            : /\/(cards|backs|table|emoji|sfx)\//.test(path)
+              ? 'public, max-age=604800, stale-while-revalidate=86400'
+              : 'no-cache',
+        );
       },
     });
     app.setNotFoundHandler((request, reply) => {

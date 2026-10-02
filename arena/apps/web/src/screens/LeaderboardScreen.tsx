@@ -2,6 +2,7 @@ import type { LeaderboardBy, LeaderboardRowDto, SeasonDto } from '@arena/shared'
 import { Avatar, Balance, EmptyState, Panel, RatingBadge, Tabs } from '@arena/ui';
 import { useState } from 'react';
 import { useQuery } from '../lib/useQuery.js';
+import { useNav } from '../navigation.js';
 import { QueryView, ScreenHeader } from './common.js';
 
 type View = LeaderboardBy | 'season';
@@ -14,6 +15,7 @@ function Value({ row, by }: { row: LeaderboardRowDto; by: LeaderboardBy }) {
 
 export default function LeaderboardScreen() {
   const [view, setView] = useState<View>('rating');
+  const { openPlayer } = useNav();
   const board = useQuery<LeaderboardRowDto[]>(view === 'season' ? null : `/leaderboard?by=${view}`);
   const season = useQuery<SeasonDto | null>(view === 'season' ? '/season' : null);
 
@@ -44,7 +46,7 @@ export default function LeaderboardScreen() {
                   </p>
                 </Panel>
                 {s.top.map((row) => (
-                  <Panel key={row.id} padded={false} className="board-row">
+                  <Panel key={row.id} padded={false} className="board-row" role="button" tabIndex={0} onClick={() => openPlayer(row.id)}>
                     <span className={`board-row__place${row.place <= 3 ? ' board-row__place--top' : ''}`}>{row.place}</span>
                     <Avatar id={row.id} name={row.name} photoUrl={row.photoUrl} size={38} />
                     <div className="board-row__body">
@@ -65,7 +67,7 @@ export default function LeaderboardScreen() {
             ) : (
               <div className="app-list">
                 {rows.map((row) => (
-                  <Panel key={row.id} padded={false} className="board-row">
+                  <Panel key={row.id} padded={false} className="board-row" role="button" tabIndex={0} onClick={() => openPlayer(row.id)}>
                     <span className={`board-row__place${row.place <= 3 ? ' board-row__place--top' : ''}`}>{row.place}</span>
                     <Avatar id={row.id} name={row.name} photoUrl={row.photoUrl} size={38} />
                     <div className="board-row__body">

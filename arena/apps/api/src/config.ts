@@ -15,6 +15,11 @@ const schema = z.object({
   BOT_USERNAME: z.string().default(''),
   /** Short name of the Mini App in BotFather (/newapp). Empty = the bot's main Mini App. */
   MINI_APP_SHORT_NAME: z.string().default(''),
+  /** Telegram IDs (comma separated) of the game's owners: in-app announcements and gifts. Same list as the bot's OWNER_IDS. */
+  OWNER_IDS: z.string().default(''),
+  /** Public https address of the arena; invites from the bot open it directly. Railway's own domain when unset. */
+  PUBLIC_URL: z.string().default(''),
+  RAILWAY_PUBLIC_DOMAIN: z.string().default(''),
   /** Signs session tokens. At least 32 random characters. */
   SESSION_SECRET: z.string().min(32),
   SESSION_TTL_HOURS: z.coerce.number().int().positive().default(24),
@@ -23,6 +28,7 @@ const schema = z.object({
   /** Shared secret for bot → arena calls on /internal/*. */
   INTERNAL_API_SECRET: z.string().min(16).optional(),
   SIGNUP_BONUS_CREDITS: z.coerce.number().int().nonnegative().default(1_450),
+  SIGNUP_BONUS_COINS: z.coerce.number().int().nonnegative().default(0),
   /** Seconds tournament players have to press «Готов» before a no-show loss. */
   MATCH_READY_SECONDS: z.coerce.number().int().positive().default(90),
   /** Logins per minute from one IP (raise only for load tests from a single machine). */

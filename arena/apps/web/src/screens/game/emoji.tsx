@@ -1,5 +1,4 @@
 import { EMOJI_PACKS, smilesOf, stickerUrl, type EmojiPackKey } from '@arena/shared';
-import { BottomSheet } from '@arena/ui';
 import { useEffect, useRef, useState } from 'react';
 import { play } from '../../lib/sound.js';
 import { settings } from '../../lib/settings.js';
@@ -40,20 +39,42 @@ export function useSeatEmojis(myId: string): Record<string, SeatSmile | null> {
   return emojis;
 }
 
-/** The picker shows the pack chosen in «Предметы». */
+/**
+ * Compact smile picker that sits above the dock, like a speech balloon with a tab holding the
+ * close button. Tapping my portrait again (marked `data-emoji-toggle`) closes it, so does a tap
+ * anywhere outside. Shows the pack chosen in «Предметы».
+ */
 export function EmojiSheet({ open, pack, onClose, onPick }: { open: boolean; pack: string; onClose: () => void; onPick: (smile: string) => void }) {
   const def = EMOJI_PACKS[pack as EmojiPackKey] ?? EMOJI_PACKS.emoji_pack_basic;
   const smiles = smilesOf(pack);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const outside = (e: PointerEvent) => {
+      const target = e.target as Element | null;
+      if (!target || ref.current?.contains(target) || target.closest('[data-emoji-toggle]')) return;
+      onClose();
+    };
+    document.addEventListener('pointerdown', outside, true);
+    return () => document.removeEventListener('pointerdown', outside, true);
+  }, [open, onClose]);
+  if (!open) return null;
   return (
-    <BottomSheet open={open} title={def.title} onClose={onClose}>
-      <div className={`emoji-grid${def.stickers ? ' emoji-grid--stickers' : ''}`}>
+    <div className="emoji-pop" ref={ref} role="dialog" aria-label={def.title}>
+      <div className="emoji-pop__tab">
+        <button type="button" className="emoji-pop__close" aria-label="Закрыть" onClick={onClose}>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" />
+          </svg>
+        </button>
+      </div>
+      <div className={`emoji-pop__grid${def.stickers ? '' : ' emoji-pop__grid--text'}`}>
         {smiles.map((s) => (
           <button key={s} type="button" onClick={() => (onClose(), onPick(s))}>
             <Smile smile={s} />
           </button>
         ))}
       </div>
-      <p className="emoji-hint">Другие наборы смайлов — в «Предметах»</p>
-    </BottomSheet>
+    </div>
   );
 }

@@ -62,6 +62,28 @@ export async function playerRoutes(app: FastifyInstance, ctx: Context): Promise<
     };
   });
 
+  /** The full game card: stats, favourite kind of game, history, rare titles, games together. */
+  app.get('/players/:userId/profile', auth, async (request) => {
+    const { userId } = userParam.parse(request.params);
+    return ctx.profiles.profile(sessionOf(request).sub, userId);
+  });
+
+  /** «История матчей», page by page (newest first). */
+  app.get('/players/:userId/matches', auth, async (request) => {
+    const { userId } = userParam.parse(request.params);
+    const { limit, before } = z
+      .object({ limit: z.coerce.number().int().min(1).max(50).default(20), before: z.iso.datetime().optional() })
+      .parse(request.query);
+    return ctx.profiles.matches(userId, limit, before ? new Date(before) : undefined);
+  });
+
+  app.put('/players/:userId/favorite', { ...auth, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request) =>
+    ctx.friends.setFavorite(sessionOf(request).sub, userParam.parse(request.params).userId, true),
+  );
+  app.delete('/players/:userId/favorite', auth, async (request) =>
+    ctx.friends.setFavorite(sessionOf(request).sub, userParam.parse(request.params).userId, false),
+  );
+
   /** My labels for the people at my table, to show under their portraits. */
   app.get('/players/notes', auth, async (request): Promise<Record<string, string>> => {
     const me = sessionOf(request).sub;

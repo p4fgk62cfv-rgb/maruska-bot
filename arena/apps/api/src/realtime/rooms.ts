@@ -30,6 +30,9 @@ export const WAITING_GRACE_MS = 30_000;
 /** After a deal the same company has this long to press «Готов» for the next one (the result screen eats some of it). */
 export const REMATCH_READY_MS = 180_000;
 const EMOJI_COOLDOWN_MS = 1500;
+/** Wrong private-table PINs: after this many in the window the table stops accepting guesses. */
+const PIN_TRIES = 8;
+const PIN_WINDOW_MS = 10 * 60_000;
 
 /** Callbacks into the tournament service for match rooms. */
 export interface MatchHooks {
@@ -64,6 +67,9 @@ export class RoomManager {
   private readonly queues = new Map<string, SerialQueue>();
   private readonly timers = new Map<string, NodeJS.Timeout>();
   private readonly lastEmoji = new Map<string, number>();
+  /** One table at a time: a player's create/join/quick run one after another, so a double tap cannot seat them twice. */
+  private readonly userQueues = new Map<string, { queue: SerialQueue; pending: number }>();
+  private readonly pinFails = new Map<string, { count: number; since: number }>();
   matchHooks: MatchHooks | null = null;
 
   constructor(private readonly deps: RoomDeps) {}
@@ -120,7 +126,34 @@ export class RoomManager {
 
   // ── commands ───────────────────────────────────────────────
 
-  async create(userId: string, settings: RoomSettings): Promise<MyRoomDto> {
+  create(userId: string, settings: RoomSettings): Promise<MyRoomDto> {
+    return this.asUser(userId, () => this.createRoom(userId, settings));
+  }
+
+  join(userId: string, roomId: string, access: { password?: string; invite?: string }): Promise<MyRoomDto> {
+    return this.asUser(userId, () => this.joinRoom(userId, roomId, access));
+  }
+
+  /** «Быстрая игра»: the fullest open room the player can afford, or a new one. */
+  quick(userId: string, stake?: number): Promise<MyRoomDto> {
+    return this.asUser(userId, () => this.quickRoom(userId, stake));
+  }
+
+  private async asUser<T>(userId: string, job: () => Promise<T>): Promise<T> {
+    let entry = this.userQueues.get(userId);
+    if (!entry) {
+      entry = { queue: new SerialQueue(), pending: 0 };
+      this.userQueues.set(userId, entry);
+    }
+    entry.pending++;
+    try {
+      return await entry.queue.run(job);
+    } finally {
+      if (--entry.pending === 0) this.userQueues.delete(userId);
+    }
+  }
+
+  private async createRoom(userId: string, settings: RoomSettings): Promise<MyRoomDto> {
     const problem = validateSettings(settings);
     if (problem) throw new AppError(problem === 'DECK_NOT_SUPPORTED' ? 'DECK_NOT_SUPPORTED' : 'VALIDATION_FAILED');
     if (settings.isPrivate && !settings.password) throw new AppError('VALIDATION_FAILED');
@@ -171,7 +204,7 @@ export class RoomManager {
     return this.mine(room);
   }
 
-  async join(userId: string, roomId: string, access: { password?: string; invite?: string }): Promise<MyRoomDto> {
+  private async joinRoom(userId: string, roomId: string, access: { password?: string; invite?: string }): Promise<MyRoomDto> {
     const room = this.rooms.get(roomId);
     if (!room) throw new AppError('ROOM_CLOSED');
     if (room.seats.some((s) => s.userId === userId)) return this.mine(room);
@@ -182,12 +215,25 @@ export class RoomManager {
       if (room.seats.length >= room.settings.players) throw new AppError('ROOM_FULL');
       if (room.passwordHash) {
         const byInvite = access.invite ? checkInvite(room.id, access.invite, this.deps.config.SESSION_SECRET) : false;
-        const byPassword = access.password ? await verifyPassword(access.password, room.passwordHash) : false;
-        if (!byInvite && !byPassword) throw new AppError('WRONG_PASSWORD');
+        if (!byInvite) {
+          // A PIN is short: after a series of wrong guesses the table only lets in by invite link.
+          const fails = this.pinFails.get(room.id);
+          const now = Date.now();
+          if (fails && now - fails.since < PIN_WINDOW_MS && fails.count >= PIN_TRIES) throw new AppError('RATE_LIMITED');
+          const byPassword = access.password ? await verifyPassword(access.password, room.passwordHash) : false;
+          if (!byPassword) {
+            const fresh = !fails || now - fails.since >= PIN_WINDOW_MS;
+            this.pinFails.set(room.id, fresh ? { count: 1, since: now } : { ...fails, count: fails.count + 1 });
+            throw new AppError('WRONG_PASSWORD');
+          }
+        }
       }
       const seat = await this.seatFor(userId, room.settings.stake);
       // Re-check after the awaits: someone else may have taken the last seat.
       if (room.seats.length >= room.settings.players) throw new AppError('ROOM_FULL');
+      if (room.status !== 'waiting') throw new AppError('GAME_ALREADY_STARTED');
+      const elsewhere = this.roomOf(userId);
+      if (elsewhere && elsewhere !== room) throw new AppError('ALREADY_IN_ROOM');
       room.seats.push(seat);
       if (room.seats.length === room.settings.players) this.armReadyTimer(room);
       await this.changed(room);
@@ -196,8 +242,7 @@ export class RoomManager {
     });
   }
 
-  /** «Быстрая игра»: the fullest open room the player can afford, or a new one. */
-  async quick(userId: string, stake?: number): Promise<MyRoomDto> {
+  private async quickRoom(userId: string, stake?: number): Promise<MyRoomDto> {
     const existing = this.roomOf(userId);
     if (existing) return this.mine(existing);
     const balance = (await this.deps.users.wallet(userId)).credits;
@@ -211,12 +256,12 @@ export class RoomManager {
       .sort((a, b) => b.seats.length / b.settings.players - a.seats.length / a.settings.players);
     for (const room of candidates) {
       try {
-        return await this.join(userId, room.id, {});
+        return await this.joinRoom(userId, room.id, {});
       } catch (error) {
         if (!(error instanceof AppError)) throw error;
       }
     }
-    return this.create(userId, {
+    return this.createRoom(userId, {
       ...QUICK_DEFAULTS,
       stake: wanted ?? affordable[0]!,
       server: 'almaz',
@@ -304,7 +349,7 @@ export class RoomManager {
   private async closeRoom(room: Room): Promise<void> {
     this.clearTimer(`ready:${room.id}`);
     room.status = 'closed';
-    this.rooms.delete(room.id);
+    this.forget(room.id);
     for (const s of room.seats) this.deps.hub.send(s.userId, { type: 'ROOM_LEFT', room: this.dto(room), userId: s.userId });
     await this.deps.store.deleteRoom(room.id).catch(() => undefined);
     await this.deps.db.room.update({ where: { id: room.id }, data: { status: 'CLOSED', closedAt: new Date() } }).catch(() => undefined);
@@ -330,6 +375,7 @@ export class RoomManager {
     const now = Date.now();
     if (now - (this.lastEmoji.get(userId) ?? 0) < EMOJI_COOLDOWN_MS) throw new AppError('RATE_LIMITED');
     this.lastEmoji.set(userId, now);
+    if (this.lastEmoji.size > 5000) for (const [id, at] of this.lastEmoji) if (now - at > EMOJI_COOLDOWN_MS) this.lastEmoji.delete(id);
     await assertSmile(this.deps.db, userId, emoji);
     for (const s of room.seats) this.deps.hub.send(s.userId, { type: 'EMOJI', gameId: null, roomId, userId, emoji });
   }
@@ -412,8 +458,7 @@ export class RoomManager {
     if (room.tournament) {
       this.matchHooks?.finished(room, result);
       room.status = 'finished';
-      this.rooms.delete(roomId);
-      this.queues.delete(roomId);
+      this.forget(roomId);
       this.deps.store.deleteRoom(roomId).catch(() => undefined);
       this.deps.hub.publishRoom(this.dto(room));
       return;
@@ -493,7 +538,7 @@ export class RoomManager {
 
     if (room.seats.length === 0) {
       room.status = 'closed';
-      this.rooms.delete(room.id);
+      this.forget(room.id);
       await this.deps.store.deleteRoom(room.id).catch(() => undefined);
       await this.deps.db.room.update({ where: { id: room.id }, data: { status: 'CLOSED', closedAt: new Date() } }).catch(() => undefined);
       this.deps.hub.publishRoom(this.dto(room));
@@ -501,6 +546,14 @@ export class RoomManager {
     }
     if (room.ownerId === userId) room.ownerId = room.seats[0]!.userId;
     await this.changed(room);
+  }
+
+  /** A room is gone: drop everything kept for it. Jobs already queued still finish. */
+  private forget(roomId: string): void {
+    this.rooms.delete(roomId);
+    this.queues.delete(roomId);
+    this.pinFails.delete(roomId);
+    this.clearTimer(`ready:${roomId}`);
   }
 
   private armReadyTimer(room: Room, ms = READY_TIMEOUT_MS): void {

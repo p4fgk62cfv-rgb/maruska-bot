@@ -82,7 +82,7 @@ describe('attack and defence', () => {
     let state = act(base(), 'p1', { type: 'PLAY_CARD', card: '7S' });
     state = act(state, 'p2', { type: 'PLAY_CARD', card: '8S', target: 0 });
     state = act(state, 'p1', { type: 'PASS' });
-    expect(state.discard.sort()).toEqual(['7S', '8S']);
+    expect(state.discard.filter((c) => c !== '6S').sort()).toEqual(['7S', '8S']);
     expect(hand(state, 'p1')).toHaveLength(6);
     expect(hand(state, 'p2')).toHaveLength(6);
     expect(state.attacker).toBe('p2');
@@ -125,6 +125,25 @@ describe('attack and defence', () => {
         ['9S', '9D', '9C', '10S', '10D', '10C'],
       ],
     });
+    expect(state.boutLimit).toBe(5);
+  });
+
+  it('the five-card cap lasts until the first «бито», not just the first bout', () => {
+    let state = arranged({
+      trump: '6H',
+      firstBout: true,
+      deck: ['AC', 'AD', 'AS', 'KC', 'KD', 'KS', 'QC', 'QD'],
+      hands: [
+        ['7S', '7D', '7C', '8S', '8D', '8C'],
+        ['9S', '9D', '9C', '10S', '10D', '10C'],
+      ],
+    });
+    state = act(state, 'p1', { type: 'PLAY_CARD', card: '7S' });
+    state = act(state, 'p2', { type: 'TAKE_CARDS' });
+    state = act(state, 'p1', { type: 'PASS' });
+    // p2 took, so p1 attacks again: still nothing in the discard → still at most five.
+    expect(state.discard).toEqual([]);
+    expect(state.boutNumber).toBe(2);
     expect(state.boutLimit).toBe(5);
   });
 });
@@ -283,7 +302,7 @@ describe('timeouts', () => {
     state = act(state, 'p2', { type: 'PLAY_CARD', card: '10S', target: 0 });
     const result = applyTimeout({ ...state, turnDeadline: NOW }, NOW + 1);
     expect(result?.ok && result.state.status).toBe('playing');
-    expect(result?.ok && result.state.discard.sort()).toEqual(['10S', '9S']);
+    expect(result?.ok && result.state.discard.filter((c) => c !== '6S').sort()).toEqual(['10S', '9S']);
     expect(result?.ok && result.state.attacker).toBe('p2');
   });
 });

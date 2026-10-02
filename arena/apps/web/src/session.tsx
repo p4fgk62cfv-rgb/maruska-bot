@@ -1,6 +1,6 @@
 import type { AuthResponse, MeDto } from '@arena/shared';
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { ApiError, api, setToken, setUnauthorizedHandler } from './lib/api.js';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { ApiError, api, getToken, setToken, setUnauthorizedHandler } from './lib/api.js';
 import { tg } from './lib/telegram.js';
 
 type SessionState =
@@ -14,22 +14,26 @@ interface SessionApi {
   refreshMe: () => Promise<void>;
   retry: () => void;
   devLogin: (id: number, name: string) => Promise<void>;
+  /** New token for the current session; false when it cannot be renewed (banned, too old). */
+  renew: () => Promise<boolean>;
 }
+
+/** Renew the session when less than this is left (the app checks on a timer and on coming back). */
+const RENEW_BEFORE_MS = 12 * 3600_000;
 
 const SessionContext = createContext<SessionApi | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<SessionState>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  const expiresAt = useRef(0);
 
   const accept = useCallback((auth: AuthResponse) => {
     setToken(auth.token);
+    expiresAt.current = auth.expiresAt;
     setState({ status: 'ready', me: auth.me, startParam: auth.startParam });
   }, []);
 
-  useEffect(() => {
-    setUnauthorizedHandler(() => setAttempt((n) => n + 1));
-  }, []);
 
   useEffect(() => {
     if (!tg) {
@@ -42,6 +46,49 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .then(accept)
       .catch((error: ApiError) => setState({ status: 'error', error }));
   }, [attempt, accept]);
+
+  const renewing = useRef<Promise<boolean> | null>(null);
+  const renew = useCallback((): Promise<boolean> => {
+    // One renewal at a time: the timer, the socket and «back to the app» may ask together.
+    renewing.current ??= fetch('/api/auth/refresh', { method: 'POST', headers: { authorization: `Bearer ${getToken() ?? ''}` } })
+      .then(async (res) => {
+        if (!res.ok) return false;
+        const next = (await res.json()) as { token: string; expiresAt: number };
+        setToken(next.token);
+        expiresAt.current = next.expiresAt;
+        return true;
+      })
+      .catch(() => false)
+      .finally(() => {
+        renewing.current = null;
+      });
+    return renewing.current;
+  }, []);
+
+  // A 401 means the session ran out: renew it quietly; sign in again only if that fails.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      void renew().then((ok) => {
+        if (!ok) setAttempt((n) => n + 1);
+      });
+    });
+  }, [renew]);
+
+  // A Mini App may stay open (or minimised) for days, longer than one session and far longer
+  // than Telegram's initData is accepted: keep the session fresh while it lives.
+  useEffect(() => {
+    if (state.status !== 'ready') return;
+    const check = () => {
+      if (document.visibilityState === 'visible' && expiresAt.current - Date.now() < RENEW_BEFORE_MS) void renew();
+    };
+    const id = window.setInterval(check, 15 * 60_000);
+    document.addEventListener('visibilitychange', check);
+    check();
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, [state.status, renew]);
 
   const refreshMe = useCallback(async () => {
     const me = await api<MeDto>('/me');
@@ -56,7 +103,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <SessionContext.Provider value={{ state, refreshMe, retry: () => setAttempt((n) => n + 1), devLogin }}>
+    <SessionContext.Provider value={{ state, refreshMe, retry: () => setAttempt((n) => n + 1), devLogin, renew }}>
       {children}
     </SessionContext.Provider>
   );

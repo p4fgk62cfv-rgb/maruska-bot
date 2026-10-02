@@ -40,6 +40,9 @@
 
     Promise.all(pages).then(function (res) {
       var total = res[0].total;
+      var inChat = res[0].chat_total;
+      // Ботам Telegram не отдаёт полный список участников — только число
+      var known = filter === "all" && !query && inChat && inChat > total;
       var people = [].concat.apply([], res.map(function (r) { return r.users; }));
 
       var right = function (p) {
@@ -56,10 +59,12 @@
         + '<div class="chips">' + FILTERS.map(function (f) {
             return '<span class="chip' + (filter === f[0] ? " on" : "") + '" data-filter="' + f[0] + '">' + f[1] + "</span>";
           }).join("") + "</div>"
-        + '<div class="row-gap" style="align-items:center;margin-bottom:10px"><span class="dim grow">Найдено: ' + num(total) + "</span>"
+        + '<div class="row-gap" style="align-items:center;margin-bottom:10px"><span class="dim grow">Найдено: ' + num(total) + (known ? " из " + num(inChat) + " в группе" : "") + "</span>"
         + '<select data-sort style="width:auto">' + SORTS.map(function (o) {
             return '<option value="' + o[0] + '"' + (sort === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
-          }).join("") + "</select></div>";
+          }).join("") + "</select></div>"
+        + (known ? '<div class="card dim" style="font-size:13px;margin-bottom:10px">ℹ️ Telegram не показывает ботам тех, кто ни разу не писал в группе. '
+          + "Они появятся здесь, как только напишут сообщение, зайдут в группу заново или станут админами.</div>" : "");
 
       html += people.length ? people.map(function (p) {
         return '<div class="list-item tap" data-open="profile" data-arg="' + p.telegram_id + '">'
@@ -69,7 +74,7 @@
           + (p.admin ? ' <span class="tag">👑</span>' : "")
           + (p.blocked ? ' <span class="tag bad">игнор</span>' : "")
           + (p.warnings ? ' <span class="tag bad">⚠️ ' + p.warnings + "</span>" : "") + "</div>"
-          + '<div class="s">' + (p.username ? "@" + esc(p.username) + " · " : "") + "Ур. " + p.level + " · " + M.ago(p.last_seen) + "</div></div>"
+          + '<div class="s">' + (p.username ? "@" + esc(p.username) + " · " : "") + "Ур. " + p.level + " · " + (p.last_seen ? M.ago(p.last_seen) : "ещё не писал(а)") + "</div></div>"
           + right(p) + M.chev() + '</div>';
       }).join("") : '<div class="center muted">Никого не нашла</div>';
 

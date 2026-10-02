@@ -2,6 +2,7 @@ import { Avatar, Balance, Icon, RatingBadge, type IconName } from '@arena/ui';
 import { DAILY_CREDITS, type MyRoomDto } from '@arena/shared';
 import { useState } from 'react';
 import { ringOf } from '../lib/cosmetics.js';
+import { useSettings } from '../lib/settings.js';
 import { ApiError, api } from '../lib/api.js';
 import { haptic, tg } from '../lib/telegram.js';
 import { useNav, type Page } from '../navigation.js';
@@ -31,6 +32,7 @@ const TILES: Tile[] = [
 
 export function HomeScreen() {
   const me = useMe();
+  const homeDesign = useSettings().homeDesign;
   const { push } = useNav();
   const toast = useToast();
   const { enterRoom, requestCount } = useRealtime();
@@ -63,8 +65,21 @@ export function HomeScreen() {
   };
 
   return (
-    <div className="home">
+    <div className={`home${homeDesign === "daylight" ? " home--premium" : ""}`}>
       <HomeBar />
+
+      {homeDesign === 'daylight' && (
+      <section className="arena-hero" aria-label="Маруська Арена">
+        <div className="arena-hero__ornament" aria-hidden="true">
+          <span className="arena-card arena-card--left">A<span>♥</span></span>
+          <span className="arena-card arena-card--back">✦</span>
+          <span className="arena-card arena-card--right">K<span>♠</span></span>
+        </div>
+        <p className="arena-hero__eyebrow">ТВОЙ КАРТОЧНЫЙ КЛУБ</p>
+        <h1 className="arena-hero__title">МАРУСЬКА <span>АРЕНА</span></h1>
+        <p className="arena-hero__subtitle">Собирай друзей. Играй красиво. Побеждай.</p>
+      </section>
+      )}
 
       <button type="button" className="quick-play" onClick={quickGame} disabled={finding} aria-busy={finding}>
         <span className="quick-play__icon">{finding ? <span className="ui-spinner" /> : <Icon name="play" size={30} />}</span>
@@ -72,8 +87,19 @@ export function HomeScreen() {
         <span className="quick-play__hint">Подберём стол по вашей ставке</span>
       </button>
 
+      {homeDesign === 'daylight' && (
+        <>
+      <button type="button" className="friends-play" onClick={() => push('friends')}>
+        <span className="friends-play__icon"><Icon name="users" size={22} /></span>
+        <span><strong>Играть с друзьями</strong><small>Пригласи знакомых за свой стол</small></span>
+        <span className="friends-play__arrow" aria-hidden="true">›</span>
+      </button>
+
+      <div className="home-section-label"><span>ТВОЯ АРЕНА</span><i /></div>
+        </>
+      )}
       <div className="tile-grid">
-        {TILES.map((tile) => {
+        {(me.owner ? [...TILES, { icon: 'crown', title: 'Управление', page: 'owner' } as Tile] : TILES).map((tile) => {
           const count = counter(tile);
           return (
             <button key={tile.title} type="button" className="grid-tile" onClick={() => (tile.action === 'share' ? share() : tile.page && push(tile.page))}>

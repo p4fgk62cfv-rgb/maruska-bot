@@ -70,7 +70,7 @@ describe.skipIf(!url)('friends, requests and invites', () => {
     return p;
   }
 
-  const call = (p: Player, method: 'GET' | 'POST' | 'DELETE', path: string, payload?: object) =>
+  const call = (p: Player, method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, payload?: object) =>
     handle.app.inject({ method, url: `/api${path}`, payload, headers: { authorization: `Bearer ${p.token}` } });
 
   const waitSent = async (chatId: number, contains = '') => {
@@ -175,6 +175,57 @@ describe.skipIf(!url)('friends, requests and invites', () => {
 
     const recent = (await call(a, 'GET', '/friends/recent')).json();
     expect(recent[0]).toMatchObject({ id: b.id, relation: 'none', games: 1 });
+  });
+
+  it('favourites, live presence, «сообщить, когда освободится» and the player card', async () => {
+    const a = await player('Ада', undefined, true);
+    const b = await player('Бэлла', undefined, true);
+    const c = await player('Вика', undefined, true);
+    const stranger = await player('Гоша');
+    await call(a, 'POST', '/friends/requests', { userId: b.id });
+    await call(b, 'POST', '/friends/requests', { userId: a.id });
+
+    // Favourites: a flag in the friends list and a list of their own.
+    expect((await call(a, 'PUT', `/players/${b.id}/favorite`)).json()).toEqual({ favorite: true });
+    expect((await call(a, 'PUT', `/players/${a.id}/favorite`)).statusCode).toBe(400);
+    expect((await call(a, 'GET', '/friends')).json()[0]).toMatchObject({ id: b.id, favorite: true, presence: 'online', watching: false });
+    expect((await call(a, 'GET', '/friends/favorites')).json().map((f: { id: string }) => f.id)).toEqual([b.id]);
+
+    // b sits down to play: a sees it at once and asks to be told when b is free.
+    const room = (await call(b, 'POST', '/rooms', ROOM)).json().room;
+    await call(c, 'POST', `/rooms/${room.id}/join`, {});
+    await b.ws!.send({ type: 'READY', roomId: room.id, ready: true });
+    await c.ws!.send({ type: 'READY', roomId: room.id, ready: true });
+    const started = await b.ws!.waitFor((m) => m.type === 'GAME_STARTED');
+    if (started.type !== 'GAME_STARTED') throw new Error('unreachable');
+    await a.ws!.waitFor((m) => m.type === 'FRIEND_PRESENCE' && m.userId === b.id && m.presence === 'in_game');
+    expect((await call(a, 'POST', `/friends/${b.id}/watch`)).json()).toEqual({ watching: true, presence: 'in_game' });
+    expect((await call(a, 'POST', `/friends/${stranger.id}/watch`)).json()).toMatchObject({ error: 'NOT_FRIENDS' });
+
+    // The game ends: «освободился» comes to a, once.
+    await c.ws!.send({ type: 'LEAVE_GAME', gameId: started.gameId });
+    const free = await a.ws!.waitFor((m) => m.type === 'FRIEND_FREE');
+    if (free.type !== 'FRIEND_FREE') throw new Error('unreachable');
+    expect(free.friend.id).toBe(b.id);
+    expect((await call(a, 'GET', '/friends')).json()[0].watching).toBe(false);
+
+    // The game card: stats, the kind of game, history and the score between two players.
+    const card = (await call(a, 'GET', `/players/${b.id}/profile`)).json();
+    expect(card).toMatchObject({ id: b.id, relation: 'friend', favorite: true, together: { games: 0 } });
+    expect(card.stats).toMatchObject({ games: 1, wins: 1, losses: 0, winRate: 100, streak: 1, bestStreak: 1 });
+    expect(card.modes[0]).toMatchObject({ variant: 'podkidnoy', deckSize: 36, players: 2, games: 1, share: 100 });
+    expect(card.form).toEqual(['W']);
+    expect(card.recent[0]).toMatchObject({ gameId: started.gameId, outcome: 'win', stake: 100, opponents: [{ id: c.id, outcome: 'left' }] });
+
+    const rival = (await call(c, 'GET', `/players/${b.id}/profile`)).json();
+    expect(rival.together).toMatchObject({ games: 1, myWins: 0, theirWins: 1 });
+    expect(rival.together.recent[0].outcome).toBe('left');
+    const mine = (await call(b, 'GET', `/players/${b.id}/profile`)).json();
+    expect(mine.together).toBeNull();
+    expect((await call(a, 'GET', `/players/${b.id}/matches?limit=5`)).json()).toHaveLength(1);
+
+    expect((await call(a, 'DELETE', `/players/${b.id}/favorite`)).json()).toEqual({ favorite: false });
+    expect((await call(a, 'GET', '/friends/favorites')).json()).toEqual([]);
   });
 
   it('five friends unlock «Компания» with its coin reward', async () => {

@@ -158,9 +158,12 @@ export function startBout(state: GameState, attacker: PlayerId): void {
   state.boutLimit = Math.min(ruleBoutLimit(state), defender.hand.length);
 }
 
-/** Rule cap on attack cards for the current bout: 5 in the very first bout, 6 afterwards. */
+/**
+ * Rule cap on attack cards for the current bout: 5 until the first «бито» of the game
+ * (bouts that ended with «беру» don't count — the discard is still empty), 6 afterwards.
+ */
 export function ruleBoutLimit(state: GameState): number {
-  return state.boutNumber === 1 ? state.rules.firstBoutLimit : state.rules.maxBoutCards;
+  return state.discard.length === 0 ? state.rules.firstBoutLimit : state.rules.maxBoutCards;
 }
 
 /** Main attacker draws first, then the other attackers clockwise, the defender last. */

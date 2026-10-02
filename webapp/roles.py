@@ -101,6 +101,15 @@ def forget_role(chat_id: int, user_id: int) -> None:
 _rights_cache: dict[int, tuple[float, dict]] = {}
 
 
+async def _forget_chat(chat_id: int) -> None:
+    try:
+        from database.repository import mark_chat_gone
+
+        await mark_chat_gone(chat_id)
+    except Exception:
+        pass
+
+
 async def bot_rights(bot, chat_id: int) -> dict:
     """
     Что сам бот умеет в группе — чтобы панель не предлагала
@@ -119,6 +128,8 @@ async def bot_rights(bot, chat_id: int) -> dict:
         member = await bot.get_chat_member(chat_id, me.id)
 
         rights["present"] = member.status not in ("left", "kicked")
+        if not rights["present"]:
+            await _forget_chat(chat_id)
 
         if member.status in ("administrator", "creator"):
             rights = {
@@ -129,8 +140,11 @@ async def bot_rights(bot, chat_id: int) -> dict:
                 "pin": bool(getattr(member, "can_pin_messages", False)),
                 "change_info": bool(getattr(member, "can_change_info", False)),
             }
-    except Exception:
-        pass
+    except Exception as error:
+        # Только однозначные ответы Telegram («группы нет», «бота выгнали»), не сбои сети
+        text = str(error).lower()
+        if any(s in text for s in ("chat not found", "bot was kicked", "bot is not a member", "group chat was deactivated", "chat was deleted")):
+            await _forget_chat(chat_id)
 
     _rights_cache[chat_id] = (time.monotonic(), rights)
 
