@@ -11,6 +11,7 @@ import type { ProfileService } from './services/profiles.js';
 import type { ReferralService } from './services/referrals.js';
 import type { TournamentService } from './services/tournaments.js';
 import type { Outbox } from './services/notifier.js';
+import type { Alerts } from './services/alerts.js';
 import type { Presence } from './services/presence.js';
 import { UserService } from './services/users.js';
 import { WalletService } from './services/wallet.js';
@@ -37,6 +38,7 @@ export interface Context extends BaseContext {
   profiles: ProfileService;
   referrals: ReferralService;
   tournaments: TournamentService;
+  alerts: Alerts;
 }
 
 export function createContext(config: Config, db: Db): BaseContext {

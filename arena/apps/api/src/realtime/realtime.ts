@@ -11,6 +11,7 @@ import type { Ledger } from '../services/ledger.js';
 import { SettlementService } from '../services/settlement.js';
 import type { UserService } from '../services/users.js';
 import type { BotService } from '../services/bots.js';
+import type { Alerts } from '../services/alerts.js';
 import { GameManager, wsError } from './games.js';
 import { Hub, type Client } from './hub.js';
 import { RoomManager } from './rooms.js';
@@ -24,6 +25,7 @@ export interface RealtimeDeps {
   store: SnapshotStore;
   log: FastifyBaseLogger;
   bots: BotService;
+  alerts?: Alerts;
 }
 
 /** Wires the hub, rooms and games together and speaks the WebSocket protocol. */
@@ -35,6 +37,8 @@ const LEASE_TTL_MS = 10_000;
 const LEASE_RENEW_MS = 3_000;
 /** A new server waits this long at most for the old one to hand over the games. */
 const HANDOVER_MAX_MS = 45_000;
+/** Requests that only read: not worth remembering across a restart. */
+const READ_ONLY = new Set(['PING', 'LOBBY_SUBSCRIBE', 'LOBBY_UNSUBSCRIBE', 'ROOM_WATCH', 'RECONNECT']);
 
 export class Realtime {
   private sweeper: NodeJS.Timeout | null = null;
@@ -55,6 +59,9 @@ export class Realtime {
   private leaseTimer: NodeJS.Timeout | null = null;
   /** Set when the server is going down for an update: no new moves are taken. */
   private stopping = false;
+  private readonly bootedAt = Date.now();
+  /** Lease renewals in a row that failed (Redis unreachable). */
+  private leaseErrors = 0;
 
   constructor(private readonly deps: RealtimeDeps) {
     this.ready = new Promise((resolve) => (this.markReady = resolve));
@@ -73,6 +80,7 @@ export class Realtime {
       },
       onPresence: (ids) => this.emitPresence(ids),
       botLevel: () => deps.bots.level(),
+      alerts: deps.alerts,
     });
   }
 
@@ -83,23 +91,47 @@ export class Realtime {
   async start(): Promise<void> {
     const began = Date.now();
     const deadline = began + HANDOVER_MAX_MS;
+    let waited = false;
     while (!(await this.deps.store.acquireLease(this.instance, LEASE_TTL_MS))) {
+      waited = true;
       if (Date.now() > deadline) {
         this.deps.log.warn('previous server did not hand over the games in time; taking over');
         break;
       }
       await new Promise((r) => setTimeout(r, 500));
     }
-    this.leaseTimer = setInterval(() => {
-      void this.deps.store.renewLease(this.instance, LEASE_TTL_MS).then(
-        (held) => held || this.deps.store.acquireLease(this.instance, LEASE_TTL_MS),
-        (error: unknown) => this.deps.log.warn({ err: error }, 'lease renewal failed'),
-      );
-    }, LEASE_RENEW_MS);
+    this.leaseTimer = setInterval(() => void this.renewLease(), LEASE_RENEW_MS);
     this.leaseTimer.unref();
     await this.recover();
     this.markReady();
     this.deps.log.info({ waitedMs: Date.now() - began, rooms: this.rooms.list().length, games: this.games.count() }, 'took over the tables');
+    // The lease was still held and no clean stop was noted: the previous server died.
+    const clean = await this.deps.store.takeHandover().catch(() => true);
+    if (waited && !clean) {
+      this.deps.alerts?.notice('crash', `Сервер перезапустился после сбоя: столы приняты, восстановлено игр — ${this.games.count()}.`);
+    }
+  }
+
+  /** Keeps the lease; losing it means another server may run the same games — the owners hear at once. */
+  private async renewLease(): Promise<void> {
+    const store = this.deps.store;
+    try {
+      const held = (await store.renewLease(this.instance, LEASE_TTL_MS)) || (await store.acquireLease(this.instance, LEASE_TTL_MS));
+      if (this.leaseErrors >= 3) this.deps.alerts?.resolve('lease', 'Связь с Redis восстановлена, столы снова под контролем.');
+      this.leaseErrors = 0;
+      if (!held && !this.stopping) {
+        this.deps.alerts?.raise('lease-lost', 'Другой сервер забрал столы, пока этот ещё работает: проверьте, не запущено ли две копии Арены.');
+      }
+    } catch (error) {
+      this.leaseErrors++;
+      this.deps.log.warn({ err: error, errors: this.leaseErrors }, 'lease renewal failed');
+      if (this.leaseErrors === 3) this.deps.alerts?.raise('lease', 'Redis недоступен: сервер не может продлить владение столами.', { err: error });
+    }
+  }
+
+  /** Snapshot writes still waiting for Redis. */
+  storeBacklog(): number {
+    return this.deps.store.backlog ?? 0;
   }
 
   /**
@@ -215,8 +247,16 @@ export class Realtime {
     // A resent request (double tap, or a resend after the network came back — even on a new
     // socket) gets the answer of the first one and is never applied twice. Ids «page:n» are
     // unique per app launch, so they are remembered per user; older plain ids per connection.
+    const lasting = Boolean(msg.rid?.includes(':')) && !READ_ONLY.has(msg.type);
     const key = msg.rid ? (msg.rid.includes(':') ? `${client.userId}|${msg.rid}` : `#${client.id}|${msg.rid}`) : null;
-    const earlier = key ? this.replies.get(key) : undefined;
+    let earlier = key ? this.replies.get(key) : undefined;
+    // Just after a restart: the request may have been applied by the previous server, whose
+    // answer the app never got. Those ids are in the store.
+    if (!earlier && key && lasting && Date.now() - this.bootedAt < REPLY_TTL_MS && (await this.deps.store.hasReply(key))) {
+      metrics.inc('arena_ws_duplicates_total', 'Resent requests answered without applying them again');
+      return this.reply(client, msg.rid, null);
+    }
+    earlier ??= key ? this.replies.get(key) : undefined;
     if (earlier) {
       metrics.inc('arena_ws_duplicates_total', 'Resent requests answered without applying them again');
       return this.reply(client, msg.rid, await earlier.done);
@@ -234,6 +274,7 @@ export class Realtime {
     const code = await done;
     // A refused request changed nothing, so trying it again is allowed.
     if (code && key) this.replies.delete(key);
+    else if (key && lasting) void this.deps.store.saveReply(key, REPLY_TTL_MS);
     this.reply(client, msg.rid, code);
   }
 
@@ -318,6 +359,9 @@ export class Realtime {
     this.rooms.shutdown();
     await this.games.shutdown();
     if (!this.crashOnShutdown) {
+      // The next server reads the snapshots: the last ones must have landed.
+      await this.deps.store.flush?.(5_000);
+      await this.deps.store.markHandover().catch(() => undefined);
       await this.deps.store.releaseLease(this.instance).catch(() => undefined);
       this.deps.log.info('handed the tables over to the next server');
     }

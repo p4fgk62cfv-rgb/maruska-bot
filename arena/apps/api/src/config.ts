@@ -57,5 +57,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (parsed.data.NODE_ENV === 'production' && parsed.data.DEV_AUTH) {
     throw new Error('DEV_AUTH must not be enabled in production');
   }
+  // Without Redis a crash or an update loses every running game: never in production.
+  if (parsed.data.NODE_ENV === 'production' && !parsed.data.REDIS_URL) {
+    throw new Error('REDIS_URL is required in production');
+  }
   return parsed.data;
 }

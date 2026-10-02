@@ -1,0 +1,50 @@
+# Маруська Арена: on every change, the whole test suite — engine, bot games, real multiplayer
+# over WebSocket, server crash and Redis/database outage scenarios — on a real Postgres and Redis.
+name: Arena
+
+on:
+  push:
+    paths: ['arena/**', '.github/workflows/arena.yml']
+  pull_request:
+    paths: ['arena/**', '.github/workflows/arena.yml']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: arena
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: maruska
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/maruska?schema=arena
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/maruska?schema=arena
+      TEST_REDIS_URL: redis://localhost:6379/2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: arena/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx prisma generate
+        working-directory: arena/apps/api
+      - run: npx prisma migrate deploy
+        working-directory: arena/apps/api
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
