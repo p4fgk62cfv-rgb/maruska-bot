@@ -3139,6 +3139,36 @@ async def mark_chat_gone(chat_id: int, gone: bool = True) -> None:
         await session.commit()
 
 
+async def move_chat(old_id: int, new_id: int) -> None:
+    """
+    Группу сделали супергруппой — у неё новый ID. Настройки, участники и
+    предупреждения переезжают на него, старая группа скрывается из панели.
+    """
+    async with session_scope() as session:
+        old = (await session.execute(select(GroupSettings).where(GroupSettings.chat_id == old_id))).scalar_one_or_none()
+        new = (await session.execute(select(GroupSettings).where(GroupSettings.chat_id == new_id))).scalar_one_or_none()
+        if old is not None:
+            if new is None:
+                old.chat_id = new_id
+            else:
+                # Новая уже что-то запомнила — старые настройки дополняют, а не затирают
+                merged = dict(old.values or {})
+                merged.update(new.values or {})
+                new.values = merged
+                new.title = new.title or old.title
+                await session.delete(old)
+
+        have = set((await session.execute(select(GroupMember.telegram_id).where(GroupMember.chat_id == new_id))).scalars().all())
+        if have:
+            await session.execute(delete(GroupMember).where(GroupMember.chat_id == old_id, GroupMember.telegram_id.in_(have)))
+        await session.execute(update(GroupMember).where(GroupMember.chat_id == old_id).values(chat_id=new_id))
+        await session.execute(update(ChatWarning).where(ChatWarning.chat_id == old_id).values(chat_id=new_id))
+        await session.commit()
+
+    await mark_chat_gone(old_id)
+    await mark_chat_gone(new_id, False)
+
+
 async def remember_chat(chat_id: int, title: str | None) -> None:
     """Группа, куда добавили Мару: название — для списка групп в панели."""
     await mark_chat_gone(chat_id, False)
