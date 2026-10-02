@@ -1531,3 +1531,13 @@ button.seat-tile--free { padding: 0; border: 0; background: transparent; color: 
 .pin-dialog__hint { font-size: 12.5px; line-height: 1.35; color: #6b6458; text-align: center; }
 .pin-dialog__ok { padding: 11px; border: 0; border-radius: 12px; background: linear-gradient(#ffd56b, #e5a531); color: #3a2506; font: inherit; font-size: 17px; font-weight: 800; cursor: pointer; }
 .pin-dialog__ok:disabled { opacity: 0.5; }
+
+/* «Арена на главный экран» card on the home screen. */
+.home-shortcut { display: flex; align-items: stretch; gap: 0; margin: 0 2px; border-radius: 16px; background: rgba(255, 255, 255, 0.1); box-shadow: inset 0 0 0 1px rgba(247, 215, 116, 0.45); overflow: hidden; }
+.home-shortcut__main { flex: 1; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.home-shortcut__main:active { background: rgba(255, 255, 255, 0.06); }
+.home-shortcut__icon { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 11px; background: linear-gradient(135deg, #f7d774, #c8902c); color: #3a2506; }
+.home-shortcut__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.home-shortcut__text strong { font-size: 15px; }
+.home-shortcut__text small { font-size: 12px; opacity: 0.75; }
+.home-shortcut__close { flex: none; width: 40px; border: 0; background: transparent; color: inherit; opacity: 0.6; cursor: pointer; }

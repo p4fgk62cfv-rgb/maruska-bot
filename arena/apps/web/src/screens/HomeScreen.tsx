@@ -9,6 +9,7 @@ import { useNav, type Page } from '../navigation.js';
 import { useRealtime } from '../realtime.js';
 import { useMe, useSession } from '../session.js';
 import { useToast } from '../toast.js';
+import { HomeShortcutCard } from './HomeShortcut.js';
 
 interface Tile {
   icon: IconName;
@@ -74,6 +75,8 @@ export function HomeScreen() {
         <span className="quick-play__title">Быстрая игра</span>
         <span className="quick-play__hint">Подберём стол по вашей ставке</span>
       </button>
+
+      <HomeShortcutCard />
 
       {homeDesign === 'daylight' && (
         <>
