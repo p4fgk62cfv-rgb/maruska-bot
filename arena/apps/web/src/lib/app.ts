@@ -44,8 +44,15 @@ function fixIOSViewport(): void {
     document.documentElement.style.setProperty('--ios-gap', gap > 0 && gap < 80 ? `${gap}px` : '0px');
   };
   measure();
+  // iOS fixes its viewport by itself a moment later (often without a resize event): follow the
+  // probe's own size, so the correction drops back to 0 as soon as the gap is gone.
+  if ('ResizeObserver' in window) new ResizeObserver(measure).observe(probe);
   window.addEventListener('resize', measure);
   window.addEventListener('orientationchange', () => setTimeout(measure, 300));
+  document.addEventListener('visibilitychange', () => setTimeout(measure, 100));
+  window.addEventListener('pageshow', () => setTimeout(measure, 100));
+  // And a few checks during the first seconds, in case nothing fires at all.
+  for (const ms of [100, 300, 700, 1500, 3000, 6000]) setTimeout(measure, ms);
 }
 
 if (document.body) fixIOSViewport();
