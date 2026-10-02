@@ -1,5 +1,4 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import type { FastifyInstance } from 'fastify';
 import { Redis } from 'ioredis';
 import { buildApp, type AppHandle } from '../src/app.js';
 import { loadConfig, type Config } from '../src/config.js';
@@ -395,4 +394,66 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     await playOut(players, gameId);
     expect(players[0]!.result).not.toBeNull();
   }, 90_000);
+
+  it.skipIf(!redisUrl)('a table whose game was lost in a restart is freed, and the stakes come back', async () => {
+    const redis = new Redis(redisUrl!);
+    await redis.flushdb();
+    await handle.app.close();
+    await start(new RedisStore(redisUrl!));
+
+    const { players, roomId } = await table(2);
+    const gameId = await startGame(players, roomId);
+    await players[0]!.waitFor((m) => m.type === 'GAME_STATE');
+    for (const p of players) p.close();
+    await handle.app.close();
+    // The game snapshot is gone (expired, lost), the room snapshot still says «playing».
+    await redis.del(`arena:game:${gameId}`);
+    await redis.quit();
+    await start(new RedisStore(redisUrl!));
+
+    await new Promise((r) => setTimeout(r, 50));
+    const room = handle.ctx.realtime.rooms.get(roomId)!;
+    expect(room.status).toBe('waiting');
+    expect(room.gameId).toBeNull();
+    // Nobody is stuck: a player can leave the table and sit elsewhere.
+    expect((await api(players[0]!, 'POST', `/rooms/${roomId}/leave`)).statusCode).toBe(200);
+
+    // The orphaned game is refunded once it has been quiet long enough.
+    await handle.ctx.realtime.sweepOrphans(Date.now() + 10 * 60_000);
+    expect((await db.game.findUniqueOrThrow({ where: { id: gameId } })).status).toBe('ABORTED');
+    const refunds = await db.transaction.count({ where: { source: `game:${gameId}`, type: 'GAME_REFUND' } });
+    expect(refunds).toBe(2);
+  }, 30_000);
+
+  it('one table at a time: two joins at once seat the player only once', async () => {
+    const hosts = [await player('H1', 10), await player('H2', 10)];
+    const rooms = [];
+    for (const h of hosts) rooms.push((await api(h, 'POST', '/rooms', { ...SETTINGS, players: 3 })).json().room.id as string);
+    const guest = await player('Guest', 10);
+    const results = await Promise.all(rooms.map((id) => api(guest, 'POST', `/rooms/${id}/join`, {})));
+    expect(results.every((r) => r.statusCode === 200)).toBe(true);
+    const seatedIn = rooms.filter((id) => handle.ctx.realtime.rooms.get(id)!.seats.some((s) => s.userId === guest.userId));
+    expect(seatedIn).toHaveLength(1);
+    // And «create» racing «quick» ends with one table too.
+    const racer = await player('Racer', 10);
+    await Promise.all([api(racer, 'POST', '/rooms', { ...SETTINGS, players: 4 }), api(racer, 'POST', '/rooms/quick', {})]);
+    const tables = handle.ctx.realtime.rooms.list().filter((r) => r.seats.some((s) => s.userId === racer.userId));
+    expect(tables).toHaveLength(1);
+  });
+
+  it('a private table stops taking PIN guesses after a series of wrong ones; the invite link still works', async () => {
+    const host = await player('Pin', 10);
+    const created = (await api(host, 'POST', '/rooms', { ...SETTINGS, players: 3, isPrivate: true, password: '4321' })).json();
+    const roomId: string = created.room.id;
+    const guesser = await player('Guesser', 10);
+    for (let i = 0; i < 8; i++) {
+      expect((await api(guesser, 'POST', `/rooms/${roomId}/join`, { password: String(1000 + i) })).json().error).toBe('WRONG_PASSWORD');
+    }
+    // Even the right PIN is refused now…
+    expect((await api(guesser, 'POST', `/rooms/${roomId}/join`, { password: '4321' })).json().error).toBe('RATE_LIMITED');
+    // …but a friend with the invite link gets in.
+    const invite = new URL(created.invite.link).searchParams.get('startapp')!.split('_')[2]!;
+    const friend = await player('Friend', 10);
+    expect((await api(friend, 'POST', `/rooms/${roomId}/join`, { invite })).statusCode).toBe(200);
+  });
 });

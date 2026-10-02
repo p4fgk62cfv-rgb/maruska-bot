@@ -66,6 +66,16 @@ export class Realtime {
       if (!room || players.length !== game.state.players.length) continue;
       await this.games.restore(game, players.map(({ userId, name, photoUrl, rating, premium, frame, crown, connected }) => ({ userId, name, photoUrl, rating, premium, frame: frame ?? null, crown: crown ?? null, connected })));
     }
+    // A table whose game could not come back (snapshot lost or expired) must not stay «playing»
+    // forever: nobody could leave it or sit anywhere else. It waits for the next deal again (a
+    // tournament match room is reopened by the tournament clock); the game itself is refunded
+    // by the orphan sweep below.
+    for (const room of rooms) {
+      if (room.status === 'playing' && !(room.gameId && this.games.get(room.gameId))) {
+        this.deps.log.warn({ roomId: room.id, gameId: room.gameId }, 'room had no game to resume; reset');
+        this.rooms.finished(room.id, null);
+      }
+    }
     await this.sweepOrphans();
     this.sweeper = setInterval(() => void this.sweepOrphans().catch((e) => this.deps.log.error({ err: e }, 'orphan sweep failed')), 60_000);
     this.sweeper.unref();

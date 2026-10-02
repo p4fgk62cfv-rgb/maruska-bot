@@ -5,6 +5,7 @@ import { createContext } from '../src/context.js';
 import { createDb, type Db } from '../src/db.js';
 import { redactUrl } from '../src/lib/security.js';
 import { signInitData } from '../src/telegram/initData.js';
+import { issueSession } from '../src/auth/session.js';
 import { Bot } from './bots.js';
 
 const url = process.env.TEST_DATABASE_URL;
@@ -48,6 +49,29 @@ describe.skipIf(!url)('security', () => {
     expect(all).toContain('/ws?token=[redacted]');
     expect(all).not.toContain(token);
     expect(all).not.toContain(initData.slice(0, 40));
+  });
+
+  it('renews a session (also one expired up to a week ago), never a forged or ancient one', async () => {
+    const initData = signInitData({ auth_date: String(Math.floor(Date.now() / 1000)), user: JSON.stringify({ id: 777_000_002, first_name: 'Сессия' }) }, BOT_TOKEN);
+    const { token, me } = (await handle.app.inject({ method: 'POST', url: '/api/auth/telegram', payload: { initData } })).json();
+    const refresh = (t: string) => handle.app.inject({ method: 'POST', url: '/api/auth/refresh', headers: { authorization: `Bearer ${t}` } });
+
+    const fresh = (await refresh(token)).json();
+    expect(fresh.token).toEqual(expect.any(String));
+    expect(fresh.expiresAt).toBeGreaterThan(Date.now() + 3600_000);
+    expect((await handle.app.inject({ method: 'GET', url: '/api/me', headers: { authorization: `Bearer ${fresh.token}` } })).json().id).toBe(me.id);
+
+    const secret = 's'.repeat(40);
+    const now = Math.floor(Date.now() / 1000);
+    const dayOld = issueSession({ sub: me.id, tg: 777_000_002, exp: now - 24 * 3600 }, secret);
+    expect((await refresh(dayOld)).statusCode).toBe(200);
+    // …but an expired token is still refused everywhere else.
+    expect((await handle.app.inject({ method: 'GET', url: '/api/me', headers: { authorization: `Bearer ${dayOld}` } })).statusCode).toBe(401);
+    const monthOld = issueSession({ sub: me.id, tg: 777_000_002, exp: now - 30 * 24 * 3600 }, secret);
+    expect((await refresh(monthOld)).statusCode).toBe(401);
+    const forged = issueSession({ sub: me.id, tg: 777_000_002, exp: now + 3600 }, 'x'.repeat(40));
+    expect((await refresh(forged)).statusCode).toBe(401);
+    expect((await refresh('')).statusCode).toBe(401);
   });
 
   it('sends security headers and allows framing only by Telegram', async () => {

@@ -103,7 +103,7 @@ export async function ownerRoutes(app: FastifyInstance, ctx: Context): Promise<v
         amount: BigInt(body.amount),
         type: 'ADMIN',
         source: `owner:${me}`,
-        idempotencyKey: `owner:${body.requestId}`,
+        idempotencyKey: `owner:${userId}:${body.requestId}`,
         meta: { reason: 'Подарок от администрации', owner: me },
       }),
     );

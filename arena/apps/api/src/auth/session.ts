@@ -19,7 +19,11 @@ export function issueSession(claims: SessionClaims, secret: string): string {
   return `${payload}.${sign(payload, secret)}`;
 }
 
-export function readSession(token: string, secret: string, nowMs = Date.now()): SessionClaims | null {
+/**
+ * `graceMs` accepts a token that expired at most that long ago — only for «refresh», so an app
+ * left minimised in Telegram for a day can renew its session without a fresh initData.
+ */
+export function readSession(token: string, secret: string, nowMs = Date.now(), graceMs = 0): SessionClaims | null {
   const [payload, signature, extra] = token.split('.');
   if (!payload || !signature || extra !== undefined) return null;
 
@@ -30,7 +34,7 @@ export function readSession(token: string, secret: string, nowMs = Date.now()): 
   try {
     const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as SessionClaims;
     if (typeof claims.sub !== 'string' || typeof claims.exp !== 'number') return null;
-    return claims.exp * 1000 > nowMs ? claims : null;
+    return claims.exp * 1000 + graceMs > nowMs ? claims : null;
   } catch {
     return null;
   }

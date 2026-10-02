@@ -48,9 +48,9 @@ const RealtimeContext = createContext<RealtimeValue | null>(null);
 
 /** Owns the socket and the player's current room/game; every screen reads from here. */
 export function RealtimeProvider({ children }: { children: ReactNode }) {
-  const { state: session, refreshMe } = useSession();
+  const { state: session, refreshMe, renew } = useSession();
   const toast = useToast();
-  const socket = useMemo(() => new GameSocket(getToken), []);
+  const socket = useMemo(() => new GameSocket(getToken, renew), [renew]);
   const [status, setStatus] = useState<SocketStatus>(socket.status);
   const [room, setRoom] = useState<RoomDto | null>(null);
   const [invite, setInvite] = useState<MyRoomDto['invite'] | null>(null);

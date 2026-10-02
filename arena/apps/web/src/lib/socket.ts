@@ -52,7 +52,11 @@ export class GameSocket {
   private statusListeners = new Set<(s: SocketStatus) => void>();
   private openListeners = new Set<() => void>();
 
-  constructor(private readonly token: () => string | null) {}
+  constructor(
+    private readonly token: () => string | null,
+    /** The server refused the session (expired): renew it; true when the socket may try again. */
+    private readonly renew: () => Promise<boolean> = async () => false,
+  ) {}
 
   start(): void {
     this.stopped = false;
@@ -195,7 +199,20 @@ export class GameSocket {
     }
     for (const waiter of this.pending.values()) waiter.sent = false;
     // Replaced by another tab or not authorised: do not fight for the connection.
-    if (this.stopped || code === CLOSE_REPLACED || code === CLOSE_UNAUTHORIZED) {
+    if (code === CLOSE_UNAUTHORIZED && !this.stopped) {
+      // Usually an app left open past its session: renew it and come back without a restart.
+      this.setStatus('reconnecting');
+      void this.renew().then((ok) => {
+        if (this.stopped) return;
+        if (ok) this.open();
+        else {
+          this.failPending();
+          this.setStatus('closed');
+        }
+      });
+      return;
+    }
+    if (this.stopped || code === CLOSE_REPLACED) {
       this.failPending();
       this.setStatus('closed');
       return;

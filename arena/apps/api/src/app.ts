@@ -154,7 +154,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
         // Hashed bundles are immutable; index.html must always be fresh. Card faces, backs, the
         // table, smiles and sounds keep for a week (re-checked after that), so a card moving from
         // the hand to the table never waits for the network and never shows up blank.
-        res.setHeader(
+        res.header(
           'Cache-Control',
           path.includes('/assets/')
             ? 'public, max-age=31536000, immutable'

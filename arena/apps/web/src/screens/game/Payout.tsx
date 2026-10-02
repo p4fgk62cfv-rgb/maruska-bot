@@ -1,4 +1,4 @@
-import { CurrencyIcon, formatCompact, Icon } from '@arena/ui';
+import { CurrencyIcon, formatCompact } from '@arena/ui';
 import { useEffect, useRef, useState } from 'react';
 import { haptic } from '../../lib/telegram.js';
 
