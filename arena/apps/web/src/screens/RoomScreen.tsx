@@ -68,7 +68,7 @@ export function RoomScreen({ room }: { room: RoomDto }) {
   };
 
   const leave = () => leaveRoom().catch((e: unknown) => toast(e instanceof ApiError ? e.message : 'Ошибка', 'error'));
-  const tileSize = room.settings.players > 4 ? 50 : 58;
+  const tileSize = room.settings.players > 5 ? 46 : room.settings.players > 4 ? 50 : 58;
 
   return (
     <div className="game game--room">
@@ -81,8 +81,8 @@ export function RoomScreen({ room }: { room: RoomDto }) {
       <div className={`game__opponents game__opponents--${others.length}`}>
         {others.map(({ number, seat }) =>
           seat ? (
+            <div key={seat.userId} className="game__opp">
             <button
-              key={seat.userId}
               type="button"
               className="seat-tap"
               disabled={!seating}
@@ -100,8 +100,11 @@ export function RoomScreen({ room }: { room: RoomDto }) {
                 emoji={emojis[seat.userId] ?? null}
               />
             </button>
+            </div>
           ) : (
-            <EmptySeat key={`empty${number}`} number={number} size={tileSize} onClick={seating && mySeat ? () => moveTo(number - 1) : undefined} />
+            <div key={`empty${number}`} className="game__opp">
+              <EmptySeat number={number} size={tileSize} onClick={seating && mySeat ? () => moveTo(number - 1) : undefined} />
+            </div>
           ),
         )}
       </div>

@@ -311,9 +311,13 @@ select.app-input { appearance: none; }
 .table-top__stake span svg { color: var(--gold); }
 .table-top__stake small { font-size: 11px; color: rgba(255, 255, 255, 0.7); }
 
-.game__opponents { display: flex; justify-content: space-around; align-items: flex-start; gap: 4px; padding: 4px 6px 0; min-height: 96px; }
-.game__opponents--4, .game__opponents--5 { justify-content: space-between; }
-.game__opp { translate: 0 var(--arc, 0px); min-width: 0; }
+.game__opponents { display: flex; justify-content: space-around; align-items: flex-start; gap: 2px; padding: 4px 8px 0; min-height: 96px; }
+/* Equal columns: the outer players keep half a gap from the screen edge, whatever their labels say. */
+.game__opp { flex: 1 1 0; display: flex; justify-content: center; translate: 0 var(--arc, 0px); min-width: 0; }
+.game__opponents--4 .game__opp:first-child .seat-tile__label, .game__opponents--5 .game__opp:first-child .seat-tile__label { justify-self: start; }
+.game__opponents--4 .game__opp:last-child .seat-tile__label, .game__opponents--5 .game__opp:last-child .seat-tile__label { justify-self: end; }
+.game__opponents--5 .seat-tile__label { font-size: 9px; padding: 1px 4px; letter-spacing: 0.02em; }
+.game__opponents--5 .seat-tile__count { right: -6px; }
 
 .seat-tile { position: relative; display: grid; justify-items: center; gap: 4px; width: calc(var(--tile) + 12px); transition: opacity 0.3s; }
 .seat-tile--dim { opacity: 0.5; }

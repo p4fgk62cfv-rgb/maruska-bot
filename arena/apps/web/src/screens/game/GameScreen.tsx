@@ -323,7 +323,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
     fairness: rules.fairness,
     ending: rules.ending,
   };
-  const tileSize = opponents.length > 3 ? 50 : 58;
+  const tileSize = opponents.length > 4 ? 46 : opponents.length > 3 ? 50 : 58;
 
   const actions: { key: string; text: string; tone?: 'main' | 'alt' | 'gold'; run: () => void }[] = [];
   if (canTransferSelected) actions.push({ key: 'transfer', text: 'Перевести', tone: 'gold', run: () => void transfer(selected[0]!) });
