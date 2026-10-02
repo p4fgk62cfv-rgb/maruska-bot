@@ -18,6 +18,10 @@ export const roomSettingsSchema = z.object({
   server: z.string().min(1).max(32),
   isPrivate: z.boolean(),
   password: z.string().min(1).max(32).optional(),
+  /** Empty seats are taken by bots when nobody comes. Off unless the creator ticks it. */
+  bots: z.boolean().optional(),
+  /** How well those bots play; the owner's default when not set. */
+  botLevel: z.enum(['easy', 'normal', 'hard']).optional(),
 });
 
 /** Lobby filter: every field is a set of accepted values; an empty set means "any". */

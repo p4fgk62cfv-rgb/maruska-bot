@@ -1488,3 +1488,12 @@ html[data-home-design="premium"] .friends-play__arrow { color: #d7b6ff; font-siz
 .invite-stats strong { font-size: 22px; }
 .invite-row { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .invite-row:last-child { border-bottom: 0; }
+
+/* ── «Добавить ботов» on the create screen ── */
+.bots-pick { display: flex; flex-direction: column; gap: 8px; }
+.bots-pick__title { font-family: var(--font-script); font-size: 26px; }
+.bots-pick__hint { font-size: 13px; color: var(--text-2); }
+.bots-pick__levels { display: flex; flex-direction: column; gap: 8px; }
+.bots-pick__level { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 14px; border: 0; border-radius: 14px; background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 0 0 1px var(--stroke); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.bots-pick__level span { font-size: 13px; color: var(--text-2); }
+.bots-pick__level--on { background: rgba(247, 215, 116, 0.18); box-shadow: inset 0 0 0 2px #e9b949; }

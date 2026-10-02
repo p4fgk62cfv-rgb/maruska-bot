@@ -358,9 +358,9 @@ function Referrals() {
 }
 
 const LEVELS: { value: BotSettingsDto['level']; label: string; hint: string }[] = [
-  { value: 'easy', label: 'Лёгкий', hint: 'Часто ошибается — новичкам приятно выигрывать' },
-  { value: 'normal', label: 'Средний', hint: 'Играет как обычный игрок' },
-  { value: 'hard', label: 'Сильный', hint: 'Бережёт козыри, грамотно подкидывает и переводит' },
+  { value: 'easy', label: 'Минимальный', hint: 'Часто ошибается — новичкам приятно выигрывать' },
+  { value: 'normal', label: 'Средний', hint: 'Как обычный игрок, иногда ошибается' },
+  { value: 'hard', label: 'Максимальный', hint: 'Без ошибок, считает вышедшие карты, точно доигрывает концовку' },
 ];
 const DELAYS = [5, 10, 15, 30, 60];
 
@@ -389,8 +389,9 @@ function Bots() {
     <Panel className="owner-card">
       <h3 className="owner-sub">Боты-соперники</h3>
       <p className="app-muted">
-        Если за открытым столом никто новый не появился за указанное время, пустые места занимают боты. Играют на кредиты, в рейтинг и
-        сезон такие партии не идут, за стол с паролем и в турниры боты не садятся.
+        Боты садятся за столы «Быстрой игры» и за те, где создатель поставил галочку «Добавить ботов», если за указанное время никто
+        новый не пришёл. Играют на кредиты; в рейтинг и сезон такие партии не идут, в турниры боты не садятся. Выключатель здесь
+        убирает ботов отовсюду.
       </p>
       <Toggle label={draft.enabled ? 'Включены' : 'Выключены'} checked={draft.enabled} onChange={(v) => void save({ ...draft, enabled: v })} />
       <h3 className="owner-sub">Через сколько садятся</h3>
@@ -401,7 +402,8 @@ function Bots() {
           </button>
         ))}
       </div>
-      <h3 className="owner-sub">Как играют</h3>
+      <h3 className="owner-sub">Уровень для «Быстрой игры»</h3>
+      <p className="app-muted">За своими столами игроки выбирают уровень сами.</p>
       <div className="owner-levels">
         {LEVELS.map((l) => (
           <button key={l.value} type="button" className={`owner-level${draft.level === l.value ? ' owner-level--on' : ''}`} onClick={() => void save({ ...draft, level: l.value })}>

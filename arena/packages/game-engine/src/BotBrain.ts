@@ -1,10 +1,12 @@
-import { cardStrength, rankOf, rankValue, suitOf, type CardId, type Suit } from './Card.js';
+import { beats, cardStrength, makeCard, RANKS, rankOf, rankValue, rankValueOf, SUITS, suitOf, type CardId, type Suit } from './Card.js';
 import type { PlayerView } from './PlayerView.js';
 
 /**
  * Bot opponent. It decides from the PlayerView with hints only — its own hand, the table, the
  * trump and the card counts — exactly what a person at the table sees. It never looks at other
- * hands or the stock order.
+ * hands or the stock order. The hard bot also remembers the beaten-off cards (the «напомнить
+ * отбой» view a person can buy too): at the end of a two-player game that tells it exactly what
+ * the opponent holds, so it leads what cannot be beaten.
  */
 export type BotLevel = 'easy' | 'normal' | 'hard';
 
@@ -37,7 +39,10 @@ export function chooseBotMove(view: PlayerView, level: BotLevel, random: () => n
   const trump = view.trump.suit;
   const hand = me.hand;
   const early = view.deckCount > 6;
-  const sloppy = level === 'easy' && random() < 0.3;
+  // The easy bot plays like a beginner (often a random legal move), the normal one
+  // slips now and then, the hard one never.
+  const sloppy = random() < (level === 'easy' ? 0.4 : level === 'normal' ? 0.2 : 0);
+  const rival = level === 'hard' ? knownRivalHand(view) : null;
 
   // ── defending ────────────────────────────────────────────
   const undefended = view.table.map((p, i) => ({ p, i })).filter(({ p }) => !p.defense);
@@ -51,6 +56,8 @@ export function chooseBotMove(view: PlayerView, level: BotLevel, random: () => n
       if (!isTrump(card, trump) && (costly || level === 'hard')) return { type: 'TRANSFER', card };
     }
     if (!plan) return a.take ? { type: 'TAKE_CARDS' } : null;
+    // A beginner gives up on a defence that needs a trump.
+    if (level === 'easy' && a.take && plan.some((m) => isTrump(m.card, trump)) && random() < 0.35) return { type: 'TAKE_CARDS' };
     if (level !== 'easy') {
       // Early in the game, burning a big trump on small cards is worse than taking them.
       const trumpsSpent = plan.filter((m) => isTrump(m.card, trump));
@@ -67,6 +74,16 @@ export function chooseBotMove(view: PlayerView, level: BotLevel, random: () => n
     const options = a.attack.length ? a.attack : hand;
     const order = cheapest(options, trump);
     let lead = sloppy ? order[Math.floor(random() * order.length)]! : order[0]!;
+    if (rival) {
+      // Endgame against one known hand: lead what it cannot beat, with every card of that rank.
+      const unbeatable = order.filter((c) => !rival.some((r) => beats(r, c, trump)));
+      if (unbeatable.length) {
+        const best = unbeatable[0]!;
+        const same = unbeatable.filter((c) => rankOf(c) === rankOf(best));
+        if (same.length > 1 && same.length <= view.boutLimit) return { type: 'PLAY_CARDS', cards: same };
+        return { type: 'PLAY_CARD', card: best };
+      }
+    }
     if (level === 'hard' && view.deckCount === 0) {
       // Endgame: lead the rank we hold most of — every copy can follow it in.
       const counts = new Map<string, number>();
@@ -92,6 +109,11 @@ export function chooseBotMove(view: PlayerView, level: BotLevel, random: () => n
       if (level === 'hard' && view.deckCount === 0) return true; // endgame: every card thrown is one less in hand
       return !isTrump(c, trump) || view.deckCount === 0;
     });
+    if (rival && taking === false) {
+      // Known hand: throw in what the defender cannot beat first — it has to take everything.
+      const killer = throwable.find((c) => !rival.some((r) => beats(r, c, trump)));
+      if (a.canAttack && killer) return { type: 'PLAY_CARD', card: killer };
+    }
     if (a.canAttack && throwable.length) return { type: 'PLAY_CARD', card: throwable[0]! };
     return { type: 'PASS' };
   }
@@ -120,4 +142,26 @@ function planDefense(open: { attack: CardId; index: number }[], defend: Record<s
   }
   // Play the cheapest-cost move first; the rest follow on the next turns.
   return plan.sort((x, y) => cardStrength(x.card, trump) - cardStrength(y.card, trump));
+}
+
+/**
+ * With the beaten-off cards known and the stock empty, a two-player opponent holds exactly the
+ * cards that are nowhere else. Null when that cannot be known.
+ */
+function knownRivalHand(view: PlayerView): CardId[] | null {
+  if (!view.discard || view.deckCount > 0 || view.players.length !== 2 || !view.you) return null;
+  const minRank = view.rules.deckSize === 52 ? 2 : view.rules.deckSize === 36 ? 6 : 9;
+  const seen = new Set<CardId>([...view.you.hand, ...view.discard]);
+  for (const pair of view.table) {
+    seen.add(pair.attack);
+    if (pair.defense) seen.add(pair.defense);
+  }
+  const rest: CardId[] = [];
+  for (const suit of SUITS) for (const rank of RANKS) if (rankValueOf(rank) >= minRank) {
+    const card = makeCard(rank, suit);
+    if (!seen.has(card)) rest.push(card);
+  }
+  const other = view.players.find((p) => p.id !== view.you!.id);
+  // Sanity check: the count must match what the opponent holds.
+  return other?.cardCount === rest.length ? rest : null;
 }

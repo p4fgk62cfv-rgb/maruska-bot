@@ -286,15 +286,18 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     expect(internals(gameId).snap.state.version).toBe(v2 + 1);
   }, 30_000);
 
-  it('bots fill an empty public table, play a whole game for credits, and leave with the people', async () => {
+  it('bots fill a table only when asked, at the table\'s level, play for credits, and leave with the people', async () => {
     await handle.ctx.bots.setSettings({ enabled: true, delaySec: 1, level: 'hard' });
     try {
       const human = await player('Solo', 10);
-      const created = (await api(human, 'POST', '/rooms', { ...SETTINGS, players: 2 })).json();
+      const created = (await api(human, 'POST', '/rooms', { ...SETTINGS, players: 2, bots: true, botLevel: 'easy' })).json();
       const roomId: string = created.room.id;
+      expect(created.room.settings).toMatchObject({ bots: true, botLevel: 'easy' });
       const before = (await api(human, 'GET', '/me')).json();
 
-      // A private table never gets bots.
+      // Without the tick a table waits for people only — public or private.
+      const otherHost = await player('NoBotsHost', 10);
+      const noBots = (await api(otherHost, 'POST', '/rooms', { ...SETTINGS, players: 6 })).json().room.id;
       const friendHost = await player('PrivateHost', 10);
       const privateRoom = (await api(friendHost, 'POST', '/rooms', { ...SETTINGS, players: 2, isPrivate: true, password: '1234' })).json().room.id;
 
@@ -304,11 +307,15 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
       expect(seats.filter((x) => x.bot)).toHaveLength(1);
       expect(seats.find((x) => x.bot)!.ready).toBe(true);
       expect(handle.ctx.realtime.rooms.get(privateRoom)!.seats).toHaveLength(1);
+      await new Promise((r) => setTimeout(r, 1200));
+      expect(handle.ctx.realtime.rooms.get(noBots)!.seats).toHaveLength(1);
 
       expect((await human.send({ type: 'READY', roomId, ready: true })).type).toBe('ACK');
       const started = await human.waitFor((m) => m.type === 'GAME_STARTED');
       const gameId = (started as { gameId: string }).gameId;
       expect((started as { players: { bot?: boolean }[] }).players.some((x) => x.bot)).toBe(true);
+      // The table's level, not the owner's default («hard»).
+      expect((handle.ctx.realtime.games.get(gameId) as unknown as { snap: { botLevel?: string } }).snap.botLevel).toBe('easy');
 
       // The person plays; the bot answers on its own.
       expect((await human.send({ type: 'USE_FEATURE', gameId, feature: 'hints' })).type).toBe('ACK');

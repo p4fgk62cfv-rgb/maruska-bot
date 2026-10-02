@@ -8,3 +8,4 @@ export * from './PlayerView.js';
 export * from './Scoring.js';
 export * from './CheatManager.js';
 export * from './BotBrain.js';
+export * from './EndgameSolver.js';

@@ -52,6 +52,8 @@ export interface GameSnapshot {
   startedAt: number;
   /** Reconnect reserve left per player (ms); missing means the full reserve. */
   reserve?: Record<string, number>;
+  /** How the bots at this table play (from the room); the owner's default when missing. */
+  botLevel?: 'easy' | 'normal' | 'hard';
   /** The player whose turn ran out while offline and is being waited for. */
   grace?: { userId: string; since: number } | null;
 }

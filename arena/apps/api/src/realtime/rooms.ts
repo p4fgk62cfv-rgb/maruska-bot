@@ -179,6 +179,7 @@ export class RoomManager {
         throwIn: settings.throwIn,
         fairness: settings.fairness,
         ending: settings.ending,
+        ...(settings.bots ? { bots: true, ...(settings.botLevel ? { botLevel: settings.botLevel } : {}) } : {}),
       },
       status: 'waiting',
       seats: [seat],
@@ -270,6 +271,8 @@ export class RoomManager {
       stake: wanted ?? affordable[0]!,
       server: 'almaz',
       isPrivate: false,
+      // «Быстрая игра» should never leave a person waiting alone: bots fill in at the owner's level.
+      bots: true,
     });
   }
 
@@ -595,14 +598,14 @@ export class RoomManager {
   // ── bot opponents ──────────────────────────────────────────
 
   /**
-   * A public table where people wait and seats are empty: if nobody new comes in for the
-   * set delay, bots take the empty seats (and are ready at once). Private tables and
-   * tournament matches never get bots.
+   * A table whose creator asked for bots (and every «Быстрая игра» table), where people wait
+   * and seats are empty: if nobody new comes in for the set delay, bots take the empty seats
+   * (and are ready at once). Tournament matches never get bots.
    */
   private scheduleBots(room: Room): void {
     const key = `bots:${room.id}`;
     const humans = room.seats.filter((s) => !s.bot).length;
-    const wanted = !room.isPrivate && !room.tournament && room.status === 'waiting' && humans > 0 && room.seats.length < room.settings.players;
+    const wanted = room.settings.bots === true && !room.tournament && room.status === 'waiting' && humans > 0 && room.seats.length < room.settings.players;
     if (!wanted) {
       this.clearTimer(key);
       this.botArmed.delete(room.id);
@@ -620,7 +623,7 @@ export class RoomManager {
     this.botArmed.delete(room.id);
     const cfg = await this.deps.bots.settings();
     const humans = room.seats.filter((s) => !s.bot).length;
-    if (!cfg.enabled || !this.rooms.has(room.id) || room.status !== 'waiting' || humans === 0) return;
+    if (!cfg.enabled || !room.settings.bots || !this.rooms.has(room.id) || room.status !== 'waiting' || humans === 0) return;
     const missing = room.settings.players - room.seats.length;
     if (missing <= 0) return;
     const busy = new Set<string>();

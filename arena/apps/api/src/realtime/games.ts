@@ -3,6 +3,7 @@ import {
   applyAction,
   applyTimeout,
   chooseBotMove,
+  solveEndgame,
   type BotLevel,
   createGame,
   toPlayerView,
@@ -388,12 +389,25 @@ export class GameRunner {
    * Every bot with something to do gets a move after a human-like pause. It decides from its
    * own player view only (its hand, the table, the trump), like a person at the table.
    */
+  /**
+   * The bot's move from its own view. The hard bot remembers the beaten-off cards; at the end of
+   * a two-player game that pins down the opponent's hand, and it plays the end exactly.
+   */
+  private botMove(id: string, level: BotLevel) {
+    const state = this.snap.state;
+    if (level === 'hard' && state.deck.length === 0 && state.players.length === 2) {
+      const exact = solveEndgame(state, id);
+      if (exact) return exact;
+    }
+    return chooseBotMove(toPlayerView(state, id, { hints: true, discard: level === 'hard' }), level);
+  }
+
   private driveBots(): void {
     if (!this.bots.size || this.result || this.snap.state.status !== 'playing') return;
-    const level = this.deps.botLevel?.() ?? 'normal';
+    const level = this.snap.botLevel ?? this.deps.botLevel?.() ?? 'normal';
     for (const id of this.bots) {
       if (this.botTimers.has(id) || this.botStuck.get(id) === this.snap.state.version) continue;
-      if (!chooseBotMove(toPlayerView(this.snap.state, id, { hints: true }), level)) continue;
+      if (!this.botMove(id, level)) continue;
       const delay = 800 + Math.random() * 1400;
       this.botTimers.set(
         id,
@@ -402,7 +416,7 @@ export class GameRunner {
           this.queue
             .run(async () => {
               if (this.result || this.snap.state.status !== 'playing') return;
-              const move = chooseBotMove(toPlayerView(this.snap.state, id, { hints: true }), level);
+              const move = this.botMove(id, level);
               if (!move) return;
               try {
                 await this.act(id, move);
@@ -505,7 +519,10 @@ export class GameManager {
       connected: true,
       bot: Boolean(s.bot),
     }));
-    const snapshot: GameSnapshot = { gameId, roomId: room.id, stake: room.settings.stake, state, previous: null, features: {}, transfers: {}, startedAt: now };
+    const snapshot: GameSnapshot = {
+      gameId, roomId: room.id, stake: room.settings.stake, state, previous: null, features: {}, transfers: {}, startedAt: now,
+      ...(room.settings.botLevel ? { botLevel: room.settings.botLevel } : {}),
+    };
     const runner = this.add(snapshot, players);
     await this.deps.store.saveGame(snapshot);
     metrics.inc('arena_games_started_total', 'Games dealt', { players: String(players.length), stake: String(room.settings.stake) });
