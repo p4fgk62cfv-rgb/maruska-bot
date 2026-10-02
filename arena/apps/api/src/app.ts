@@ -39,6 +39,8 @@ export interface AppOptions {
   store?: SnapshotStore;
   /** Replaces the Telegram HTTP client (tests). */
   bot?: TelegramBot | null;
+  /** Take over the games in the background (production: the old server may still hold them). */
+  background?: boolean;
   /** Where logs go (tests capture them to check nothing secret is written). */
   logStream?: { write(line: string): void };
 }
@@ -79,11 +81,18 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   useBanList(base.moderation);
   await base.bots.ensurePool();
   await base.bots.settings();
-  await realtime.recover();
+  // During a deploy the previous server hands the games over only when it stops, which can be
+  // after this one starts listening: in production the take-over runs in the background and
+  // requests that touch tables wait for it (see the hook below).
+  if (options.background) realtime.start().catch((error: unknown) => app.log.error({ err: error }, 'could not take over the games'));
+  else await realtime.start();
   if (config.NODE_ENV !== 'test') {
     outbox.start();
-    tournaments.start();
+    void realtime.ready.then(() => tournaments.start());
   }
+  app.addHook('onRequest', async (request) => {
+    if (request.url.startsWith('/api/rooms') || request.url.startsWith('/api/friends') || request.url.startsWith('/api/tournaments')) await realtime.ready;
+  });
   app.addHook('onClose', async () => {
     outbox.stop();
     tournaments.stop();

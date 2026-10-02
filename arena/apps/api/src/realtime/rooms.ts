@@ -756,6 +756,11 @@ export class RoomManager {
     this.timers.delete(key);
   }
 
+  /** Waits for every room's pending work (e.g. «finished» after a cancelled game) to be saved. */
+  async drain(): Promise<void> {
+    await Promise.all([...this.queues.values()].map((q) => q.run(() => undefined)));
+  }
+
   shutdown(): void {
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();

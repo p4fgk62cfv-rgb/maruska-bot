@@ -468,7 +468,49 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     }
   });
 
-  it.skipIf(!redisUrl)('a running game survives a server restart through Redis', async () => {
+  it.skipIf(!redisUrl)('an update restart: everyone is told, the game is cancelled with stakes back, the table stays', async () => {
+    const redis = new Redis(redisUrl!);
+    await redis.flushdb();
+    await redis.quit();
+    await handle.app.close();
+    await start(new RedisStore(redisUrl!));
+
+    const { players, roomId } = await table(2);
+    const before = await Promise.all(players.map(async (p) => (await api(p, 'GET', '/me')).json().wallet.credits as number));
+    const gameId = await startGame(players, roomId);
+    await players[0]!.waitFor((m) => m.type === 'GAME_STATE');
+
+    // What main.ts does on SIGTERM.
+    await handle.ctx.realtime.stopForRestart();
+    for (const p of players) {
+      expect(await p.waitFor((m) => m.type === 'SERVER_RESTART')).toMatchObject({ refunded: true });
+      expect(await p.waitFor((m) => m.type === 'GAME_FINISHED')).toMatchObject({ result: { reason: 'cancelled' } });
+    }
+    // Nothing more is applied on the old server.
+    expect(await players[0]!.send({ type: 'PASS', gameId })).toMatchObject({ type: 'ERROR', code: 'SERVER_RESTARTING' });
+    for (const p of players) p.close();
+    await handle.app.close();
+
+    // The next server: same table, both seated, nothing running, stakes back.
+    await start(new RedisStore(redisUrl!));
+    expect(handle.ctx.realtime.games.get(gameId)).toBeUndefined();
+    const room = handle.ctx.realtime.rooms.get(roomId)!;
+    expect(room.status).toBe('waiting');
+    expect(room.seats.map((s) => s.userId).sort()).toEqual(players.map((p) => p.userId).sort());
+    const game = await handle.ctx.db.game.findUnique({ where: { id: gameId } });
+    expect(game?.status).not.toBe('PLAYING');
+    for (const [i, p] of players.entries()) {
+      p.inbox = [];
+      (p as unknown as { base: string }).base = address;
+      await p.connect((p as unknown as { authToken: string }).authToken);
+      expect((await api(p, 'GET', '/me')).json().wallet.credits).toBe(before[i]);
+    }
+    // They can play the next deal right away.
+    const next = await startGame(players, roomId);
+    expect(next).not.toBe(gameId);
+  }, 90_000);
+
+  it.skipIf(!redisUrl)('a running game survives a server crash through Redis', async () => {
     const redis = new Redis(redisUrl!);
     await redis.flushdb();
     await redis.quit();
@@ -481,6 +523,8 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     const version = handle.ctx.realtime.games.get(gameId)!.state.version;
 
     for (const p of players) p.close();
+    // A crash: no goodbye, the lease simply lapses.
+    handle.ctx.realtime.crashOnShutdown = true;
     await handle.app.close();
     await start(new RedisStore(redisUrl!));
     expect(handle.ctx.realtime.games.get(gameId)?.state.version).toBe(version);

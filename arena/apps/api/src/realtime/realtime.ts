@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { clientMessageSchema } from '@arena/shared/schemas';
 import type { AppErrorCode, ClientMessage, GameResultDto } from '@arena/shared';
 import type { FastifyBaseLogger } from 'fastify';
@@ -29,6 +30,11 @@ export interface RealtimeDeps {
 const ORPHAN_AFTER_MS = 120_000;
 /** How long a request id is remembered: a resend after a reconnect is answered, not applied again. */
 const REPLY_TTL_MS = 5 * 60_000;
+/** The game-runner lease: renewed every few seconds, lapses on its own if a server dies. */
+const LEASE_TTL_MS = 10_000;
+const LEASE_RENEW_MS = 3_000;
+/** A new server waits this long at most for the old one to hand over the games. */
+const HANDOVER_MAX_MS = 45_000;
 
 export class Realtime {
   private sweeper: NodeJS.Timeout | null = null;
@@ -41,8 +47,17 @@ export class Realtime {
   readonly rooms: RoomManager;
   readonly games: GameManager;
   readonly settlement: SettlementService;
+  /** This server process (owner of the lease while it runs the games). */
+  readonly instance = randomUUID();
+  /** Resolves once this server holds the lease and has loaded rooms and games. */
+  readonly ready: Promise<void>;
+  private markReady!: () => void;
+  private leaseTimer: NodeJS.Timeout | null = null;
+  /** Set when the server is going down for an update: no new moves are taken. */
+  private stopping = false;
 
   constructor(private readonly deps: RealtimeDeps) {
+    this.ready = new Promise((resolve) => (this.markReady = resolve));
     this.settlement = new SettlementService(deps.db, deps.ledger, deps.config.RAKE_PERCENT);
     this.rooms = new RoomManager({ ...deps, hub: this.hub, games: () => this.games });
     this.games = new GameManager({
@@ -59,6 +74,30 @@ export class Realtime {
       onPresence: (ids) => this.emitPresence(ids),
       botLevel: () => deps.bots.level(),
     });
+  }
+
+  /**
+   * Takes over the games. During a deploy the previous server still runs them for a few
+   * seconds: wait until it hands the lease over (it does so when it stops), then load.
+   */
+  async start(): Promise<void> {
+    const deadline = Date.now() + HANDOVER_MAX_MS;
+    while (!(await this.deps.store.acquireLease(this.instance, LEASE_TTL_MS))) {
+      if (Date.now() > deadline) {
+        this.deps.log.warn('previous server did not hand over the games in time; taking over');
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    this.leaseTimer = setInterval(() => {
+      void this.deps.store.renewLease(this.instance, LEASE_TTL_MS).then(
+        (held) => held || this.deps.store.acquireLease(this.instance, LEASE_TTL_MS),
+        (error: unknown) => this.deps.log.warn({ err: error }, 'lease renewal failed'),
+      );
+    }, LEASE_RENEW_MS);
+    this.leaseTimer.unref();
+    await this.recover();
+    this.markReady();
   }
 
   /**
@@ -132,6 +171,8 @@ export class Realtime {
   }
 
   async connect(userId: string, socket: WebSocket): Promise<Client> {
+    // A socket that arrives during a hand-over waits until this server has the tables.
+    await this.ready;
     const wasOnline = this.hub.isOnline(userId);
     const client = this.hub.attach(userId, socket);
     this.touch(userId);
@@ -164,6 +205,8 @@ export class Realtime {
       return this.hub.sendTo(client, wsError('VALIDATION_FAILED'));
     }
     metrics.inc('arena_ws_messages_total', 'WebSocket messages received', { type: msg.type });
+    // Going down for an update: the games are already settled, nothing more is applied.
+    if (this.stopping && msg.type !== 'PING') return this.hub.sendTo(client, wsError('SERVER_RESTARTING', msg.rid));
     // Answer with the rid so the client knows this exact request was dropped and may retry.
     if (!this.hub.allow(client)) return this.hub.sendTo(client, wsError('RATE_LIMITED', msg.rid));
 
@@ -248,10 +291,31 @@ export class Realtime {
     this.hub.kick(userId);
   }
 
-  async shutdown(): Promise<void> {
+  /**
+   * Going down (an update or a restart). Everyone is told; every casual game is cancelled
+   * with all stakes returned and its players stay seated at the table for the next deal on
+   * the new server. Tournament games are saved and resumed by the new server instead (a
+   * bracket match cannot be refunded). Then the lease goes to the next server.
+   */
+  /** Tests only: shut down like a crash (games are left in the store for the next server). */
+  crashOnShutdown = false;
+
+  async stopForRestart(): Promise<void> {
+    if (this.stopping || this.crashOnShutdown) return;
+    this.stopping = true;
     if (this.sweeper) clearInterval(this.sweeper);
+    this.hub.broadcast({ type: 'SERVER_RESTART', refunded: this.games.liveCasual(this.rooms) > 0 });
+    const cancelled = await this.games.cancelForRestart(this.rooms);
+    if (cancelled) this.deps.log.info({ games: cancelled }, 'games cancelled for the restart, stakes refunded');
+    await this.rooms.drain();
+  }
+
+  async shutdown(): Promise<void> {
+    await this.stopForRestart();
+    if (this.leaseTimer) clearInterval(this.leaseTimer);
     this.rooms.shutdown();
     await this.games.shutdown();
+    if (!this.crashOnShutdown) await this.deps.store.releaseLease(this.instance).catch(() => undefined);
     this.hub.closeAll();
     await this.deps.store.close();
   }

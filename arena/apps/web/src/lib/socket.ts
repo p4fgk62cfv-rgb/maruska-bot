@@ -15,6 +15,7 @@ const PROBE_MS = 4_000;
 const CONNECT_TIMEOUT_MS = 8_000;
 const CLOSE_UNAUTHORIZED = 4001;
 const CLOSE_REPLACED = 4002;
+const CLOSE_SERVER_SHUTDOWN = 4003;
 
 interface Waiter {
   resolve: (r: Reply) => void;
@@ -38,6 +39,8 @@ export class GameSocket {
   /** Failed attempts in a row and when the next one starts — for the reconnect indicator. */
   attempt = 0;
   nextRetryAt: number | null = null;
+  /** The server closed the socket because it is restarting for an update. */
+  restarting = false;
   private ws: WebSocket | null = null;
   private seq = 0;
   /** Request ids are «page:n»: unique per launch, so the server can recognise a resend on a new socket. */
@@ -157,6 +160,7 @@ export class GameSocket {
       if (this.ws !== ws) return;
       window.clearTimeout(this.probeTimer);
       this.attempt = 0;
+      this.restarting = false;
       this.lastHeard = Date.now();
       this.setStatus('open');
       this.ping(true);
@@ -198,6 +202,7 @@ export class GameSocket {
       ws.close();
     }
     for (const waiter of this.pending.values()) waiter.sent = false;
+    if (code === CLOSE_SERVER_SHUTDOWN) this.restarting = true;
     // Replaced by another tab or not authorised: do not fight for the connection.
     if (code === CLOSE_UNAUTHORIZED && !this.stopped) {
       // Usually an app left open past its session: renew it and come back without a restart.

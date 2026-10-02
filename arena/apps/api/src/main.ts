@@ -12,11 +12,13 @@ async function main(): Promise<void> {
 
   // Without Redis live games cannot survive a restart: they are refunded on the next boot.
   const store = config.REDIS_URL ? new RedisStore(config.REDIS_URL) : new MemoryStore();
-  const { app } = await buildApp(createContext(config, db), { store });
+  const { app, ctx } = await buildApp(createContext(config, db), { store, background: true });
   if (!config.REDIS_URL) app.log.warn('REDIS_URL is not set: running games will be refunded after a restart');
 
   const shutdown = async (signal: string) => {
     app.log.info({ signal }, 'shutting down');
+    // Before the sockets close: tell everyone, cancel the running games with stakes returned.
+    await ctx.realtime.stopForRestart().catch((error: unknown) => app.log.error({ err: error }, 'restart notice failed'));
     await app.close();
     await db.$disconnect();
     process.exit(0);

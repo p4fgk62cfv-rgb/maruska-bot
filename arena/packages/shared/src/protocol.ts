@@ -66,7 +66,9 @@ export type ServerMessage =
   | { type: 'REFERRAL_REWARD'; friend: PublicUserDto; coins: number; invitee: boolean }
   /** Someone at my table asks to swap chairs with me (before the deal). */
   | { type: 'SEAT_SWAP_ASKED'; roomId: string; from: { userId: string; name: string; seat: number } }
-  | { type: 'SEAT_SWAP_DECLINED'; roomId: string; by: { userId: string; name: string } };
+  | { type: 'SEAT_SWAP_DECLINED'; roomId: string; by: { userId: string; name: string } }
+  /** The server is going down for an update; `refunded`: running games were cancelled with stakes returned. */
+  | { type: 'SERVER_RESTART'; refunded: boolean };
 
 export interface GameResultDto {
   kind: 'loser' | 'draw';

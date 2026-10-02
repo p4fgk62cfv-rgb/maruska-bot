@@ -324,8 +324,8 @@ export class GameRunner {
     };
   }
 
-  /** Moderator stop: everyone gets the stake back, the game ends as «cancelled». */
-  async adminAbort(): Promise<void> {
+  /** Moderator stop (or a server restart): everyone gets the stake back, the game ends as «cancelled». */
+  async adminAbort(why: 'moderator' | 'restart' = 'moderator'): Promise<void> {
     if (this.result) return;
     if (this.timer) clearTimeout(this.timer);
     this.stopBots();
@@ -340,7 +340,7 @@ export class GameRunner {
       payouts: this.players.map((p) => ({ userId: p.userId, net: 0, place: null, ratingGain: 0, bonusMultiplier: 1 })),
     };
     metrics.inc('arena_games_aborted_total', 'Abandoned games refunded');
-    this.deps.log.warn({ gameId: this.id }, 'game cancelled by a moderator, stakes refunded');
+    this.deps.log.warn({ gameId: this.id, why }, why === 'restart' ? 'game cancelled for a server restart, stakes refunded' : 'game cancelled by a moderator, stakes refunded');
     for (const p of this.players) this.deps.hub.send(p.userId, { type: 'GAME_FINISHED', gameId: this.id, result: this.result });
     await this.deps.store.deleteGame(this.id).catch(() => undefined);
     this.deps.onFinished(this.roomId, this.result);
@@ -571,6 +571,28 @@ export class GameManager {
     const runner = this.runners.get(msg.gameId);
     if (!runner || !runner.hasPlayer(userId)) throw new AppError('NOT_FOUND');
     await runner.queue.run(() => runner.handle(userId, msg));
+  }
+
+  /** Running casual (non-tournament) games. */
+  liveCasual(rooms?: { get(id: string): Room | undefined }): number {
+    let n = 0;
+    for (const runner of this.runners.values()) if (!runner.result && !rooms?.get(runner.roomId)?.tournament) n++;
+    return n;
+  }
+
+  /** Server restart: every casual game ends as «cancelled» and all its stakes go back. */
+  async cancelForRestart(rooms: { get(id: string): Room | undefined }): Promise<number> {
+    let cancelled = 0;
+    for (const runner of [...this.runners.values()]) {
+      if (runner.result || rooms.get(runner.roomId)?.tournament) continue;
+      try {
+        await runner.queue.run(() => runner.adminAbort('restart'));
+        cancelled++;
+      } catch (error) {
+        this.deps.log.error({ err: error, gameId: runner.id }, 'could not cancel a game for the restart');
+      }
+    }
+    return cancelled;
   }
 
   async shutdown(): Promise<void> {

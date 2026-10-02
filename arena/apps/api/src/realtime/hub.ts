@@ -101,6 +101,11 @@ export class Hub {
     client.socket.close(WS_CLOSE.UNAUTHORIZED, 'banned');
   }
 
+  /** One message to every connected socket. */
+  broadcast(message: ServerMessage): void {
+    for (const client of this.clients.values()) if (client.socket.readyState === client.socket.OPEN) client.socket.send(JSON.stringify(message));
+  }
+
   closeAll(): void {
     for (const client of this.clients.values()) client.socket.close(WS_CLOSE.SERVER_SHUTDOWN, 'restart');
     this.clients.clear();

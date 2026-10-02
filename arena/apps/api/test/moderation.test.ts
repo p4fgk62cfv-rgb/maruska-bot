@@ -77,7 +77,7 @@ describe.skipIf(!url)('integrity and moderation', () => {
     const receiver = await player('Получатель');
     for (let i = 0; i < 5; i++) await dump(dumper, receiver);
 
-    const flagged = (await internal('GET', '/integrity/suspicious?minGames=5&minCredits=1000')).json();
+    const flagged = (await internal('GET', `/integrity/suspicious?minGames=5&minCredits=1000&telegramId=${dumper.tg}`)).json();
     const pair = flagged.find((p: { loser: { id: string } }) => p.loser.id === dumper.id);
     expect(pair).toMatchObject({ winner: { id: receiver.id }, games: 5, lostToWinner: 5, gaveUp: 5, credits: 4750 });
     expect(flagged.some((p: { loser: { id: string } }) => p.loser.id === receiver.id)).toBe(false);
