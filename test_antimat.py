@@ -134,6 +134,18 @@ async def scenario():
     await swear("сука")
     expect("после мута счёт заново", "1/3" in said[-1], True)
 
+    # Админ: по умолчанию тоже получает предупреждение; с выключенной настройкой — нет
+    said.clear()
+    async def admin_member(chat_id, user_id):
+        return types.SimpleNamespace(status="administrator")
+    bot.get_chat_member = admin_member
+    antimat._admin_cache.clear()
+    await swear("сука")
+    expect("админ получил предупреждение", len(said) == 1 and "Предупреждение" in said[0], True)
+    store.apply(CHAT, "antimat_admins", False)
+    await swear("сука")
+    expect("админов не трогать — молчит", len(said), 1)
+
     async with session_scope() as session:
         await session.execute(delete(ChatWarning).where(ChatWarning.chat_id == CHAT))
         await session.commit()
