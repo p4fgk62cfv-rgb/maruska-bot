@@ -97,6 +97,12 @@ if (!inTelegram) {
   });
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => void navigator.serviceWorker.register('/sw.js').catch(() => undefined));
+    // The app opened from the phone's copy and a newer release was just fetched: right after the
+    // launch, before anything is going on, switch to it (the bundles are cached, it is quick).
+    const launchedAt = Date.now();
+    navigator.serviceWorker.addEventListener('message', (event: MessageEvent<{ type?: string }>) => {
+      if (event.data?.type === 'shell-updated' && Date.now() - launchedAt < 15_000) location.reload();
+    });
   }
 }
 

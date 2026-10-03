@@ -324,13 +324,14 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     expect(internals(gameId).snap.state.version).toBe(v2 + 1);
   }, 30_000);
 
-  it('bots fill a table only when asked, at the table\'s level, play for credits, and leave with the people', async () => {
+  it('bots fill a table only when asked, at the table\'s level; easy bots are practice for no credits; they leave with the people', async () => {
     await handle.ctx.bots.setSettings({ enabled: true, delaySec: 1, level: 'hard' });
     try {
       const human = await player('Solo', 10);
       const created = (await api(human, 'POST', '/rooms', { ...SETTINGS, players: 2, bots: true, botLevel: 'easy' })).json();
       const roomId: string = created.room.id;
-      expect(created.room.settings).toMatchObject({ bots: true, botLevel: 'easy' });
+      // Easy bots are practice: the asked stake is dropped, the table is «на интерес».
+      expect(created.room.settings).toMatchObject({ bots: true, botLevel: 'easy', stake: 0 });
       const before = (await api(human, 'GET', '/me')).json();
 
       // Without the tick a table waits for people only — public or private.
@@ -363,12 +364,13 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
       const result = human.result!;
       expect(result.reason).not.toBe('timeout');
 
-      // Credits moved like in any game; rating stayed.
+      // No credits moved either way; rating stayed.
       const after = (await api(human, 'GET', '/me')).json();
       const mine = result.payouts.find((p) => p.userId === human.userId)!;
       expect(after.rating).toBe(before.rating);
       expect(mine.ratingGain).toBe(0);
-      expect(after.wallet.credits - before.wallet.credits).toBe(mine.net);
+      expect(mine.net).toBe(0);
+      expect(after.wallet.credits).toBe(before.wallet.credits);
 
       // The person leaves the table → the bot leaves too and the table closes.
       await new Promise((r) => setTimeout(r, 300));
@@ -384,6 +386,31 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
       await handle.ctx.bots.setSettings({ enabled: false, delaySec: 12, level: 'normal' });
     }
   }, 120_000);
+
+  it('hard bots play for credits; a stake of 0 is only for practice tables; «Быстрая игра» calls hard bots', async () => {
+    const host = await player('HardHost', 10);
+    const hard = (await api(host, 'POST', '/rooms', { ...SETTINGS, bots: true, botLevel: 'hard' })).json();
+    expect(hard.room.settings).toMatchObject({ stake: SETTINGS.stake, botLevel: 'hard' });
+    expect((await api(host, 'POST', `/rooms/${hard.room.id}/leave`)).statusCode).toBe(200);
+
+    // A free table without weak bots is refused (no farming of anything at stake 0).
+    expect((await api(host, 'POST', '/rooms', { ...SETTINGS, stake: 0 })).json().error).toBe('VALIDATION_FAILED');
+    expect((await api(host, 'POST', '/rooms', { ...SETTINGS, stake: 0, bots: true, botLevel: 'hard' })).json().error).toBe('VALIDATION_FAILED');
+    // A medium-bot table is practice whatever stake was asked.
+    const medium = (await api(host, 'POST', '/rooms', { ...SETTINGS, stake: 1000, bots: true, botLevel: 'normal' })).json();
+    expect(medium.room.settings).toMatchObject({ stake: 0, botLevel: 'normal' });
+    expect((await api(host, 'POST', `/rooms/${medium.room.id}/leave`)).statusCode).toBe(200);
+
+    // «Быстрая игра» is for credits: it never seats you at a practice table, and calls hard bots.
+    const trainer = await player('Trainer', 10);
+    const practice = (await api(trainer, 'POST', '/rooms', { ...SETTINGS, bots: true, botLevel: 'easy' })).json().room.id;
+    // A stake no other table has: the quick game opens its own table.
+    const quick = (await api(host, 'POST', '/rooms/quick', { stake: 1000 })).json();
+    expect(quick.room.id).not.toBe(practice);
+    expect(quick.room.ownerId).toBe(host.userId);
+    expect(quick.room.settings).toMatchObject({ stake: 1000, bots: true, botLevel: 'hard' });
+    for (const [who, id] of [[host, quick.room.id], [trainer, practice]] as const) expect((await api(who, 'POST', `/rooms/${id}/leave`)).statusCode).toBe(200);
+  });
 
   it('chairs before the deal: move to a free one, ask to swap, accept or decline; the deal follows the chairs', async () => {
     const a = await player('Аня', 10);

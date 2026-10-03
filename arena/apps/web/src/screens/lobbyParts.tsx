@@ -1,4 +1,4 @@
-import { formatStake, MODE_LABEL_RU, SPEED_LABEL_RU, STAKE_OPTIONS, type GameMode, type RoomDto } from '@arena/shared';
+import { formatStake, MODE_LABEL_RU, PRACTICE_LABEL, SPEED_LABEL_RU, STAKE_OPTIONS, type GameMode, type RoomDto } from '@arena/shared';
 import { Avatar, CurrencyIcon, Icon, type IconName } from '@arena/ui';
 import type { ReactNode } from 'react';
 
@@ -47,10 +47,14 @@ export function RoomRow({ room, onOpen, busy }: { room: RoomDto; onOpen: () => v
         {room.isPrivate ? owner?.name ?? 'Приватный стол' : room.seats.map((seat) => seat.name).join(', ')}
       </span>
       <span className="room-row__main">
-        <span className="room-row__stake">
-          {formatStake(s.stake)}
-          <CurrencyIcon kind="credits" size={22} />
-        </span>
+        {s.stake > 0 ? (
+          <span className="room-row__stake">
+            {formatStake(s.stake)}
+            <CurrencyIcon kind="credits" size={22} />
+          </span>
+        ) : (
+          <span className="room-row__stake room-row__stake--practice">{PRACTICE_LABEL}</span>
+        )}
         <span className="room-row__avatars" aria-hidden="true">
           {room.seats.slice(0, 3).map((seat) => (
             <Avatar key={seat.userId} id={seat.userId} name={seat.name} photoUrl={seat.photoUrl} size={22} />

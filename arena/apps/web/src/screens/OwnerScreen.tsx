@@ -357,11 +357,6 @@ function Referrals() {
   );
 }
 
-const LEVELS: { value: BotSettingsDto['level']; label: string; hint: string }[] = [
-  { value: 'easy', label: 'Минимальный', hint: 'Часто ошибается — новичкам приятно выигрывать' },
-  { value: 'normal', label: 'Средний', hint: 'Как обычный игрок, иногда ошибается' },
-  { value: 'hard', label: 'Максимальный', hint: 'Без ошибок, считает вышедшие карты, точно доигрывает концовку' },
-];
 const DELAYS = [5, 10, 15, 30, 60];
 
 /** Bot opponents: they take empty seats at public tables when no person comes. */
@@ -390,8 +385,7 @@ function Bots() {
       <h3 className="owner-sub">Боты-соперники</h3>
       <p className="app-muted">
         Боты садятся за столы «Быстрой игры» и за те, где создатель поставил галочку «Добавить ботов», если за указанное время никто
-        новый не пришёл. Играют на кредиты; в рейтинг и сезон такие партии не идут, в турниры боты не садятся. Выключатель здесь
-        убирает ботов отовсюду.
+        новый не пришёл. В рейтинг и сезон такие партии не идут, в турниры боты не садятся. Выключатель здесь убирает ботов отовсюду.
       </p>
       <Toggle label={draft.enabled ? 'Включены' : 'Выключены'} checked={draft.enabled} onChange={(v) => void save({ ...draft, enabled: v })} />
       <h3 className="owner-sub">Через сколько садятся</h3>
@@ -402,16 +396,12 @@ function Bots() {
           </button>
         ))}
       </div>
-      <h3 className="owner-sub">Уровень для «Быстрой игры»</h3>
-      <p className="app-muted">За своими столами игроки выбирают уровень сами.</p>
-      <div className="owner-levels">
-        {LEVELS.map((l) => (
-          <button key={l.value} type="button" className={`owner-level${draft.level === l.value ? ' owner-level--on' : ''}`} onClick={() => void save({ ...draft, level: l.value })}>
-            <strong>{l.label}</strong>
-            <span>{l.hint}</span>
-          </button>
-        ))}
-      </div>
+      <h3 className="owner-sub">Уровни и кредиты</h3>
+      <p className="app-muted">
+        <b>Минимальный и средний</b> — тренировка «на интерес»: кредиты не ставятся и не выигрываются, заработать на слабых ботах
+        нельзя. <b>Максимальный</b> — игра на кредиты; «Быстрая игра» всегда зовёт максимальных ботов. Уровень за своим столом
+        игрок выбирает сам.
+      </p>
     </Panel>
   );
 }
