@@ -2,9 +2,19 @@
 //
 // The app shell opens at once from the phone: index.html comes from the cache and is refreshed
 // in the background (the next launch gets a new release), the hashed bundles in /assets/ never
-// change and are kept. Everything live — /api, /ws, pictures — always goes to the server.
+// change and are kept. The game's pictures (smiles, cards, backs, tables) are kept too: an
+// installed app on iPhone hardly keeps its HTTP cache, so without this every smile picker and
+// every launch downloaded them again and they showed up blank for a moment. Avatars come from
+// the phone at once and are refreshed in the background. /api and /ws always go to the server.
 // Without any network the app shows a friendly page instead of the browser's error.
 const SHELL = 'arena-shell-v1';
+const MEDIA = 'arena-media-v1';
+const AVATARS = 'arena-avatars-v1';
+const KEEP = [SHELL, MEDIA, AVATARS];
+/** Pictures that never change at the same address (a changed one gets a new ?v=). */
+const MEDIA_PATH = /^\/(emoji|cards|backs|table|icons)\//;
+const MAX_MEDIA = 400;
+const MAX_AVATARS = 300;
 const PAGE = '/';
 /** Old bundles from past releases are dropped beyond this many files. */
 const MAX_ASSETS = 120;
@@ -13,7 +23,7 @@ self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) =>
   event.waitUntil(
     (async () => {
-      for (const key of await caches.keys()) if (key !== SHELL) await caches.delete(key);
+      for (const key of await caches.keys()) if (!KEEP.includes(key)) await caches.delete(key);
       await self.clients.claim();
     })(),
   ),
@@ -62,11 +72,56 @@ async function asset(request) {
   return res;
 }
 
+async function trim(cache, max) {
+  const keys = await cache.keys();
+  for (const old of keys.slice(0, Math.max(0, keys.length - max))) await cache.delete(old);
+}
+
+/** Smiles, cards, backs, tables: from the phone once fetched. */
+async function media(request) {
+  const cache = await caches.open(MEDIA);
+  const hit = await cache.match(request);
+  if (hit) return hit;
+  const res = await fetch(request);
+  if (res.ok && res.status === 200) {
+    await cache.put(request, res.clone());
+    void trim(cache, MAX_MEDIA);
+  }
+  return res;
+}
+
+/** Avatars (ours and Telegram's): the kept one at once, a fresh one for next time. */
+async function avatar(event) {
+  const { request } = event;
+  const cache = await caches.open(AVATARS);
+  const hit = await cache.match(request);
+  const fresh = fetch(request).then(async (res) => {
+    // Telegram's pictures come «opaque» (another site): kept as they are.
+    if (res.ok || res.type === 'opaque') {
+      await cache.put(request, res.clone());
+      void trim(cache, MAX_AVATARS);
+    }
+    return res;
+  });
+  if (hit) {
+    event.waitUntil(fresh.catch(() => undefined));
+    return hit;
+  }
+  return fresh;
+}
+
+const isTelegramPicture = (url) => url.hostname === 't.me' || url.hostname.endsWith('.telegram.org') || url.hostname.endsWith('.telesco.pe');
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
+  if (url.origin !== self.location.origin) {
+    if (request.destination === 'image' && isTelegramPicture(url)) event.respondWith(avatar(event));
+    return;
+  }
+  if (url.pathname.startsWith('/api/avatars/')) return event.respondWith(avatar(event));
+  if (MEDIA_PATH.test(url.pathname)) return event.respondWith(media(request));
   if (request.mode === 'navigate') event.respondWith(page(event));
   else if (url.pathname.startsWith('/assets/')) event.respondWith(asset(request));
 });

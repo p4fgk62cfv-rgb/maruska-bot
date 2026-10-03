@@ -409,7 +409,7 @@ export class FriendService {
     const base = publicUrl(this.deps.config);
     const startapp = `game_${room.id}_${code}`;
     await this.deps.outbox.enqueue(friendId, 'room_invite', {
-      text: `🃏 <b>${escapeHtml(from.name)}</b> зовёт вас сыграть в дурака. ${room.settings.stake > 0 ? `Ставка ${room.settings.stake}.` : 'На интерес.'}`,
+      text: `🃏 <b>${escapeHtml(from.name)}</b> зовёт вас сыграть в дурака. ${room.settings.stake > 0 ? `Ставка ${room.settings.stake}.` : 'Тренировочный стол.'}`,
       button: base
         ? { text: '🎮 Играть', webApp: `${base}/?start=${startapp}` }
         : { text: '🎮 Играть', url: roomDeepLink(this.deps.config.BOT_USERNAME, this.deps.config.MINI_APP_SHORT_NAME || null, room.id, code) },

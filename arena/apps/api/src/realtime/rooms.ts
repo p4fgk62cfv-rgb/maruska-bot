@@ -118,7 +118,7 @@ export class RoomManager {
   mine(room: Room): MyRoomDto {
     const code = inviteCode(room.id, this.deps.config.SESSION_SECRET);
     const link = roomDeepLink(this.deps.config.BOT_USERNAME || 'bot', this.deps.config.MINI_APP_SHORT_NAME || null, room.id, code);
-    const text = room.settings.stake > 0 ? `Сыграем в дурака? Ставка ${room.settings.stake}` : 'Сыграем в дурака на интерес?';
+    const text = room.settings.stake > 0 ? `Сыграем в дурака? Ставка ${room.settings.stake}` : 'Сыграем тренировочную партию в дурака?';
     return {
       room: this.dto(room),
       invite: { link, shareUrl: `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}` },
@@ -163,7 +163,7 @@ export class RoomManager {
   }
 
   private async createRoom(userId: string, requested: RoomSettings): Promise<MyRoomDto> {
-    // Easy and medium bots are practice: the table is «на интерес» whatever stake was asked.
+    // Easy and medium bots are practice: the table is a training one whatever stake was asked.
     // A stake of 0 is only for such a table.
     const level = requested.bots ? (requested.botLevel ?? this.deps.bots.level()) : null;
     const practice = isPracticeLevel(level);

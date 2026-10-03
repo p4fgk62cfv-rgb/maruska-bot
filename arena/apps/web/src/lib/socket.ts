@@ -46,6 +46,12 @@ export class GameSocket {
   /** Request ids are «page:n»: unique per launch, so the server can recognise a resend on a new socket. */
   private readonly page = Math.random().toString(36).slice(2, 10);
   private stopped = true;
+  /**
+   * Another window of the same player took the connection (the Arena in Telegram and the
+   * installed app open at once). This one waits quietly and takes it back when the player
+   * returns to it or does something here.
+   */
+  private replaced = false;
   private retryTimer: number | undefined;
   private heartbeat: number | undefined;
   private probeTimer: number | undefined;
@@ -96,6 +102,7 @@ export class GameSocket {
   send(msg: Outgoing): Promise<Reply> {
     const rid = `${this.page}:${++this.seq}`;
     return new Promise((resolve) => {
+      if (this.replaced && this.status === 'closed') this.reclaim();
       // While reconnecting a request waits for the socket instead of failing at once.
       if (this.stopped || this.status === 'closed') return resolve(noConnection());
       const timer = window.setTimeout(() => {
@@ -218,6 +225,7 @@ export class GameSocket {
       return;
     }
     if (this.stopped || code === CLOSE_REPLACED) {
+      if (code === CLOSE_REPLACED) this.replaced = true;
       this.failPending();
       this.setStatus('closed');
       return;
@@ -266,8 +274,18 @@ export class GameSocket {
     } else if (this.status === 'reconnecting' || this.status === 'offline') {
       window.clearTimeout(this.retryTimer);
       this.open();
+    } else if (this.status === 'closed' && this.replaced && document.visibilityState === 'visible') {
+      this.reclaim();
     }
   };
+
+  /** The player is back in this window: the connection comes here again. */
+  private reclaim(): void {
+    this.replaced = false;
+    this.attempt = 0;
+    window.clearTimeout(this.retryTimer);
+    this.open();
+  }
 
   private readonly lost = (): void => {
     if (this.stopped) return;

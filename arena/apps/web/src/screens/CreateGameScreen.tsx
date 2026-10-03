@@ -28,8 +28,8 @@ const DEFAULT: Draft = {
 const PAIR_KEY = ['variant', 'throwIn', 'fairness', 'ending'] as const;
 type BotLevel = NonNullable<Draft['botLevel']>;
 const BOT_LEVELS: { value: BotLevel; label: string; tag: string; hint: string }[] = [
-  { value: 'easy', label: 'Минимальный', tag: 'Тренировка · на интерес', hint: 'Часто ошибается — для разминки' },
-  { value: 'normal', label: 'Средний', tag: 'Тренировка · на интерес', hint: 'Играет как обычный игрок, иногда промахивается' },
+  { value: 'easy', label: 'Минимальный', tag: 'Тренировочный', hint: 'Часто ошибается — для разминки' },
+  { value: 'normal', label: 'Средний', tag: 'Тренировочный', hint: 'Играет как обычный игрок, иногда промахивается' },
   { value: 'hard', label: 'Максимальный', tag: 'На кредиты', hint: 'Без ошибок: бережёт козыри, считает вышедшие карты, точно доигрывает концовку' },
 ];
 
@@ -68,7 +68,7 @@ export default function CreateGameScreen() {
 
       <section className="felt-section">
         <div className="stake-head">
-          <ScriptTitle>Ваша ставка:</ScriptTitle>
+          <ScriptTitle>{practice ? 'Игра:' : 'Ваша ставка:'}</ScriptTitle>
           {practice ? (
             <span className="stake-head__value stake-head__value--practice">{PRACTICE_LABEL}</span>
           ) : (
@@ -79,7 +79,7 @@ export default function CreateGameScreen() {
         </div>
         {practice ? (
           <p className="stake-practice">
-            С лёгкими и средними ботами — тренировка: кредиты не ставятся и не выигрываются. На кредиты играют только максимальные боты.
+            С минимальными и средними ботами игра тренировочная: кредиты не ставятся и не выигрываются. На кредиты играют только максимальные боты.
           </p>
         ) : (
           <StakeSlider value={draft.stake} max={me.wallet.credits} onChange={(v) => set('stake', v)} />

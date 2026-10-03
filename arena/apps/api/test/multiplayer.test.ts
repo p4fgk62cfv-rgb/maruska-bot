@@ -330,7 +330,7 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
       const human = await player('Solo', 10);
       const created = (await api(human, 'POST', '/rooms', { ...SETTINGS, players: 2, bots: true, botLevel: 'easy' })).json();
       const roomId: string = created.room.id;
-      // Easy bots are practice: the asked stake is dropped, the table is «на интерес».
+      // Easy bots are practice: the asked stake is dropped, the table is a training one.
       expect(created.room.settings).toMatchObject({ bots: true, botLevel: 'easy', stake: 0 });
       const before = (await api(human, 'GET', '/me')).json();
 

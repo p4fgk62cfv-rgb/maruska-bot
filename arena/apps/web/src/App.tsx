@@ -198,7 +198,7 @@ function InviteSheet() {
     <BottomSheet open title="Приглашение в игру" onClose={() => dismissInvite(current.room.id)}>
       <div className="app-stack">
         <p>
-          <strong>{current.from.name}</strong> зовёт вас за стол: {current.room.settings.stake > 0 ? `ставка ${current.room.settings.stake}` : 'на интерес'}, игроков{' '}
+          <strong>{current.from.name}</strong> зовёт вас за стол: {current.room.settings.stake > 0 ? `ставка ${current.room.settings.stake}` : 'тренировочный стол'}, игроков{' '}
           {current.room.seats.length}/{current.room.settings.players}.
         </p>
         <Button block variant="gold" loading={busy} onClick={accept}>

@@ -79,15 +79,15 @@ export const SPEED_LABEL_RU = { normal: 'Обычная', fast: 'Быстрая'
 
 /** 50 000 → "50K", 1 000 000 → "1M" */
 /**
- * Easy and medium bots are practice: such a table is played «на интерес», no credits change
+ * Easy and medium bots are practice: such a table is a training one, no credits change
  * hands, so nobody can farm credits off weak bots. Hard bots play for credits.
  */
 export function isPracticeLevel(level: string | null | undefined): boolean {
   return level === 'easy' || level === 'normal';
 }
-export const PRACTICE_LABEL = 'На интерес';
+export const PRACTICE_LABEL = 'Тренировочный';
 
-/** A table's stake as shown: «На интерес» for a practice table (stake 0). */
+/** A table's stake as shown: «Тренировочный» for a practice table (stake 0). */
 export function stakeText(stake: number): string {
   return stake > 0 ? formatStake(stake) : PRACTICE_LABEL;
 }
