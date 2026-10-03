@@ -11,6 +11,7 @@ import { useMe, useSession } from '../session.js';
 import { useToast } from '../toast.js';
 import { InstallCard } from './InstallCard.js';
 import { NEWS, newsDate, useUnseenNews } from '../lib/news.js';
+import { chatHasNew } from '../lib/chat.js';
 
 interface Tile {
   icon: IconName;
@@ -20,6 +21,7 @@ interface Tile {
 
 const TILES: Tile[] = [
   { icon: 'gift', title: 'Задания', page: 'daily' },
+  { icon: 'chat', title: 'Чат', page: 'chat' },
   { icon: 'trophy', title: 'Турниры', page: 'tournaments' },
   { icon: 'news', title: 'Новости', page: 'news' },
   { icon: 'users', title: 'Друзья', page: 'friends' },
@@ -56,6 +58,7 @@ export function HomeScreen() {
     if (tile.page === 'friends' && requestCount) return requestCount;
     if (tile.page === 'news' && unseenNews) return unseenNews;
     if (tile.page === 'daily' && me.daily.claimable) return me.daily.claimable;
+    if (tile.page === 'chat' && chatHasNew(me.chatLastAt)) return 'новое';
     return null;
   };
 

@@ -60,6 +60,8 @@ model User {
   invitedBy          Referral?         @relation("ReferralInvitee")
   invited            Referral[]        @relation("ReferralReferrer")
   dailyQuests        DailyQuest[]
+  chatMessages       ChatMessage[]
+  chatReports        ChatReport[]
 
   @@map("users")
   @@schema("arena")
@@ -92,6 +94,8 @@ model Profile {
   /// Login calendar: the Moscow day of the last collected reward and its step (1–7).
   loginDay        String?   @map("login_day") @db.VarChar(10)
   loginStep       Int       @default(0) @map("login_step")
+  /// A moderator took away the right to write in the common chat until then.
+  chatMutedUntil  DateTime? @map("chat_muted_until")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -713,6 +717,36 @@ model DailyQuest {
 
   @@id([userId, day, key])
   @@map("daily_quests")
+  @@schema("arena")
+}
+
+/// The common chat. Kept for CHAT.keepDays; a deleted message stays for the reports, hidden from everyone.
+model ChatMessage {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  text      String    @db.VarChar(300)
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reports ChatReport[]
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@map("chat_messages")
+  @@schema("arena")
+}
+
+model ChatReport {
+  messageId  String   @map("message_id") @db.Uuid
+  reporterId String   @map("reporter_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  message  ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  reporter User        @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, reporterId])
+  @@map("chat_reports")
   @@schema("arena")
 }
 

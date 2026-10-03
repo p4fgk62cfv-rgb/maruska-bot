@@ -24,6 +24,8 @@ import { ProfileService } from './services/profiles.js';
 import { ReferralService } from './services/referrals.js';
 import { referralRoutes } from './routes/referrals.js';
 import { dailyRoutes } from './routes/daily.js';
+import { chatRoutes } from './routes/chat.js';
+import { ChatService } from './services/chat.js';
 import { Outbox, TelegramBot } from './services/notifier.js';
 import { playerRoutes } from './routes/players.js';
 import { ownerRoutes } from './routes/owner.js';
@@ -82,7 +84,16 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   realtime.finishedListeners.add((result) => {
     referrals.onGame(result).catch((error: unknown) => app.log.error({ err: error }, 'referral reward failed'));
   });
-  const ctx: Context = { ...base, realtime, presence, outbox, friends, profiles, tournaments, referrals, alerts };
+  const chat = new ChatService({
+    db: base.db,
+    publish: (message) => realtime.hub.publishChat(message),
+    online: () => realtime.hub.onlineUsers().length,
+    owners: ownerIds(config.OWNER_IDS),
+    outbox,
+    log: app.log,
+  });
+  base.users.useChat(chat);
+  const ctx: Context = { ...base, realtime, presence, outbox, friends, profiles, tournaments, referrals, alerts, chat };
   await base.moderation.loadBans();
   useBanList(base.moderation);
   await base.bots.ensurePool();
@@ -94,6 +105,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   else await realtime.start();
   if (config.NODE_ENV !== 'test') {
     outbox.start();
+    chat.start();
     void realtime.ready.then(() => tournaments.start());
   }
   app.addHook('onRequest', async (request) => {
@@ -101,6 +113,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   });
   app.addHook('onClose', async () => {
     outbox.stop();
+    chat.stop();
     tournaments.stop();
     await realtime.shutdown();
   });
@@ -161,6 +174,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
       await playerRoutes(api, ctx);
       await referralRoutes(api, ctx);
       await dailyRoutes(api, ctx);
+      await chatRoutes(api, ctx);
       await ownerRoutes(api, ctx);
       await tournamentRoutes(api, ctx);
       await internalRoutes(api, ctx);

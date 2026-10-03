@@ -55,6 +55,8 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('PING'), rid }),
   z.object({ type: z.literal('LOBBY_SUBSCRIBE'), rid, filter: roomFilterSchema.optional() }),
   z.object({ type: z.literal('LOBBY_UNSUBSCRIBE'), rid }),
+  z.object({ type: z.literal('CHAT_SUBSCRIBE'), rid }),
+  z.object({ type: z.literal('CHAT_UNSUBSCRIBE'), rid }),
   z.object({ type: z.literal('ROOM_WATCH'), rid, roomId: z.string() }),
   z.object({ type: z.literal('READY'), rid, roomId: z.string(), ready: z.boolean() }),
   z.object({ type: z.literal('RECONNECT'), rid, roomId: z.string(), lastVersion: z.number().int().optional() }),

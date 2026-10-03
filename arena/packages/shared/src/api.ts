@@ -56,6 +56,8 @@ export interface MeDto extends PublicUserDto {
   dailyCredits: { available: boolean; availableAt: string | null };
   /** Daily quests and the login calendar: rewards waiting to be collected. */
   daily: DailySummaryDto;
+  /** Time of the newest message in the common chat (for the «new» mark on its tile). */
+  chatLastAt: string | null;
   /** Game owner (OWNER_IDS): sees «Управление» — the announcement and gifts. */
   owner: boolean;
 }

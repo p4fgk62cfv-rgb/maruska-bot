@@ -33,6 +33,13 @@ export class UserService {
     private readonly daily: { summary(userId: string): Promise<DailySummaryDto> } | null = null,
   ) {}
 
+  private chat: { lastAt(): Promise<string | null> } | null = null;
+
+  /** The chat lives with the server (it pushes over the sockets): wired after the context is built. */
+  useChat(chat: { lastAt(): Promise<string | null> }): void {
+    this.chat = chat;
+  }
+
   isOwnerTelegram(telegramId: bigint): boolean {
     return this.owners.has(telegramId);
   }
@@ -91,13 +98,14 @@ export class UserService {
   async me(userId: string): Promise<MeDto | null> {
     const user = await this.db.user.findUnique({ where: { id: userId }, include: { profile: true } });
     if (!user?.profile) return null;
-    const [wallet, unlocked, total, lastDaily, equipped, daily] = await Promise.all([
+    const [wallet, unlocked, total, lastDaily, equipped, daily, chatLastAt] = await Promise.all([
       this.wallet(userId),
       this.db.userAchievement.count({ where: { userId, unlockedAt: { not: null } } }),
       this.db.achievement.count(),
       this.lastDailyCredits(userId),
       this.items.equipped(userId),
       this.daily ? this.daily.summary(userId) : { claimable: 0 },
+      this.chat ? this.chat.lastAt() : null,
     ]);
     const profile = user.profile;
     const now = Date.now();
@@ -127,6 +135,7 @@ export class UserService {
         availableAt: dailyReady && dailyReady > now ? new Date(dailyReady).toISOString() : null,
       },
       daily,
+      chatLastAt,
     };
   }
 

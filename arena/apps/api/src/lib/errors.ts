@@ -26,6 +26,10 @@ const STATUS: Partial<Record<AppErrorCode, number>> = {
   DAILY_CREDITS_BALANCE_TOO_HIGH: 409,
   REWARD_NOT_READY: 409,
   REWARD_CLAIMED: 409,
+  CHAT_LINKS: 400,
+  CHAT_MUTED: 403,
+  CHAT_NEED_GAME: 403,
+  CHAT_TOO_FAST: 429,
 };
 
 /** An expected failure that is safe to show to the user. Anything else becomes SERVER_ERROR. */

@@ -9,6 +9,8 @@ export interface Client {
   userId: string;
   /** Lobby filter while the client watches the lobby, otherwise null. */
   lobby: RoomFilter | null;
+  /** The common chat is open on this client. */
+  chat: boolean;
   /** Token bucket against message floods. */
   tokens: number;
   refilledAt: number;
@@ -34,7 +36,7 @@ export class Hub {
   attach(userId: string, socket: WebSocket): Client {
     const previous = this.clients.get(userId);
     if (previous && previous.socket !== socket) previous.socket.close(WS_CLOSE.REPLACED, 'replaced');
-    const client: Client = { id: this.nextId++, socket, userId, lobby: null, tokens: 20, refilledAt: Date.now() };
+    const client: Client = { id: this.nextId++, socket, userId, lobby: null, chat: false, tokens: 20, refilledAt: Date.now() };
     this.clients.set(userId, client);
     return client;
   }
@@ -71,6 +73,18 @@ export class Hub {
 
   unsubscribeLobby(client: Client): void {
     client.lobby = null;
+  }
+
+  /** New and deleted messages of the common chat go to those who have it open. */
+  setChat(client: Client, open: boolean): void {
+    client.chat = open;
+  }
+
+  publishChat(message: ServerMessage): void {
+    const data = JSON.stringify(message);
+    for (const client of this.clients.values()) {
+      if (client.chat && client.socket.readyState === client.socket.OPEN) client.socket.send(data);
+    }
   }
 
   /** A room changed: lobby watchers whose filter matches get it, others learn it is gone. */

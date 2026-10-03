@@ -41,7 +41,7 @@ const LEASE_RENEW_MS = 3_000;
 /** A new server waits this long at most for the old one to hand over the games. */
 const HANDOVER_MAX_MS = 45_000;
 /** Requests that only read: not worth remembering across a restart. */
-const READ_ONLY = new Set(['PING', 'LOBBY_SUBSCRIBE', 'LOBBY_UNSUBSCRIBE', 'ROOM_WATCH', 'RECONNECT']);
+const READ_ONLY = new Set(['PING', 'LOBBY_SUBSCRIBE', 'LOBBY_UNSUBSCRIBE', 'CHAT_SUBSCRIBE', 'CHAT_UNSUBSCRIBE', 'ROOM_WATCH', 'RECONNECT']);
 
 export class Realtime {
   private sweeper: NodeJS.Timeout | null = null;
@@ -305,6 +305,10 @@ export class Realtime {
         return this.hub.subscribeLobby(client, msg.filter, this.rooms.list());
       case 'LOBBY_UNSUBSCRIBE':
         return this.hub.unsubscribeLobby(client);
+      case 'CHAT_SUBSCRIBE':
+        return this.hub.setChat(client, true);
+      case 'CHAT_UNSUBSCRIBE':
+        return this.hub.setChat(client, false);
       case 'ROOM_WATCH':
       case 'RECONNECT': {
         const room = this.rooms.get(msg.roomId);

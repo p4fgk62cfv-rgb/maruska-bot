@@ -27,6 +27,10 @@ export type AppErrorCode =
   | 'DAILY_CREDITS_BALANCE_TOO_HIGH'
   | 'REWARD_NOT_READY'
   | 'REWARD_CLAIMED'
+  | 'CHAT_LINKS'
+  | 'CHAT_MUTED'
+  | 'CHAT_NEED_GAME'
+  | 'CHAT_TOO_FAST'
   | 'FRIEND_LIMIT'
   | 'NOT_FRIENDS'
   | 'NOT_IN_ROOM'
@@ -65,6 +69,10 @@ export const ERROR_TEXT_RU: Record<AppErrorCode, string> = {
   DAILY_CREDITS_BALANCE_TOO_HIGH: 'Бесплатные кредиты выдаются, только если на счету меньше 1450.',
   REWARD_NOT_READY: 'Задание ещё не выполнено.',
   REWARD_CLAIMED: 'Эта награда уже получена.',
+  CHAT_LINKS: 'Ссылки в чате запрещены.',
+  CHAT_MUTED: 'Модератор временно запретил вам писать в чат.',
+  CHAT_NEED_GAME: 'Писать в чат можно после первой сыгранной партии.',
+  CHAT_TOO_FAST: 'Слишком часто. Подождите немного.',
   NOT_ILLEGAL: 'Эта карта сыграна честно.',
   FRIEND_LIMIT: 'Слишком много друзей и заявок.',
   NOT_FRIENDS: 'Приглашать можно только друзей.',

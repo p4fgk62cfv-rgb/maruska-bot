@@ -4,6 +4,7 @@ import type { clientMessageSchema } from './schemas.js';
 import type { AppErrorCode } from './errors.js';
 import type { Presence, PublicUserDto } from './api.js';
 import type { RoomDto } from './lobby.js';
+import type { ChatMessageDto } from './chat.js';
 
 /**
  * WebSocket protocol on /ws. One socket per client, authenticated with the session
@@ -68,7 +69,10 @@ export type ServerMessage =
   | { type: 'SEAT_SWAP_ASKED'; roomId: string; from: { userId: string; name: string; seat: number } }
   | { type: 'SEAT_SWAP_DECLINED'; roomId: string; by: { userId: string; name: string } }
   /** The server is going down for an update; `refunded`: running games were cancelled with stakes returned. */
-  | { type: 'SERVER_RESTART'; refunded: boolean };
+  | { type: 'SERVER_RESTART'; refunded: boolean }
+  /** The common chat (to those who have it open). */
+  | { type: 'CHAT_MESSAGE'; message: ChatMessageDto }
+  | { type: 'CHAT_DELETED'; ids: string[] };
 
 export interface GameResultDto {
   kind: 'loser' | 'draw';

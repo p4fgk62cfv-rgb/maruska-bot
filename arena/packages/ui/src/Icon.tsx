@@ -39,6 +39,7 @@ const PATHS = {
   book: 'M4 5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2V5Zm0 15a2 2 0 0 0 2 2h13v-4',
   bag: 'M5 8h14l-1 12H6L5 8Zm4 0V6a3 3 0 0 1 6 0v2',
   play: 'M8 5v14l11-7L8 5Z',
+  chat: 'M4 5h16v11H10l-5 4v-4H4V5Zm4 5h.01M12 10h.01M16 10h.01',
   gift: 'M4 11h16v9H4v-9Zm-1-4h18v4H3V7Zm9 0v13M12 7C10.5 4 7 3.5 7 6s3.5 1 5 1Zm0 0c1.5-3 5-3.5 5-1s-3.5 1-5 1Z',
   plus: 'M12 5v14M5 12h14',
   back: 'M15 5l-7 7 7 7',
