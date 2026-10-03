@@ -71,7 +71,6 @@ export function HomeScreen() {
         {homeDesign === 'vegas' ? (
           <>
             <img className="vegas-arena-logo" src="/vegas-arena-logo.svg" alt="VEGAS АРЕНА" />
-            <p className="arena-hero__subtitle">ИГРАЙ. БЛЕФУЙ. ПОБЕЖДАЙ.</p>
           </>
         ) : (
           <>
