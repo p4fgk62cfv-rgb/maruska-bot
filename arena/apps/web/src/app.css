@@ -1805,3 +1805,7 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 
 .home--vegas .arena-hero__ornament { display:flex; justify-content:center; align-items:center; width:100%; }
 .home--vegas .arena-card { display:flex; flex-direction:column; align-items:center; justify-content:center; }
+
+.home--vegas .arena-hero--vegas-logo { min-height:0; padding:16px 12px 17px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0; }
+.home--vegas .vegas-arena-logo { display:block; width:min(100%, 310px); height:auto; max-height:145px; object-fit:contain; }
+.home--vegas .arena-hero--vegas-logo .arena-hero__subtitle { margin:0; font-size:9px; letter-spacing:.16em; color:#bca57c; }
