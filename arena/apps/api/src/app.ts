@@ -23,6 +23,7 @@ import { FriendService } from './services/friends.js';
 import { ProfileService } from './services/profiles.js';
 import { ReferralService } from './services/referrals.js';
 import { referralRoutes } from './routes/referrals.js';
+import { dailyRoutes } from './routes/daily.js';
 import { Outbox, TelegramBot } from './services/notifier.js';
 import { playerRoutes } from './routes/players.js';
 import { ownerRoutes } from './routes/owner.js';
@@ -159,6 +160,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
       await friendRoutes(api, ctx);
       await playerRoutes(api, ctx);
       await referralRoutes(api, ctx);
+      await dailyRoutes(api, ctx);
       await ownerRoutes(api, ctx);
       await tournamentRoutes(api, ctx);
       await internalRoutes(api, ctx);

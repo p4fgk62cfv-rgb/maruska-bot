@@ -59,6 +59,7 @@ model User {
   avatar             UserAvatar?
   invitedBy          Referral?         @relation("ReferralInvitee")
   invited            Referral[]        @relation("ReferralReferrer")
+  dailyQuests        DailyQuest[]
 
   @@map("users")
   @@schema("arena")
@@ -88,6 +89,9 @@ model Profile {
   avatarVersion   Int?      @map("avatar_version")
   /// Times caught in «С шулерами» — for moderation and achievements.
   caughtCheating  Int       @default(0) @map("caught_cheating")
+  /// Login calendar: the Moscow day of the last collected reward and its step (1–7).
+  loginDay        String?   @map("login_day") @db.VarChar(10)
+  loginStep       Int       @default(0) @map("login_step")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -128,6 +132,10 @@ enum TransactionType {
   MODERATION
   /// Coins for inviting a friend (and for coming by an invite).
   REFERRAL
+  /// Daily quests and their «all three done» bonus.
+  QUEST_REWARD
+  /// Login calendar.
+  LOGIN_REWARD
 
   @@schema("arena")
 }
@@ -692,6 +700,22 @@ model Referral {
 }
 
 /// Sign-in outside Telegram: the app asks, the person confirms in the bot, the app takes a session.
+/// Progress of one daily quest of one player on one Moscow day (@arena/shared questsFor).
+/// Rows appear with the first game that moves the quest; key «all_done» marks the bonus.
+model DailyQuest {
+  userId    String    @map("user_id") @db.Uuid
+  day       String    @db.VarChar(10)
+  key       String    @db.VarChar(32)
+  progress  Int       @default(0)
+  claimedAt DateTime? @map("claimed_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, day, key])
+  @@map("daily_quests")
+  @@schema("arena")
+}
+
 model LoginRequest {
   id          String    @id @db.VarChar(32)
   /// sha256 of the secret only the asking device holds: seeing the link is not enough to sign in.

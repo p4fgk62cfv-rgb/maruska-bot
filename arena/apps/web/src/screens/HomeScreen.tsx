@@ -19,6 +19,7 @@ interface Tile {
 }
 
 const TILES: Tile[] = [
+  { icon: 'gift', title: 'Задания', page: 'daily' },
   { icon: 'trophy', title: 'Турниры', page: 'tournaments' },
   { icon: 'news', title: 'Новости', page: 'news' },
   { icon: 'users', title: 'Друзья', page: 'friends' },
@@ -54,6 +55,7 @@ export function HomeScreen() {
     if (tile.page === 'achievements') return `${s.achievementsUnlocked} / ${s.achievementsTotal}`;
     if (tile.page === 'friends' && requestCount) return requestCount;
     if (tile.page === 'news' && unseenNews) return unseenNews;
+    if (tile.page === 'daily' && me.daily.claimable) return me.daily.claimable;
     return null;
   };
 
@@ -79,6 +81,20 @@ export function HomeScreen() {
         <span className="quick-play__title">Быстрая игра</span>
         <span className="quick-play__hint">Подберём стол по вашей ставке</span>
       </button>
+
+      {me.daily.claimable > 0 && (
+        <button type="button" className="news-card news-card--fresh daily-home" onClick={() => push('daily')}>
+          <span className="news-card__icon" aria-hidden="true">🎁</span>
+          <span className="news-card__body">
+            <small>
+              Задания и награды дня
+              <b className="news-card__badge">{me.daily.claimable}</b>
+            </small>
+            <strong>Вас ждут награды — заберите их</strong>
+          </span>
+          <span className="news-card__arrow" aria-hidden="true">›</span>
+        </button>
+      )}
 
       <button type="button" className={`news-card${unseenNews ? ' news-card--fresh' : ''}`} onClick={() => push('news')}>
         <span className="news-card__icon" aria-hidden="true">📰</span>

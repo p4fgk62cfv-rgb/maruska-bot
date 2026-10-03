@@ -15,6 +15,7 @@ import type { Alerts } from './services/alerts.js';
 import type { Presence } from './services/presence.js';
 import { UserService } from './services/users.js';
 import { WalletService } from './services/wallet.js';
+import { DailyService } from './services/daily.js';
 
 /** Services that do not depend on the HTTP server. */
 export interface BaseContext {
@@ -27,6 +28,7 @@ export interface BaseContext {
   moderation: ModerationService;
   welcome: WelcomeService;
   bots: BotService;
+  daily: DailyService;
 }
 
 /** Explicit dependency container: routes receive what they need, nothing is a hidden global. */
@@ -44,12 +46,14 @@ export interface Context extends BaseContext {
 export function createContext(config: Config, db: Db): BaseContext {
   const ledger = new Ledger(db);
   const items = new ItemService(db, ledger);
+  const daily = new DailyService(db, ledger);
   const welcome = new WelcomeService(db, ledger, { enabled: true, credits: config.SIGNUP_BONUS_CREDITS, coins: config.SIGNUP_BONUS_COINS });
   return {
     config,
     db,
     ledger,
-    users: new UserService(db, ledger, welcome, items, ownerIds(config.OWNER_IDS)),
+    users: new UserService(db, ledger, welcome, items, ownerIds(config.OWNER_IDS), daily),
+    daily,
     welcome,
     bots: new BotService(db, ledger),
     wallets: new WalletService(db, ledger),

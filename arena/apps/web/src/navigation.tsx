@@ -16,6 +16,7 @@ export type Page =
   | 'settings'
   | 'owner'
   | 'invite'
+  | 'daily'
   | 'player';
 
 interface Navigation {

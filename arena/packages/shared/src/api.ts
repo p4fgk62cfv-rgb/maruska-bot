@@ -1,5 +1,7 @@
 /** REST DTOs shared by apps/api and apps/web. Money is sent as number (all balances stay below 2^53). */
 
+import type { DailySummaryDto } from './daily.js';
+
 export type Currency = 'CREDITS' | 'COINS' | 'DIAMONDS';
 
 export interface WalletDto {
@@ -52,6 +54,8 @@ export interface MeDto extends PublicUserDto {
   equipped: EquippedDto;
   bonus: BonusDto;
   dailyCredits: { available: boolean; availableAt: string | null };
+  /** Daily quests and the login calendar: rewards waiting to be collected. */
+  daily: DailySummaryDto;
   /** Game owner (OWNER_IDS): sees «Управление» — the announcement and gifts. */
   owner: boolean;
 }

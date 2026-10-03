@@ -25,6 +25,8 @@ export type AppErrorCode =
   | 'BANNED'
   | 'DAILY_CREDITS_NOT_READY'
   | 'DAILY_CREDITS_BALANCE_TOO_HIGH'
+  | 'REWARD_NOT_READY'
+  | 'REWARD_CLAIMED'
   | 'FRIEND_LIMIT'
   | 'NOT_FRIENDS'
   | 'NOT_IN_ROOM'
@@ -61,6 +63,8 @@ export const ERROR_TEXT_RU: Record<AppErrorCode, string> = {
   BANNED: 'Учётная запись заблокирована.',
   DAILY_CREDITS_NOT_READY: 'Бесплатные кредиты можно получать раз в сутки.',
   DAILY_CREDITS_BALANCE_TOO_HIGH: 'Бесплатные кредиты выдаются, только если на счету меньше 1450.',
+  REWARD_NOT_READY: 'Задание ещё не выполнено.',
+  REWARD_CLAIMED: 'Эта награда уже получена.',
   NOT_ILLEGAL: 'Эта карта сыграна честно.',
   FRIEND_LIMIT: 'Слишком много друзей и заявок.',
   NOT_FRIENDS: 'Приглашать можно только друзей.',

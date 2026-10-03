@@ -1,4 +1,4 @@
-import { DAILY_CREDITS, RATING, type EquippedDto, type MeDto, type PublicUserDto, type WalletDto } from '@arena/shared';
+import { DAILY_CREDITS, RATING, type DailySummaryDto, type EquippedDto, type MeDto, type PublicUserDto, type WalletDto } from '@arena/shared';
 import type { Db } from '../db.js';
 import { Prisma, type Currency, type Profile, type User } from '../generated/prisma/client.js';
 import { toNumber } from '../lib/money.js';
@@ -30,6 +30,7 @@ export class UserService {
     private readonly welcome: { give(userId: string): Promise<void> },
     private readonly items: { equipped(userId: string): Promise<EquippedDto> },
     private readonly owners: ReadonlySet<bigint> = new Set(),
+    private readonly daily: { summary(userId: string): Promise<DailySummaryDto> } | null = null,
   ) {}
 
   isOwnerTelegram(telegramId: bigint): boolean {
@@ -90,12 +91,13 @@ export class UserService {
   async me(userId: string): Promise<MeDto | null> {
     const user = await this.db.user.findUnique({ where: { id: userId }, include: { profile: true } });
     if (!user?.profile) return null;
-    const [wallet, unlocked, total, lastDaily, equipped] = await Promise.all([
+    const [wallet, unlocked, total, lastDaily, equipped, daily] = await Promise.all([
       this.wallet(userId),
       this.db.userAchievement.count({ where: { userId, unlockedAt: { not: null } } }),
       this.db.achievement.count(),
       this.lastDailyCredits(userId),
       this.items.equipped(userId),
+      this.daily ? this.daily.summary(userId) : { claimable: 0 },
     ]);
     const profile = user.profile;
     const now = Date.now();
@@ -124,6 +126,7 @@ export class UserService {
         available: wallet.credits < DAILY_CREDITS.belowBalance && (!dailyReady || dailyReady <= now),
         availableAt: dailyReady && dailyReady > now ? new Date(dailyReady).toISOString() : null,
       },
+      daily,
     };
   }
 

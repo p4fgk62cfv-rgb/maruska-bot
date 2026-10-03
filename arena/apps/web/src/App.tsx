@@ -32,6 +32,7 @@ const CreateGameScreen = lazy(() => import('./screens/CreateGameScreen.js'));
 const SettingsScreen = lazy(() => import('./screens/SettingsScreen.js'));
 const OwnerScreen = lazy(() => import('./screens/OwnerScreen.js'));
 const InviteScreen = lazy(() => import('./screens/InviteScreen.js'));
+const DailyScreen = lazy(() => import('./screens/DailyScreen.js'));
 const PlayerScreen = lazy(() => import('./screens/player/PlayerScreen.js'));
 // The table is the most important screen: it loads as soon as the app starts, not on first use.
 const gameModule = import('./screens/game/GameScreen.js');
@@ -87,6 +88,8 @@ function PageScreen({ page }: { page: Page }) {
       return <PlayerScreen />;
     case 'invite':
       return <InviteScreen />;
+    case 'daily':
+      return <DailyScreen />;
   }
 }
 

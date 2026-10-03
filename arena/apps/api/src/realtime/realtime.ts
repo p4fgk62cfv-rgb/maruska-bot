@@ -16,6 +16,7 @@ import { GameManager, wsError } from './games.js';
 import { Hub, type Client } from './hub.js';
 import { RoomManager } from './rooms.js';
 import type { SnapshotStore } from './store.js';
+import type { DailyService } from '../services/daily.js';
 
 export interface RealtimeDeps {
   config: Config;
@@ -25,6 +26,8 @@ export interface RealtimeDeps {
   store: SnapshotStore;
   log: FastifyBaseLogger;
   bots: BotService;
+  /** Daily quests are counted when a game is settled. */
+  daily?: DailyService;
   alerts?: Alerts;
 }
 
@@ -65,7 +68,7 @@ export class Realtime {
 
   constructor(private readonly deps: RealtimeDeps) {
     this.ready = new Promise((resolve) => (this.markReady = resolve));
-    this.settlement = new SettlementService(deps.db, deps.ledger, deps.config.RAKE_PERCENT);
+    this.settlement = new SettlementService(deps.db, deps.ledger, deps.config.RAKE_PERCENT, deps.daily);
     this.rooms = new RoomManager({ ...deps, hub: this.hub, games: () => this.games });
     this.games = new GameManager({
       db: deps.db,
