@@ -142,11 +142,13 @@ async def require_admin(request: web.Request):
     """
     Возвращает (пользователь, доступные группы) или бросает 401/403.
     """
-    from webapp.server import verify_init_data
+    from webapp.server import ADMIN_AUTH_AGE, verify_init_data
 
     init_data = request.headers.get("X-Init-Data", "")
 
-    parsed = verify_init_data(init_data, request.app["bot_token"])
+    parsed = verify_init_data(
+        init_data, request.app["bot_token"], max_age=ADMIN_AUTH_AGE
+    )
 
     if parsed is None:
         raise web.HTTPUnauthorized(text="bad signature")
