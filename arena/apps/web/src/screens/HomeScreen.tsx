@@ -10,6 +10,7 @@ import { useRealtime } from '../realtime.js';
 import { useMe, useSession } from '../session.js';
 import { useToast } from '../toast.js';
 import { InstallCard } from './InstallCard.js';
+import { NEWS, newsDate, useUnseenNews } from '../lib/news.js';
 
 interface Tile {
   icon: IconName;
@@ -37,6 +38,8 @@ export function HomeScreen() {
   const toast = useToast();
   const { enterRoom, requestCount } = useRealtime();
   const [finding, setFinding] = useState(false);
+  const unseenNews = useUnseenNews();
+  const latest = NEWS[0]!;
   const s = me.stats;
 
   const quickGame = () => {
@@ -50,6 +53,7 @@ export function HomeScreen() {
   const counter = (tile: Tile): string | number | null => {
     if (tile.page === 'achievements') return `${s.achievementsUnlocked} / ${s.achievementsTotal}`;
     if (tile.page === 'friends' && requestCount) return requestCount;
+    if (tile.page === 'news' && unseenNews) return unseenNews;
     return null;
   };
 
@@ -74,6 +78,18 @@ export function HomeScreen() {
         <span className="quick-play__icon">{finding ? <span className="ui-spinner" /> : <Icon name="play" size={30} />}</span>
         <span className="quick-play__title">Быстрая игра</span>
         <span className="quick-play__hint">Подберём стол по вашей ставке</span>
+      </button>
+
+      <button type="button" className={`news-card${unseenNews ? ' news-card--fresh' : ''}`} onClick={() => push('news')}>
+        <span className="news-card__icon" aria-hidden="true">📰</span>
+        <span className="news-card__body">
+          <small>
+            Новости · {newsDate(latest.date)}
+            {unseenNews > 0 && <b className="news-card__badge">новое</b>}
+          </small>
+          <strong>{latest.headline}</strong>
+        </span>
+        <span className="news-card__arrow" aria-hidden="true">›</span>
       </button>
 
       <InstallCard />

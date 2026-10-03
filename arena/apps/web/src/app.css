@@ -1590,3 +1590,51 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 @keyframes ios-alert-fade { from { opacity: 0; } }
 @keyframes ios-alert-pop { from { opacity: 0; transform: scale(1.12); } }
 @media (prefers-reduced-motion: reduce) { .ios-alert-backdrop, .ios-alert { animation: none; } }
+
+/* «Новости» — a card on the home screen and the screen itself */
+.news-card {
+  display: flex; align-items: center; gap: 12px; margin: 8px 2px 0; padding: 12px 14px; border-radius: 16px; text-align: left; color: var(--text);
+  background: linear-gradient(135deg, rgba(255, 207, 90, 0.14), rgba(255, 255, 255, 0.05)); box-shadow: inset 0 0 0 1px var(--stroke);
+}
+.news-card:active { transform: scale(0.985); }
+.news-card--fresh { box-shadow: inset 0 0 0 1.5px rgba(255, 207, 90, 0.7), 0 0 18px rgba(255, 207, 90, 0.18); }
+.news-card__icon { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 12px; font-size: 24px; background: rgba(0, 0, 0, 0.22); }
+.news-card__body { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.news-card__body small { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); }
+.news-card__body strong { font-size: 15px; line-height: 1.25; }
+.news-card__badge, .news-day__new {
+  font-style: normal; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 2px 7px; border-radius: 8px; color: #3a2200; background: var(--gold);
+}
+.news-card__arrow { font-size: 28px; line-height: 1; color: var(--text-2); }
+
+.news { padding-bottom: 28px; }
+.news-hero {
+  display: grid; justify-items: center; gap: 4px; margin: 4px 14px 2px; padding: 18px 16px; border-radius: 20px; text-align: center;
+  background: radial-gradient(ellipse at 50% 0%, rgba(255, 207, 90, 0.22), transparent 70%), rgba(0, 0, 0, 0.18); box-shadow: inset 0 0 0 1px var(--stroke);
+}
+.news-hero__icon { font-size: 34px; }
+.news-hero strong { font-family: var(--font-script); font-size: 30px; line-height: 1.15; color: var(--gold); }
+.news-hero span:last-child { font-size: 13px; color: var(--text-2); }
+.news-day { margin: 0 14px; padding: 14px 14px 6px; border-radius: 18px; background: rgba(0, 0, 0, 0.2); box-shadow: inset 0 0 0 1px var(--stroke); }
+.news-day--latest { background: linear-gradient(180deg, rgba(255, 207, 90, 0.12), rgba(0, 0, 0, 0.2) 55%); box-shadow: inset 0 0 0 1.5px rgba(255, 207, 90, 0.45); }
+.news-day__head { display: flex; align-items: center; gap: 8px; }
+.news-day__date { font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--gold); }
+.news-day__headline { margin: 4px 0 8px; font-size: 18px; line-height: 1.25; }
+.news-day__items { list-style: none; margin: 0; padding: 0; }
+.news-item { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line, rgba(255, 255, 255, 0.08)); }
+.news-item:first-child { border-top: 0; }
+.news-item__emoji { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; font-size: 22px; background: rgba(255, 255, 255, 0.08); }
+.news-item__body { display: grid; gap: 3px; min-width: 0; }
+.news-item__body strong { font-size: 15px; }
+.news-item__body span { font-size: 13.5px; line-height: 1.45; color: var(--text-2); }
+.news-foot { margin: 6px 0 0; text-align: center; font-size: 12px; color: var(--text-3, var(--text-2)); }
+
+:root[data-game-design="daylight"] .news-card,
+:root[data-game-design="daylight"] .news-hero,
+:root[data-game-design="daylight"] .news-day { background: rgba(255, 255, 255, 0.72); }
+:root[data-game-design="daylight"] .news-day--latest { background: linear-gradient(180deg, rgba(255, 211, 106, 0.28), rgba(255, 255, 255, 0.78) 55%); }
+:root[data-game-design="daylight"] .news-hero strong,
+:root[data-game-design="daylight"] .news-day__date { color: #b9770e; }
+:root[data-game-design="daylight"] .news-item__emoji,
+:root[data-game-design="daylight"] .news-card__icon { background: rgba(47, 121, 177, 0.1); }

@@ -26,7 +26,7 @@ const AchievementsScreen = lazy(() => import('./screens/AchievementsScreen.js'))
 const ItemsScreen = lazy(() => import('./screens/ItemsScreen.js'));
 const RulesScreen = lazy(() => import('./screens/RulesScreen.js'));
 const ServersScreen = lazy(() => import('./screens/ServersScreen.js'));
-const SoonScreen = lazy(() => import('./screens/SoonScreen.js'));
+const NewsScreen = lazy(() => import('./screens/NewsScreen.js'));
 const LeaderboardScreen = lazy(() => import('./screens/LeaderboardScreen.js'));
 const CreateGameScreen = lazy(() => import('./screens/CreateGameScreen.js'));
 const SettingsScreen = lazy(() => import('./screens/SettingsScreen.js'));
@@ -78,7 +78,7 @@ function PageScreen({ page }: { page: Page }) {
     case 'leaderboard':
       return <LeaderboardScreen />;
     case 'news':
-      return <SoonScreen title="Новости" text="Здесь будут обновления Арены, турниры и события." />;
+      return <NewsScreen />;
     case 'settings':
       return <SettingsScreen />;
     case 'owner':
