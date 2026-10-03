@@ -67,15 +67,24 @@ export function HomeScreen() {
       <HomeBar />
 
       {(homeDesign === 'daylight' || homeDesign === 'vegas') && (
-      <section className="arena-hero" aria-label="Маруська Арена">
-        <div className="arena-hero__ornament" aria-hidden="true">
-          <span className="arena-card arena-card--left">A<span>♥</span></span>
-          <span className="arena-card arena-card--back">✦</span>
-          <span className="arena-card arena-card--right">K<span>♠</span></span>
-        </div>
-        <p className="arena-hero__eyebrow">{homeDesign === "vegas" ? "КАРТОЧНАЯ АРЕНА" : "ТВОЙ КАРТОЧНЫЙ КЛУБ"}</p>
-        <h1 className="arena-hero__title">{homeDesign === "vegas" ? "VEGAS" : "МАРУСЬКА"} <span>АРЕНА</span></h1>
-        <p className="arena-hero__subtitle">{homeDesign === "vegas" ? "ИГРАЙ. БЛЕФУЙ. ПОБЕЖДАЙ." : "Собирай друзей. Играй красиво. Побеждай."}</p>
+      <section className={`arena-hero${homeDesign === 'vegas' ? ' arena-hero--vegas-logo' : ''}`} aria-label={homeDesign === 'vegas' ? 'VEGAS Арена' : 'Маруська Арена'}>
+        {homeDesign === 'vegas' ? (
+          <>
+            <img className="vegas-arena-logo" src="/vegas-arena-logo.svg" alt="VEGAS АРЕНА" />
+            <p className="arena-hero__subtitle">ИГРАЙ. БЛЕФУЙ. ПОБЕЖДАЙ.</p>
+          </>
+        ) : (
+          <>
+            <div className="arena-hero__ornament" aria-hidden="true">
+              <span className="arena-card arena-card--left">A<span>♥</span></span>
+              <span className="arena-card arena-card--back">✦</span>
+              <span className="arena-card arena-card--right">K<span>♠</span></span>
+            </div>
+            <p className="arena-hero__eyebrow">ТВОЙ КАРТОЧНЫЙ КЛУБ</p>
+            <h1 className="arena-hero__title">МАРУСЬКА <span>АРЕНА</span></h1>
+            <p className="arena-hero__subtitle">Собирай друзей. Играй красиво. Побеждай.</p>
+          </>
+        )}
       </section>
       )}
 
