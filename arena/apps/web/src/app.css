@@ -119,6 +119,11 @@
 .room-row__main { display: flex; align-items: center; gap: 8px; }
 .room-row__stake { display: inline-flex; align-items: center; gap: 4px; min-width: 88px; font-size: 26px; font-weight: 500; letter-spacing: -0.01em; }
 .room-row__stake svg { color: var(--gold); }
+.room-row__stake--practice { font-size: 15px; font-weight: 700; color: #b9f5d6; }
+.stake-head__value.stake-head__value--practice { font-size: 22px; color: #b9f5d6; }
+.stake-practice { margin: 6px 0 0; font-size: 13px; line-height: 1.35; color: rgba(255, 255, 255, 0.8); }
+.bots-pick__tag { justify-self: start; font-style: normal; font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 8px; background: rgba(255, 207, 90, 0.22); color: var(--gold); }
+.bots-pick__tag--practice { background: rgba(95, 212, 155, 0.22); color: #b9f5d6; }
 .room-row__avatars { display: flex; }
 .room-row__avatars .ui-avatar { margin-left: -6px; box-shadow: 0 0 0 2px var(--felt); }
 .room-row__avatars .ui-avatar:first-child { margin-left: 0; }
@@ -310,6 +315,7 @@ select.app-input { appearance: none; }
 .table-top__stake span { display: inline-flex; align-items: center; gap: 4px; font-size: 22px; font-weight: 600; }
 .table-top__stake span svg { color: var(--gold); }
 .table-top__stake small { font-size: 11px; color: rgba(255, 255, 255, 0.7); }
+.table-top__stake .table-top__practice { font-size: 13px; font-weight: 700; color: #b9f5d6; }
 
 .game__opponents { display: flex; justify-content: space-around; align-items: flex-start; gap: 2px; padding: 4px 8px 0; min-height: 96px; }
 /* Equal columns: the outer players keep half a gap from the screen edge, whatever their labels say. */
@@ -353,11 +359,11 @@ select.app-input { appearance: none; }
 .seat-tile--empty .seat-tile__frame { background: rgba(255, 255, 255, 0.05); box-shadow: none; border: 2px dashed rgba(255, 255, 255, 0.7); color: rgba(255, 255, 255, 0.8); }
 /* A smile covers the portrait: pops in, sways for a few seconds, fades back to the photo */
 .seat__emoji {
-  position: absolute; inset: -12%; z-index: 3; display: grid; place-items: center; pointer-events: none;
+  position: absolute; inset: -28%; z-index: 3; display: grid; place-items: center; pointer-events: none;
   transform-origin: 50% 70%; animation: smile-show 3.4s linear forwards;
 }
 .seat__emoji .smile-img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.35)); }
-.seat__emoji .smile-text { font-size: calc(var(--tile) * 0.95); line-height: 1; filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.35)); }
+.seat__emoji .smile-text { font-size: calc(var(--tile) * 1.2); line-height: 1; filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.35)); }
 @keyframes smile-show {
   0% { opacity: 0; transform: scale(0.55); }
   6% { opacity: 1; transform: scale(1.08); }
@@ -1564,3 +1570,71 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 .install-hint__steps { margin: 0; padding: 4px 16px 12px 34px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .install-hint__steps svg { vertical-align: -3px; }
 .install-hint--compact { width: auto; margin: 0 2px; }
+.home-shortcut__img { flex: none; border-radius: 10px; }
+.install-hint__browser { display: block; margin: 2px 12px 6px; padding: 11px 12px; border-radius: 12px; background: #2aabee; color: #fff; font-weight: 800; text-align: center; text-decoration: none; }
+
+/* «Вы действительно хотите сдаться?» — an iPhone-style alert over the table */
+.ios-alert-backdrop { position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; padding: 24px; background: rgba(0, 0, 0, 0.32); animation: ios-alert-fade 0.18s ease-out; }
+.ios-alert {
+  width: min(100%, 300px); overflow: hidden; border-radius: 16px; text-align: center; color: #1c1c1e;
+  background: rgba(205, 233, 221, 0.94); -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28); animation: ios-alert-pop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+}
+.ios-alert__text { margin: 0; padding: 22px 18px 20px; font-size: 16px; line-height: 1.35; }
+.ios-alert__actions { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid rgba(60, 60, 67, 0.22); }
+.ios-alert__btn { padding: 13px 8px; border: 0; background: none; font: inherit; font-size: 17px; color: #0a7aff; cursor: pointer; }
+.ios-alert__btn + .ios-alert__btn { border-left: 1px solid rgba(60, 60, 67, 0.22); }
+.ios-alert__btn--cancel { font-weight: 600; }
+.ios-alert__btn:active { background: rgba(0, 0, 0, 0.08); }
+@keyframes ios-alert-fade { from { opacity: 0; } }
+@keyframes ios-alert-pop { from { opacity: 0; transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .ios-alert-backdrop, .ios-alert { animation: none; } }
+
+/* «Новости» — a card on the home screen and the screen itself */
+.news-card {
+  display: flex; align-items: center; gap: 12px; margin: 8px 2px 0; padding: 12px 14px; border-radius: 16px; text-align: left; color: var(--text);
+  background: linear-gradient(135deg, rgba(255, 207, 90, 0.14), rgba(255, 255, 255, 0.05)); box-shadow: inset 0 0 0 1px var(--stroke);
+}
+.news-card:active { transform: scale(0.985); }
+.news-card--fresh { box-shadow: inset 0 0 0 1.5px rgba(255, 207, 90, 0.7), 0 0 18px rgba(255, 207, 90, 0.18); }
+.news-card__icon { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 12px; font-size: 24px; background: rgba(0, 0, 0, 0.22); }
+.news-card__body { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.news-card__body small { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); }
+.news-card__body strong { font-size: 15px; line-height: 1.25; }
+.news-card__badge, .news-day__new {
+  font-style: normal; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 2px 7px; border-radius: 8px; color: #3a2200; background: var(--gold);
+}
+.news-card__arrow { font-size: 28px; line-height: 1; color: var(--text-2); }
+
+.news { padding-bottom: 28px; }
+.news-hero {
+  display: grid; justify-items: center; gap: 4px; margin: 4px 14px 2px; padding: 18px 16px; border-radius: 20px; text-align: center;
+  background: radial-gradient(ellipse at 50% 0%, rgba(255, 207, 90, 0.22), transparent 70%), rgba(0, 0, 0, 0.18); box-shadow: inset 0 0 0 1px var(--stroke);
+}
+.news-hero__icon { font-size: 34px; }
+.news-hero strong { font-family: var(--font-script); font-size: 30px; line-height: 1.15; color: var(--gold); }
+.news-hero span:last-child { font-size: 13px; color: var(--text-2); }
+.news-day { margin: 0 14px; padding: 14px 14px 6px; border-radius: 18px; background: rgba(0, 0, 0, 0.2); box-shadow: inset 0 0 0 1px var(--stroke); }
+.news-day--latest { background: linear-gradient(180deg, rgba(255, 207, 90, 0.12), rgba(0, 0, 0, 0.2) 55%); box-shadow: inset 0 0 0 1.5px rgba(255, 207, 90, 0.45); }
+.news-day__head { display: flex; align-items: center; gap: 8px; }
+.news-day__date { font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--gold); }
+.news-day__headline { margin: 4px 0 8px; font-size: 18px; line-height: 1.25; }
+.news-day__items { list-style: none; margin: 0; padding: 0; }
+.news-item { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line, rgba(255, 255, 255, 0.08)); }
+.news-item:first-child { border-top: 0; }
+.news-item__emoji { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; font-size: 22px; background: rgba(255, 255, 255, 0.08); }
+.news-item__body { display: grid; gap: 3px; min-width: 0; }
+.news-item__body strong { font-size: 15px; }
+.news-item__body span { font-size: 13.5px; line-height: 1.45; color: var(--text-2); }
+.news-foot { margin: 6px 0 0; text-align: center; font-size: 12px; color: var(--text-3, var(--text-2)); }
+
+:root[data-game-design="daylight"] .news-card,
+:root[data-game-design="daylight"] .news-hero,
+:root[data-game-design="daylight"] .news-day { background: rgba(255, 255, 255, 0.72); }
+:root[data-game-design="daylight"] .news-day--latest { background: linear-gradient(180deg, rgba(255, 211, 106, 0.28), rgba(255, 255, 255, 0.78) 55%); }
+:root[data-game-design="daylight"] .news-hero strong,
+:root[data-game-design="daylight"] .news-day__date { color: #b9770e; }
+:root[data-game-design="daylight"] .news-item__emoji,
+:root[data-game-design="daylight"] .news-card__icon { background: rgba(47, 121, 177, 0.1); }

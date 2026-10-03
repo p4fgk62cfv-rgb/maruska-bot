@@ -120,6 +120,8 @@ export async function internalRoutes(app: FastifyInstance, ctx: Context): Promis
       arena_games_running: { help: 'Games in memory', value: ctx.realtime.games.count() },
       arena_rooms_waiting: { help: 'Rooms waiting for players', value: rooms.filter((r) => r.status === 'waiting').length },
       arena_outbox_pending: { help: 'Bot messages not yet delivered', value: outbox },
+      arena_snapshot_backlog: { help: 'Snapshot writes waiting for a retry', value: ctx.realtime.storeBacklog() },
+      arena_moves_backlog: { help: 'Logged moves waiting for a retry', value: ctx.realtime.games.movesBacklog() },
     });
   });
 

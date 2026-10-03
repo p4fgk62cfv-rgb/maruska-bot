@@ -1,4 +1,4 @@
-import { formatStake, type RoomDto } from '@arena/shared';
+import { formatStake, PRACTICE_LABEL, type RoomDto } from '@arena/shared';
 import { Avatar, CurrencyIcon, Icon, PlayingCard, type IconName } from '@arena/ui';
 import { memo, type KeyboardEvent, type ReactNode } from 'react';
 import { ringOf } from '../../lib/cosmetics.js';
@@ -13,14 +13,15 @@ export function TableTop({
   title,
 }: {
   settings: RoomDto['settings'];
-  button: { icon: IconName; label: string; onClick: () => void };
+  /** `node` replaces the icon (the game's white flag). */
+  button: { icon: IconName; label: string; onClick: () => void; node?: ReactNode };
   title?: string;
 }) {
   const bank = settings.stake * settings.players;
   return (
     <div className="table-top">
       <button type="button" className="table-top__btn" aria-label={button.label} onClick={button.onClick}>
-        <Icon name={button.icon} size={24} />
+        {button.node ?? <Icon name={button.icon} size={24} />}
       </button>
       <div className="table-top__rules">{title ? <span className="table-top__title">{title}</span> : <ModeStrip settings={settings} />}</div>
       {settings.stake > 0 ? (
@@ -31,7 +32,7 @@ export function TableTop({
           <small>банк {formatStake(bank)}</small>
         </div>
       ) : (
-        <div className="table-top__stake" />
+        <div className="table-top__stake">{settings.bots ? <span className="table-top__practice">{PRACTICE_LABEL}</span> : null}</div>
       )}
     </div>
   );

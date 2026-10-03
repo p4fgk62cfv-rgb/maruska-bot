@@ -48,6 +48,16 @@ export function EmojiSheet({ open, pack, onClose, onPick }: { open: boolean; pac
   const def = EMOJI_PACKS[pack as EmojiPackKey] ?? EMOJI_PACKS.emoji_pack_basic;
   const smiles = smilesOf(pack);
   const ref = useRef<HTMLDivElement>(null);
+  // At the table already: fetch the pack's pictures now, so the picker opens full, not blank.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      for (const s of smilesOf(pack)) {
+        const url = stickerUrl(s);
+        if (url) new Image().src = url;
+      }
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [pack]);
   useEffect(() => {
     if (!open) return;
     const outside = (e: PointerEvent) => {

@@ -1,4 +1,4 @@
-import { GAME_SERVERS, MODE_LABEL_RU, MODE_PAIRS, STAKE_OPTIONS, type GameMode, type MyRoomDto, type RoomSettings } from '@arena/shared';
+import { GAME_SERVERS, isPracticeLevel, MODE_LABEL_RU, MODE_PAIRS, PRACTICE_LABEL, STAKE_OPTIONS, type GameMode, type MyRoomDto, type RoomSettings } from '@arena/shared';
 import { Button, CurrencyIcon, Icon } from '@arena/ui';
 import { useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
@@ -27,10 +27,10 @@ const DEFAULT: Draft = {
 };
 const PAIR_KEY = ['variant', 'throwIn', 'fairness', 'ending'] as const;
 type BotLevel = NonNullable<Draft['botLevel']>;
-const BOT_LEVELS: { value: BotLevel; label: string; hint: string }[] = [
-  { value: 'easy', label: 'Минимальный', hint: 'Часто ошибается — для разминки' },
-  { value: 'normal', label: 'Средний', hint: 'Играет как обычный игрок, иногда промахивается' },
-  { value: 'hard', label: 'Максимальный', hint: 'Без ошибок: бережёт козыри, считает вышедшие карты, точно доигрывает концовку' },
+const BOT_LEVELS: { value: BotLevel; label: string; tag: string; hint: string }[] = [
+  { value: 'easy', label: 'Минимальный', tag: 'Тренировочный', hint: 'Часто ошибается — для разминки' },
+  { value: 'normal', label: 'Средний', tag: 'Тренировочный', hint: 'Играет как обычный игрок, иногда промахивается' },
+  { value: 'hard', label: 'Максимальный', tag: 'На кредиты', hint: 'Без ошибок: бережёт козыри, считает вышедшие карты, точно доигрывает концовку' },
 ];
 
 const randomPin = () => String(1000 + Math.floor(Math.random() * 9000));
@@ -50,11 +50,13 @@ export default function CreateGameScreen() {
   const [busy, setBusy] = useState(false);
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
   const maxPlayers = draft.deckSize === 24 ? 4 : 6;
+  // Easy and medium bots are practice: no credits are staked or won at such a table.
+  const practice = Boolean(draft.bots) && isPracticeLevel(draft.botLevel ?? 'normal');
 
   const create = () => {
     setBusy(true);
     safeStorage.set(DRAFT_KEY, draft);
-    api<MyRoomDto>('/rooms', { method: 'POST', body: { ...draft, players: Math.min(draft.players, maxPlayers), bots: Boolean(draft.bots), botLevel: draft.bots ? draft.botLevel : undefined, ...(draft.isPrivate ? { password } : {}) } })
+    api<MyRoomDto>('/rooms', { method: 'POST', body: { ...draft, stake: practice ? 0 : draft.stake, players: Math.min(draft.players, maxPlayers), bots: Boolean(draft.bots), botLevel: draft.bots ? draft.botLevel : undefined, ...(draft.isPrivate ? { password } : {}) } })
       .then(enterRoom)
       .catch((e: unknown) => toast(e instanceof ApiError ? e.message : 'Ошибка', 'error'))
       .finally(() => setBusy(false));
@@ -66,12 +68,22 @@ export default function CreateGameScreen() {
 
       <section className="felt-section">
         <div className="stake-head">
-          <ScriptTitle>Ваша ставка:</ScriptTitle>
-          <span className="stake-head__value">
-            {draft.stake.toLocaleString('ru-RU')} <CurrencyIcon kind="credits" size={24} />
-          </span>
+          <ScriptTitle>{practice ? 'Игра:' : 'Ваша ставка:'}</ScriptTitle>
+          {practice ? (
+            <span className="stake-head__value stake-head__value--practice">{PRACTICE_LABEL}</span>
+          ) : (
+            <span className="stake-head__value">
+              {draft.stake.toLocaleString('ru-RU')} <CurrencyIcon kind="credits" size={24} />
+            </span>
+          )}
         </div>
-        <StakeSlider value={draft.stake} max={me.wallet.credits} onChange={(v) => set('stake', v)} />
+        {practice ? (
+          <p className="stake-practice">
+            С минимальными и средними ботами игра тренировочная: кредиты не ставятся и не выигрываются. На кредиты играют только максимальные боты.
+          </p>
+        ) : (
+          <StakeSlider value={draft.stake} max={me.wallet.credits} onChange={(v) => set('stake', v)} />
+        )}
       </section>
 
       <section className="felt-section">
@@ -146,6 +158,7 @@ export default function CreateGameScreen() {
                 onClick={() => set('botLevel', l.value)}
               >
                 <strong>{l.label}</strong>
+                <em className={`bots-pick__tag${isPracticeLevel(l.value) ? ' bots-pick__tag--practice' : ''}`}>{l.tag}</em>
                 <span>{l.hint}</span>
               </button>
             ))}

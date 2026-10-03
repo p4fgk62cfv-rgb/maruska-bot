@@ -7,7 +7,8 @@ import { isCardId, type CardId } from '@arena/game-engine';
 import { SMILES, STAKE_OPTIONS } from './lobby.js';
 
 export const roomSettingsSchema = z.object({
-  stake: z.number().int().refine((v) => (STAKE_OPTIONS as readonly number[]).includes(v), 'stake'),
+  // 0: a practice table with easy or medium bots (the server checks the pairing).
+  stake: z.number().int().refine((v) => v === 0 || (STAKE_OPTIONS as readonly number[]).includes(v), 'stake'),
   players: z.number().int().min(2).max(6),
   deckSize: z.union([z.literal(24), z.literal(36), z.literal(52)]),
   speed: z.enum(['normal', 'fast']),

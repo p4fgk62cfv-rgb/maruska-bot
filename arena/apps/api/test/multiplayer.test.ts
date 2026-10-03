@@ -1,6 +1,8 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { Redis } from 'ioredis';
-import { buildApp, type AppHandle } from '../src/app.js';
+import { buildApp, type AppHandle, type AppOptions } from '../src/app.js';
+import { Alerts } from '../src/services/alerts.js';
+import type { GameSnapshot } from '../src/realtime/types.js';
 import { loadConfig, type Config } from '../src/config.js';
 import { createContext, type BaseContext } from '../src/context.js';
 import { createDb, type Db } from '../src/db.js';
@@ -13,6 +15,42 @@ import { parseRoomStartParam, type RoomSettings } from '@arena/shared';
 const url = process.env.TEST_DATABASE_URL;
 const redisUrl = process.env.TEST_REDIS_URL;
 const BOT_TOKEN = '123456:TEST-token-for-multiplayer';
+
+/** Redis that can be «switched off» for a while: game snapshot writes fail. */
+class FlakyStore extends RedisStore {
+  down = false;
+  override async saveGame(game: GameSnapshot) {
+    if (this.down) throw new Error('redis is down');
+    return super.saveGame(game);
+  }
+}
+
+/** Owner alerts written down instead of sent. */
+class RecordingAlerts extends Alerts {
+  raised: string[] = [];
+  resolved: string[] = [];
+  constructor() {
+    const quiet = { error() {}, warn() {}, info() {}, debug() {}, trace() {}, fatal() {}, child: () => quiet, level: 'silent', silent() {} };
+    super(null, new Set(), quiet as never);
+  }
+  override raise(kind: string) {
+    this.raised.push(kind);
+  }
+  override resolve(kind: string) {
+    this.resolved.push(kind);
+  }
+  override notice(kind: string) {
+    this.raised.push(`notice:${kind}`);
+  }
+}
+
+async function until(check: () => boolean, timeoutMs = 10_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!check()) {
+    if (Date.now() > deadline) throw new Error('condition not reached');
+    await new Promise((r) => setTimeout(r, 25));
+  }
+}
 
 const SETTINGS: Omit<RoomSettings, 'password'> = {
   stake: 100,
@@ -36,8 +74,8 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
   const bots: Bot[] = [];
   let nextTg = 800_000_000 + Math.floor(Math.random() * 10_000_000);
 
-  async function start(store?: SnapshotStore): Promise<void> {
-    handle = await buildApp(base, { store, bot: null });
+  async function start(store?: SnapshotStore, extra: Partial<AppOptions> = {}): Promise<void> {
+    handle = await buildApp(base, { store, bot: null, ...extra });
     address = await handle.app.listen({ port: 0, host: '127.0.0.1' });
   }
 
@@ -286,13 +324,14 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     expect(internals(gameId).snap.state.version).toBe(v2 + 1);
   }, 30_000);
 
-  it('bots fill a table only when asked, at the table\'s level, play for credits, and leave with the people', async () => {
+  it('bots fill a table only when asked, at the table\'s level; easy bots are practice for no credits; they leave with the people', async () => {
     await handle.ctx.bots.setSettings({ enabled: true, delaySec: 1, level: 'hard' });
     try {
       const human = await player('Solo', 10);
       const created = (await api(human, 'POST', '/rooms', { ...SETTINGS, players: 2, bots: true, botLevel: 'easy' })).json();
       const roomId: string = created.room.id;
-      expect(created.room.settings).toMatchObject({ bots: true, botLevel: 'easy' });
+      // Easy bots are practice: the asked stake is dropped, the table is a training one.
+      expect(created.room.settings).toMatchObject({ bots: true, botLevel: 'easy', stake: 0 });
       const before = (await api(human, 'GET', '/me')).json();
 
       // Without the tick a table waits for people only — public or private.
@@ -325,12 +364,13 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
       const result = human.result!;
       expect(result.reason).not.toBe('timeout');
 
-      // Credits moved like in any game; rating stayed.
+      // No credits moved either way; rating stayed.
       const after = (await api(human, 'GET', '/me')).json();
       const mine = result.payouts.find((p) => p.userId === human.userId)!;
       expect(after.rating).toBe(before.rating);
       expect(mine.ratingGain).toBe(0);
-      expect(after.wallet.credits - before.wallet.credits).toBe(mine.net);
+      expect(mine.net).toBe(0);
+      expect(after.wallet.credits).toBe(before.wallet.credits);
 
       // The person leaves the table → the bot leaves too and the table closes.
       await new Promise((r) => setTimeout(r, 300));
@@ -346,6 +386,31 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
       await handle.ctx.bots.setSettings({ enabled: false, delaySec: 12, level: 'normal' });
     }
   }, 120_000);
+
+  it('hard bots play for credits; a stake of 0 is only for practice tables; «Быстрая игра» calls hard bots', async () => {
+    const host = await player('HardHost', 10);
+    const hard = (await api(host, 'POST', '/rooms', { ...SETTINGS, bots: true, botLevel: 'hard' })).json();
+    expect(hard.room.settings).toMatchObject({ stake: SETTINGS.stake, botLevel: 'hard' });
+    expect((await api(host, 'POST', `/rooms/${hard.room.id}/leave`)).statusCode).toBe(200);
+
+    // A free table without weak bots is refused (no farming of anything at stake 0).
+    expect((await api(host, 'POST', '/rooms', { ...SETTINGS, stake: 0 })).json().error).toBe('VALIDATION_FAILED');
+    expect((await api(host, 'POST', '/rooms', { ...SETTINGS, stake: 0, bots: true, botLevel: 'hard' })).json().error).toBe('VALIDATION_FAILED');
+    // A medium-bot table is practice whatever stake was asked.
+    const medium = (await api(host, 'POST', '/rooms', { ...SETTINGS, stake: 1000, bots: true, botLevel: 'normal' })).json();
+    expect(medium.room.settings).toMatchObject({ stake: 0, botLevel: 'normal' });
+    expect((await api(host, 'POST', `/rooms/${medium.room.id}/leave`)).statusCode).toBe(200);
+
+    // «Быстрая игра» is for credits: it never seats you at a practice table, and calls hard bots.
+    const trainer = await player('Trainer', 10);
+    const practice = (await api(trainer, 'POST', '/rooms', { ...SETTINGS, bots: true, botLevel: 'easy' })).json().room.id;
+    // A stake no other table has: the quick game opens its own table.
+    const quick = (await api(host, 'POST', '/rooms/quick', { stake: 1000 })).json();
+    expect(quick.room.id).not.toBe(practice);
+    expect(quick.room.ownerId).toBe(host.userId);
+    expect(quick.room.settings).toMatchObject({ stake: 1000, bots: true, botLevel: 'hard' });
+    for (const [who, id] of [[host, quick.room.id], [trainer, practice]] as const) expect((await api(who, 'POST', `/rooms/${id}/leave`)).statusCode).toBe(200);
+  });
 
   it('chairs before the deal: move to a free one, ask to swap, accept or decline; the deal follows the chairs', async () => {
     const a = await player('Аня', 10);
@@ -567,6 +632,146 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     const refunds = await db.transaction.count({ where: { source: `game:${gameId}`, type: 'GAME_REFUND' } });
     expect(refunds).toBe(2);
   }, 30_000);
+
+  it.skipIf(!redisUrl)('Redis blips: the game goes on, the snapshot lands later, and a crash right after resumes the latest move', async () => {
+    const redis = new Redis(redisUrl!);
+    await redis.flushdb();
+    await redis.quit();
+    await handle.app.close();
+    const flaky = new FlakyStore(redisUrl!);
+    await start(flaky);
+
+    const { players, roomId } = await table(2);
+    const gameId = await startGame(players, roomId);
+    const mover = players.find((p) => p.userId === internals(gameId).snap.state.attacker)!;
+    const state = (await mover.waitFor((m) => m.type === 'GAME_STATE')) as { state: { you: { hand: string[] } } };
+
+    flaky.down = true;
+    // The move is taken although Redis is gone; the snapshot waits.
+    expect((await mover.send({ type: 'PLAY_CARD', gameId, card: state.state.you.hand[0]! as never })).type).toBe('ACK');
+    const version = internals(gameId).snap.state.version;
+    expect(handle.ctx.realtime.storeBacklog()).toBeGreaterThan(0);
+
+    flaky.down = false;
+    await until(() => handle.ctx.realtime.storeBacklog() === 0);
+
+    for (const p of players) p.close();
+    handle.ctx.realtime.crashOnShutdown = true;
+    await handle.app.close();
+    await start(new RedisStore(redisUrl!));
+    expect(handle.ctx.realtime.games.get(gameId)?.state.version).toBe(version);
+  }, 60_000);
+
+  it.skipIf(!redisUrl)('a crash mid-game: the next server resumes it, a move resent to it is not applied twice, the money is settled once', async () => {
+    const redis = new Redis(redisUrl!);
+    await redis.flushdb();
+    await redis.quit();
+    await handle.app.close();
+    await start(new RedisStore(redisUrl!));
+
+    const { players, roomId } = await table(2);
+    const gameId = await startGame(players, roomId);
+    const mover = players.find((p) => p.userId === internals(gameId).snap.state.attacker)!;
+    const state = (await mover.waitFor((m) => m.type === 'GAME_STATE')) as { state: { you: { hand: string[] } } };
+    const frame = JSON.stringify({ type: 'PLAY_CARD', gameId, card: state.state.you.hand[0], rid: 'pagecrash:1' });
+    mover.ws.send(frame);
+    await mover.waitFor((m) => m.type === 'ACK' && m.rid === 'pagecrash:1');
+    const version = internals(gameId).snap.state.version;
+    // Let the «answered» note reach Redis.
+    await new Promise((r) => setTimeout(r, 100));
+
+    for (const p of players) p.close();
+    handle.ctx.realtime.crashOnShutdown = true;
+    await handle.app.close();
+    const alerts = new RecordingAlerts();
+    await start(new RedisStore(redisUrl!), { alerts });
+    expect(handle.ctx.realtime.games.get(gameId)?.state.version).toBe(version);
+    // No clean hand-over was noted: the owners hear that the server came back after a crash.
+    expect(alerts.raised).toContain('notice:crash');
+
+    for (const p of players) {
+      p.inbox = [];
+      (p as unknown as { base: string }).base = address;
+      await p.connect(token(p));
+    }
+    // The app never got the answer and sends the same move to the new server: answered, not applied.
+    mover.ws.send(frame);
+    const reply = await mover.waitFor((m) => (m.type === 'ACK' || m.type === 'ERROR') && m.rid === 'pagecrash:1');
+    expect(reply.type).toBe('ACK');
+    expect(internals(gameId).snap.state.version).toBe(version);
+
+    await playOut(players, gameId);
+    const txs = await db.transaction.findMany({ where: { source: `game:${gameId}` }, select: { type: true, userId: true } });
+    expect(txs.filter((t) => t.type === 'GAME_STAKE')).toHaveLength(2);
+    // One payout per player at most, never a second one from the replayed server.
+    const paid = txs.filter((t) => t.type === 'GAME_PAYOUT' || t.type === 'GAME_REFUND').map((t) => t.userId);
+    expect(new Set(paid).size).toBe(paid.length);
+    expect((await db.game.findUniqueOrThrow({ where: { id: gameId } })).status).toBe('FINISHED');
+  }, 120_000);
+
+  it('the database refuses the move log for a while: no move is lost, the owners are told and then told it is fine', async () => {
+    await handle.app.close();
+    const alerts = new RecordingAlerts();
+    await start(undefined, { alerts });
+    const { players, roomId } = await table(2);
+    const gameId = await startGame(players, roomId);
+    const runner = handle.ctx.realtime.games.get(gameId)! as unknown as { flushMoves(): Promise<boolean>; pendingMoves: number; deps: { db: Db } };
+    // This runner's database only: its move-log writes fail until switched back.
+    let down = true;
+    const realDb = runner.deps.db;
+    runner.deps = {
+      ...runner.deps,
+      db: { ...realDb, gameMove: { createMany: (args: never) => (down ? Promise.reject(new Error('db is down')) : realDb.gameMove.createMany(args)) } } as unknown as Db,
+    };
+
+    const mover = players.find((p) => p.userId === internals(gameId).snap.state.attacker)!;
+    const state = (await mover.waitFor((m) => m.type === 'GAME_STATE')) as { state: { you: { hand: string[] } } };
+    expect((await mover.send({ type: 'PLAY_CARD', gameId, card: state.state.you.hand[0]! as never })).type).toBe('ACK');
+    for (let i = 0; i < 3; i++) expect(await runner.flushMoves()).toBe(false);
+    expect(runner.pendingMoves).toBe(1);
+    expect(handle.ctx.realtime.games.movesBacklog()).toBe(1);
+    expect(alerts.raised).toContain('moves');
+
+    down = false;
+    expect(await runner.flushMoves()).toBe(true);
+    expect(runner.pendingMoves).toBe(0);
+    expect(alerts.resolved).toContain('moves');
+    expect(await db.gameMove.count({ where: { gameId } })).toBe(1);
+  }, 30_000);
+
+  it('settlement fails while the database is down: the owners are told, it is retried, and the money moves once', async () => {
+    await handle.app.close();
+    const alerts = new RecordingAlerts();
+    await start(undefined, { alerts });
+    const settlement = handle.ctx.realtime.settlement;
+    const realFinish = settlement.finish.bind(settlement);
+    let failures = 0;
+    settlement.finish = async (input) => {
+      if (failures < 4) {
+        failures++;
+        throw new Error('db is down');
+      }
+      return realFinish(input);
+    };
+
+    const { players, roomId } = await table(2);
+    const gameId = await startGame(players, roomId);
+    const runner = handle.ctx.realtime.games.get(gameId)! as unknown as { result: unknown; settleTimer: NodeJS.Timeout | null; finish(): Promise<void>; queue: { run<T>(f: () => Promise<T>): Promise<T> } };
+    // The loser gives up; settlement fails all its quick attempts.
+    expect((await players[0]!.send({ type: 'LEAVE_GAME', gameId })).type).toBe('ACK');
+    await until(() => alerts.raised.includes('settlement'), 20_000);
+    expect(runner.result).toBeNull();
+    expect(runner.settleTimer).not.toBeNull();
+
+    // The retry (normally 30 s later) goes through.
+    clearTimeout(runner.settleTimer!);
+    await runner.queue.run(() => runner.finish());
+    expect(runner.result).not.toBeNull();
+    expect(alerts.resolved).toContain('settlement');
+    await players[1]!.waitFor((m) => m.type === 'GAME_FINISHED');
+    const payouts = await db.transaction.count({ where: { source: `game:${gameId}`, type: 'GAME_PAYOUT' } });
+    expect(payouts).toBe(1);
+  }, 60_000);
 
   it('one table at a time: two joins at once seat the player only once', async () => {
     const hosts = [await player('H1', 10), await player('H2', 10)];

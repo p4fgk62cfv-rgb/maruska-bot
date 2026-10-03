@@ -60,6 +60,14 @@
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body, #root { height: 100%; }
+/* The installed iPhone app (translucent status bar) lays the page out short by the status bar
+   height, leaving a strip under the tab bar. A page taller by that much makes iOS size the
+   viewport right. Static on purpose: nothing is measured, so nothing can oscillate. */
+@media (display-mode: standalone) {
+  html { height: calc(100% + env(safe-area-inset-top, 0px)); }
+  /* iOS blurs a strip under the status bar: keep the header (avatar, balance) clear of it. */
+  :root { --safe-top: calc(max(env(safe-area-inset-top), var(--tg-safe-top, 0px)) + 14px); }
+}
 
 body {
   margin: 0;

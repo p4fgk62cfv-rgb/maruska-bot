@@ -12,6 +12,8 @@ export function isStandalone(): boolean {
   return window.matchMedia?.('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
 }
 
+export const isAndroid = /android/i.test(navigator.userAgent);
+
 export const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 /** «Android · Chrome», «iPhone · Safari» — shown by the bot before the sign-in is confirmed. */
@@ -20,6 +22,21 @@ export function deviceName(): string {
   const os = /android/i.test(ua) ? 'Android' : /iphone/i.test(ua) ? 'iPhone' : /ipad/i.test(ua) || isIOS ? 'iPad' : /windows/i.test(ua) ? 'Windows' : /mac os/i.test(ua) ? 'Mac' : /linux/i.test(ua) ? 'Linux' : 'Устройство';
   const browser = /yabrowser/i.test(ua) ? 'Яндекс Браузер' : /samsungbrowser/i.test(ua) ? 'Samsung Internet' : /edg\//i.test(ua) ? 'Edge' : /opr\//i.test(ua) ? 'Opera' : /firefox|fxios/i.test(ua) ? 'Firefox' : /crios|chrome/i.test(ua) ? 'Chrome' : /safari/i.test(ua) ? 'Safari' : 'браузер';
   return `${os} · ${browser}${isStandalone() ? ' · приложение' : ''}`;
+}
+
+/**
+ * «Установить приложение» from inside Telegram: the install page must open in a real browser —
+ * Telegram's own window cannot install apps. Chrome shows a one-tap «Установить».
+ */
+export function openInstallPage(): void {
+  const url = `${location.origin}/?install=1`;
+  tg?.openLink?.(url, isAndroid ? { try_browser: 'chrome' } : undefined);
+}
+
+/** Android: leave an in-app browser for Chrome (or the default browser when there is no Chrome). */
+export function androidBrowserLink(): string {
+  const url = `${location.origin}/?install=1`;
+  return `intent://${location.host}/?install=1#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
 }
 
 // ── remembered sign-in (outside Telegram only) ──
@@ -80,18 +97,24 @@ if (!inTelegram) {
   });
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => void navigator.serviceWorker.register('/sw.js').catch(() => undefined));
+    // The app opened from the phone's copy and a newer release was just fetched: right after the
+    // launch, before anything is going on, switch to it (the bundles are cached, it is quick).
+    const launchedAt = Date.now();
+    navigator.serviceWorker.addEventListener('message', (event: MessageEvent<{ type?: string }>) => {
+      if (event.data?.type === 'shell-updated' && Date.now() - launchedAt < 15_000) location.reload();
+    });
   }
 }
 
 /** What install help to show: a real «Установить» button, the iPhone steps, or nothing. */
-export function useInstall(): { mode: 'prompt' | 'ios' | null; install: () => Promise<void> } {
+export function useInstall(): { mode: 'prompt' | 'ios' | 'android' | null; install: () => Promise<void> } {
   const [, tick] = useState(0);
   useEffect(() => {
     const l = () => tick((n) => n + 1);
     listeners.add(l);
     return () => void listeners.delete(l);
   }, []);
-  const mode = inTelegram || isStandalone() ? null : deferred ? 'prompt' : isIOS ? 'ios' : null;
+  const mode = inTelegram || isStandalone() ? null : deferred ? 'prompt' : isIOS ? 'ios' : isAndroid ? 'android' : null;
   return {
     mode,
     install: async () => {

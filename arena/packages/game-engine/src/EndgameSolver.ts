@@ -1,4 +1,4 @@
-import { cardStrength, type CardId } from './Card.js';
+import { cardStrength, RANKS, SUITS, type CardId } from './Card.js';
 import { applyAction, legalActions } from './GameEngine.js';
 import type { GameState, PlayerId } from './GameState.js';
 import type { BotMove } from './BotBrain.js';
@@ -112,8 +112,22 @@ class Search {
   }
 }
 
+/** Each card as its own bit: a hand is a sum of distinct powers of two (52 cards fit a double exactly). */
+const CARD_BIT = new Map<string, number>(SUITS.flatMap((suit, s) => RANKS.map((rank, r) => [`${rank}${suit}`, 2 ** (s * RANKS.length + r)] as const)));
+
+function maskOf(cards: readonly CardId[]): number {
+  let mask = 0;
+  for (const card of cards) mask += CARD_BIT.get(card)!;
+  return mask;
+}
+
+/** The position, order-free for hands and the passed set — the search revisits it by many paths. */
 function keyOf(state: GameState): string {
-  const hands = state.players.map((p) => `${p.id}:${[...p.hand].sort().join(',')}`).join('|');
-  const table = state.table.map((t) => `${t.attack}>${t.defense ?? ''}`).join(',');
-  return `${hands}#${table}#${state.phase}#${state.attacker}#${state.defender}#${state.currentPlayer ?? ''}#${[...state.passed].sort().join(',')}#${state.boutLimit}`;
+  let key = '';
+  for (const p of state.players) key += `${p.id}:${maskOf(p.hand).toString(36)}|`;
+  key += '#';
+  for (const t of state.table) key += `${t.attack}>${t.defense ?? ''},`;
+  let passed = '';
+  if (state.passed.length) passed = state.passed.length === 1 ? state.passed[0]! : [...state.passed].sort().join(',');
+  return `${key}#${state.phase}#${state.attacker}#${state.defender}#${state.currentPlayer ?? ''}#${passed}#${state.boutLimit}`;
 }

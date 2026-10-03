@@ -6,7 +6,7 @@ import fastifyStatic from '@fastify/static';
 import { errorText, type ApiErrorBody } from '@arena/shared';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
-import type { BaseContext, Context } from './context.js';
+import { ownerIds, type BaseContext, type Context } from './context.js';
 import { bearerToken, useBanList } from './auth/plugin.js';
 import { AppError } from './lib/errors.js';
 import { requestSerializer, securityHeaders } from './lib/security.js';
@@ -15,7 +15,8 @@ import { boardRoutes } from './routes/board.js';
 import { profileRoutes } from './routes/profile.js';
 import { roomRoutes } from './routes/rooms.js';
 import { Realtime } from './realtime/realtime.js';
-import { MemoryStore, type SnapshotStore } from './realtime/store.js';
+import { MemoryStore, ResilientStore, type SnapshotStore } from './realtime/store.js';
+import { Alerts } from './services/alerts.js';
 import { websocketRoutes } from './realtime/ws.js';
 import { RealtimePresence } from './services/presence.js';
 import { FriendService } from './services/friends.js';
@@ -41,12 +42,13 @@ export interface AppOptions {
   bot?: TelegramBot | null;
   /** Take over the games in the background (production: the old server may still hold them). */
   background?: boolean;
+  /** Replaces the owner alerts (tests). */
+  alerts?: Alerts;
   /** Where logs go (tests capture them to check nothing secret is written). */
   logStream?: { write(line: string): void };
 }
 
 export async function buildApp(base: BaseContext, options: AppOptions = {}): Promise<AppHandle> {
-  const store = options.store ?? new MemoryStore();
   const { config } = base;
   const app = Fastify({
     logger:
@@ -65,9 +67,12 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   app.decorateRequest('session', null);
   securityHeaders(app);
 
-  const realtime = new Realtime({ ...base, store, log: app.log });
-  const presence = new RealtimePresence(realtime);
   const bot = options.bot !== undefined ? options.bot : config.TELEGRAM_API_URL ? new TelegramBot(config.BOT_TOKEN, config.TELEGRAM_API_URL) : null;
+  const alerts = options.alerts ?? new Alerts(bot, ownerIds(config.OWNER_IDS), app.log);
+  // A failed snapshot write is retried until it lands; the games never wait for it.
+  const store = new ResilientStore(options.store ?? new MemoryStore(), app.log, alerts);
+  const realtime = new Realtime({ ...base, store, log: app.log, alerts });
+  const presence = new RealtimePresence(realtime);
   const outbox = new Outbox(base.db, bot, app.log);
   const friends = new FriendService({ ...base, outbox, presence, realtime });
   const tournaments = new TournamentService({ ...base, outbox, realtime, log: app.log });
@@ -76,7 +81,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   realtime.finishedListeners.add((result) => {
     referrals.onGame(result).catch((error: unknown) => app.log.error({ err: error }, 'referral reward failed'));
   });
-  const ctx: Context = { ...base, realtime, presence, outbox, friends, profiles, tournaments, referrals };
+  const ctx: Context = { ...base, realtime, presence, outbox, friends, profiles, tournaments, referrals, alerts };
   await base.moderation.loadBans();
   useBanList(base.moderation);
   await base.bots.ensurePool();
@@ -84,7 +89,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   // During a deploy the previous server hands the games over only when it stops, which can be
   // after this one starts listening: in production the take-over runs in the background and
   // requests that touch tables wait for it (see the hook below).
-  if (options.background) realtime.start().catch((error: unknown) => app.log.error({ err: error }, 'could not take over the games'));
+  if (options.background) realtime.start().catch((error: unknown) => alerts.raise('takeover', 'Сервер не смог принять столы после запуска', { err: error }));
   else await realtime.start();
   if (config.NODE_ENV !== 'test') {
     outbox.start();
@@ -142,7 +147,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
     }
   });
 
-  app.get('/health', async () => ({ ok: true, service: 'arena', games: realtime.games.count(), online: realtime.hub.onlineUsers().length }));
+  app.get('/health', async () => ({ ok: true, service: 'arena', games: realtime.games.count(), online: realtime.hub.onlineUsers().length, unsaved: realtime.storeBacklog() }));
   await websocketRoutes(app, ctx);
 
   await app.register(
@@ -166,6 +171,8 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
     await app.register(fastifyStatic, {
       root: webDist,
       wildcard: false,
+      // dist carries .br/.gz copies made at build time (apps/web/scripts/compress.mjs).
+      preCompressed: true,
       // Our own Cache-Control below; otherwise the plugin overwrites it with «max-age=0».
       cacheControl: false,
       setHeaders: (res, path) => {

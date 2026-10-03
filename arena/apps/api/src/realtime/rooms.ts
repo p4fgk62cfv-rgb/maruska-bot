@@ -1,5 +1,6 @@
 import { validateSettings } from '@arena/game-engine';
 import {
+  isPracticeLevel,
   isPremium,
   roomDeepLink,
   STAKE_OPTIONS,
@@ -117,7 +118,7 @@ export class RoomManager {
   mine(room: Room): MyRoomDto {
     const code = inviteCode(room.id, this.deps.config.SESSION_SECRET);
     const link = roomDeepLink(this.deps.config.BOT_USERNAME || 'bot', this.deps.config.MINI_APP_SHORT_NAME || null, room.id, code);
-    const text = `Сыграем в дурака? Ставка ${room.settings.stake}`;
+    const text = room.settings.stake > 0 ? `Сыграем в дурака? Ставка ${room.settings.stake}` : 'Сыграем тренировочную партию в дурака?';
     return {
       room: this.dto(room),
       invite: { link, shareUrl: `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}` },
@@ -161,7 +162,13 @@ export class RoomManager {
     }
   }
 
-  private async createRoom(userId: string, settings: RoomSettings): Promise<MyRoomDto> {
+  private async createRoom(userId: string, requested: RoomSettings): Promise<MyRoomDto> {
+    // Easy and medium bots are practice: the table is a training one whatever stake was asked.
+    // A stake of 0 is only for such a table.
+    const level = requested.bots ? (requested.botLevel ?? this.deps.bots.level()) : null;
+    const practice = isPracticeLevel(level);
+    if (!practice && requested.stake === 0) throw new AppError('VALIDATION_FAILED');
+    const settings: RoomSettings = { ...requested, stake: practice ? 0 : requested.stake, ...(level ? { botLevel: level } : {}) };
     const problem = validateSettings(settings);
     if (problem) throw new AppError(problem === 'DECK_NOT_SUPPORTED' ? 'DECK_NOT_SUPPORTED' : 'VALIDATION_FAILED');
     if (settings.isPrivate && !settings.password) throw new AppError('VALIDATION_FAILED');
@@ -260,7 +267,8 @@ export class RoomManager {
     const wanted = stake && (affordable as number[]).includes(stake) ? stake : null;
 
     const candidates = this.list()
-      .filter((r) => r.status === 'waiting' && !r.isPrivate && r.seats.length < r.settings.players)
+      // Practice tables (stake 0) are somebody's training, not a match for credits.
+      .filter((r) => r.status === 'waiting' && !r.isPrivate && r.settings.stake > 0 && r.seats.length < r.settings.players)
       .filter((r) => (wanted ? r.settings.stake === wanted : r.settings.stake <= balance))
       .sort((a, b) => b.seats.length / b.settings.players - a.seats.length / a.settings.players);
     for (const room of candidates) {
@@ -275,8 +283,10 @@ export class RoomManager {
       stake: wanted ?? affordable[0]!,
       server: 'almaz',
       isPrivate: false,
-      // «Быстрая игра» should never leave a person waiting alone: bots fill in at the owner's level.
+      // «Быстрая игра» should never leave a person waiting alone: bots fill in. It is played for
+      // credits, so they are hard bots (easy and medium ones are practice only).
       bots: true,
+      botLevel: 'hard',
     });
   }
 

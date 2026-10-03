@@ -28,7 +28,8 @@ interface TelegramWebApp {
   disableClosingConfirmation(): void;
   lockOrientation?(): void;
   openTelegramLink(url: string): void;
-  openLink?(url: string, options?: { try_instant_view?: boolean }): void;
+  /** try_browser: Telegram opens the link in that browser (if installed) instead of its own window. */
+  openLink?(url: string, options?: { try_instant_view?: boolean; try_browser?: string }): void;
   onEvent(event: string, handler: (payload?: unknown) => void): void;
   offEvent(event: string, handler: (payload?: unknown) => void): void;
   /** Bot API 8.0: a shortcut to the Mini App on the phone's home screen. */

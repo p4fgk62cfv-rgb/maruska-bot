@@ -5,6 +5,7 @@ import {
   chooseBotMove,
   solveEndgame,
   type BotLevel,
+  type BotMove,
   createGame,
   toPlayerView,
   undoLastMove,
@@ -21,6 +22,7 @@ import { AppError } from '../lib/errors.js';
 import { cryptoRandom } from '../lib/ids.js';
 import { metrics } from '../lib/metrics.js';
 import { SerialQueue } from '../lib/serial.js';
+import type { Alerts } from '../services/alerts.js';
 import type { Ledger } from '../services/ledger.js';
 import { NotSettleable, type SettlementService } from '../services/settlement.js';
 import type { Hub } from './hub.js';
@@ -34,6 +36,12 @@ const EMOJI_COOLDOWN_MS = 1500;
 /** Finished games stay in memory a little so late reconnects still see the result. */
 const LINGER_MS = 60_000;
 const SETTLE_ATTEMPTS = 4;
+/** A game whose settlement failed is tried again this often until the database takes it. */
+const SETTLE_RETRY_MS = 30_000;
+/** Move-log retries after a failed write: doubling up to this. */
+const MOVES_RETRY_MAX_MS = 30_000;
+/** Give up on the move log of one game after this many failed writes in a row (≈ half an hour). */
+const MOVES_MAX_FAILURES = 70;
 /**
  * Lost connection on your turn: instead of losing at once, the table waits for you, spending
  * this per-game reserve. Once it is used up, the next timeout while offline loses the game.
@@ -54,6 +62,7 @@ export interface GameDeps {
   onPresence?: (userIds: string[]) => void;
   /** How well bot opponents play (owner's setting). */
   botLevel?: () => BotLevel;
+  alerts?: Alerts;
 }
 
 /** One live game: the only place where its GameState changes. */
@@ -67,7 +76,12 @@ export class GameRunner {
   private readonly bots: Set<string>;
   private readonly botTimers = new Map<string, NodeJS.Timeout>();
   private readonly botStuck = new Map<string, number>();
+  /** The endgame search per bot for the current position: the readiness check and the move itself share it. */
+  private readonly botSolved = new Map<string, { version: number; move: BotMove | null }>();
   result: GameResultDto | null = null;
+  private settleTimer: NodeJS.Timeout | null = null;
+  private moveFailures = 0;
+  private disposed = false;
 
   constructor(
     private snap: GameSnapshot,
@@ -273,17 +287,32 @@ export class GameRunner {
   }
 
   private async finish(): Promise<void> {
+    if (this.result) return;
     if (this.timer) clearTimeout(this.timer);
+    if (this.settleTimer) clearTimeout(this.settleTimer);
+    this.settleTimer = null;
     this.stopBots();
     await this.flushMoves();
     try {
       this.result = await this.settle();
     } catch (error) {
-      // The snapshot stays in the store: the next boot retries settlement.
       metrics.inc('arena_settlement_failures_total', 'Games whose settlement failed');
-      this.deps.log.error({ err: error, gameId: this.id }, 'settlement failed');
+      if (error instanceof NotSettleable) {
+        this.deps.log.error({ err: error, gameId: this.id }, 'settlement refused');
+        return;
+      }
+      // Settlement is idempotent: it is tried again until the database takes it (and the next
+      // boot tries too — the snapshot stays in the store until then).
+      this.deps.alerts?.raise('settlement', 'Не удалось рассчитать партию: база данных не отвечает. Повторяю каждые 30 с, деньги игроков не потеряны.', { err: error, gameId: this.id });
+      if (!this.disposed) {
+        this.settleTimer = setTimeout(() => {
+          this.settleTimer = null;
+          this.queue.run(() => this.finish()).catch((e: unknown) => this.deps.log.error({ err: e, gameId: this.id }, 'settlement retry failed'));
+        }, SETTLE_RETRY_MS);
+      }
       return;
     }
+    this.deps.alerts?.resolve('settlement', 'Расчёт партий снова проходит.');
     metrics.inc('arena_games_finished_total', 'Games settled', { kind: this.result.kind, reason: this.result.reason ?? 'draw' });
     this.deps.log.info(
       { gameId: this.id, roomId: this.roomId, kind: this.result.kind, reason: this.result.reason, moves: this.snap.state.version, ms: Date.now() - this.snap.startedAt },
@@ -396,8 +425,12 @@ export class GameRunner {
   private botMove(id: string, level: BotLevel) {
     const state = this.snap.state;
     if (level === 'hard' && state.deck.length === 0 && state.players.length === 2) {
-      const exact = solveEndgame(state, id);
-      if (exact) return exact;
+      let solved = this.botSolved.get(id);
+      if (solved?.version !== state.version) {
+        solved = { version: state.version, move: solveEndgame(state, id) };
+        this.botSolved.set(id, solved);
+      }
+      if (solved.move) return solved.move;
     }
     return chooseBotMove(toPlayerView(state, id, { hints: true, discard: level === 'hard' }), level);
   }
@@ -458,20 +491,55 @@ export class GameRunner {
     this.flushTimer = setTimeout(() => void this.flushMoves(), 2000);
   }
 
-  async flushMoves(): Promise<void> {
+  /** Moves logged in memory and not yet in the database. */
+  get pendingMoves(): number {
+    return this.moves.length;
+  }
+
+  /**
+   * Writes the logged moves. A failed batch is kept (in order, before newer moves) and written
+   * again later; the rows are keyed by (game, seq), so a retry never doubles one.
+   */
+  async flushMoves(): Promise<boolean> {
     if (this.flushTimer) clearTimeout(this.flushTimer);
     this.flushTimer = null;
     const batch = this.moves;
     this.moves = [];
-    if (!batch.length) return;
-    await this.deps.db.gameMove.createMany({ data: batch, skipDuplicates: true }).catch((error) => {
-      this.deps.log.error({ err: error, gameId: this.id }, 'move log write failed');
-    });
+    if (!batch.length) return true;
+    try {
+      await this.deps.db.gameMove.createMany({ data: batch, skipDuplicates: true });
+      if (this.moveFailures >= 3) this.deps.alerts?.resolve('moves', 'История ходов снова записывается.');
+      this.moveFailures = 0;
+      return true;
+    } catch (error) {
+      this.moves = batch.concat(this.moves);
+      this.moveFailures++;
+      metrics.inc('arena_move_log_failures_total', 'Move-log writes that failed and wait for a retry');
+      this.deps.log.error({ err: error, gameId: this.id, moves: this.moves.length, failures: this.moveFailures }, 'move log write failed; retrying');
+      if (this.moveFailures === 3) this.deps.alerts?.raise('moves', 'База данных не принимает историю ходов; ходы ждут в памяти и будут дописаны.', { err: error, gameId: this.id });
+      if (this.moveFailures >= MOVES_MAX_FAILURES) {
+        this.deps.log.error({ gameId: this.id, lost: this.moves.length }, 'move log given up');
+        this.moves = [];
+        return false;
+      }
+      const delay = Math.min(2000 * 2 ** (this.moveFailures - 1), MOVES_RETRY_MAX_MS);
+      this.flushTimer = setTimeout(() => void this.flushMoves(), delay);
+      return false;
+    }
+  }
+
+  /** Process exit: nothing is retried any more. */
+  stopRetries(): void {
+    if (this.flushTimer) clearTimeout(this.flushTimer);
+    this.flushTimer = null;
   }
 
   dispose(): void {
+    this.disposed = true;
     if (this.timer) clearTimeout(this.timer);
-    if (this.flushTimer) clearTimeout(this.flushTimer);
+    if (this.settleTimer) clearTimeout(this.settleTimer);
+    // Moves still waiting for the database keep their retry; anything else stops.
+    if (this.flushTimer && !this.moves.length) clearTimeout(this.flushTimer);
     this.stopBots();
   }
 }
@@ -535,6 +603,11 @@ export class GameManager {
 
   /** Re-creates a runner from a stored snapshot after a restart. */
   async restore(snapshot: GameSnapshot, players: PlayerInfo[]): Promise<void> {
+    // Moves logged after this snapshot never happened as far as the game goes on: drop them,
+    // or the replayed moves with the same numbers would be skipped and the history would lie.
+    await this.deps.db.gameMove
+      .deleteMany({ where: { gameId: snapshot.gameId, seq: { gt: snapshot.state.version } } })
+      .catch((error: unknown) => this.deps.log.error({ err: error, gameId: snapshot.gameId }, 'move log trim failed'));
     const runner = this.add(snapshot, players);
     if (snapshot.state.status === 'finished') await runner.queue.run(() => runner.settleRecovered());
     else runner.resume();
@@ -595,10 +668,19 @@ export class GameManager {
     return cancelled;
   }
 
+  /** Logged moves of all games not yet in the database. */
+  movesBacklog(): number {
+    let n = 0;
+    for (const runner of this.runners.values()) n += runner.pendingMoves;
+    return n;
+  }
+
   async shutdown(): Promise<void> {
     for (const runner of this.runners.values()) {
-      await runner.flushMoves();
+      // A database blip at the wrong moment: a couple of quick tries before giving the game up.
+      for (let attempt = 0; attempt < 3 && !(await runner.flushMoves()); attempt++) await new Promise((r) => setTimeout(r, 300));
       runner.dispose();
+      runner.stopRetries();
     }
   }
 }

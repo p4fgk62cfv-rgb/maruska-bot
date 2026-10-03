@@ -1,6 +1,5 @@
 import { Icon } from '@arena/ui';
-import { inTelegram } from '../lib/app.js';
-import { tg } from '../lib/telegram.js';
+import { inTelegram, openInstallPage } from '../lib/app.js';
 import { useSession } from '../session.js';
 import { InstallHint } from './InstallHint.js';
 
@@ -15,7 +14,7 @@ export function AppSettings() {
       <section className="settings__section">
         <h3 className="script-title">Приложение</h3>
         <p className="app-muted">Арену можно поставить на телефон отдельным приложением со значком «Арена» — аккаунт тот же.</p>
-        <button type="button" className="settings__outline" onClick={() => tg?.openLink?.(`${location.origin}/?install=1`)}>
+        <button type="button" className="settings__outline" onClick={openInstallPage}>
           <span>Установить как приложение</span>
           <Icon name="plus" size={28} />
         </button>

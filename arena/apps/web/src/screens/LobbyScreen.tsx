@@ -1,4 +1,4 @@
-import { EMPTY_FILTER, formatStake, MODE_PAIRS, type MyRoomDto, type RoomDto, type RoomFilter } from '@arena/shared';
+import { formatStake, MODE_PAIRS, type MyRoomDto, type RoomDto, type RoomFilter } from '@arena/shared';
 import { BottomSheet, Button, EmptyState, Icon } from '@arena/ui';
 import { useEffect, useMemo, useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
@@ -9,15 +9,14 @@ import { useToast } from '../toast.js';
 import { ScreenFallback, ScreenHeader } from './common.js';
 import { MODE_ICON, RoomRow } from './lobbyParts.js';
 
-const PRIVATE_FILTER: RoomFilter = { ...EMPTY_FILTER, scope: 'private' };
-
 /** «Открытые» and «Приватные»: a live list of tables waiting for players. */
 export default function LobbyScreen({ scope }: { scope: 'open' | 'private' }) {
   const { socket, enterRoom } = useRealtime();
   const { setTab } = useNav();
   const toast = useToast();
-  const [openFilter] = useLobbyFilter();
-  const filter = scope === 'open' ? openFilter : PRIVATE_FILTER;
+  // One set of filters for both lists: the same stakes, players and modes, open or private.
+  const [savedFilter] = useLobbyFilter();
+  const filter = useMemo<RoomFilter>(() => ({ ...savedFilter, scope }), [savedFilter, scope]);
   const [rooms, setRooms] = useState<RoomDto[] | null>(null);
   const [joining, setJoining] = useState<string | null>(null);
   const [locked, setLocked] = useState<RoomDto | null>(null);
@@ -73,7 +72,7 @@ export default function LobbyScreen({ scope }: { scope: 'open' | 'private' }) {
           ) : undefined
         }
       />
-      {scope === 'open' && <FilterBand filter={openFilter} />}
+      <FilterBand filter={filter} />
 
       {!sorted ? (
         <ScreenFallback />
@@ -81,7 +80,7 @@ export default function LobbyScreen({ scope }: { scope: 'open' | 'private' }) {
         <EmptyState
           icon={scope === 'open' ? 'cards' : 'lock'}
           title={scope === 'open' ? 'Свободных столов нет' : 'Приватных столов нет'}
-          text={scope === 'open' ? 'Ослабьте фильтры или создайте свой стол — соперники увидят его сразу.' : 'Создайте стол с паролем и отправьте друзьям приглашение.'}
+          text={scope === 'open' ? 'Ослабьте фильтры или создайте свой стол — соперники увидят его сразу.' : 'Ослабьте фильтры или создайте стол с паролем и отправьте друзьям приглашение.'}
           action={<Button icon="plus" onClick={() => setTab('create')}>Создать игру</Button>}
         />
       ) : (

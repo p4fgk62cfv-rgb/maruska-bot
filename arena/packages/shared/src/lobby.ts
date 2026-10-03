@@ -78,6 +78,20 @@ export const MODE_LABEL_RU: Record<string, string> = {
 export const SPEED_LABEL_RU = { normal: 'Обычная', fast: 'Быстрая' } as const;
 
 /** 50 000 → "50K", 1 000 000 → "1M" */
+/**
+ * Easy and medium bots are practice: such a table is a training one, no credits change
+ * hands, so nobody can farm credits off weak bots. Hard bots play for credits.
+ */
+export function isPracticeLevel(level: string | null | undefined): boolean {
+  return level === 'easy' || level === 'normal';
+}
+export const PRACTICE_LABEL = 'Тренировочный';
+
+/** A table's stake as shown: «Тренировочный» for a practice table (stake 0). */
+export function stakeText(stake: number): string {
+  return stake > 0 ? formatStake(stake) : PRACTICE_LABEL;
+}
+
 export function formatStake(value: number): string {
   if (value >= 1_000_000) return `${value / 1_000_000}M`;
   if (value >= 1_000) return `${value / 1_000}K`;
@@ -148,6 +162,8 @@ export const EMOJI_PACKS = {
   emoji_pack_horse: { title: 'Смайлы «Лошадка»', stickers: { prefix: 'horse', count: 25 } },
   emoji_pack_cat: { title: 'Смайлы «Котик»', stickers: { prefix: 'cat', count: 25 } },
   emoji_pack_raccoon: { title: 'Смайлы «Енот»', stickers: { prefix: 'raccoon', count: 25 } },
+  // `v`: bump when a pack's pictures change — phones keep stickers for a week.
+  emoji_pack_leaf: { title: 'Смайлы «Осенний лист»', stickers: { prefix: 'leaf', count: 25, v: 2 } },
 } as const;
 export type EmojiPackKey = keyof typeof EMOJI_PACKS;
 export const DEFAULT_EMOJI_PACK: EmojiPackKey = 'emoji_pack_basic';
@@ -178,5 +194,8 @@ export function packOfSmile(smile: string): EmojiPackKey | null {
 /** Picture of a sticker, or null for a classic emoji. */
 export function stickerUrl(smile: string): string | null {
   const [prefix, n] = smile.split(':');
-  return n ? `/emoji/${prefix}/${n}.webp` : null;
+  if (!n) return null;
+  const pack = Object.values(EMOJI_PACKS).find((p) => p.stickers?.prefix === prefix)?.stickers;
+  const v = pack && 'v' in pack ? `?v=${pack.v}` : '';
+  return `/emoji/${prefix}/${n}.webp${v}`;
 }

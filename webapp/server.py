@@ -42,6 +42,9 @@ logger = logging.getLogger("maruska.webapp")
 STATIC_DIR = Path(__file__).parent / "static"
 
 MAX_AUTH_AGE = 24 * 60 * 60
+# The admin panel can ban, delete and hand out roles: an intercepted or leaked
+# initData of an admin is accepted for an hour only (reopening the panel renews it).
+ADMIN_AUTH_AGE = 60 * 60
 MAX_IMAGE_BYTES = 6 * 1024 * 1024
 
 
@@ -53,7 +56,9 @@ def _secret_key(bot_token: str) -> bytes:
     ).digest()
 
 
-def verify_init_data(init_data: str, bot_token: str) -> dict | None:
+def verify_init_data(
+    init_data: str, bot_token: str, max_age: int = MAX_AUTH_AGE
+) -> dict | None:
     if not init_data:
         return None
 
@@ -85,7 +90,7 @@ def verify_init_data(init_data: str, bot_token: str) -> dict | None:
     except ValueError:
         return None
 
-    if auth_date and time.time() - auth_date > MAX_AUTH_AGE:
+    if not auth_date or time.time() - auth_date > max_age:
         return None
 
     try:
@@ -376,8 +381,36 @@ async def api_draw(request: web.Request):
     return web.json_response({"ok": True, "preview": preview})
 
 
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    # The pages open only inside Telegram: other sites can not frame them.
+    "Content-Security-Policy": (
+        "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org; "
+        "object-src 'none'; base-uri 'self'"
+    ),
+}
+
+
+@web.middleware
+async def security_headers(request: web.Request, handler):
+    try:
+        response = await handler(request)
+    except web.HTTPException as error:
+        error.headers.update(SECURITY_HEADERS)
+        raise
+    for name, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    return response
+
+
 def create_app(bot, bot_token: str) -> web.Application:
-    app = web.Application(client_max_size=MAX_IMAGE_BYTES + 1024 * 1024)
+    app = web.Application(
+        client_max_size=MAX_IMAGE_BYTES + 1024 * 1024,
+        middlewares=[security_headers],
+    )
 
     import time as _time
 
