@@ -70,6 +70,7 @@ export const ITEMS: ItemSeed[] = [
   // Replaced by «Котик»: whoever bought it gets the coins back once (see retireItems).
   { key: 'emoji_pack_fox', kind: 'EMOJI', name: 'Смайлы «Лисёнок»', rarity: 'RARE', price: 59, currency: 'COINS', isActive: false },
   { key: 'emoji_pack_raccoon', kind: 'EMOJI', name: 'Смайлы «Енот»', rarity: 'RARE', price: 59, currency: 'COINS' },
+  { key: 'emoji_pack_leaf', kind: 'EMOJI', name: 'Смайлы «Осенний лист»', rarity: 'RARE', price: 59, currency: 'COINS' },
   { key: 'effect_sparks', kind: 'EFFECT', name: 'Искры победы', rarity: 'EPIC', price: 120, currency: 'COINS' },
 ];
 

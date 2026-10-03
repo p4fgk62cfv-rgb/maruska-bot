@@ -148,6 +148,7 @@ export const EMOJI_PACKS = {
   emoji_pack_horse: { title: 'Смайлы «Лошадка»', stickers: { prefix: 'horse', count: 25 } },
   emoji_pack_cat: { title: 'Смайлы «Котик»', stickers: { prefix: 'cat', count: 25 } },
   emoji_pack_raccoon: { title: 'Смайлы «Енот»', stickers: { prefix: 'raccoon', count: 25 } },
+  emoji_pack_leaf: { title: 'Смайлы «Осенний лист»', stickers: { prefix: 'leaf', count: 25 } },
 } as const;
 export type EmojiPackKey = keyof typeof EMOJI_PACKS;
 export const DEFAULT_EMOJI_PACK: EmojiPackKey = 'emoji_pack_basic';
