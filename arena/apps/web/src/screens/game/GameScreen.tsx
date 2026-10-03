@@ -19,9 +19,10 @@ import { Payout } from './Payout.js';
 import { api } from '../../lib/api.js';
 import { DockAction, DockExtra, SeatTile, TableDock, TableTop } from './TableChrome.js';
 import { EmojiSheet, useSeatEmojis } from './emoji.js';
+import { ConfirmAlert, FlagIcon } from './ConfirmAlert.js';
 import { Table, type PendingMove } from './Table.js';
 
-type Sheet = null | 'menu' | 'emoji' | 'surrender' | 'discard' | { report: number };
+type Sheet = null | 'emoji' | 'surrender' | 'discard' | { report: number };
 
 export function GameScreen({ game }: { game: LiveGame }) {
   const me = useMe();
@@ -32,6 +33,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
   const a = view.actions;
   const [selected, setSelected] = useState<CardId[]>([]);
   const [sheet, setSheet] = useState<Sheet>(null);
+  const closeSheet = useCallback(() => setSheet(null), []);
   const sort = prefs.handSort;
   const rootRef = useRef<HTMLDivElement>(null);
   const layerRef = useRef<HTMLDivElement>(null);
@@ -336,7 +338,16 @@ export function GameScreen({ game }: { game: LiveGame }) {
     <div className="game" ref={rootRef}>
       <div className="motion-layer" ref={layerRef} />
 
-      <TableTop settings={tableSettings} button={{ icon: 'menu', label: 'Меню', onClick: () => setSheet('menu') }} />
+      <TableTop
+        settings={tableSettings}
+        button={{
+          icon: 'flag',
+          label: 'Сдаться',
+          node: <FlagIcon />,
+          // Only a player still in the deal can give it up.
+          onClick: () => mine?.status === 'active' && view.status === 'playing' && setSheet('surrender'),
+        }}
+      />
 
       <div className={`game__opponents game__opponents--${opponents.length}`}>
         {opponents.map((p, i) => (
@@ -449,24 +460,12 @@ export function GameScreen({ game }: { game: LiveGame }) {
         }
       />
 
-      <BottomSheet open={sheet === 'menu'} title="Меню" onClose={() => setSheet(null)}>
-        <div className="app-list">
-          <Button block variant="ghost" icon="heart" onClick={() => setSheet('emoji')}>Смайлик</Button>
-          <p className="app-muted">
-            Перетащите карту пальцем: на стол — сходить или подкинуть, на карту соперника — побить её, на «Перевести» — перевести. Двойной тап по карте — сразу сыграть. Свайп вправо по руке — сменить сортировку. Внизу справа — подсказки за монеты: вернуть карту ({FEATURE_PRICES.undo}), подсветка ({FEATURE_PRICES.hints}), отбой ({FEATURE_PRICES.discardReminder}).
-          </p>
-          {mine?.status === 'active' && (
-            <Button block variant="danger" icon="flag" onClick={() => setSheet('surrender')}>Сдаться</Button>
-          )}
-        </div>
-      </BottomSheet>
-
-      <BottomSheet open={sheet === 'surrender'} title="Сдаться?" onClose={() => setSheet(null)}>
-        <div className="app-stack">
-          <p className="app-muted">Вы проиграете партию и потеряете ставку.</p>
-          <Button block variant="danger" onClick={() => (setSheet(null), void send({ type: 'LEAVE_GAME', gameId }))}>Сдаться</Button>
-        </div>
-      </BottomSheet>
+      <ConfirmAlert
+        open={sheet === 'surrender'}
+        text="Вы действительно хотите сдаться?"
+        onNo={closeSheet}
+        onYes={() => (setSheet(null), void send({ type: 'LEAVE_GAME', gameId }))}
+      />
 
       <EmojiSheet open={sheet === 'emoji'} pack={me.equipped.emoji} onClose={() => setSheet(null)} onPick={(emoji) => void send({ type: 'SEND_EMOJI', gameId, emoji })} />
 

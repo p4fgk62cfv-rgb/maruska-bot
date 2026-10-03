@@ -1572,3 +1572,21 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 .install-hint--compact { width: auto; margin: 0 2px; }
 .home-shortcut__img { flex: none; border-radius: 10px; }
 .install-hint__browser { display: block; margin: 2px 12px 6px; padding: 11px 12px; border-radius: 12px; background: #2aabee; color: #fff; font-weight: 800; text-align: center; text-decoration: none; }
+
+/* «Вы действительно хотите сдаться?» — an iPhone-style alert over the table */
+.ios-alert-backdrop { position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; padding: 24px; background: rgba(0, 0, 0, 0.32); animation: ios-alert-fade 0.18s ease-out; }
+.ios-alert {
+  width: min(100%, 300px); overflow: hidden; border-radius: 16px; text-align: center; color: #1c1c1e;
+  background: rgba(205, 233, 221, 0.94); -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28); animation: ios-alert-pop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+}
+.ios-alert__text { margin: 0; padding: 22px 18px 20px; font-size: 16px; line-height: 1.35; }
+.ios-alert__actions { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid rgba(60, 60, 67, 0.22); }
+.ios-alert__btn { padding: 13px 8px; border: 0; background: none; font: inherit; font-size: 17px; color: #0a7aff; cursor: pointer; }
+.ios-alert__btn + .ios-alert__btn { border-left: 1px solid rgba(60, 60, 67, 0.22); }
+.ios-alert__btn--cancel { font-weight: 600; }
+.ios-alert__btn:active { background: rgba(0, 0, 0, 0.08); }
+@keyframes ios-alert-fade { from { opacity: 0; } }
+@keyframes ios-alert-pop { from { opacity: 0; transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .ios-alert-backdrop, .ios-alert { animation: none; } }
