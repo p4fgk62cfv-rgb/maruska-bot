@@ -1,20 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420" role="img" aria-labelledby="title desc">
-<title id="title">VEGAS АРЕНА</title><desc id="desc">Минималистичная эмблема карточной арены, золото и бордовый цвет на прозрачном фоне.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="340" viewBox="0 0 900 340" role="img" aria-labelledby="title desc">
+<title id="title">VEGAS АРЕНА</title>
+<desc id="desc">Минималистичный логотип карточной игры в тёмно-бордовом и золотом цветах на прозрачном фоне.</desc>
 <defs>
-  <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6dfaa"/><stop offset=".48" stop-color="#d6ad62"/><stop offset="1" stop-color="#a97937"/></linearGradient>
-  <linearGradient id="red" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6a2029"/><stop offset="1" stop-color="#250e13"/></linearGradient>
-  <filter id="shadow" x="-15%" y="-15%" width="130%" height="140%"><feGaussianBlur in="SourceAlpha" stdDeviation="7"/><feOffset dy="5"/><feComponentTransfer><feFuncA type="linear" slope=".32"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4dda5"/><stop offset=".52" stop-color="#d5ad65"/><stop offset="1" stop-color="#a77a3d"/></linearGradient>
+  <linearGradient id="spade" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6b2630"/><stop offset="1" stop-color="#2b1016"/></linearGradient>
+  <filter id="shadow" x="-10%" y="-15%" width="120%" height="135%"><feGaussianBlur in="SourceAlpha" stdDeviation="5"/><feOffset dy="3"/><feComponentTransfer><feFuncA type="linear" slope=".25"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
 </defs>
 <g filter="url(#shadow)">
-  <path d="M450 20 C422 53 395 70 365 80 C390 111 416 125 450 127 C484 125 510 111 535 80 C505 70 478 53 450 20Z" fill="url(#red)" stroke="url(#gold)" stroke-width="3"/>
-  <path d="M450 42 L450 111 M414 76 L486 76" stroke="#d7b26c" stroke-width="2" opacity=".65"/>
-  <path d="M450 136 C430 169 391 201 355 235 C328 262 349 293 384 284 C412 277 432 252 450 231 C468 252 488 277 516 284 C551 293 572 262 545 235 C509 201 470 169 450 136Z" fill="url(#red)" stroke="url(#gold)" stroke-width="3"/>
-  <path d="M450 157 C430 187 401 212 380 236 C366 251 379 263 394 254 C418 240 436 216 450 201 C464 216 482 240 506 254 C521 263 534 251 520 236 C499 212 470 187 450 157Z" fill="none" stroke="#d7b26c" stroke-width="1.5" opacity=".7"/>
-  <path d="M302 116 Q450 147 598 116" fill="none" stroke="url(#gold)" stroke-width="2" opacity=".8"/>
-  <text x="450" y="187" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="108" letter-spacing="5" fill="url(#gold)" stroke="#321a17" stroke-width="1.2" paint-order="stroke">VEGAS</text>
-  <path d="M267 209 H633" stroke="url(#gold)" stroke-width="2" opacity=".85"/>
-  <circle cx="250" cy="209" r="4" fill="#d8b66f"/><circle cx="650" cy="209" r="4" fill="#d8b66f"/>
-  <text x="450" y="264" text-anchor="middle" font-family="Arial, sans-serif" font-weight="600" font-size="43" letter-spacing="18" fill="#f4ecdf">АРЕНА</text>
-  <text x="450" y="309" text-anchor="middle" font-family="Arial, sans-serif" font-weight="500" font-size="15" letter-spacing="7" fill="#bca57c">КАРТОЧНАЯ ИГРА</text>
+  <path d="M450 18 C429 42 407 55 384 67 C406 93 429 105 450 105 C471 105 494 93 516 67 C493 55 471 42 450 18Z" fill="url(#spade)" stroke="url(#gold)" stroke-width="2.5"/>
+  <path d="M450 83 L450 111 M434 111 H466" stroke="url(#gold)" stroke-width="3" stroke-linecap="round"/>
+  <text x="450" y="196" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="112" letter-spacing="5" fill="url(#gold)">VEGAS</text>
+  <path d="M290 221 H370 M530 221 H610" stroke="url(#gold)" stroke-width="2" opacity=".85"/>
+  <circle cx="278" cy="221" r="3" fill="#d5ad65"/><circle cx="622" cy="221" r="3" fill="#d5ad65"/>
+  <text x="450" y="235" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="600" font-size="37" letter-spacing="12" fill="#f4ecdf">АРЕНА</text>
+  <text x="450" y="280" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="500" font-size="14" letter-spacing="6" fill="#bca57c">КАРТОЧНАЯ ИГРА</text>
 </g>
 </svg>
