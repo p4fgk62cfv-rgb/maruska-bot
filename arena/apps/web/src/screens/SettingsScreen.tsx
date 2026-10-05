@@ -155,16 +155,17 @@ export default function SettingsScreen() {
 
       <section className="settings__section">
         <h3 className="script-title">Дизайн игры</h3>
-        <Tabs<'classic' | 'daylight'>
+        <Tabs<'classic' | 'daylight' | 'vegas'>
           value={s.homeDesign}
           onChange={(homeDesign) => settings.set({ homeDesign })}
           items={[
             { value: 'classic', label: 'старый' },
             { value: 'daylight', label: 'светлый' },
+            { value: 'vegas', label: 'VEGAS' },
           ]}
         />
         <p className="app-muted" style={{ textAlign: 'center', marginTop: 8 }}>
-          Старый дизайн используется по умолчанию. Светлый стиль меняет оформление всех экранов. Выбор сохраняется на устройстве.
+          Классический дизайн включён по умолчанию. VEGAS — тёмный бордово-золотой стиль. Выбор сохраняется на устройстве.
         </p>
       </section>
 
