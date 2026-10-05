@@ -22,6 +22,7 @@ interface Tile {
 const TILES: Tile[] = [
   { icon: 'gift', title: 'Задания', page: 'daily' },
   { icon: 'chat', title: 'Чат', page: 'chat' },
+  { icon: 'cards', title: 'Зал ботов', page: 'training' },
   { icon: 'trophy', title: 'Турниры', page: 'tournaments' },
   { icon: 'news', title: 'Новости', page: 'news' },
   { icon: 'users', title: 'Друзья', page: 'friends' },
@@ -133,7 +134,7 @@ export function HomeScreen() {
         </>
       )}
       <div className="tile-grid">
-        {(me.owner ? [...TILES, { icon: 'cards', title: 'Тренировка ботов', page: 'training' } as Tile, { icon: 'crown', title: 'Управление', page: 'owner' } as Tile] : TILES).map((tile) => {
+        {(me.owner ? [...TILES, { icon: 'crown', title: 'Управление', page: 'owner' } as Tile] : TILES).map((tile) => {
           const count = counter(tile);
           return (
             <button key={tile.title} type="button" className="grid-tile" onClick={() => tile.page && push(tile.page)}>
