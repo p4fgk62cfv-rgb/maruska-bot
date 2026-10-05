@@ -5,6 +5,7 @@ import type { AppErrorCode } from './errors.js';
 import type { Presence, PublicUserDto } from './api.js';
 import type { RoomDto } from './lobby.js';
 import type { ChatMessageDto } from './chat.js';
+import type { TrainingTableDto } from './training.js';
 
 /**
  * WebSocket protocol on /ws. One socket per client, authenticated with the session
@@ -72,7 +73,10 @@ export type ServerMessage =
   | { type: 'SERVER_RESTART'; refunded: boolean }
   /** The common chat (to those who have it open). */
   | { type: 'CHAT_MESSAGE'; message: ChatMessageDto }
-  | { type: 'CHAT_DELETED'; ids: string[] };
+  | { type: 'CHAT_DELETED'; ids: string[] }
+  /** Bot training tables (to those watching them): all of them, then each one after every move. */
+  | { type: 'TRAINING_TABLES'; tables: TrainingTableDto[] }
+  | { type: 'TRAINING_TABLE'; table: TrainingTableDto };
 
 export interface GameResultDto {
   kind: 'loser' | 'draw';

@@ -137,15 +137,35 @@ export function runGame(
   let s = start;
   const called = new Set<number>();
   for (let step = 0; step < maxSteps && s.status === 'playing'; step++) {
-    const move = nextMove(s, decide, random, catchRate, called);
-    let result = move ? applyAction(s, move.id, move.move, s.updatedAt + 1) : applyTimeout(s, (s.turnDeadline ?? s.updatedAt) + 1);
-    // A refused move (should not happen with the policy): let the timer decide.
-    if (!result || !result.ok) result = applyTimeout(s, (s.turnDeadline ?? s.updatedAt) + 1);
-    if (!result || !result.ok) break;
-    s = result.state;
-    onEvents?.(result.events);
+    const next = stepGame(s, decide, random, catchRate, called);
+    if (!next) break;
+    s = next.state;
+    onEvents?.(next.events);
   }
   return s;
+}
+
+/**
+ * One step of a game played by deciders: who moves and the state after it. `called` keeps the
+ * cheats already looked at (each is called out at most once). Null when the game cannot go on.
+ */
+export function stepGame(
+  s: GameState,
+  decide: Decider,
+  random: () => number,
+  catchRate: number,
+  called: Set<number>,
+): { state: GameState; events: GameEvent[]; actor: PlayerId | null; move: BrainMove | null } | null {
+  if (s.status !== 'playing') return null;
+  const move = nextMove(s, decide, random, catchRate, called);
+  let result = move ? applyAction(s, move.id, move.move, s.updatedAt + 1) : null;
+  // Nobody moves, or a refused move (should not happen with the policy): the timer decides.
+  if (!result || !result.ok) {
+    const forced = applyTimeout(s, (s.turnDeadline ?? s.updatedAt) + 1);
+    if (!forced || !forced.ok) return null;
+    return { state: forced.state, events: forced.events, actor: null, move: null };
+  }
+  return { state: result.state, events: result.events, actor: move!.id, move: move!.move };
 }
 
 function nextMove(s: GameState, decide: Decider, random: () => number, catchRate: number, called: Set<number>): { id: PlayerId; move: BrainMove } | null {

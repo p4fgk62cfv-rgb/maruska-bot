@@ -18,6 +18,7 @@ export type Page =
   | 'invite'
   | 'daily'
   | 'chat'
+  | 'training'
   | 'player';
 
 interface Navigation {

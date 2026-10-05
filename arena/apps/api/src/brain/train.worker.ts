@@ -108,6 +108,7 @@ async function main(): Promise<void> {
   for (;;) {
     // ── one generation: a challenger near the champion plays a batch on every table ──
     const challenger = mutateParams(champion, sigma, Math.random);
+    post({ type: 'challenger', params: challenger, champion, version });
     const results: number[] = [];
     const perTable: number[] = TRAINING_TABLES.map(() => 0);
     const confirm = async (deals: number) => {

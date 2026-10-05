@@ -28,7 +28,9 @@ export interface TrainingExam {
 export type TrainerMessage =
   | { type: 'generation'; games: number[]; promoted: boolean; version: number; sigma: number; score: number; params: BrainParams | null }
   | { type: 'exam'; exam: TrainingExam; version: number }
-  | { type: 'error'; error: string };
+  | { type: 'error'; error: string }
+  /** The copy now being tried against the champion (the watched tables show these two). */
+  | { type: 'challenger'; params: BrainParams; champion: BrainParams; version: number };
 
 /** What the owner sees in «Управление» → «Обучение ботов». */
 export interface TrainingStats {

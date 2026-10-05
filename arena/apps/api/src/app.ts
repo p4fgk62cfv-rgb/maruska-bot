@@ -28,6 +28,7 @@ import { chatRoutes } from './routes/chat.js';
 import { ChatService } from './services/chat.js';
 import { Brain } from './brain/brain.js';
 import { Trainer } from './brain/trainer.js';
+import { Showcase } from './brain/showcase.js';
 import { Outbox, TelegramBot } from './services/notifier.js';
 import { playerRoutes } from './routes/players.js';
 import { ownerRoutes } from './routes/owner.js';
@@ -80,6 +81,13 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   await brain.start();
   const trainer = new Trainer(base.db, brain, app.log, { duty: config.BOT_TRAINING_DUTY });
   const realtime = new Realtime({ ...base, store, log: app.log, alerts, brain });
+  const showcase = new Showcase({
+    publish: (message) => realtime.hub.publishTraining(message),
+    watched: () => realtime.hub.hasTrainingWatchers(),
+    players: () => trainer.current,
+    fallback: () => ({ params: brain.params, version: brain.version }),
+  });
+  realtime.trainingTables = () => showcase.snapshot();
   const presence = new RealtimePresence(realtime);
   const outbox = new Outbox(base.db, bot, app.log);
   const friends = new FriendService({ ...base, outbox, presence, realtime });
@@ -114,7 +122,13 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
     void realtime.ready.then(() => tournaments.start());
     // One server trains: the one that runs the games (it holds the lease).
     if (config.BOT_TRAINING === 'on') {
-      void realtime.ready.then(() => trainer.start()).then((on) => on && app.log.info('bot training started')).catch((err: unknown) => app.log.error({ err }, 'bot training did not start'));
+      void realtime.ready
+        .then(() => trainer.start())
+        .then((on) => {
+          if (on) app.log.info('bot training started');
+          showcase.start();
+        })
+        .catch((err: unknown) => app.log.error({ err }, 'bot training did not start'));
     }
   }
   app.addHook('onRequest', async (request) => {
@@ -124,6 +138,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
     outbox.stop();
     chat.stop();
     tournaments.stop();
+    showcase.stop();
     await trainer.stop();
     await realtime.shutdown();
     await brain.stop();

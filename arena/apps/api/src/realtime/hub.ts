@@ -11,6 +11,8 @@ export interface Client {
   lobby: RoomFilter | null;
   /** The common chat is open on this client. */
   chat: boolean;
+  /** Watches the bot training tables. */
+  training: boolean;
   /** Token bucket against message floods. */
   tokens: number;
   refilledAt: number;
@@ -36,7 +38,7 @@ export class Hub {
   attach(userId: string, socket: WebSocket): Client {
     const previous = this.clients.get(userId);
     if (previous && previous.socket !== socket) previous.socket.close(WS_CLOSE.REPLACED, 'replaced');
-    const client: Client = { id: this.nextId++, socket, userId, lobby: null, chat: false, tokens: 20, refilledAt: Date.now() };
+    const client: Client = { id: this.nextId++, socket, userId, lobby: null, chat: false, training: false, tokens: 20, refilledAt: Date.now() };
     this.clients.set(userId, client);
     return client;
   }
@@ -78,6 +80,23 @@ export class Hub {
   /** New and deleted messages of the common chat go to those who have it open. */
   setChat(client: Client, open: boolean): void {
     client.chat = open;
+  }
+
+  setTraining(client: Client, on: boolean): void {
+    client.training = on;
+  }
+
+  /** Whether anybody watches the training tables (nothing to send otherwise). */
+  hasTrainingWatchers(): boolean {
+    for (const c of this.clients.values()) if (c.training) return true;
+    return false;
+  }
+
+  publishTraining(message: ServerMessage): void {
+    const data = JSON.stringify(message);
+    for (const client of this.clients.values()) {
+      if (client.training && client.socket.readyState === client.socket.OPEN) client.socket.send(data);
+    }
   }
 
   publishChat(message: ServerMessage): void {

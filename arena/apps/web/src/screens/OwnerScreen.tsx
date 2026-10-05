@@ -6,6 +6,7 @@ import { useQuery } from '../lib/useQuery.js';
 import { useSession } from '../session.js';
 import { useToast } from '../toast.js';
 import { ScreenHeader } from './common.js';
+import { useNav } from '../navigation.js';
 
 type Section = 'announcement' | 'gifts' | 'bonus' | 'bots';
 interface GiftItem { key: string; name: string; kind: string; owned: boolean }
@@ -425,6 +426,7 @@ const when = (iso: string) => new Date(iso).toLocaleString('ru-RU', { day: 'nume
 /** Self-play training of the strong bots: the three tables, improvements and exams. */
 function Training() {
   const query = useQuery<TrainingDto>('/owner/training');
+  const { push } = useNav();
   useEffect(() => {
     const timer = setInterval(query.reload, 15_000);
     return () => clearInterval(timer);
@@ -449,6 +451,9 @@ function Training() {
         <span><b>{trainingNum.format(t.generations)}</b><small>проверено версий</small></span>
       </div>
       {t.lastImprovementAt && <p className="app-muted">Последнее улучшение: {when(t.lastImprovementAt)}</p>}
+      <Button variant="gold" block icon="eye" onClick={() => push('training')}>
+        Смотреть, как боты играют
+      </Button>
       <h3 className="owner-sub">Столы</h3>
       <ul className="training-tables">
         {t.tables.map((table, i) => (

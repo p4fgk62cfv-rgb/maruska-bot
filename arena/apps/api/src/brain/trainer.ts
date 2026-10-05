@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
-import { DEFAULT_PARAMS, sanitizeParams } from '@arena/game-engine';
+import { DEFAULT_PARAMS, sanitizeParams, type BrainParams } from '@arena/game-engine';
 import type { FastifyBaseLogger } from 'fastify';
 import type { Db } from '../db.js';
 import type { Prisma } from '../generated/prisma/client.js';
@@ -32,6 +32,8 @@ export class Trainer {
   private stats: TrainingStats | null = null;
   private saveTimer: NodeJS.Timeout | null = null;
   private stopped = false;
+  /** Who plays at the watched tables: the champion and the copy being tried now. */
+  current: { champion: BrainParams; challenger: BrainParams; version: number } | null = null;
 
   constructor(
     private readonly db: Db,
@@ -96,6 +98,10 @@ export class Trainer {
   private async onMessage(m: TrainerMessage): Promise<void> {
     const stats = this.stats;
     if (!stats) return;
+    if (m.type === 'challenger') {
+      this.current = { champion: m.champion, challenger: m.params, version: m.version };
+      return;
+    }
     if (m.type === 'error') {
       this.log.error({ err: m.error }, 'training failed');
       return;

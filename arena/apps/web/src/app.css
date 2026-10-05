@@ -1826,3 +1826,32 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 .home--vegas .arena-hero--vegas-logo { min-height:0; padding:16px 12px 17px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0; }
 .home--vegas .vegas-arena-logo { display:block; width:min(100%, 310px); height:auto; max-height:145px; object-fit:contain; }
 .home--vegas .arena-hero--vegas-logo .arena-hero__subtitle { margin:0; font-size:9px; letter-spacing:.16em; color:#bca57c; }
+
+/* «Тренировочный зал»: bot training tables with open cards */
+.training-hall__intro { margin: 0 2px; font-size: 13px; line-height: 1.45; color: var(--text-2); }
+.tt { display: grid; gap: 8px; }
+.tt__head { display: flex; align-items: center; gap: 10px; }
+.tt__n { display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 50%; font-size: 13px; font-weight: 800; color: #3a2200; background: var(--gold); }
+.tt__title { display: grid; gap: 1px; min-width: 0; }
+.tt__title strong { font-size: 15px; }
+.tt__title small { font-size: 12px; color: var(--text-2); }
+.tt__felt {
+  display: grid; gap: 8px; padding: 10px; border-radius: 18px;
+  background: radial-gradient(ellipse at 50% 40%, #1f7a4d, #0d4a2c 75%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+.tt-seat { display: grid; gap: 4px; }
+.tt-seat__name { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #fff; }
+.tt-seat__name small { margin-left: auto; font-weight: 500; color: rgba(255, 255, 255, 0.7); }
+.tt-seat--challenger .tt-seat__name { color: #ffd76a; }
+.tt-seat--out { opacity: 0.55; }
+.tt-seat__hand { display: flex; flex-wrap: wrap; gap: 2px; min-height: 36px; }
+.tt__middle { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px dashed rgba(255, 255, 255, 0.18); border-bottom: 1px dashed rgba(255, 255, 255, 0.18); }
+.tt__stock { display: grid; justify-items: center; gap: 2px; flex: none; width: 56px; }
+.tt__stock small { font-size: 10px; color: rgba(255, 255, 255, 0.75); white-space: nowrap; }
+.tt__trump-suit { font-size: 11px; color: rgba(255, 255, 255, 0.6); }
+.tt__pairs { display: flex; flex-wrap: wrap; gap: 8px 6px; flex: 1; min-height: 50px; align-items: center; }
+.tt__pair { position: relative; display: inline-block; padding: 0 8px 10px 0; }
+.tt__cover { position: absolute; left: 9px; top: 11px; }
+.tt__empty { font-size: 12px; color: rgba(255, 255, 255, 0.55); }
+.tt__last { margin: 0; min-height: 18px; font-size: 13px; color: #fff; }
+.tt__last--result { font-weight: 800; color: #ffd76a; }
