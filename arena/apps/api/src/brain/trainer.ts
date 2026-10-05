@@ -126,6 +126,7 @@ export class Trainer {
       stats.improvements++;
       stats.version = m.version;
       stats.lastImprovementAt = new Date().toISOString();
+      stats.history = [...stats.history, { at: stats.lastImprovementAt, version: m.version, score: m.score }].slice(-100);
       const value = { version: m.version, params: m.params, sigma: m.sigma, updatedAt: stats.lastImprovementAt } as unknown as Prisma.InputJsonValue;
       await this.db.setting.upsert({ where: { key: BRAIN_KEY }, create: { key: BRAIN_KEY, value }, update: { value } });
       this.brain.params = m.params;
@@ -150,6 +151,7 @@ export class Trainer {
       sigma: v.sigma ?? 0.25,
       tables: TRAINING_TABLES.map((t) => ({ key: t.key, title: t.title, games: v.tables?.find((x) => x.key === t.key)?.games ?? 0 })),
       exams: v.exams ?? [],
+      history: v.history ?? [],
     };
   }
 

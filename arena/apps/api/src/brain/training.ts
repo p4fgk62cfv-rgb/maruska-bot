@@ -45,4 +45,6 @@ export interface TrainingStats {
   sigma: number;
   tables: { key: string; title: string; games: number }[];
   exams: (TrainingExam & { version: number })[];
+  /** Every improvement: when, which version, how much better than the previous champion. */
+  history: { at: string; version: number; score: number }[];
 }

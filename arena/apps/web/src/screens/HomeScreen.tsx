@@ -134,7 +134,7 @@ export function HomeScreen() {
         </>
       )}
       <div className="tile-grid">
-        {(me.owner ? [...TILES, { icon: 'crown', title: 'Управление', page: 'owner' } as Tile] : TILES).map((tile) => {
+        {(me.owner ? [...TILES, { icon: 'flame', title: 'Прогресс бота', page: 'botprogress' } as Tile, { icon: 'crown', title: 'Управление', page: 'owner' } as Tile] : TILES).map((tile) => {
           const count = counter(tile);
           return (
             <button key={tile.title} type="button" className="grid-tile" onClick={() => tile.page && push(tile.page)}>

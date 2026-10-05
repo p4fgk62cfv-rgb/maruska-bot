@@ -19,6 +19,7 @@ export type Page =
   | 'daily'
   | 'chat'
   | 'training'
+  | 'botprogress'
   | 'player';
 
 interface Navigation {

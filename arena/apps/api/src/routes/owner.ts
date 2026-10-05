@@ -1,3 +1,4 @@
+import { DEFAULT_PARAMS } from '@arena/game-engine';
 import type { AnnouncementDto, OwnerPlayerDto, WelcomeGiftDto } from '@arena/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -30,7 +31,7 @@ export async function ownerRoutes(app: FastifyInstance, ctx: Context): Promise<v
   // ── bot training: three self-play tables and the exams against the old strong bot ──
   app.get('/owner/training', auth, async (request) => {
     await owner(request);
-    return { ...(await ctx.trainer.read()), brainVersion: ctx.brain.version };
+    return { ...(await ctx.trainer.read()), brainVersion: ctx.brain.version, params: ctx.brain.params, defaults: DEFAULT_PARAMS };
   });
 
   // ── announcement: everyone reads, the owner writes ──
