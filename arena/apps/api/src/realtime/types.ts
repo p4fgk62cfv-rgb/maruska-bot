@@ -1,4 +1,4 @@
-import type { GameState } from '@arena/game-engine';
+import type { CardMemory, GameState } from '@arena/game-engine';
 import type { RoomSettings, RoomStatus } from '@arena/shared';
 
 export interface Seat {
@@ -56,6 +56,8 @@ export interface GameSnapshot {
   reserve?: Record<string, number>;
   /** How the bots at this table play (from the room); the owner's default when missing. */
   botLevel?: 'easy' | 'normal' | 'hard';
+  /** Cards everyone saw going into each hand (taken from the table): the strong bots remember them. */
+  memory?: CardMemory;
   /** The player whose turn ran out while offline and is being waited for. */
   grace?: { userId: string; since: number } | null;
 }

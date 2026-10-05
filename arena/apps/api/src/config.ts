@@ -36,6 +36,12 @@ const schema = z.object({
   /** Postgres connections per instance; keep instances × size under the server's max_connections. */
   DB_POOL_SIZE: z.coerce.number().int().positive().default(20),
   RAKE_PERCENT: z.coerce.number().min(0).max(50).default(5),
+  /** Threads where the strong bots think (0: inline, small searches — tests). */
+  BRAIN_THREADS: z.coerce.number().int().min(0).max(8).default(2),
+  /** Self-play training of the bots in the background: «on» or «off». */
+  BOT_TRAINING: z.enum(['on', 'off']).default('on'),
+  /** Share of one CPU core the training may use. */
+  BOT_TRAINING_DUTY: z.coerce.number().min(0.05).max(0.9).default(0.5),
   CORS_ORIGINS: z.string().default(''),
   /** Directory with the built web app; served from the same origin as the API. */
   WEB_DIST: z.string().default('../web/dist'),

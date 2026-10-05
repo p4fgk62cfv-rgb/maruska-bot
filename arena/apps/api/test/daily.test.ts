@@ -116,7 +116,8 @@ describe.skipIf(!url)('daily quests and the login calendar', () => {
   it('login calendar: once a day, seven in a row, a missed day starts over', async () => {
     const p = await player();
     const daily = handle.ctx.daily;
-    const t0 = Date.parse('2026-10-05T09:00:00Z');
+    // A fixed day far from today, so the real «today» claim above never shares a key with these.
+    const t0 = Date.parse('2031-03-02T09:00:00Z');
     const before = await balance(p.id);
 
     let got = (await call(p, 'GET', '/daily')).json() as DailyDto;

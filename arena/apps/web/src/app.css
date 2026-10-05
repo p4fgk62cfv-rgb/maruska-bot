@@ -1745,3 +1745,20 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 :root[data-game-design="daylight"] .chat-composer__input { background: rgba(255, 255, 255, 0.92); }
 :root[data-game-design="daylight"] .chat-older,
 :root[data-game-design="daylight"] .chat-composer__blocked { background: rgba(255, 255, 255, 0.8); }
+
+/* «Управление» → «Боты»: training of the strong bots */
+.training-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.training-stats span { display: grid; gap: 2px; padding: 10px 6px; border-radius: 12px; text-align: center; background: rgba(0, 0, 0, 0.2); }
+.training-stats b { font-size: 17px; }
+.training-stats small { font-size: 11px; color: var(--text-2); }
+.training-tables, .training-exams { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.training-tables li { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; background: rgba(0, 0, 0, 0.18); }
+.training-tables__n { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font-size: 12px; font-weight: 700; color: #3a2200; background: var(--gold); }
+.training-tables__title { flex: 1; font-size: 14px; }
+.training-exams li { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; padding: 8px 12px; border-radius: 12px; background: rgba(0, 0, 0, 0.18); font-size: 13px; }
+.training-exams small { grid-column: 1 / -1; font-size: 11px; color: var(--text-2); }
+.training-exams__good { color: #4cd964; }
+:root[data-game-design="daylight"] .training-stats span,
+:root[data-game-design="daylight"] .training-tables li,
+:root[data-game-design="daylight"] .training-exams li { background: rgba(47, 121, 177, 0.08); }
+:root[data-game-design="daylight"] .training-exams__good { color: #23893f; }

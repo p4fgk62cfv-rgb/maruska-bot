@@ -35,7 +35,6 @@ function valuable(card: CardId, trump: Suit): boolean {
 export function chooseBotMove(view: PlayerView, level: BotLevel, random: () => number = Math.random): BotMove | null {
   const me = view.you;
   if (!me || view.status !== 'playing') return null;
-  const a = view.actions;
   const trump = view.trump.suit;
   const hand = me.hand;
   const early = view.deckCount > 6;
@@ -43,6 +42,17 @@ export function chooseBotMove(view: PlayerView, level: BotLevel, random: () => n
   // slips now and then, the hard one never.
   const sloppy = random() < (level === 'easy' ? 0.4 : level === 'normal' ? 0.2 : 0);
   const rival = level === 'hard' ? knownRivalHand(view) : null;
+  // «С шулерами» the hints list rule-breaking cards too; these bots play honestly.
+  const tableRanks = new Set(view.table.flatMap((p) => (p.defense ? [rankOf(p.attack), rankOf(p.defense)] : [rankOf(p.attack)])));
+  const a = {
+    ...view.actions,
+    attack: view.phase === 'attack' ? view.actions.attack : view.actions.attack.filter((c) => tableRanks.has(rankOf(c))),
+    defend: Object.fromEntries(
+      Object.entries(view.actions.defend)
+        .map(([card, targets]) => [card, (targets ?? []).filter((i) => view.table[i] && beats(card as CardId, view.table[i]!.attack, view.trump.suit))])
+        .filter(([, targets]) => (targets as number[]).length > 0),
+    ) as Record<string, number[]>,
+  };
 
   // ── defending ────────────────────────────────────────────
   const undefended = view.table.map((p, i) => ({ p, i })).filter(({ p }) => !p.defense);

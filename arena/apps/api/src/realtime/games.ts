@@ -3,7 +3,9 @@ import {
   applyAction,
   applyTimeout,
   chooseBotMove,
+  rememberEvents,
   solveEndgame,
+  type BrainMove,
   type BotLevel,
   type BotMove,
   createGame,
@@ -22,6 +24,7 @@ import { AppError } from '../lib/errors.js';
 import { cryptoRandom } from '../lib/ids.js';
 import { metrics } from '../lib/metrics.js';
 import { SerialQueue } from '../lib/serial.js';
+import type { Brain } from '../brain/brain.js';
 import type { Alerts } from '../services/alerts.js';
 import type { Ledger } from '../services/ledger.js';
 import { NotSettleable, type SettlementService } from '../services/settlement.js';
@@ -62,6 +65,8 @@ export interface GameDeps {
   onPresence?: (userIds: string[]) => void;
   /** How well bot opponents play (owner's setting). */
   botLevel?: () => BotLevel;
+  /** How the strong bots think (search with trained weights); without it they play the old way. */
+  brain?: Brain;
   alerts?: Alerts;
 }
 
@@ -206,6 +211,7 @@ export class GameRunner {
     if (this.snap.grace) this.spendGrace(Date.now());
     this.snap.state = result.state;
     this.snap.previous = previous;
+    this.snap.memory = rememberEvents(this.snap.memory ?? {}, result.events);
     for (const event of result.events) {
       if (event.type === 'CARD_TRANSFERRED') {
         this.snap.transfers[event.playerId] = (this.snap.transfers[event.playerId] ?? 0) + 1;
@@ -414,43 +420,57 @@ export class GameRunner {
 
   // ── bot opponents ──────────────────────────────────────────
 
-  /**
-   * Every bot with something to do gets a move after a human-like pause. It decides from its
-   * own player view only (its hand, the table, the trump), like a person at the table.
-   */
-  /**
-   * The bot's move from its own view. The hard bot remembers the beaten-off cards; at the end of
-   * a two-player game that pins down the opponent's hand, and it plays the end exactly.
-   */
-  private botMove(id: string, level: BotLevel) {
+  /** The endgame search per bot (two players, no stock): exact, so it overrules everything else. */
+  private endgameMove(id: string): BotMove | null {
     const state = this.snap.state;
-    if (level === 'hard' && state.deck.length === 0 && state.players.length === 2) {
-      let solved = this.botSolved.get(id);
-      if (solved?.version !== state.version) {
-        solved = { version: state.version, move: solveEndgame(state, id) };
-        this.botSolved.set(id, solved);
-      }
-      if (solved.move) return solved.move;
+    if (state.deck.length !== 0 || state.players.length !== 2) return null;
+    let solved = this.botSolved.get(id);
+    if (solved?.version !== state.version) {
+      solved = { version: state.version, move: solveEndgame(state, id) };
+      this.botSolved.set(id, solved);
     }
-    return chooseBotMove(toPlayerView(state, id, { hints: true, discard: level === 'hard' }), level);
+    return solved.move;
   }
 
+  /**
+   * Whether the bot has something to do now, and a promise of its move. Easy and normal bots
+   * decide at once from their own view; the hard bot searches (in a worker thread) with what it
+   * knows: its hand, the table, the beaten-off pile and the cards others took.
+   */
+  private planBot(id: string, level: BotLevel, budgetMs: number): Promise<BrainMove | null> | null {
+    const state = this.snap.state;
+    if (level === 'hard') {
+      const exact = this.endgameMove(id);
+      if (exact) return Promise.resolve(exact);
+      const brain = this.deps.brain;
+      if (brain) return brain.hasMove(state, id) ? brain.think(state, id, this.snap.memory ?? {}, budgetMs) : null;
+    }
+    const move = chooseBotMove(toPlayerView(state, id, { hints: true, discard: level === 'hard' }), level);
+    return move ? Promise.resolve(move) : null;
+  }
+
+  /** Every bot with something to do gets a move after a human-like pause (it thinks meanwhile). */
   private driveBots(): void {
     if (!this.bots.size || this.result || this.snap.state.status !== 'playing') return;
     const level = this.snap.botLevel ?? this.deps.botLevel?.() ?? 'normal';
     for (const id of this.bots) {
       if (this.botTimers.has(id) || this.botStuck.get(id) === this.snap.state.version) continue;
-      if (!this.botMove(id, level)) continue;
       const delay = 800 + Math.random() * 1400;
+      const version = this.snap.state.version;
+      const thinking = this.planBot(id, level, Math.max(300, delay - 150));
+      if (!thinking) continue;
       this.botTimers.set(
         id,
         setTimeout(() => {
-          this.botTimers.delete(id);
-          this.queue
-            .run(async () => {
-              if (this.result || this.snap.state.status !== 'playing') return;
-              const move = this.botMove(id, level);
-              if (!move) return;
+          void (async () => {
+            let move = await thinking;
+            // The table moved on while the bot thought (someone threw in): a quick second look.
+            if (this.snap.state.version !== version && !this.result) move = (await this.planBot(id, level, 300)) ?? null;
+            const seen = this.snap.state.version;
+            await this.queue.run(async () => {
+              this.botTimers.delete(id);
+              if (this.result || this.snap.state.status !== 'playing' || !move) return;
+              if (this.snap.state.version !== seen) return; // changed again: planned anew below
               try {
                 await this.act(id, move);
               } catch (error) {
@@ -458,8 +478,12 @@ export class GameRunner {
                 this.botStuck.set(id, this.snap.state.version);
                 this.deps.log.debug({ err: error, gameId: this.id, bot: id }, 'bot move refused');
               }
+            });
+          })()
+            .catch((error) => {
+              this.botTimers.delete(id);
+              this.deps.log.error({ err: error, gameId: this.id }, 'bot move failed');
             })
-            .catch((error) => this.deps.log.error({ err: error, gameId: this.id }, 'bot move failed'))
             .finally(() => this.driveBots());
         }, delay),
       );

@@ -27,6 +27,12 @@ export async function ownerRoutes(app: FastifyInstance, ctx: Context): Promise<v
     return me;
   };
 
+  // ── bot training: three self-play tables and the exams against the old strong bot ──
+  app.get('/owner/training', auth, async (request) => {
+    await owner(request);
+    return { ...(await ctx.trainer.read()), brainVersion: ctx.brain.version };
+  });
+
   // ── announcement: everyone reads, the owner writes ──
   app.get('/announcement', auth, async (): Promise<AnnouncementDto | null> => {
     const row = await db.announcement.findFirst({ orderBy: { createdAt: 'desc' } });

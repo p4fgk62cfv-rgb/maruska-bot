@@ -17,6 +17,7 @@ import { Hub, type Client } from './hub.js';
 import { RoomManager } from './rooms.js';
 import type { SnapshotStore } from './store.js';
 import type { DailyService } from '../services/daily.js';
+import type { Brain } from '../brain/brain.js';
 
 export interface RealtimeDeps {
   config: Config;
@@ -26,6 +27,8 @@ export interface RealtimeDeps {
   store: SnapshotStore;
   log: FastifyBaseLogger;
   bots: BotService;
+  /** How the strong bots think. */
+  brain?: Brain;
   /** Daily quests are counted when a game is settled. */
   daily?: DailyService;
   alerts?: Alerts;
@@ -83,6 +86,7 @@ export class Realtime {
       },
       onPresence: (ids) => this.emitPresence(ids),
       botLevel: () => deps.bots.level(),
+      brain: deps.brain,
       alerts: deps.alerts,
     });
   }
