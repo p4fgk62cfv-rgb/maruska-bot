@@ -13,6 +13,8 @@ import type { BotMove } from './BotBrain.js';
  */
 const WIN = 1;
 const LOSS = -1;
+/** Lines longer than this are cut (a draw): taking cards back and forth can go round for ever. */
+const MAX_DEPTH = 120;
 
 class OutOfBudget extends Error {}
 
@@ -42,6 +44,8 @@ export function solveEndgame(state: GameState, me: PlayerId, budget = 20_000): B
 class Search {
   private nodes = 0;
   private readonly memo = new Map<string, number>();
+  /** Positions on the current line: coming back to one is a loop, not progress. */
+  private readonly onLine = new Set<string>();
 
   constructor(
     private readonly me: PlayerId,
@@ -73,7 +77,7 @@ class Search {
   }
 
   /** Game value for `me`: WIN, LOSS or 0 (draw), with best play from both sides. */
-  value(state: GameState): number {
+  value(state: GameState, depth = 0): number {
     if (state.status === 'finished') {
       if (!state.loser) return 0;
       return state.loser === this.me ? LOSS : WIN;
@@ -81,6 +85,9 @@ class Search {
     const key = keyOf(state);
     const cached = this.memo.get(key);
     if (cached !== undefined) return cached;
+    // The same position again on this line (cards taken back and forth), or a very long line:
+    // nobody gets anywhere — count it as a draw.
+    if (this.onLine.has(key) || depth >= MAX_DEPTH) return 0;
 
     // Whose move: the one the clock waits for, else whoever can act.
     const order = state.currentPlayer
@@ -99,12 +106,17 @@ class Search {
 
     const mine = actor === this.me;
     let best = mine ? -Infinity : Infinity;
-    for (const move of moves) {
-      const next = this.apply(state, actor, move);
-      if (!next) continue;
-      const v = this.value(next);
-      if (mine ? v > best : v < best) best = v;
-      if ((mine && best === WIN) || (!mine && best === LOSS)) break;
+    this.onLine.add(key);
+    try {
+      for (const move of moves) {
+        const next = this.apply(state, actor, move);
+        if (!next) continue;
+        const v = this.value(next, depth + 1);
+        if (mine ? v > best : v < best) best = v;
+        if ((mine && best === WIN) || (!mine && best === LOSS)) break;
+      }
+    } finally {
+      this.onLine.delete(key);
     }
     if (!Number.isFinite(best)) best = 0;
     this.memo.set(key, best);

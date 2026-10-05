@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyAction,
+  chooseBotMove,
+  solveEndgame,
+  toPlayerView,
   createDeck,
   DEFAULT_PARAMS,
   determinize,
@@ -115,4 +118,19 @@ describe('the strong bot', () => {
     expect(sanitizeParams({ early: { trump: 'x', size: 1e9 }, catchRate: 7 })).toEqual(DEFAULT_PARAMS);
     expect(sanitizeParams(next)).toEqual(next);
   });
+
+  it('the exact endgame never runs round for ever when cards are taken back and forth («Переводной»)', () => {
+    const decide: Decider = (s, id) => {
+      if (s.deck.length === 0) {
+        const m = solveEndgame(s, id);
+        if (m) return m;
+      }
+      return chooseBotMove(toPlayerView(s, id, { hints: true, discard: true }), 'hard');
+    };
+    for (let g = 0; g < 80; g++) {
+      const rnd = mulberry(900 + g);
+      const end = runGame(newGame({ ...base, variant: 'perevodnoy' }, ['a', 'b'], rnd), decide, rnd);
+      expect(end.status).toBe('finished');
+    }
+  }, 120_000);
 });
