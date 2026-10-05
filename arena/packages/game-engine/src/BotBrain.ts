@@ -60,10 +60,13 @@ export function chooseBotMove(view: PlayerView, level: BotLevel, random: () => n
     // Every open card must be beaten; plan them strongest-first so cheap cards are not wasted.
     const plan = planDefense(undefended.map(({ p, i }) => ({ attack: p.attack, index: i })), a.defend, trump);
     // «Переводной»: pass the attack on with a cheap card instead of spending trumps or taking.
-    if (a.transfer.length && level !== 'easy') {
+    // Every level transfers: the hard one whenever it can with a plain card, the normal one
+    // when beating would cost a trump (and often otherwise), the easy one now and then.
+    if (a.transfer.length) {
       const card = cheapest(a.transfer, trump)[0]!;
       const costly = !plan || plan.some((m) => isTrump(m.card, trump));
-      if (!isTrump(card, trump) && (costly || level === 'hard')) return { type: 'TRANSFER', card };
+      const chance = level === 'hard' ? 1 : level === 'normal' ? (costly ? 1 : 0.5) : costly ? 0.45 : 0.25;
+      if (!isTrump(card, trump) && random() < chance) return { type: 'TRANSFER', card };
     }
     if (!plan) return a.take ? { type: 'TAKE_CARDS' } : null;
     // A beginner gives up on a defence that needs a trump.
