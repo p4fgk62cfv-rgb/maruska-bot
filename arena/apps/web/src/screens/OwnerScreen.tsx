@@ -1,5 +1,5 @@
 import type { AnnouncementDto, BotSettingsDto, OwnerPlayerDto, ReferralSettingsDto, WelcomeGiftDto } from '@arena/shared';
-import { Avatar, Balance, BottomSheet, Button, Panel, Tabs, Toggle } from '@arena/ui';
+import { Avatar, Balance, Button, Panel, Tabs, Toggle } from '@arena/ui';
 import { useEffect, useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
 import { useQuery } from '../lib/useQuery.js';
@@ -99,6 +99,26 @@ function Gifts() {
   }, [q]);
   const players = useQuery<OwnerPlayerDto[]>(`/owner/players?q=${encodeURIComponent(query)}`);
 
+  // The gift panel is part of the page, not a pop-up: on iPhone, taps inside a scrolled pop-up
+  // stopped reaching the buttons after the list refreshed.
+  if (picked) {
+    return (
+      <div className="app-stack">
+        <button type="button" className="owner-back" onClick={() => setPicked(null)}>
+          ‹ Все игроки
+        </button>
+        <div className="owner-player owner-player--picked">
+          <Avatar id={picked.id} name={picked.name} photoUrl={picked.photoUrl} size={40} />
+          <span className="owner-player__body">
+            <strong>Подарок: {picked.name}</strong>
+            <span>{picked.username ? `@${picked.username}` : ''}</span>
+          </span>
+        </div>
+        <GiftSheet player={picked} onDone={() => players.reload()} />
+      </div>
+    );
+  }
+
   return (
     <>
       <input className="owner-search" value={q} placeholder="Имя, @username или Telegram ID" onChange={(e) => setQ(e.target.value)} />
@@ -118,9 +138,6 @@ function Gifts() {
         ))}
         {players.data && players.data.length === 0 && <p className="app-muted">Никого не нашли</p>}
       </div>
-      <BottomSheet open={Boolean(picked)} title={picked ? `Подарок: ${picked.name}` : ''} onClose={() => setPicked(null)}>
-        {picked && <GiftSheet player={picked} onDone={() => players.reload()} />}
-      </BottomSheet>
     </>
   );
 }

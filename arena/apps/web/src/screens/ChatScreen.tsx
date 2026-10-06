@@ -1,5 +1,5 @@
 import { CHAT, type ChatMessageDto, type ChatStateDto } from '@arena/shared';
-import { Avatar, BottomSheet, Button, EmptyState, Icon, useKeyboardInset } from '@arena/ui';
+import { Avatar, BottomSheet, Button, EmptyState, Icon } from '@arena/ui';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
 import { markChatSeen } from '../lib/chat.js';
@@ -21,8 +21,32 @@ function timeOf(iso: string): string {
     : d.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-const nearBottom = () => window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 160;
-const toBottom = () => window.scrollTo({ top: document.documentElement.scrollHeight });
+/**
+ * The part of the screen above the phone keyboard. iPhone keeps the page height when the
+ * keyboard opens and scrolls the page instead; the chat follows the visible area, so the
+ * message field stays right on top of the keyboard and nothing jumps.
+ */
+function useVisibleArea(): { top: number; height: number; keyboard: boolean } {
+  const read = () => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    const height = vv?.height ?? window.innerHeight;
+    return { top: vv?.offsetTop ?? 0, height, keyboard: window.innerHeight - height > 120 };
+  };
+  const [area, setArea] = useState(read);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    const update = () => setArea(read());
+    vv?.addEventListener('resize', update);
+    vv?.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
+    return () => {
+      vv?.removeEventListener('resize', update);
+      vv?.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+  return area;
+}
 
 /** «Общий чат»: one room for the whole Arena. */
 export default function ChatScreen() {
@@ -30,7 +54,16 @@ export default function ChatScreen() {
   const { socket } = useRealtime();
   const { openPlayer } = useNav();
   const toast = useToast();
-  const keyboard = useKeyboardInset();
+  const area = useVisibleArea();
+  const listRef = useRef<HTMLDivElement>(null);
+  const nearBottom = () => {
+    const el = listRef.current;
+    return !el || el.scrollTop + el.clientHeight >= el.scrollHeight - 160;
+  };
+  const toBottom = () => {
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  };
   const [state, setState] = useState<ChatStateDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState('');
@@ -77,19 +110,22 @@ export default function ChatScreen() {
 
   useLayoutEffect(() => {
     if (stick.current) toBottom();
-  }, [state?.messages.length, keyboard]);
+  }, [state?.messages.length, area.height]);
 
   const older = () => {
     const first = state?.messages[0];
     if (!first) return;
     setLoadingOlder(true);
-    const height = document.documentElement.scrollHeight;
+    const height = listRef.current?.scrollHeight ?? 0;
     api<ChatStateDto>(`/chat?before=${first.id}`)
       .then((page) => {
         stick.current = false;
         setState((s) => (s ? { ...s, more: page.more, messages: [...page.messages, ...s.messages.filter((m) => !page.messages.some((p) => p.id === m.id))] } : s));
         // Keep the reader where they were: the new messages appear above.
-        requestAnimationFrame(() => window.scrollBy(0, document.documentElement.scrollHeight - height));
+        requestAnimationFrame(() => {
+          const el = listRef.current;
+          if (el) el.scrollTop += el.scrollHeight - height;
+        });
       })
       .catch((e: unknown) => toast(e instanceof ApiError ? e.message : 'Ошибка', 'error'))
       .finally(() => setLoadingOlder(false));
@@ -143,8 +179,12 @@ export default function ChatScreen() {
   const blocked = state.blocked;
 
   return (
-    <div className="app-stack chat" style={{ paddingBottom: keyboard ? keyboard : undefined }}>
+    <div
+      className={`chat-shell${area.keyboard ? ' chat-shell--keyboard' : ''}`}
+      style={area.keyboard ? { top: area.top, height: area.height } : undefined}
+    >
       <ScreenHeader title="Общий чат" subtitle={`Сейчас в Арене: ${state.online}`} />
+      <div className="chat-scroll" ref={listRef}>
       {state.more && (
         <button type="button" className="chat-older" onClick={older} disabled={loadingOlder}>
           {loadingOlder ? 'Загружаю…' : 'Показать сообщения раньше'}
@@ -175,8 +215,9 @@ export default function ChatScreen() {
         </ol>
       )}
       {hidden.length > 0 && <p className="chat-hidden-note">Скрыты сообщения игроков: {hidden.length}. Вернуть — в меню сообщения игрока.</p>}
+      </div>
 
-      <div className="chat-composer" style={keyboard ? { bottom: keyboard } : undefined}>
+      <div className="chat-composer">
         {blocked ? (
           <p className="chat-composer__blocked">
             {blocked.reason === 'muted'
