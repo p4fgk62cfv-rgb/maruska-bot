@@ -22,6 +22,8 @@ export interface ChatMessageDto {
   user: PublicUserDto;
   text: string;
   createdAt: string;
+  /** The message this one answers; `text` is null once that message was deleted. */
+  replyTo: { id: string; userId: string; name: string; text: string | null } | null;
 }
 
 export interface ChatStateDto {

@@ -727,9 +727,13 @@ model ChatMessage {
   text      String    @db.VarChar(300)
   createdAt DateTime  @default(now()) @map("created_at")
   deletedAt DateTime? @map("deleted_at")
+  /// The message this one answers (a quote is shown above it).
+  replyToId String?   @map("reply_to_id") @db.Uuid
 
-  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   reports ChatReport[]
+  replyTo ChatMessage?  @relation("ChatReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies ChatMessage[] @relation("ChatReply")
 
   @@index([createdAt])
   @@index([userId, createdAt])

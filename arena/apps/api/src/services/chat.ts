@@ -17,7 +17,16 @@ export interface ChatDeps {
   log: FastifyBaseLogger;
 }
 
-type Row = { id: string; text: string; createdAt: Date; user: User & { profile: Profile | null } };
+type Author = User & { profile: Profile | null };
+type Row = {
+  id: string;
+  text: string;
+  createdAt: Date;
+  user: Author;
+  replyTo?: { id: string; text: string; deletedAt: Date | null; user: Author } | null;
+};
+/** Everything a message needs to be shown: its author and the message it answers. */
+const WITH = { user: { include: { profile: true } }, replyTo: { include: { user: { include: { profile: true } } } } } as const;
 
 /**
  * The Arena's common chat. Written to over REST, pushed over the socket.
@@ -53,7 +62,7 @@ export class ChatService {
         where: { deletedAt: null, ...(before ? { id: { lt: before } } : {}) },
         orderBy: { id: 'desc' },
         take: CHAT.page + 1,
-        include: { user: { include: { profile: true } } },
+        include: WITH,
       }),
       db.user.findUnique({ where: { id: userId }, include: { profile: true } }),
     ]);
@@ -69,7 +78,7 @@ export class ChatService {
     };
   }
 
-  async send(userId: string, raw: string): Promise<ChatMessageDto> {
+  async send(userId: string, raw: string, replyTo?: string): Promise<ChatMessageDto> {
     const text = raw.replace(/\s+/g, ' ').trim();
     if (!text || text.length > CHAT.maxLength) throw new AppError('VALIDATION_FAILED');
     const { db } = this.deps;
@@ -82,7 +91,9 @@ export class ChatService {
     if (hasLink(text)) throw new AppError('CHAT_LINKS');
     this.throttle(userId);
 
-    const row = await db.chatMessage.create({ data: { userId, text: censor(text) }, include: { user: { include: { profile: true } } } });
+    // A reply to a message that is gone (deleted or expired) goes out as a plain message.
+    const target = replyTo ? await db.chatMessage.findFirst({ where: { id: replyTo, deletedAt: null }, select: { id: true } }) : null;
+    const row = await db.chatMessage.create({ data: { userId, text: censor(text), replyToId: target?.id ?? null }, include: WITH });
     const message = dto(row);
     this.deps.publish({ type: 'CHAT_MESSAGE', message });
     return message;
@@ -172,5 +183,19 @@ function blocked(profile: Profile | null): ChatStateDto['blocked'] {
 }
 
 function dto(row: Row): ChatMessageDto {
-  return { id: row.id, user: publicUser(row.user, row.user.profile!), text: row.text, createdAt: row.createdAt.toISOString() };
+  const quoted = row.replyTo;
+  return {
+    id: row.id,
+    user: publicUser(row.user, row.user.profile!),
+    text: row.text,
+    createdAt: row.createdAt.toISOString(),
+    replyTo: quoted
+      ? {
+          id: quoted.id,
+          userId: quoted.user.id,
+          name: publicUser(quoted.user, quoted.user.profile!).name,
+          text: quoted.deletedAt ? null : quoted.text.length > 90 ? `${quoted.text.slice(0, 90)}…` : quoted.text,
+        }
+      : null,
+  };
 }

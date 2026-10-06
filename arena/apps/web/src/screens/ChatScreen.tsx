@@ -70,6 +70,9 @@ export default function ChatScreen() {
   const [sending, setSending] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [picked, setPicked] = useState<ChatMessageDto | null>(null);
+  const [replyTo, setReplyTo] = useState<ChatMessageDto | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [hidden, setHidden] = useState<string[]>(() => safeStorage.get<string[]>(HIDDEN_KEY, []));
   const stick = useRef(true);
   const firstLoad = useRef(true);
@@ -135,10 +138,11 @@ export default function ChatScreen() {
     const value = text.trim();
     if (!value || sending) return;
     setSending(true);
-    api<ChatMessageDto>('/chat', { method: 'POST', body: { text: value } })
+    api<ChatMessageDto>('/chat', { method: 'POST', body: { text: value, ...(replyTo ? { replyTo: replyTo.id } : {}) } })
       .then((message) => {
         haptic.tap();
         setText('');
+        setReplyTo(null);
         stick.current = true;
         setState((s) => (s && !s.messages.some((x) => x.id === message.id) ? { ...s, messages: [...s.messages, message] } : s));
       })
@@ -147,6 +151,23 @@ export default function ChatScreen() {
         if (e instanceof ApiError && (e.code === 'CHAT_MUTED' || e.code === 'CHAT_NEED_GAME')) load();
       })
       .finally(() => setSending(false));
+  };
+
+  const startReply = (m: ChatMessageDto) => {
+    setPicked(null);
+    setReplyTo(m);
+    haptic.tap();
+    // After the sheet closes: the keyboard opens on the field.
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  /** Tap on a quote: show the answered message, if it is loaded. */
+  const showOriginal = (id: string) => {
+    const el = document.getElementById(`chat-${id}`);
+    if (!el) return toast('Это сообщение выше — откройте более ранние', 'info');
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    setFlash(id);
+    setTimeout(() => setFlash((f) => (f === id ? null : f)), 1600);
   };
 
   const toggleHidden = (userId: string) => {
@@ -196,19 +217,37 @@ export default function ChatScreen() {
         <ol className="chat-list">
           {visible.map((m, i) => {
             const mine = m.user.id === me.id;
-            const sameAuthor = visible[i - 1]?.user.id === m.user.id;
+            const sameAuthor = visible[i - 1]?.user.id === m.user.id && !m.replyTo;
+            const toMe = !mine && m.replyTo?.userId === me.id;
             return (
-              <li key={m.id} className={`chat-msg${mine ? ' chat-msg--mine' : ''}${sameAuthor ? ' chat-msg--cont' : ''}`}>
+              <li
+                key={m.id}
+                id={`chat-${m.id}`}
+                className={`chat-msg${mine ? ' chat-msg--mine' : ''}${sameAuthor ? ' chat-msg--cont' : ''}${toMe ? ' chat-msg--to-me' : ''}${flash === m.id ? ' chat-msg--flash' : ''}`}
+              >
                 {!mine && (
                   <button type="button" className="chat-msg__avatar" onClick={() => openPlayer(m.user.id)} aria-label={m.user.name}>
                     {!sameAuthor && <Avatar id={m.user.id} name={m.user.name} photoUrl={m.user.photoUrl} size={34} />}
                   </button>
                 )}
-                <button type="button" className="chat-msg__bubble" onClick={() => setPicked(m)}>
+                <div className="chat-msg__bubble" role="button" tabIndex={0} onClick={() => setPicked(m)}>
                   {!mine && !sameAuthor && <strong className="chat-msg__name">{m.user.name}</strong>}
+                  {m.replyTo && (
+                    <span
+                      className="chat-quote"
+                      role="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        showOriginal(m.replyTo!.id);
+                      }}
+                    >
+                      <b>{m.replyTo.userId === me.id ? 'Вам' : m.replyTo.name}</b>
+                      <span>{m.replyTo.text ?? 'сообщение удалено'}</span>
+                    </span>
+                  )}
                   <span className="chat-msg__text">{m.text}</span>
                   <small className="chat-msg__time">{timeOf(m.createdAt)}</small>
-                </button>
+                </div>
               </li>
             );
           })}
@@ -225,6 +264,18 @@ export default function ChatScreen() {
               : 'Писать в чат можно после первой сыгранной партии — подойдёт и тренировочная с ботами.'}
           </p>
         ) : (
+          <>
+          {replyTo && (
+            <div className="chat-reply">
+              <span className="chat-reply__body">
+                <b>Ответ: {replyTo.user.id === me.id ? 'себе' : replyTo.user.name}</b>
+                <span>{replyTo.text}</span>
+              </span>
+              <button type="button" className="chat-reply__close" aria-label="Не отвечать" onClick={() => setReplyTo(null)}>
+                <Icon name="close" size={18} />
+              </button>
+            </div>
+          )}
           <form
             className="chat-composer__form"
             onSubmit={(e) => {
@@ -233,10 +284,11 @@ export default function ChatScreen() {
             }}
           >
             <input
+              ref={inputRef}
               className="chat-composer__input"
               value={text}
               onChange={(e) => setText(e.target.value.slice(0, CHAT.maxLength))}
-              placeholder="Сообщение для всех"
+              placeholder={replyTo ? 'Ваш ответ' : 'Сообщение для всех'}
               enterKeyHint="send"
               maxLength={CHAT.maxLength}
               aria-label="Сообщение"
@@ -245,6 +297,7 @@ export default function ChatScreen() {
               {sending ? <span className="ui-spinner" /> : <Icon name="send" size={20} />}
             </button>
           </form>
+          </>
         )}
       </div>
 
@@ -252,6 +305,11 @@ export default function ChatScreen() {
         {picked && (
           <div className="chat-actions">
             <p className="chat-actions__quote">«{picked.text}»</p>
+            {!state.blocked && (
+              <Button variant="gold" block icon="chat" onClick={() => startReply(picked)}>
+                Ответить
+              </Button>
+            )}
             <Button variant="ghost" block icon="user" onClick={() => (setPicked(null), openPlayer(picked.user.id))}>
               Профиль игрока
             </Button>

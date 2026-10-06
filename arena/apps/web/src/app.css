@@ -1914,3 +1914,24 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 .owner-back { justify-self: start; padding: 6px 2px; font-size: 15px; font-weight: 600; color: var(--gold); background: none; }
 .owner-player--picked { pointer-events: none; }
 :root[data-game-design="daylight"] .owner-back { color: #b9770e; }
+
+/* Chat replies: a quote above the answer, the bar above the field */
+.chat-quote {
+  display: grid; gap: 1px; margin: 2px 0 3px; padding: 4px 8px; border-radius: 8px; border-left: 3px solid var(--gold);
+  background: rgba(0, 0, 0, 0.22); font-size: 12.5px; line-height: 1.3; cursor: pointer;
+}
+.chat-quote b { color: var(--gold); font-size: 12px; }
+.chat-quote span { color: var(--text-2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.chat-msg--to-me .chat-msg__bubble { box-shadow: inset 0 0 0 1.5px rgba(255, 207, 90, 0.7); }
+.chat-msg--flash .chat-msg__bubble { animation: chat-flash 1.5s ease; }
+@keyframes chat-flash { 0%, 40% { box-shadow: inset 0 0 0 2px var(--gold), 0 0 16px rgba(255, 207, 90, 0.5); } }
+.chat-msg__bubble { cursor: pointer; }
+.chat-reply { display: flex; align-items: center; gap: 8px; max-width: 640px; margin: 0 auto 8px; padding: 6px 6px 6px 10px; border-left: 3px solid var(--gold); border-radius: 8px; background: rgba(0, 0, 0, 0.25); }
+.chat-reply__body { display: grid; gap: 1px; flex: 1; min-width: 0; font-size: 12.5px; }
+.chat-reply__body b { color: var(--gold); font-size: 12px; }
+.chat-reply__body span { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-reply__close { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; color: var(--text-2); background: none; }
+:root[data-game-design="daylight"] .chat-quote,
+:root[data-game-design="daylight"] .chat-reply { background: rgba(47, 121, 177, 0.08); border-left-color: #b9770e; }
+:root[data-game-design="daylight"] .chat-quote b,
+:root[data-game-design="daylight"] .chat-reply__body b { color: #b9770e; }

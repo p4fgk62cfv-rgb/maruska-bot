@@ -149,4 +149,23 @@ describe.skipIf(!url)('the common chat', () => {
     const msg = (await say(a, 'свежее')).json() as ChatMessageDto;
     expect((await call(a, 'GET', '/me')).json().chatLastAt).toBe(msg.createdAt);
   });
+
+  it('a reply carries a quote of the message it answers; a deleted original reads as deleted', async () => {
+    const owner = await player({ tg: OWNER_TG });
+    const [a, b] = [await player(), await player()];
+    const original = (await say(a, 'кто на 10К в переводного?')).json() as ChatMessageDto;
+    const reply = (await call(b, 'POST', '/chat', { text: 'я!', replyTo: original.id })).json() as ChatMessageDto;
+    expect(reply.replyTo).toMatchObject({ id: original.id, userId: a.id, text: 'кто на 10К в переводного?' });
+    const listed = ((await call(a, 'GET', '/chat')).json() as ChatStateDto).messages.find((m) => m.id === reply.id)!;
+    expect(listed.replyTo?.id).toBe(original.id);
+
+    await call(owner, 'DELETE', `/chat/${original.id}`);
+    const after = ((await call(a, 'GET', '/chat')).json() as ChatStateDto).messages.find((m) => m.id === reply.id)!;
+    expect(after.replyTo).toMatchObject({ id: original.id, text: null });
+
+    // Answering a message that is gone: sent as a plain message.
+    await pause(2100);
+    const plain = (await call(b, 'POST', '/chat', { text: 'а где все?', replyTo: original.id })).json() as ChatMessageDto;
+    expect(plain.replyTo).toBeNull();
+  });
 });

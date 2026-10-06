@@ -17,8 +17,8 @@ export async function chatRoutes(app: FastifyInstance, ctx: Context): Promise<vo
   });
 
   app.post('/chat', { ...auth, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request): Promise<ChatMessageDto> => {
-    const { text } = z.object({ text: z.string().min(1).max(CHAT.maxLength * 2) }).parse(request.body);
-    return ctx.chat.send(sessionOf(request).sub, text);
+    const { text, replyTo } = z.object({ text: z.string().min(1).max(CHAT.maxLength * 2), replyTo: z.uuid().optional() }).parse(request.body);
+    return ctx.chat.send(sessionOf(request).sub, text, replyTo);
   });
 
   app.post('/chat/:id/report', { ...auth, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request) => {
