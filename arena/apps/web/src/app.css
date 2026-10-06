@@ -1935,3 +1935,21 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 :root[data-game-design="daylight"] .chat-reply { background: rgba(47, 121, 177, 0.08); border-left-color: #b9770e; }
 :root[data-game-design="daylight"] .chat-quote b,
 :root[data-game-design="daylight"] .chat-reply__body b { color: #b9770e; }
+
+/* Home: the common chat strip (latest messages, opens the chat) */
+.chat-strip {
+  display: grid; gap: 4px; margin: 8px 2px 0; padding: 10px 14px 11px; border-radius: 16px; text-align: left; color: var(--text);
+  background: linear-gradient(135deg, rgba(255, 207, 90, 0.1), rgba(255, 255, 255, 0.05)); box-shadow: inset 0 0 0 1px var(--stroke);
+}
+.chat-strip:active { transform: scale(0.985); }
+.chat-strip--fresh { box-shadow: inset 0 0 0 1.5px rgba(255, 207, 90, 0.7), 0 0 18px rgba(255, 207, 90, 0.18); }
+.chat-strip__head { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--gold); }
+.chat-strip__head small { color: var(--text-2); font-size: 12px; }
+.chat-strip__new { font-style: normal; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 7px; border-radius: 8px; color: #3a2200; background: var(--gold); }
+.chat-strip__arrow { margin-left: auto; font-size: 24px; line-height: 1; color: var(--text-2); }
+.chat-strip__line { font-size: 14px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-strip__line b { color: var(--text); }
+.chat-strip__line--muted { color: var(--text-2); }
+:root[data-game-design="daylight"] .chat-strip { background: rgba(255, 255, 255, 0.72); }
+:root[data-game-design="daylight"] .chat-strip__head { color: #b9770e; }
+.home--vegas .chat-strip { margin-left: 12px; margin-right: 12px; color: #eee2d3; background: linear-gradient(120deg, #1c1517, #130f10); border: 1px solid rgba(201, 151, 78, 0.3); border-radius: 12px; }

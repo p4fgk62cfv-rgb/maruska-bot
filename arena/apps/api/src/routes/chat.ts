@@ -12,8 +12,10 @@ export async function chatRoutes(app: FastifyInstance, ctx: Context): Promise<vo
   const auth = { preHandler: requireSession(ctx.config.SESSION_SECRET) };
 
   app.get('/chat', auth, async (request): Promise<ChatStateDto> => {
-    const { before } = z.object({ before: z.uuid().optional() }).parse(request.query);
-    return ctx.chat.state(sessionOf(request).sub, before);
+    const { before, limit } = z
+      .object({ before: z.uuid().optional(), limit: z.coerce.number().int().min(1).max(CHAT.page).default(CHAT.page) })
+      .parse(request.query);
+    return ctx.chat.state(sessionOf(request).sub, before, limit);
   });
 
   app.post('/chat', { ...auth, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request): Promise<ChatMessageDto> => {

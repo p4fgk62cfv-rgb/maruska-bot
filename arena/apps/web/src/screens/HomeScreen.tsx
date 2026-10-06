@@ -12,6 +12,7 @@ import { useToast } from '../toast.js';
 import { InstallCard } from './InstallCard.js';
 import { NEWS, newsDate, useUnseenNews } from '../lib/news.js';
 import { chatHasNew } from '../lib/chat.js';
+import { ChatStrip } from './ChatStrip.js';
 
 interface Tile {
   icon: IconName;
@@ -94,19 +95,7 @@ export function HomeScreen() {
         <span className="quick-play__hint">Подберём стол по вашей ставке</span>
       </button>
 
-      {me.daily.claimable > 0 && (
-        <button type="button" className="news-card news-card--fresh daily-home" onClick={() => push('daily')}>
-          <span className="news-card__icon" aria-hidden="true">🎁</span>
-          <span className="news-card__body">
-            <small>
-              Задания и награды дня
-              <b className="news-card__badge">{me.daily.claimable}</b>
-            </small>
-            <strong>Вас ждут награды — заберите их</strong>
-          </span>
-          <span className="news-card__arrow" aria-hidden="true">›</span>
-        </button>
-      )}
+      <ChatStrip />
 
       <button type="button" className={`news-card${unseenNews ? ' news-card--fresh' : ''}`} onClick={() => push('news')}>
         <span className="news-card__icon" aria-hidden="true">📰</span>

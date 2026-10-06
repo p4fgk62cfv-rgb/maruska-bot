@@ -55,19 +55,19 @@ export class ChatService {
     if (this.timer) clearInterval(this.timer);
   }
 
-  async state(userId: string, before?: string): Promise<ChatStateDto> {
+  async state(userId: string, before?: string, limit: number = CHAT.page): Promise<ChatStateDto> {
     const { db } = this.deps;
     const [rows, me] = await Promise.all([
       db.chatMessage.findMany({
         where: { deletedAt: null, ...(before ? { id: { lt: before } } : {}) },
         orderBy: { id: 'desc' },
-        take: CHAT.page + 1,
+        take: limit + 1,
         include: WITH,
       }),
       db.user.findUnique({ where: { id: userId }, include: { profile: true } }),
     ]);
-    const more = rows.length > CHAT.page;
-    const page = rows.slice(0, CHAT.page).reverse();
+    const more = rows.length > limit;
+    const page = rows.slice(0, limit).reverse();
     const moderator = me ? this.isOwner(me.telegramId) : false;
     return {
       messages: page.map(dto),
