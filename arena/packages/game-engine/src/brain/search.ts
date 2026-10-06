@@ -6,6 +6,7 @@ import type { GameState, PlayerId } from '../GameState.js';
 import type { GameSettings } from '../Rules.js';
 import { pendingThrowers, undefendedCount } from '../TurnManager.js';
 import type { CardMemory } from './memory.js';
+import { violates, type VoidNote } from './inference.js';
 import type { BrainParams } from './params.js';
 import { candidates, policyMove, visibleCheats, type BrainMove } from './policy.js';
 
@@ -17,6 +18,8 @@ export interface SearchOptions {
   random?: () => number;
   /** Candidates looked at (the policy's best ones). */
   width?: number;
+  /** Guesses about hidden hands (see rememberVoids). */
+  notes?: readonly VoidNote[];
 }
 
 /** Turns `() => number` into the engine's Random. */
@@ -42,7 +45,7 @@ export function searchMove(state: GameState, me: PlayerId, memory: CardMemory, p
   const wins = new Array<number>(list.length).fill(0);
   const tries = new Array<number>(list.length).fill(0);
   for (let i = 0; i < iterations && (i < 8 || Date.now() < deadline); i++) {
-    const world = determinize(state, me, memory, random);
+    const world = determinize(state, me, memory, random, options.notes);
     for (let c = 0; c < list.length; c++) {
       const moved = applyAction(world, me, list[c]!.move, world.updatedAt);
       if (!moved.ok) continue;
@@ -75,7 +78,7 @@ function roll(key: string): number {
 }
 
 /** A full deal that agrees with what `me` knows; the unknown cards are spread at random. */
-export function determinize(state: GameState, me: PlayerId, memory: CardMemory, random: () => number): GameState {
+export function determinize(state: GameState, me: PlayerId, memory: CardMemory, random: () => number, notes: readonly VoidNote[] = []): GameState {
   const world = cloneState(state);
   const mine = world.players.find((p) => p.id === me)!;
   const seen = new Set<CardId>([...mine.hand, ...world.discard]);
@@ -102,9 +105,25 @@ export function determinize(state: GameState, me: PlayerId, memory: CardMemory, 
     pool = shuffle(createDeck(world.rules.deckSize as 24 | 36 | 52).filter((c) => !base.has(c)), toRandom(random));
     for (const p of others) known.set(p.id, []);
   }
-  for (const p of others) {
+  // Fill the hidden hands in random order; a card that goes against a guess about that player
+  // is turned down as often as the guess is sure (it then goes to someone else or the stock).
+  for (const p of shuffle(others, toRandom(random))) {
     const k = known.get(p.id)!;
-    p.hand = [...k, ...pool.splice(0, p.hand.length - k.length)];
+    const need = p.hand.length - k.length;
+    const mine = notes.filter((n) => n.player === p.id);
+    const picked: CardId[] = [];
+    if (mine.length) {
+      for (let i = 0; i < pool.length && picked.length < need; ) {
+        const c = pool[i]!;
+        let keep = 1;
+        for (const n of mine) if (violates(c, n)) keep *= 1 - n.conf;
+        if (keep >= 1 || random() < keep) {
+          picked.push(c);
+          pool.splice(i, 1);
+        } else i++;
+      }
+    }
+    p.hand = [...k, ...picked, ...pool.splice(0, need - picked.length)];
   }
   world.deck = trumpInStock ? [...pool.splice(0, world.deck.length - 1), world.trump.card] : [];
   return world;
@@ -131,16 +150,17 @@ export function runGame(
   random: () => number,
   catchRate = 0,
   maxSteps = 600,
-  /** Sees every step's events (to keep the public card memory). */
-  onEvents?: (events: GameEvent[]) => void,
+  /** Sees every step's events and the state they came from (to keep the public memory). */
+  onEvents?: (events: GameEvent[], before: GameState) => void,
 ): GameState {
   let s = start;
   const called = new Set<number>();
   for (let step = 0; step < maxSteps && s.status === 'playing'; step++) {
     const next = stepGame(s, decide, random, catchRate, called);
     if (!next) break;
+    const before = s;
     s = next.state;
-    onEvents?.(next.events);
+    onEvents?.(next.events, before);
   }
   return s;
 }

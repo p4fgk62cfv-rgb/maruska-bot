@@ -13,6 +13,7 @@ import {
   type CardMemory,
   type GameState,
   type PlayerId,
+  type VoidNote,
 } from '@arena/game-engine';
 import type { FastifyBaseLogger } from 'fastify';
 import type { Db } from '../db.js';
@@ -22,6 +23,7 @@ export interface ThinkRequest {
   state: GameState;
   me: PlayerId;
   memory: CardMemory;
+  notes: VoidNote[];
   params: BrainParams;
   budgetMs: number;
   iterations: number;
@@ -94,16 +96,16 @@ export class Brain {
   }
 
   /** The move after thinking up to `budgetMs`. Never throws: on trouble, the policy's own choice. */
-  think(state: GameState, me: PlayerId, memory: CardMemory, budgetMs: number): Promise<BrainMove | null> {
+  think(state: GameState, me: PlayerId, memory: CardMemory, budgetMs: number, notes: VoidNote[] = []): Promise<BrainMove | null> {
     const fallback = () => policyMove(state, me, this.params, Math.random, 0.02);
     if (!this.workers.length) {
       try {
-        return Promise.resolve(searchMove(state, me, memory, this.params, { iterations: this.inlineIterations, budgetMs: Math.min(budgetMs, 150) }));
+        return Promise.resolve(searchMove(state, me, memory, this.params, { iterations: this.inlineIterations, budgetMs: Math.min(budgetMs, 150), notes }));
       } catch {
         return Promise.resolve(fallback());
       }
     }
-    const req: ThinkRequest = { id: this.nextId++, state, me, memory, params: this.params, budgetMs, iterations: 2000 };
+    const req: ThinkRequest = { id: this.nextId++, state, me, memory, notes, params: this.params, budgetMs, iterations: 4000 };
     return new Promise<BrainMove | null>((resolve) => {
       this.waiting.push({ req, resolve: (m) => resolve(m ?? fallback()) });
       this.dispatch();

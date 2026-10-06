@@ -9,6 +9,8 @@ import { BRAIN_KEY, type Brain } from './brain.js';
 import { TRAINING_TABLES, type TrainerInit, type TrainerMessage, type TrainingStats } from './training.js';
 
 const STATS_KEY = 'bot_training';
+/** The best weights of the fast self-play, before they win a duel for the tables. */
+const CHAMP_KEY = 'bot_training_champion';
 const MOSCOW_MS = 3 * 3600_000;
 const today = () => new Date(Date.now() + MOSCOW_MS).toISOString().slice(0, 10);
 
@@ -19,6 +21,9 @@ export interface TrainerOptions {
   examEveryMs?: number;
   examGames?: number;
   examIterations?: number;
+  duelEveryMs?: number;
+  duelDeals?: number;
+  duelIterations?: number;
 }
 
 /**
@@ -49,12 +54,22 @@ export class Trainer {
     this.stopped = false;
     this.stats = await this.load();
     this.stats.running = true;
-    const brainRow = await this.db.setting.findUnique({ where: { key: BRAIN_KEY } });
-    const stored = brainRow?.value as { version?: number; params?: unknown; sigma?: number } | null;
+    const [brainRow, champRow] = await Promise.all([
+      this.db.setting.findUnique({ where: { key: BRAIN_KEY } }),
+      this.db.setting.findUnique({ where: { key: CHAMP_KEY } }),
+    ]);
+    const live = brainRow?.value as { version?: number; params?: unknown; sigma?: number } | null;
+    const champ = (champRow?.value as { version?: number; params?: unknown; sigma?: number } | null) ?? live;
+    const liveParams = live?.params ? sanitizeParams(live.params) : DEFAULT_PARAMS;
     const init: TrainerInit = {
-      champion: stored?.params ? sanitizeParams(stored.params) : DEFAULT_PARAMS,
-      version: stored?.version ?? 0,
-      sigma: stored?.sigma,
+      champion: champ?.params ? sanitizeParams(champ.params) : liveParams,
+      version: champ?.version ?? 0,
+      live: liveParams,
+      liveVersion: live?.version ?? 0,
+      duelEveryMs: this.options.duelEveryMs ?? 60 * 60_000,
+      duelDeals: this.options.duelDeals ?? 40,
+      duelIterations: this.options.duelIterations ?? 40,
+      sigma: champ?.sigma,
       duty: this.options.duty,
       dealsPerGeneration: this.options.dealsPerGeneration ?? 100,
       examEveryMs: this.options.examEveryMs ?? 30 * 60_000,
@@ -106,6 +121,19 @@ export class Trainer {
       this.log.error({ err: m.error }, 'training failed');
       return;
     }
+    if (m.type === 'duel') {
+      stats.duels = [...stats.duels, m.duel].slice(-50);
+      this.log.info({ ...m.duel }, m.duel.won ? 'bot duel won: new weights at the tables' : 'bot duel lost: the tables keep their weights');
+      if (m.params) {
+        stats.liveVersion = m.liveVersion;
+        const value = { version: m.liveVersion, params: m.params, updatedAt: m.duel.at } as unknown as Prisma.InputJsonValue;
+        await this.db.setting.upsert({ where: { key: BRAIN_KEY }, create: { key: BRAIN_KEY, value }, update: { value } });
+        this.brain.params = m.params;
+        this.brain.version = m.liveVersion;
+      }
+      await this.save();
+      return;
+    }
     if (m.type === 'exam') {
       stats.exams = [...stats.exams, { ...m.exam, version: m.version }].slice(-48);
       this.log.info({ version: m.version, winRate: m.exam.winRate, games: m.exam.games }, 'bot exam against the old hard bot');
@@ -127,10 +155,9 @@ export class Trainer {
       stats.version = m.version;
       stats.lastImprovementAt = new Date().toISOString();
       stats.history = [...stats.history, { at: stats.lastImprovementAt, version: m.version, score: m.score }].slice(-100);
+      // The fast champion is kept; it reaches the tables only by winning a duel at full strength.
       const value = { version: m.version, params: m.params, sigma: m.sigma, updatedAt: stats.lastImprovementAt } as unknown as Prisma.InputJsonValue;
-      await this.db.setting.upsert({ where: { key: BRAIN_KEY }, create: { key: BRAIN_KEY, value }, update: { value } });
-      this.brain.params = m.params;
-      this.brain.version = m.version;
+      await this.db.setting.upsert({ where: { key: CHAMP_KEY }, create: { key: CHAMP_KEY, value }, update: { value } });
       this.log.info({ version: m.version, score: m.score }, 'bot brain improved');
       await this.save();
     }
@@ -152,6 +179,8 @@ export class Trainer {
       tables: TRAINING_TABLES.map((t) => ({ key: t.key, title: t.title, games: v.tables?.find((x) => x.key === t.key)?.games ?? 0 })),
       exams: v.exams ?? [],
       history: v.history ?? [],
+      liveVersion: v.liveVersion ?? this.brain.version,
+      duels: v.duels ?? [],
     };
   }
 

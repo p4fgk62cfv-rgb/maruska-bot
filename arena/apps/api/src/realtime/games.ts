@@ -4,6 +4,7 @@ import {
   applyTimeout,
   chooseBotMove,
   rememberEvents,
+  rememberVoids,
   solveEndgame,
   type BrainMove,
   type BotLevel,
@@ -209,8 +210,10 @@ export class GameRunner {
   ): Promise<void> {
     // Somebody moved while we waited for an offline player: what was waited is spent.
     if (this.snap.grace) this.spendGrace(Date.now());
+    const before = this.snap.state;
     this.snap.state = result.state;
     this.snap.previous = previous;
+    this.snap.voids = rememberVoids(this.snap.voids ?? [], before, result.events);
     this.snap.memory = rememberEvents(this.snap.memory ?? {}, result.events);
     for (const event of result.events) {
       if (event.type === 'CARD_TRANSFERRED') {
@@ -443,7 +446,7 @@ export class GameRunner {
       const exact = this.endgameMove(id);
       if (exact) return Promise.resolve(exact);
       const brain = this.deps.brain;
-      if (brain) return brain.hasMove(state, id) ? brain.think(state, id, this.snap.memory ?? {}, budgetMs) : null;
+      if (brain) return brain.hasMove(state, id) ? brain.think(state, id, this.snap.memory ?? {}, budgetMs, this.snap.voids ?? []) : null;
     }
     const move = chooseBotMove(toPlayerView(state, id, { hints: true, discard: level === 'hard' }), level);
     return move ? Promise.resolve(move) : null;
@@ -455,9 +458,10 @@ export class GameRunner {
     const level = this.snap.botLevel ?? this.deps.botLevel?.() ?? 'normal';
     for (const id of this.bots) {
       if (this.botTimers.has(id) || this.botStuck.get(id) === this.snap.state.version) continue;
-      const delay = 800 + Math.random() * 1400;
+      // The strong bot takes a little longer: the pause is its thinking time.
+      const delay = level === 'hard' ? 1300 + Math.random() * 1500 : 800 + Math.random() * 1400;
       const version = this.snap.state.version;
-      const thinking = this.planBot(id, level, Math.max(300, delay - 150));
+      const thinking = this.planBot(id, level, Math.max(300, delay - 120));
       if (!thinking) continue;
       this.botTimers.set(
         id,
@@ -465,7 +469,7 @@ export class GameRunner {
           void (async () => {
             let move = await thinking;
             // The table moved on while the bot thought (someone threw in): a quick second look.
-            if (this.snap.state.version !== version && !this.result) move = (await this.planBot(id, level, 300)) ?? null;
+            if (this.snap.state.version !== version && !this.result) move = (await this.planBot(id, level, 500)) ?? null;
             const seen = this.snap.state.version;
             await this.queue.run(async () => {
               this.botTimers.delete(id);

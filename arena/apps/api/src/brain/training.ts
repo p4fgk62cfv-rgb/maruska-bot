@@ -8,8 +8,15 @@ export const TRAINING_TABLES: { key: string; title: string; settings: GameSettin
 ];
 
 export interface TrainerInit {
+  /** Best weights of the fast self-play. */
   champion: BrainParams;
   version: number;
+  /** Weights the bots at the tables use, and their version. */
+  live: BrainParams;
+  liveVersion: number;
+  duelEveryMs: number;
+  duelDeals: number;
+  duelIterations: number;
   sigma?: number;
   duty: number;
   dealsPerGeneration: number;
@@ -25,9 +32,21 @@ export interface TrainingExam {
   winRate: number;
 }
 
+/** The fast-training champion against the live weights, both searching as at a real table. */
+export interface TrainingDuel {
+  at: string;
+  games: number;
+  /** Share the champion won. */
+  winRate: number;
+  champion: number;
+  live: number;
+  won: boolean;
+}
+
 export type TrainerMessage =
   | { type: 'generation'; games: number[]; promoted: boolean; version: number; sigma: number; score: number; params: BrainParams | null }
   | { type: 'exam'; exam: TrainingExam; version: number }
+  | { type: 'duel'; duel: TrainingDuel; params: BrainParams | null; liveVersion: number }
   | { type: 'error'; error: string }
   /** The copy now being tried against the champion (the watched tables show these two). */
   | { type: 'challenger'; params: BrainParams; champion: BrainParams; version: number };
@@ -47,4 +66,7 @@ export interface TrainingStats {
   exams: (TrainingExam & { version: number })[];
   /** Every improvement: when, which version, how much better than the previous champion. */
   history: { at: string; version: number; score: number }[];
+  /** Version the bots at the tables play. */
+  liveVersion: number;
+  duels: TrainingDuel[];
 }

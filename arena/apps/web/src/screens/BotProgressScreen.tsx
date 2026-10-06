@@ -17,6 +17,9 @@ interface ProgressDto {
   tables: { key: string; title: string; games: number }[];
   exams: { at: string; games: number; winRate: number; version: number }[];
   history: { at: string; version: number; score: number }[];
+  version: number;
+  liveVersion: number;
+  duels: { at: string; games: number; winRate: number; champion: number; live: number; won: boolean }[];
   params: BrainParams;
   defaults: BrainParams;
 }
@@ -94,18 +97,49 @@ export default function BotProgressScreen() {
               </section>
 
               <div className="bp-grid">
-                <Stat value={`v${d.brainVersion}`} label="версия мозга" />
-                <Stat value={num.format(d.improvements)} label="улучшений" />
+                <Stat value={`v${d.brainVersion}`} label="играет за столами" />
+                <Stat value={`v${d.version}`} label="лучшая в обучении" />
                 <Stat value={ago(d.lastImprovementAt)} label="последнее улучшение" small />
                 <Stat value={num.format(d.today.games)} label="партий сегодня" />
                 <Stat value={num.format(d.games)} label="партий всего" />
                 <Stat value={num.format(d.generations)} label="проверено версий" />
+                <Stat value={num.format(d.improvements)} label="находок обучения" />
+                <Stat value={num.format(d.duels.filter((x) => x.won).length)} label="выиграно поединков" />
+                <Stat value={num.format(d.duels.length)} label="поединков всего" />
               </div>
 
               <section className="bp-card">
                 <h3>Экзамены против прежнего бота</h3>
                 <p className="bp-note">Каждые полчаса — 40 партий. Выше линии 50% — новый бот сильнее старого. На 40 партиях результат прыгает на ±10%, смотрите на общий тренд.</p>
                 <ExamChart exams={d.exams.slice(-24)} />
+              </section>
+
+              <section className="bp-card">
+                <h3>Поединки за место за столами</h3>
+                <p className="bp-note">
+                  Раз в час лучшая версия обучения играет 80 партий против той, что сейчас за столами, — обе в полную силу, с просчётом
+                  ходов. За столы с людьми она садится, только если уверенно победила.
+                </p>
+                {d.duels.length === 0 ? (
+                  <p className="bp-note">Первый поединок — примерно через час после запуска.</p>
+                ) : (
+                  <ul className="bp-history">
+                    {d.duels
+                      .slice(-8)
+                      .reverse()
+                      .map((x) => (
+                        <li key={x.at}>
+                          <b>
+                            v{x.champion} {x.won ? '✓' : '✗'}
+                          </b>
+                          <span>{dayTime(x.at)}</span>
+                          <small className={x.won ? '' : 'bp-history__lost'}>
+                            {pct(x.winRate)} против v{x.live} · {x.won ? 'за столами' : 'не прошла'}
+                          </small>
+                        </li>
+                      ))}
+                  </ul>
+                )}
               </section>
 
               <section className="bp-card">
@@ -147,7 +181,8 @@ export default function BotProgressScreen() {
               </section>
 
               <section className="bp-card">
-                <h3>Последние улучшения</h3>
+                <h3>Находки обучения</h3>
+                <p className="bp-note">Версии, которые обыграли прежнюю в быстрых партиях. Часть — везение; в игру их пускает только поединок.</p>
                 {d.history.length === 0 ? (
                   <p className="bp-note">Ещё не было — обучение только началось.</p>
                 ) : (

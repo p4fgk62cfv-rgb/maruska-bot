@@ -37,7 +37,7 @@ const schema = z.object({
   DB_POOL_SIZE: z.coerce.number().int().positive().default(20),
   RAKE_PERCENT: z.coerce.number().min(0).max(50).default(5),
   /** Threads where the strong bots think (0: inline, small searches — tests). */
-  BRAIN_THREADS: z.coerce.number().int().min(0).max(8).default(2),
+  BRAIN_THREADS: z.coerce.number().int().min(0).max(8).default(3),
   /** Self-play training of the bots in the background: «on» or «off». */
   BOT_TRAINING: z.enum(['on', 'off']).default('on'),
   /** Share of one CPU core the training may use. */

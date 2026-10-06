@@ -6,7 +6,7 @@ import type { ThinkRequest, ThinkReply } from './brain.js';
 parentPort!.on('message', (req: ThinkRequest) => {
   let reply: ThinkReply;
   try {
-    reply = { id: req.id, move: searchMove(req.state, req.me, req.memory, req.params, { budgetMs: req.budgetMs, iterations: req.iterations }) };
+    reply = { id: req.id, move: searchMove(req.state, req.me, req.memory, req.params, { budgetMs: req.budgetMs, iterations: req.iterations, notes: req.notes }) };
   } catch (error) {
     reply = { id: req.id, move: null, error: String(error) };
   }

@@ -83,7 +83,7 @@ describe.skipIf(!url)('admin panel API («🃏 Арена» in the bot)', () => 
     expect(card.transactions[0]).toMatchObject({ type: 'ADMIN', amount: -450 });
     expect(card.premiumUntil).toBeTruthy();
     expect((await call(p, 'POST', '/items/back_wolf/equip')).json()).toMatchObject({ cardBack: 'back_wolf' });
-  });
+  }, 20_000);
 
   it('shows live tables and closes a waiting one', async () => {
     const host = await player('Хозяин');

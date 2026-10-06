@@ -11,6 +11,8 @@ import {
   newGame,
   policyMove,
   rememberEvents,
+  rememberVoids,
+  violates,
   runGame,
   sanitizeParams,
   searchMove,
@@ -133,4 +135,28 @@ describe('the strong bot', () => {
       expect(end.status).toBe('finished');
     }
   }, 120_000);
+
+  it('guesses from a take: probably nothing higher of that suit; guessed hands follow it; a contradicting card drops it', () => {
+    const rnd = mulberry(31);
+    const s = newGame(base, ['me', 'opp'], rnd);
+    const before = { ...s, deck: [], table: [{ attack: '9S', by: 'me', attackSeq: 1, defense: null, defenseBy: null, defenseSeq: null }] } as typeof s;
+    let notes = rememberVoids([], before, [{ type: 'TAKE_DECLARED', playerId: 'opp' }]);
+    expect(notes.find((n) => n.suit === 'S')).toMatchObject({ player: 'opp', above: 9, conf: 0.85 });
+    // Guessed hands rarely give him spades above 9.
+    const world0 = { ...s, players: s.players.map((p) => ({ ...p })) };
+    let high = 0;
+    let deals = 0;
+    for (let i = 0; i < 300; i++) {
+      const w = determinize(world0, 'me', {}, rnd, notes);
+      const opp = w.players.find((p) => p.id === 'opp')!;
+      high += opp.hand.filter((c) => violates(c, notes.find((n) => n.suit === 'S')!)).length;
+      deals++;
+    }
+    let highFree = 0;
+    for (let i = 0; i < 300; i++) highFree += determinize(world0, 'me', {}, rnd).players.find((p) => p.id === 'opp')!.hand.filter((c) => c.endsWith('S') && !c.startsWith('6') && !c.startsWith('7') && !c.startsWith('8') && !c.startsWith('9')).length;
+    expect(high / deals).toBeLessThan((highFree / 300) * 0.5);
+    // He plays the queen of spades: the guess was wrong.
+    notes = rememberVoids(notes, s, [{ type: 'CARD_PLAYED', playerId: 'opp', card: 'QS', role: 'attack', target: 0 }]);
+    expect(notes.some((n) => n.suit === 'S' && n.player === 'opp')).toBe(false);
+  });
 });
