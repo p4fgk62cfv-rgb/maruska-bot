@@ -1638,3 +1638,319 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 :root[data-game-design="daylight"] .news-day__date { color: #b9770e; }
 :root[data-game-design="daylight"] .news-item__emoji,
 :root[data-game-design="daylight"] .news-card__icon { background: rgba(47, 121, 177, 0.1); }
+
+/* ── «Задания»: login calendar and daily quests ── */
+.daily { padding-bottom: 28px; }
+.daily-hero {
+  display: grid; justify-items: center; gap: 4px; margin: 4px 14px 2px; padding: 18px 16px; border-radius: 20px; text-align: center;
+  background: radial-gradient(ellipse at 50% 0%, rgba(255, 207, 90, 0.22), transparent 70%), rgba(0, 0, 0, 0.18); box-shadow: inset 0 0 0 1px var(--stroke);
+}
+.daily-hero__icon { font-size: 34px; }
+.daily-hero strong { font-family: var(--font-script); font-size: 30px; line-height: 1.15; color: var(--gold); }
+.daily-hero span:last-child { font-size: 13px; color: var(--text-2); }
+.daily-card { display: grid; gap: 12px; margin: 0 14px; padding: 14px; border-radius: 18px; background: rgba(0, 0, 0, 0.2); box-shadow: inset 0 0 0 1px var(--stroke); }
+.daily-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.daily-card__head h3 { margin: 0; font-size: 17px; }
+.daily-card__head small { font-size: 12px; color: var(--text-2); }
+.daily-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; margin: 0; padding: 0; list-style: none; }
+.daily-day {
+  display: grid; justify-items: center; align-content: start; gap: 4px; min-width: 0; padding: 7px 2px 8px; border-radius: 12px; text-align: center;
+  background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--stroke); opacity: 0.75;
+}
+.daily-day small { font-size: 10px; color: var(--text-2); white-space: nowrap; }
+.daily-day__icon { font-size: 20px; line-height: 1.2; }
+.daily-day .daily-reward { flex-direction: column; gap: 2px; }
+.daily-day .ui-balance { font-size: 10px; gap: 2px; }
+.daily-day .ui-balance svg { width: 12px; height: 12px; }
+.daily-day--done { opacity: 1; background: rgba(76, 217, 100, 0.14); }
+.daily-day--done .daily-day__icon { color: #4cd964; font-weight: 800; }
+.daily-day--today { opacity: 1; background: rgba(255, 207, 90, 0.16); box-shadow: inset 0 0 0 1.5px rgba(255, 207, 90, 0.8), 0 0 14px rgba(255, 207, 90, 0.25); }
+.daily-day--chest:not(.daily-day--done) { opacity: 1; background: linear-gradient(180deg, rgba(255, 207, 90, 0.2), rgba(255, 255, 255, 0.04)); }
+.daily-reward { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.daily-note { margin: 0; font-size: 13px; color: var(--text-2); }
+.daily-note--center { margin: 0 20px; text-align: center; font-size: 12px; }
+.daily-quests { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.daily-quest { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--stroke); }
+.daily-quest--ready { box-shadow: inset 0 0 0 1.5px rgba(255, 207, 90, 0.75), 0 0 14px rgba(255, 207, 90, 0.18); }
+.daily-quest--claimed { opacity: 0.7; }
+.daily-quest__body { display: grid; gap: 7px; flex: 1; min-width: 0; }
+.daily-quest__body strong { font-size: 14px; line-height: 1.3; }
+.daily-quest__tag {
+  margin-left: 6px; padding: 1px 6px; border-radius: 6px; font-style: normal; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  color: #3a2200; background: var(--gold); vertical-align: 2px;
+}
+.daily-quest__progress { display: flex; align-items: center; gap: 8px; }
+.daily-quest__progress .ui-progress { flex: 1; }
+.daily-quest__progress small { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.daily-quest__side { flex: none; display: grid; justify-items: end; }
+.daily-quest__side .daily-reward { flex-direction: column; align-items: flex-end; gap: 2px; }
+.daily-done { font-size: 12px; font-weight: 700; color: #4cd964; white-space: nowrap; }
+.daily-bonus { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 14px; background: linear-gradient(135deg, rgba(255, 207, 90, 0.12), rgba(255, 255, 255, 0.04)); }
+.daily-bonus--ready { box-shadow: inset 0 0 0 1.5px rgba(255, 207, 90, 0.75); }
+.daily-bonus__icon { font-size: 26px; }
+.daily-bonus__text { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.daily-bonus__text strong { font-size: 14px; }
+.daily-bonus__text small { font-size: 12px; color: var(--text-2); }
+.daily-home { margin-top: 8px; }
+:root[data-game-design="daylight"] .daily-hero,
+:root[data-game-design="daylight"] .daily-card { background: rgba(255, 255, 255, 0.72); }
+:root[data-game-design="daylight"] .daily-hero strong { color: #b9770e; }
+:root[data-game-design="daylight"] .daily-day,
+:root[data-game-design="daylight"] .daily-quest { background: rgba(47, 121, 177, 0.06); }
+:root[data-game-design="daylight"] .daily-day--done { background: rgba(52, 168, 83, 0.14); }
+:root[data-game-design="daylight"] .daily-day--today { background: rgba(255, 211, 106, 0.32); }
+:root[data-game-design="daylight"] .daily-done,
+:root[data-game-design="daylight"] .daily-day--done .daily-day__icon { color: #23893f; }
+
+/* ── «Общий чат» ── */
+/* The chat is its own fixed window: the messages scroll inside it, the field sits at its bottom.
+   With the keyboard open it takes the visible area exactly (see useVisibleArea). */
+.chat-shell {
+  position: fixed; left: 0; right: 0; top: 0; bottom: calc(var(--nav-h) + var(--safe-bottom)); z-index: 25;
+  display: flex; flex-direction: column; padding: calc(var(--safe-top) + 12px) 16px 0;
+  background: var(--felt-texture), radial-gradient(130% 90% at 50% 30%, var(--felt-hi) 0%, var(--felt) 50%, var(--felt-lo) 100%);
+  background-color: var(--felt);
+}
+.chat-shell--keyboard { bottom: auto; }
+.chat-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 10px; padding: 8px 0 12px; }
+.chat-older { align-self: center; padding: 6px 14px; border-radius: 14px; font-size: 13px; color: var(--text-2); background: rgba(0, 0, 0, 0.2); box-shadow: inset 0 0 0 1px var(--stroke); }
+.chat-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.chat-msg { display: flex; align-items: flex-end; gap: 8px; max-width: 100%; }
+.chat-msg--cont { margin-top: -3px; }
+.chat-msg--mine { justify-content: flex-end; }
+.chat-msg__avatar { flex: none; width: 34px; min-height: 1px; padding: 0; background: none; }
+.chat-msg__bubble {
+  display: grid; gap: 2px; max-width: min(78%, 420px); padding: 7px 11px 6px; border-radius: 16px 16px 16px 6px; text-align: left; color: var(--text);
+  background: rgba(0, 0, 0, 0.26); box-shadow: inset 0 0 0 1px var(--stroke);
+}
+.chat-msg--mine .chat-msg__bubble { border-radius: 16px 16px 6px 16px; background: linear-gradient(135deg, rgba(255, 207, 90, 0.26), rgba(255, 207, 90, 0.12)); }
+.chat-msg__bubble:active { transform: scale(0.99); }
+.chat-msg__name { font-size: 12.5px; color: var(--gold); }
+.chat-msg__text { font-size: 15px; line-height: 1.35; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-msg__time { justify-self: end; font-size: 10.5px; color: var(--text-2); }
+.chat-hidden-note { margin: 4px 0 0; text-align: center; font-size: 12px; color: var(--text-2); }
+.chat-composer { flex: none; margin: 0 -16px; padding: 8px 12px 10px; background: rgba(0, 0, 0, 0.28); box-shadow: 0 -1px 0 var(--stroke); }
+.chat-shell--keyboard .chat-composer { padding-bottom: 8px; }
+.chat-composer__form { display: flex; gap: 8px; max-width: 640px; margin: 0 auto; }
+.chat-composer__input {
+  flex: 1; min-width: 0; height: 44px; padding: 0 16px; border: 0; border-radius: 22px; font: inherit; font-size: 16px; color: var(--text);
+  background: rgba(0, 0, 0, 0.35); box-shadow: inset 0 0 0 1px var(--stroke); outline: none;
+}
+.chat-composer__input:focus { box-shadow: inset 0 0 0 1.5px rgba(255, 207, 90, 0.7); }
+.chat-composer__send { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; color: #3a2200; background: var(--gold); }
+.chat-composer__send:disabled { opacity: 0.45; }
+.chat-composer__blocked { max-width: 640px; margin: 0 auto; padding: 10px 14px; border-radius: 14px; font-size: 13px; text-align: center; color: var(--text-2); background: rgba(0, 0, 0, 0.4); }
+.chat-actions { display: grid; gap: 8px; }
+.chat-actions__quote { margin: 0 0 4px; font-size: 14px; color: var(--text-2); overflow-wrap: anywhere; }
+.chat-actions__title { margin: 8px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-2); }
+.chat-actions__mute { display: flex; flex-wrap: wrap; gap: 6px; }
+.chat-actions__hint { margin: 0; font-size: 12px; color: var(--text-2); }
+:root[data-game-design="daylight"] .chat-msg__bubble { background: rgba(255, 255, 255, 0.85); }
+:root[data-game-design="daylight"] .chat-msg--mine .chat-msg__bubble { background: linear-gradient(135deg, rgba(255, 211, 106, 0.55), rgba(255, 236, 190, 0.8)); }
+:root[data-game-design="daylight"] .chat-msg__name { color: #b9770e; }
+:root[data-game-design="daylight"] .chat-composer { background: rgba(255, 255, 255, 0.7); }
+:root[data-game-design="daylight"] .chat-composer__input { background: rgba(255, 255, 255, 0.92); }
+:root[data-game-design="daylight"] .chat-older,
+:root[data-game-design="daylight"] .chat-composer__blocked { background: rgba(255, 255, 255, 0.8); }
+
+/* «Управление» → «Боты»: training of the strong bots */
+.training-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.training-stats span { display: grid; gap: 2px; padding: 10px 6px; border-radius: 12px; text-align: center; background: rgba(0, 0, 0, 0.2); }
+.training-stats b { font-size: 17px; }
+.training-stats small { font-size: 11px; color: var(--text-2); }
+.training-tables, .training-exams { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.training-tables li { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; background: rgba(0, 0, 0, 0.18); }
+.training-tables__n { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font-size: 12px; font-weight: 700; color: #3a2200; background: var(--gold); }
+.training-tables__title { flex: 1; font-size: 14px; }
+.training-exams li { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; padding: 8px 12px; border-radius: 12px; background: rgba(0, 0, 0, 0.18); font-size: 13px; }
+.training-exams small { grid-column: 1 / -1; font-size: 11px; color: var(--text-2); }
+.training-exams__good { color: #4cd964; }
+:root[data-game-design="daylight"] .training-stats span,
+:root[data-game-design="daylight"] .training-tables li,
+:root[data-game-design="daylight"] .training-exams li { background: rgba(47, 121, 177, 0.08); }
+:root[data-game-design="daylight"] .training-exams__good { color: #23893f; }
+
+
+/* ── VEGAS Arena theme: selectable, classic remains the default ── */
+:root[data-game-design="vegas"] {
+  --paper: #120e10; --paper-2: #1d1517; --ink: #f6eee2; --ink-2: #c8b6a4;
+  --felt: #250d12; --felt-1: #3a1119; --felt-2: #160b0e; --gold: #d9ae62;
+  --gold-deep: #94672c; --line: rgba(201,151,78,.18); --stroke: rgba(201,151,78,.22);
+  color-scheme: dark;
+}
+:root[data-game-design="vegas"] body,
+:root[data-game-design="vegas"] .app-screen { background-color: #100c0e; }
+:root[data-game-design="vegas"] .app-header,
+:root[data-game-design="vegas"] .home-bar {
+  color: #f7eee2; background: linear-gradient(115deg,#171113,#211316 55%,#120e10);
+  border-bottom: 1px solid rgba(201,151,78,.28); box-shadow: 0 8px 22px rgba(0,0,0,.28);
+}
+:root[data-game-design="vegas"] .home-bar__who .ui-rank__value { color: #f3e7d5; }
+:root[data-game-design="vegas"] .home-bar__money .ui-balance--credits,
+:root[data-game-design="vegas"] .home-bar__money .ui-balance--coins { color: #e2bd78; }
+.home--vegas { background: radial-gradient(ellipse at 50% 18%,rgba(110,25,35,.22),transparent 45%),linear-gradient(180deg,#100c0e,#1b0d11 70%,#100c0e); min-height:100%; }
+.home--vegas .arena-hero {
+  margin:0 12px; min-height:178px; padding:22px 12px 18px; border:1px solid rgba(207,164,91,.28); border-radius:0 0 18px 18px;
+  background:radial-gradient(ellipse at 50% 72%,rgba(128,20,34,.34),transparent 58%),linear-gradient(145deg,rgba(35,17,20,.98),rgba(15,12,14,.99));
+  box-shadow:inset 0 -1px 0 rgba(224,178,94,.08),0 12px 24px rgba(0,0,0,.2);
+}
+.home--vegas .arena-hero__ornament { height:34px; margin-bottom:7px; }
+.home--vegas .arena-card { width:34px; height:47px; border-radius:5px; border:1px solid #bd995a; background:#191214; color:#d8b878; font:700 14px/1 Georgia,serif; box-shadow:0 5px 12px #0008; }
+.home--vegas .arena-card span { color:#b82e3b; font-size:15px; margin-top:3px; }
+.home--vegas .arena-card--left { transform:translateX(7px) rotate(-13deg); }
+.home--vegas .arena-card--right { transform:translateX(-7px) rotate(13deg); }
+.home--vegas .arena-card--back { background:repeating-linear-gradient(45deg,#3b141a 0 4px,#211114 4px 8px); color:#e2bd78; }
+.home--vegas .arena-hero__eyebrow { margin:0 0 4px; color:#bda477; font-size:9px; letter-spacing:.24em; font-weight:800; }
+.home--vegas .arena-hero__title { margin:0; color:#f2d7a0; font:900 clamp(30px,8vw,42px)/1 Georgia,serif; letter-spacing:.06em; text-shadow:0 2px 0 #4a2d18,0 8px 24px #000; }
+.home--vegas .arena-hero__title span { display:block; color:#f7eee2; font-size:.48em; letter-spacing:.34em; margin-top:7px; }
+.home--vegas .arena-hero__subtitle { margin:9px 0 0; color:#a99a8d; font-size:10px; letter-spacing:.12em; }
+.home--vegas .quick-play {
+  margin:14px 16px 0; padding:13px 16px; display:flex; flex-direction:row; justify-content:center; align-items:center; gap:12px;
+  border:1px solid rgba(208,165,92,.55); border-radius:13px; color:#f4e7d0; background:linear-gradient(110deg,#45121b,#260e13 65%,#1b1012); box-shadow:0 7px 18px #0004;
+}
+.home--vegas .quick-play:active { background:#511720; }
+.home--vegas .quick-play__icon { width:38px; height:38px; margin:0; color:#170f10; background:linear-gradient(145deg,#f5d996,#b9853e); box-shadow:none; }
+.home--vegas .quick-play__icon svg { width:20px; height:20px; }
+.home--vegas .quick-play__title { font:700 16px/1.2 var(--font); text-shadow:none; }
+.home--vegas .quick-play__hint { color:#b5a69a; font-size:10px; }
+.home--vegas .news-card { margin-left:12px; margin-right:12px; color:#eee2d3; background:linear-gradient(120deg,#1c1517,#130f10); border:1px solid rgba(201,151,78,.3); border-radius:12px; }
+.home--vegas .tile-grid { gap:8px; padding:12px; }
+.home--vegas .grid-tile { min-height:86px; padding:12px 6px; border:1px solid rgba(201,151,78,.2); border-radius:12px; background:linear-gradient(145deg,rgba(34,23,24,.95),rgba(19,14,15,.98)); box-shadow:inset 0 1px 0 #ffffff08; }
+.home--vegas .grid-tile:nth-child(odd) { border-right:1px solid rgba(201,151,78,.2); }
+.home--vegas .grid-tile:active { background:rgba(100,35,39,.35); }
+.home--vegas .grid-tile__icon { color:#d7b777; }
+.home--vegas .grid-tile__title { font-family:var(--font); font-size:14px; font-weight:600; color:#eadfd1; text-shadow:none; }
+.home--vegas .friends-play { margin:12px 12px 0; color:#f0e4d5; background:linear-gradient(120deg,#32151a,#1b1113); border:1px solid rgba(201,151,78,.28); border-radius:12px; }
+.home--vegas .home-section-label { margin:18px 18px 0; color:#b9a078; font-size:10px; letter-spacing:.2em; }
+.home--vegas .home-section-label i { flex:1; height:1px; background:linear-gradient(90deg,rgba(201,151,78,.35),transparent); }
+:root[data-game-design="vegas"] .app-header h1,
+:root[data-game-design="vegas"] .script-title { color:#ead7b4; }
+:root[data-game-design="vegas"] .app-header .ui-icon-btn { color:#e1c58e; background:#211619; }
+
+.home--vegas .arena-hero__ornament { display:flex; justify-content:center; align-items:center; width:100%; }
+.home--vegas .arena-card { display:flex; flex-direction:column; align-items:center; justify-content:center; }
+
+.home--vegas .arena-hero--vegas-logo { min-height:0; padding:16px 12px 17px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0; }
+.home--vegas .vegas-arena-logo { display:block; width:min(100%, 310px); height:auto; max-height:145px; object-fit:contain; }
+.home--vegas .arena-hero--vegas-logo .arena-hero__subtitle { margin:0; font-size:9px; letter-spacing:.16em; color:#bca57c; }
+
+/* «Тренировочный зал»: bot training tables with open cards */
+.training-hall__intro { margin: 0 2px; font-size: 13px; line-height: 1.45; color: var(--text-2); }
+.tt { display: grid; gap: 8px; }
+.tt__head { display: flex; align-items: center; gap: 10px; }
+.tt__n { display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 50%; font-size: 13px; font-weight: 800; color: #3a2200; background: var(--gold); }
+.tt__title { display: grid; gap: 1px; min-width: 0; }
+.tt__title strong { font-size: 15px; }
+.tt__title small { font-size: 12px; color: var(--text-2); }
+.tt__felt {
+  display: grid; gap: 8px; padding: 10px; border-radius: 18px;
+  background: radial-gradient(ellipse at 50% 40%, #1f7a4d, #0d4a2c 75%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+.tt-seat { display: grid; gap: 4px; }
+.tt-seat__name { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #fff; }
+.tt-seat__name small { margin-left: auto; font-weight: 500; color: rgba(255, 255, 255, 0.7); }
+.tt-seat--challenger .tt-seat__name { color: #ffd76a; }
+.tt-seat--out { opacity: 0.55; }
+.tt-seat__hand { display: flex; flex-wrap: wrap; gap: 2px; min-height: 36px; }
+.tt__middle { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px dashed rgba(255, 255, 255, 0.18); border-bottom: 1px dashed rgba(255, 255, 255, 0.18); }
+.tt__stock { display: grid; justify-items: center; gap: 2px; flex: none; width: 56px; }
+.tt__stock small { font-size: 10px; color: rgba(255, 255, 255, 0.75); white-space: nowrap; }
+.tt__trump-suit { font-size: 11px; color: rgba(255, 255, 255, 0.6); }
+.tt__pairs { display: flex; flex-wrap: wrap; gap: 8px 6px; flex: 1; min-height: 50px; align-items: center; }
+.tt__pair { position: relative; display: inline-block; padding: 0 8px 10px 0; }
+.tt__cover { position: absolute; left: 9px; top: 11px; }
+.tt__empty { font-size: 12px; color: rgba(255, 255, 255, 0.55); }
+.tt__last { margin: 0; min-height: 18px; font-size: 13px; color: #fff; }
+.tt__last--result { font-weight: 800; color: #ffd76a; }
+
+/* «Прогресс бота» (temporary owner screen) */
+.bp-hero { display: grid; justify-items: center; gap: 4px; padding: 18px 16px; border-radius: 20px; text-align: center; background: radial-gradient(ellipse at 50% 0%, rgba(255, 207, 90, 0.22), transparent 70%), rgba(0, 0, 0, 0.2); box-shadow: inset 0 0 0 1px var(--stroke); }
+.bp-status { font-size: 12px; color: var(--text-2); }
+.bp-status--on { color: #4cd964; }
+.bp-hero__value { font-size: 52px; line-height: 1.05; color: var(--gold); font-variant-numeric: tabular-nums; }
+.bp-hero__label { font-size: 13px; color: var(--text); }
+.bp-hero__delta { font-size: 12px; color: var(--text-2); }
+.bp-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.bp-stat { display: grid; gap: 2px; padding: 10px 6px; border-radius: 14px; text-align: center; background: rgba(0, 0, 0, 0.2); box-shadow: inset 0 0 0 1px var(--stroke); }
+.bp-stat b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.bp-stat .bp-stat__small { font-size: 13px; line-height: 1.6; }
+.bp-stat small { font-size: 11px; color: var(--text-2); }
+.bp-card { display: grid; gap: 10px; padding: 14px; border-radius: 18px; background: rgba(0, 0, 0, 0.2); box-shadow: inset 0 0 0 1px var(--stroke); }
+.bp-card h3 { margin: 0; font-size: 16px; }
+.bp-note { margin: 0; font-size: 12px; line-height: 1.4; color: var(--text-2); }
+.bp-chart { display: grid; gap: 6px; }
+.bp-chart__plot { position: relative; display: flex; align-items: flex-end; gap: 2px; height: 140px; padding: 0 0 0 30px; border-bottom: 1px solid var(--stroke); }
+.bp-chart__ref { position: absolute; left: 30px; right: 0; border-top: 1px dashed rgba(255, 255, 255, 0.35); pointer-events: none; }
+.bp-chart__ref small { position: absolute; left: -30px; top: -8px; font-size: 10px; color: var(--text-2); }
+.bp-chart__col { flex: 1; display: flex; align-items: flex-end; height: 100%; min-width: 6px; padding: 0; background: none; }
+.bp-chart__col i { display: block; width: 100%; max-width: 22px; margin: 0 auto; border-radius: 4px 4px 0 0; background: rgba(255, 207, 90, 0.45); }
+.bp-chart__col--on i { background: var(--gold); }
+.bp-chart__caption { margin: 0; font-size: 12px; color: var(--text-2); }
+.bp-chart__caption b { color: var(--text); }
+.bp-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.bp-lessons, .bp-tables, .bp-history { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.bp-lessons li { display: grid; grid-template-columns: 1fr 70px; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); }
+.bp-lessons__text { display: grid; gap: 1px; font-size: 13px; color: var(--text); }
+.bp-lessons__text small { font-size: 11px; color: var(--text-2); }
+.bp-lessons__bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.bp-lessons__bar i { display: block; height: 100%; border-radius: 3px; background: var(--gold); }
+.bp-tables li, .bp-history li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); font-size: 13px; }
+.bp-tables li span { flex: 1; }
+.bp-history li span { flex: 1; color: var(--text-2); }
+.bp-history li small { font-size: 12px; color: #4cd964; }
+:root[data-game-design="daylight"] .bp-hero,
+:root[data-game-design="daylight"] .bp-stat,
+:root[data-game-design="daylight"] .bp-card { background: rgba(255, 255, 255, 0.75); }
+:root[data-game-design="daylight"] .bp-hero__value { color: #b9770e; }
+:root[data-game-design="daylight"] .bp-chart__ref { border-top-color: rgba(0, 0, 0, 0.3); }
+:root[data-game-design="daylight"] .bp-chart__col i { background: rgba(185, 119, 14, 0.4); }
+:root[data-game-design="daylight"] .bp-chart__col--on i,
+:root[data-game-design="daylight"] .bp-lessons__bar i { background: #b9770e; }
+:root[data-game-design="daylight"] .bp-lessons li,
+:root[data-game-design="daylight"] .bp-tables li,
+:root[data-game-design="daylight"] .bp-history li { background: rgba(47, 121, 177, 0.07); }
+:root[data-game-design="daylight"] .bp-history li small,
+:root[data-game-design="daylight"] .bp-status--on { color: #23893f; }
+.owner-back { justify-self: start; padding: 6px 2px; font-size: 15px; font-weight: 600; color: var(--gold); background: none; }
+.owner-player--picked { pointer-events: none; }
+:root[data-game-design="daylight"] .owner-back { color: #b9770e; }
+
+/* Chat replies: a quote above the answer, the bar above the field */
+.chat-quote {
+  display: grid; gap: 1px; margin: 2px 0 3px; padding: 4px 8px; border-radius: 8px; border-left: 3px solid var(--gold);
+  background: rgba(0, 0, 0, 0.22); font-size: 12.5px; line-height: 1.3; cursor: pointer;
+}
+.chat-quote b { color: var(--gold); font-size: 12px; }
+.chat-quote span { color: var(--text-2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.chat-msg--to-me .chat-msg__bubble { box-shadow: inset 0 0 0 1.5px rgba(255, 207, 90, 0.7); }
+.chat-msg--flash .chat-msg__bubble { animation: chat-flash 1.5s ease; }
+@keyframes chat-flash { 0%, 40% { box-shadow: inset 0 0 0 2px var(--gold), 0 0 16px rgba(255, 207, 90, 0.5); } }
+.chat-msg__bubble { cursor: pointer; }
+.chat-reply { display: flex; align-items: center; gap: 8px; max-width: 640px; margin: 0 auto 8px; padding: 6px 6px 6px 10px; border-left: 3px solid var(--gold); border-radius: 8px; background: rgba(0, 0, 0, 0.25); }
+.chat-reply__body { display: grid; gap: 1px; flex: 1; min-width: 0; font-size: 12.5px; }
+.chat-reply__body b { color: var(--gold); font-size: 12px; }
+.chat-reply__body span { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-reply__close { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; color: var(--text-2); background: none; }
+:root[data-game-design="daylight"] .chat-quote,
+:root[data-game-design="daylight"] .chat-reply { background: rgba(47, 121, 177, 0.08); border-left-color: #b9770e; }
+:root[data-game-design="daylight"] .chat-quote b,
+:root[data-game-design="daylight"] .chat-reply__body b { color: #b9770e; }
+
+/* Home: the common chat strip (latest messages, opens the chat) */
+.chat-strip {
+  display: grid; gap: 4px; margin: 8px 2px 0; padding: 10px 14px 11px; border-radius: 16px; text-align: left; color: var(--text);
+  background: linear-gradient(135deg, rgba(255, 207, 90, 0.1), rgba(255, 255, 255, 0.05)); box-shadow: inset 0 0 0 1px var(--stroke);
+}
+.chat-strip:active { transform: scale(0.985); }
+.chat-strip--fresh { box-shadow: inset 0 0 0 1.5px rgba(255, 207, 90, 0.7), 0 0 18px rgba(255, 207, 90, 0.18); }
+.chat-strip__head { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--gold); }
+.chat-strip__head small { color: var(--text-2); font-size: 12px; }
+.chat-strip__new { font-style: normal; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 7px; border-radius: 8px; color: #3a2200; background: var(--gold); }
+.chat-strip__arrow { margin-left: auto; font-size: 24px; line-height: 1; color: var(--text-2); }
+.chat-strip__line { font-size: 14px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-strip__line b { color: var(--text); }
+.chat-strip__line--muted { color: var(--text-2); }
+:root[data-game-design="daylight"] .chat-strip { background: rgba(255, 255, 255, 0.72); }
+:root[data-game-design="daylight"] .chat-strip__head { color: #b9770e; }
+.home--vegas .chat-strip { margin-left: 12px; margin-right: 12px; color: #eee2d3; background: linear-gradient(120deg, #1c1517, #130f10); border: 1px solid rgba(201, 151, 78, 0.3); border-radius: 12px; }
+.bp-history li small.bp-history__lost { color: var(--text-2); }

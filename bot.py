@@ -52,6 +52,7 @@ from features.chatters import router as chatters_router
 from features.social import router as social_router
 from features.rating import router as rating_router
 from features.weather import router as weather_router
+from features.radio import router as radio_router
 
 from games.crocodile import (
     drawing_enabled,
@@ -148,6 +149,7 @@ dp.include_router(fishing_router)
 dp.include_router(arena_router)
 dp.include_router(rating_router)
 dp.include_router(weather_router)
+dp.include_router(radio_router)
 dp.include_router(cats_router)
 dp.include_router(fortune_router)
 

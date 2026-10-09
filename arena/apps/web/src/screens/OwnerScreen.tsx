@@ -1,11 +1,12 @@
 import type { AnnouncementDto, BotSettingsDto, OwnerPlayerDto, ReferralSettingsDto, WelcomeGiftDto } from '@arena/shared';
-import { Avatar, Balance, BottomSheet, Button, Panel, Tabs, Toggle } from '@arena/ui';
+import { Avatar, Balance, Button, Panel, Tabs, Toggle } from '@arena/ui';
 import { useEffect, useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
 import { useQuery } from '../lib/useQuery.js';
 import { useSession } from '../session.js';
 import { useToast } from '../toast.js';
 import { ScreenHeader } from './common.js';
+import { useNav } from '../navigation.js';
 
 type Section = 'announcement' | 'gifts' | 'bonus' | 'bots';
 interface GiftItem { key: string; name: string; kind: string; owned: boolean }
@@ -20,7 +21,7 @@ export default function OwnerScreen() {
     <div className="app-stack owner">
       <ScreenHeader title="Управление" subtitle="Видно только владельцу" />
       <Tabs<Section> value={section} onChange={setSection} items={[{ value: 'announcement', label: 'Объявление' }, { value: 'gifts', label: 'Подарки' }, { value: 'bonus', label: 'Бонусы' }, { value: 'bots', label: 'Боты' }]} />
-      {section === 'announcement' ? <AnnouncementEditor /> : section === 'gifts' ? <Gifts /> : section === 'bots' ? <Bots /> : <Bonuses />}
+      {section === 'announcement' ? <AnnouncementEditor /> : section === 'gifts' ? <Gifts /> : section === 'bots' ? <><Bots /><Training /></> : <Bonuses />}
     </div>
   );
 }
@@ -98,6 +99,26 @@ function Gifts() {
   }, [q]);
   const players = useQuery<OwnerPlayerDto[]>(`/owner/players?q=${encodeURIComponent(query)}`);
 
+  // The gift panel is part of the page, not a pop-up: on iPhone, taps inside a scrolled pop-up
+  // stopped reaching the buttons after the list refreshed.
+  if (picked) {
+    return (
+      <div className="app-stack">
+        <button type="button" className="owner-back" onClick={() => setPicked(null)}>
+          ‹ Все игроки
+        </button>
+        <div className="owner-player owner-player--picked">
+          <Avatar id={picked.id} name={picked.name} photoUrl={picked.photoUrl} size={40} />
+          <span className="owner-player__body">
+            <strong>Подарок: {picked.name}</strong>
+            <span>{picked.username ? `@${picked.username}` : ''}</span>
+          </span>
+        </div>
+        <GiftSheet player={picked} onDone={() => players.reload()} />
+      </div>
+    );
+  }
+
   return (
     <>
       <input className="owner-search" value={q} placeholder="Имя, @username или Telegram ID" onChange={(e) => setQ(e.target.value)} />
@@ -117,9 +138,6 @@ function Gifts() {
         ))}
         {players.data && players.data.length === 0 && <p className="app-muted">Никого не нашли</p>}
       </div>
-      <BottomSheet open={Boolean(picked)} title={picked ? `Подарок: ${picked.name}` : ''} onClose={() => setPicked(null)}>
-        {picked && <GiftSheet player={picked} onDone={() => players.reload()} />}
-      </BottomSheet>
     </>
   );
 }
@@ -402,6 +420,81 @@ function Bots() {
         нельзя. <b>Максимальный</b> — игра на кредиты; «Быстрая игра» всегда зовёт максимальных ботов. Уровень за своим столом
         игрок выбирает сам.
       </p>
+    </Panel>
+  );
+}
+
+interface TrainingDto {
+  running: boolean;
+  version: number;
+  brainVersion: number;
+  games: number;
+  today: { day: string; games: number };
+  generations: number;
+  improvements: number;
+  lastImprovementAt: string | null;
+  tables: { key: string; title: string; games: number }[];
+  exams: { at: string; games: number; winRate: number; version: number }[];
+}
+
+const trainingNum = new Intl.NumberFormat('ru-RU');
+const when = (iso: string) => new Date(iso).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+
+/** Self-play training of the strong bots: the three tables, improvements and exams. */
+function Training() {
+  const query = useQuery<TrainingDto>('/owner/training');
+  const { push } = useNav();
+  useEffect(() => {
+    const timer = setInterval(query.reload, 15_000);
+    return () => clearInterval(timer);
+  }, [query.reload]);
+  const t = query.data;
+  if (!t) return <p className="app-muted">Загрузка…</p>;
+  const exams = t.exams.slice(-6).reverse();
+  return (
+    <Panel className="owner-card training">
+      <h3 className="owner-sub">Обучение максимальных ботов</h3>
+      <p className="app-muted">
+        Боты круглосуточно играют друг с другом за тремя столами. Немного изменённая копия бота играет с текущим чемпионом на одинаковых
+        раздачах; если она уверенно сильнее — становится чемпионом, и за столами с людьми максимальные боты сразу начинают играть
+        по‑новому. Раз в полчаса — экзамен против прежнего максимального бота.
+      </p>
+      <div className="training-stats">
+        <span><b>{t.running ? 'идёт' : 'на паузе'}</b><small>обучение</small></span>
+        <span><b>v{t.brainVersion}</b><small>версия мозга</small></span>
+        <span><b>{trainingNum.format(t.today.games)}</b><small>партий сегодня</small></span>
+        <span><b>{trainingNum.format(t.games)}</b><small>партий всего</small></span>
+        <span><b>{trainingNum.format(t.improvements)}</b><small>улучшений</small></span>
+        <span><b>{trainingNum.format(t.generations)}</b><small>проверено версий</small></span>
+      </div>
+      {t.lastImprovementAt && <p className="app-muted">Последнее улучшение: {when(t.lastImprovementAt)}</p>}
+      <Button variant="gold" block icon="eye" onClick={() => push('training')}>
+        Смотреть, как боты играют
+      </Button>
+      <h3 className="owner-sub">Столы</h3>
+      <ul className="training-tables">
+        {t.tables.map((table, i) => (
+          <li key={table.key}>
+            <span className="training-tables__n">{i + 1}</span>
+            <span className="training-tables__title">{table.title}</span>
+            <b>{trainingNum.format(table.games)}</b>
+          </li>
+        ))}
+      </ul>
+      <h3 className="owner-sub">Экзамены против прежнего максимального бота</h3>
+      {exams.length === 0 ? (
+        <p className="app-muted">Первый экзамен — примерно через полчаса после запуска.</p>
+      ) : (
+        <ul className="training-exams">
+          {exams.map((e) => (
+            <li key={e.at}>
+              <span>{when(e.at)} · v{e.version}</span>
+              <b className={e.winRate >= 0.5 ? 'training-exams__good' : ''}>{Math.round(e.winRate * 100)}% побед</b>
+              <small>{e.games} партий</small>
+            </li>
+          ))}
+        </ul>
+      )}
     </Panel>
   );
 }

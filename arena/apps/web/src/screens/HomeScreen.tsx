@@ -11,6 +11,8 @@ import { useMe, useSession } from '../session.js';
 import { useToast } from '../toast.js';
 import { InstallCard } from './InstallCard.js';
 import { NEWS, newsDate, useUnseenNews } from '../lib/news.js';
+import { chatHasNew } from '../lib/chat.js';
+import { ChatStrip } from './ChatStrip.js';
 
 interface Tile {
   icon: IconName;
@@ -19,6 +21,9 @@ interface Tile {
 }
 
 const TILES: Tile[] = [
+  { icon: 'gift', title: 'Задания', page: 'daily' },
+  { icon: 'chat', title: 'Чат', page: 'chat' },
+  { icon: 'cards', title: 'Зал ботов', page: 'training' },
   { icon: 'trophy', title: 'Турниры', page: 'tournaments' },
   { icon: 'news', title: 'Новости', page: 'news' },
   { icon: 'users', title: 'Друзья', page: 'friends' },
@@ -54,23 +59,33 @@ export function HomeScreen() {
     if (tile.page === 'achievements') return `${s.achievementsUnlocked} / ${s.achievementsTotal}`;
     if (tile.page === 'friends' && requestCount) return requestCount;
     if (tile.page === 'news' && unseenNews) return unseenNews;
+    if (tile.page === 'daily' && me.daily.claimable) return me.daily.claimable;
+    if (tile.page === 'chat' && chatHasNew(me.chatLastAt)) return 'новое';
     return null;
   };
 
   return (
-    <div className={`home${homeDesign === "daylight" ? " home--premium" : ""}`}>
+    <div className={`home${homeDesign === 'daylight' ? ' home--premium' : ''}${homeDesign === 'vegas' ? ' home--vegas' : ''}`}>
       <HomeBar />
 
-      {homeDesign === 'daylight' && (
-      <section className="arena-hero" aria-label="Маруська Арена">
-        <div className="arena-hero__ornament" aria-hidden="true">
-          <span className="arena-card arena-card--left">A<span>♥</span></span>
-          <span className="arena-card arena-card--back">✦</span>
-          <span className="arena-card arena-card--right">K<span>♠</span></span>
-        </div>
-        <p className="arena-hero__eyebrow">ТВОЙ КАРТОЧНЫЙ КЛУБ</p>
-        <h1 className="arena-hero__title">МАРУСЬКА <span>АРЕНА</span></h1>
-        <p className="arena-hero__subtitle">Собирай друзей. Играй красиво. Побеждай.</p>
+      {(homeDesign === 'daylight' || homeDesign === 'vegas') && (
+      <section className={`arena-hero${homeDesign === 'vegas' ? ' arena-hero--vegas-logo' : ''}`} aria-label={homeDesign === 'vegas' ? 'VEGAS Арена' : 'Маруська Арена'}>
+        {homeDesign === 'vegas' ? (
+          <>
+            <img className="vegas-arena-logo" src="/vegas-arena-logo.svg" alt="VEGAS АРЕНА" />
+          </>
+        ) : (
+          <>
+            <div className="arena-hero__ornament" aria-hidden="true">
+              <span className="arena-card arena-card--left">A<span>♥</span></span>
+              <span className="arena-card arena-card--back">✦</span>
+              <span className="arena-card arena-card--right">K<span>♠</span></span>
+            </div>
+            <p className="arena-hero__eyebrow">ТВОЙ КАРТОЧНЫЙ КЛУБ</p>
+            <h1 className="arena-hero__title">МАРУСЬКА <span>АРЕНА</span></h1>
+            <p className="arena-hero__subtitle">Собирай друзей. Играй красиво. Побеждай.</p>
+          </>
+        )}
       </section>
       )}
 
@@ -79,6 +94,8 @@ export function HomeScreen() {
         <span className="quick-play__title">Быстрая игра</span>
         <span className="quick-play__hint">Подберём стол по вашей ставке</span>
       </button>
+
+      <ChatStrip />
 
       <button type="button" className={`news-card${unseenNews ? ' news-card--fresh' : ''}`} onClick={() => push('news')}>
         <span className="news-card__icon" aria-hidden="true">📰</span>
@@ -94,7 +111,7 @@ export function HomeScreen() {
 
       <InstallCard />
 
-      {homeDesign === 'daylight' && (
+      {(homeDesign === 'daylight' || homeDesign === 'vegas') && (
         <>
       <button type="button" className="friends-play" onClick={() => push('friends')}>
         <span className="friends-play__icon"><Icon name="users" size={22} /></span>
@@ -106,7 +123,7 @@ export function HomeScreen() {
         </>
       )}
       <div className="tile-grid">
-        {(me.owner ? [...TILES, { icon: 'crown', title: 'Управление', page: 'owner' } as Tile] : TILES).map((tile) => {
+        {(me.owner ? [...TILES, { icon: 'flame', title: 'Прогресс бота', page: 'botprogress' } as Tile, { icon: 'crown', title: 'Управление', page: 'owner' } as Tile] : TILES).map((tile) => {
           const count = counter(tile);
           return (
             <button key={tile.title} type="button" className="grid-tile" onClick={() => tile.page && push(tile.page)}>

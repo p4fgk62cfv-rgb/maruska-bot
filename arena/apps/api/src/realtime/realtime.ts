@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { clientMessageSchema } from '@arena/shared/schemas';
-import type { AppErrorCode, ClientMessage, GameResultDto } from '@arena/shared';
+import type { AppErrorCode, ClientMessage, GameResultDto, TrainingTableDto } from '@arena/shared';
 import type { FastifyBaseLogger } from 'fastify';
 import type { WebSocket } from 'ws';
 import type { Config } from '../config.js';
@@ -16,6 +16,8 @@ import { GameManager, wsError } from './games.js';
 import { Hub, type Client } from './hub.js';
 import { RoomManager } from './rooms.js';
 import type { SnapshotStore } from './store.js';
+import type { DailyService } from '../services/daily.js';
+import type { Brain } from '../brain/brain.js';
 
 export interface RealtimeDeps {
   config: Config;
@@ -25,6 +27,10 @@ export interface RealtimeDeps {
   store: SnapshotStore;
   log: FastifyBaseLogger;
   bots: BotService;
+  /** How the strong bots think. */
+  brain?: Brain;
+  /** Daily quests are counted when a game is settled. */
+  daily?: DailyService;
   alerts?: Alerts;
 }
 
@@ -38,7 +44,7 @@ const LEASE_RENEW_MS = 3_000;
 /** A new server waits this long at most for the old one to hand over the games. */
 const HANDOVER_MAX_MS = 45_000;
 /** Requests that only read: not worth remembering across a restart. */
-const READ_ONLY = new Set(['PING', 'LOBBY_SUBSCRIBE', 'LOBBY_UNSUBSCRIBE', 'ROOM_WATCH', 'RECONNECT']);
+const READ_ONLY = new Set(['PING', 'LOBBY_SUBSCRIBE', 'LOBBY_UNSUBSCRIBE', 'CHAT_SUBSCRIBE', 'CHAT_UNSUBSCRIBE', 'TRAINING_SUBSCRIBE', 'TRAINING_UNSUBSCRIBE', 'ROOM_WATCH', 'RECONNECT']);
 
 export class Realtime {
   private sweeper: NodeJS.Timeout | null = null;
@@ -46,6 +52,8 @@ export class Realtime {
   private readonly presenceListeners = new Set<(userIds: string[]) => void>();
   /** Settled games (casual and tournament): referral rewards and the like. */
   readonly finishedListeners = new Set<(result: GameResultDto) => void>();
+  /** The bot training tables to show a new watcher (set by the showcase). */
+  trainingTables: (() => TrainingTableDto[]) | null = null;
   private readonly replies = new Map<string, { at: number; done: Promise<AppErrorCode | null> }>();
   readonly hub = new Hub();
   readonly rooms: RoomManager;
@@ -65,7 +73,7 @@ export class Realtime {
 
   constructor(private readonly deps: RealtimeDeps) {
     this.ready = new Promise((resolve) => (this.markReady = resolve));
-    this.settlement = new SettlementService(deps.db, deps.ledger, deps.config.RAKE_PERCENT);
+    this.settlement = new SettlementService(deps.db, deps.ledger, deps.config.RAKE_PERCENT, deps.daily);
     this.rooms = new RoomManager({ ...deps, hub: this.hub, games: () => this.games });
     this.games = new GameManager({
       db: deps.db,
@@ -80,6 +88,7 @@ export class Realtime {
       },
       onPresence: (ids) => this.emitPresence(ids),
       botLevel: () => deps.bots.level(),
+      brain: deps.brain,
       alerts: deps.alerts,
     });
   }
@@ -302,6 +311,15 @@ export class Realtime {
         return this.hub.subscribeLobby(client, msg.filter, this.rooms.list());
       case 'LOBBY_UNSUBSCRIBE':
         return this.hub.unsubscribeLobby(client);
+      case 'CHAT_SUBSCRIBE':
+        return this.hub.setChat(client, true);
+      case 'CHAT_UNSUBSCRIBE':
+        return this.hub.setChat(client, false);
+      case 'TRAINING_SUBSCRIBE':
+        this.hub.setTraining(client, true);
+        return this.hub.sendTo(client, { type: 'TRAINING_TABLES', tables: this.trainingTables?.() ?? [] });
+      case 'TRAINING_UNSUBSCRIBE':
+        return this.hub.setTraining(client, false);
       case 'ROOM_WATCH':
       case 'RECONNECT': {
         const room = this.rooms.get(msg.roomId);

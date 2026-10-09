@@ -9,3 +9,8 @@ export * from './Scoring.js';
 export * from './CheatManager.js';
 export * from './BotBrain.js';
 export * from './EndgameSolver.js';
+export * from './brain/params.js';
+export * from './brain/policy.js';
+export * from './brain/memory.js';
+export * from './brain/search.js';
+export * from './brain/inference.js';

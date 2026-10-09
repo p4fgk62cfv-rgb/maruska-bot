@@ -22,7 +22,7 @@ export interface Settings {
   rewardAnimations: boolean;
   theme: Theme;
   /** Home screen visual style. Classic preserves the original design. */
-  homeDesign: 'classic' | 'daylight';
+  homeDesign: 'classic' | 'daylight' | 'vegas';
 }
 
 const KEY = 'arena.settings';
@@ -42,7 +42,7 @@ const DEFAULTS: Settings = {
 };
 
 let current: Settings = { ...DEFAULTS, ...safeStorage.get<Partial<Settings>>(KEY, {}) };
-// Migrate the previous experimental theme to the safe classic default.\nif ((current.homeDesign as string) !== 'classic' && (current.homeDesign as string) !== 'daylight') current.homeDesign = 'classic';
+// Migrate the previous experimental theme to the safe classic default.\nif (!['classic', 'daylight', 'vegas'].includes(current.homeDesign as string)) current.homeDesign = 'classic';
 const listeners = new Set<() => void>();
 
 /** Per-device preferences (sound, vibration, animations, hand sorting). */

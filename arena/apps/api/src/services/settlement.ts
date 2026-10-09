@@ -6,6 +6,7 @@ import type { Db } from '../db.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { AppError } from '../lib/errors.js';
 import { progressAchievements } from './achievements.js';
+import type { DailyService } from './daily.js';
 import type { Ledger } from './ledger.js';
 
 type Tx = Prisma.TransactionClient;
@@ -34,7 +35,12 @@ export interface FinishInput {
  * Each step is one transaction and idempotent, so a retry after a crash is harmless.
  */
 export class SettlementService {
-  constructor(private readonly db: Db, private readonly ledger: Ledger, private readonly rakePercent: number) {}
+  constructor(
+    private readonly db: Db,
+    private readonly ledger: Ledger,
+    private readonly rakePercent: number,
+    private readonly daily?: DailyService,
+  ) {}
 
   /** Creates the game record and escrows every stake. Throws INSUFFICIENT_FUNDS (with the user) if someone is short. */
   async start(input: StartInput): Promise<void> {
@@ -191,6 +197,16 @@ export class SettlementService {
             stake,
             transfers: input.transfers[payout.playerId] ?? 0,
           });
+
+          // Daily quests count every game of a person, practice tables and bot opponents included.
+          if (this.daily && !input.bots?.includes(payout.playerId)) {
+            await this.daily.onGame(
+              tx,
+              payout.playerId,
+              { won, stake, variant: state.rules.variant, players: state.players.length, transfers: input.transfers[payout.playerId] ?? 0 },
+              now.getTime(),
+            );
+          }
 
           payouts.push({ userId: payout.playerId, net: payout.net, place: player.place, ratingGain: gain, bonusMultiplier: bonus.applied });
         }

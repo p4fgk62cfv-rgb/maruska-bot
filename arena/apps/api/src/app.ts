@@ -23,6 +23,12 @@ import { FriendService } from './services/friends.js';
 import { ProfileService } from './services/profiles.js';
 import { ReferralService } from './services/referrals.js';
 import { referralRoutes } from './routes/referrals.js';
+import { dailyRoutes } from './routes/daily.js';
+import { chatRoutes } from './routes/chat.js';
+import { ChatService } from './services/chat.js';
+import { Brain } from './brain/brain.js';
+import { Trainer } from './brain/trainer.js';
+import { Showcase } from './brain/showcase.js';
 import { Outbox, TelegramBot } from './services/notifier.js';
 import { playerRoutes } from './routes/players.js';
 import { ownerRoutes } from './routes/owner.js';
@@ -71,7 +77,17 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   const alerts = options.alerts ?? new Alerts(bot, ownerIds(config.OWNER_IDS), app.log);
   // A failed snapshot write is retried until it lands; the games never wait for it.
   const store = new ResilientStore(options.store ?? new MemoryStore(), app.log, alerts);
-  const realtime = new Realtime({ ...base, store, log: app.log, alerts });
+  const brain = new Brain(base.db, app.log, config.NODE_ENV === 'test' ? 0 : config.BRAIN_THREADS);
+  await brain.start();
+  const trainer = new Trainer(base.db, brain, app.log, { duty: config.BOT_TRAINING_DUTY });
+  const realtime = new Realtime({ ...base, store, log: app.log, alerts, brain });
+  const showcase = new Showcase({
+    publish: (message) => realtime.hub.publishTraining(message),
+    watched: () => realtime.hub.hasTrainingWatchers(),
+    players: () => trainer.current,
+    fallback: () => ({ params: brain.params, version: brain.version }),
+  });
+  realtime.trainingTables = () => showcase.snapshot();
   const presence = new RealtimePresence(realtime);
   const outbox = new Outbox(base.db, bot, app.log);
   const friends = new FriendService({ ...base, outbox, presence, realtime });
@@ -81,7 +97,16 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   realtime.finishedListeners.add((result) => {
     referrals.onGame(result).catch((error: unknown) => app.log.error({ err: error }, 'referral reward failed'));
   });
-  const ctx: Context = { ...base, realtime, presence, outbox, friends, profiles, tournaments, referrals, alerts };
+  const chat = new ChatService({
+    db: base.db,
+    publish: (message) => realtime.hub.publishChat(message),
+    online: () => realtime.hub.onlineUsers().length,
+    owners: ownerIds(config.OWNER_IDS),
+    outbox,
+    log: app.log,
+  });
+  base.users.useChat(chat);
+  const ctx: Context = { ...base, realtime, presence, outbox, friends, profiles, tournaments, referrals, alerts, chat, brain, trainer };
   await base.moderation.loadBans();
   useBanList(base.moderation);
   await base.bots.ensurePool();
@@ -93,15 +118,30 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   else await realtime.start();
   if (config.NODE_ENV !== 'test') {
     outbox.start();
+    chat.start();
     void realtime.ready.then(() => tournaments.start());
+    // One server trains: the one that runs the games (it holds the lease).
+    if (config.BOT_TRAINING === 'on') {
+      void realtime.ready
+        .then(() => trainer.start())
+        .then((on) => {
+          if (on) app.log.info('bot training started');
+          showcase.start();
+        })
+        .catch((err: unknown) => app.log.error({ err }, 'bot training did not start'));
+    }
   }
   app.addHook('onRequest', async (request) => {
     if (request.url.startsWith('/api/rooms') || request.url.startsWith('/api/friends') || request.url.startsWith('/api/tournaments')) await realtime.ready;
   });
   app.addHook('onClose', async () => {
     outbox.stop();
+    chat.stop();
     tournaments.stop();
+    showcase.stop();
+    await trainer.stop();
     await realtime.shutdown();
+    await brain.stop();
   });
 
   const origins = config.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean);
@@ -159,6 +199,8 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
       await friendRoutes(api, ctx);
       await playerRoutes(api, ctx);
       await referralRoutes(api, ctx);
+      await dailyRoutes(api, ctx);
+      await chatRoutes(api, ctx);
       await ownerRoutes(api, ctx);
       await tournamentRoutes(api, ctx);
       await internalRoutes(api, ctx);

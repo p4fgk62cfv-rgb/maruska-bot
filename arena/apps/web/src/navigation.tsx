@@ -16,6 +16,10 @@ export type Page =
   | 'settings'
   | 'owner'
   | 'invite'
+  | 'daily'
+  | 'chat'
+  | 'training'
+  | 'botprogress'
   | 'player';
 
 interface Navigation {

@@ -189,6 +189,13 @@ describe.skipIf(!url)('real-time multiplayer over WebSocket', () => {
     expect(profile.gamesPlayed).toBe(1);
     const firstGame = await db.userAchievement.findFirst({ where: { userId: p1.userId, achievement: { key: 'first_game' } } });
     expect(firstGame?.unlockedAt).not.toBeNull();
+    // The game moved the daily quests that count every game.
+    const variant = (game.settings as { variant: string }).variant;
+    for (const p of players) {
+      for (const q of (await base.daily.get(p.userId)).quests) {
+        if (q.key === 'play_3' || q.key === 'play_8' || q.key === `play_${variant}_2`) expect(q.progress).toBe(1);
+      }
+    }
 
     // The same company stays at the table: it waits again, and the next deal starts when both are ready.
     for (const p of players) p.autoplay = false;

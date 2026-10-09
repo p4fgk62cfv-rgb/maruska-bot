@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="430" viewBox="0 0 900 430" role="img" aria-labelledby="title desc">
+<title id="title">VEGAS АРЕНА</title>
+<desc id="desc">Золотая эмблема VEGAS АРЕНА с короной, красной пиковой мастью и декоративными линиями на прозрачном фоне.</desc>
+<defs>
+  <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0c1"/><stop offset=".25" stop-color="#e9c77e"/><stop offset=".62" stop-color="#bd8a42"/><stop offset="1" stop-color="#f0d38f"/></linearGradient>
+  <linearGradient id="red" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a91d29"/><stop offset=".5" stop-color="#5a101b"/><stop offset="1" stop-color="#210a10"/></linearGradient>
+  <linearGradient id="ivory" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff8e9"/><stop offset="1" stop-color="#d9c9ad"/></linearGradient>
+  <filter id="shadow" x="-15%" y="-15%" width="130%" height="140%"><feGaussianBlur in="SourceAlpha" stdDeviation="3"/><feOffset dy="3"/><feComponentTransfer><feFuncA type="linear" slope=".42"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<g filter="url(#shadow)">
+  <!-- Crown -->
+  <path d="M411 49 L397 19 L423 34 L450 7 L477 34 L503 19 L489 49 Q450 61 411 49Z" fill="url(#gold)" stroke="#6d451e" stroke-width="2"/>
+  <path d="M411 49 Q450 59 489 49 L484 61 Q450 70 416 61Z" fill="#9b6b31" stroke="url(#gold)" stroke-width="1.5"/>
+  <circle cx="397" cy="18" r="4" fill="#f9e8b3"/><circle cx="450" cy="7" r="4.5" fill="#f9e8b3"/><circle cx="503" cy="18" r="4" fill="#f9e8b3"/>
+  <!-- Spade crest -->
+  <path d="M450 54 C430 76 405 88 383 102 C405 129 428 145 450 145 C472 145 495 129 517 102 C495 88 470 76 450 54Z" fill="url(#red)" stroke="url(#gold)" stroke-width="2.5"/>
+  <path d="M450 72 C436 89 420 100 407 107 C422 125 438 134 450 134 C462 134 478 125 493 107 C480 100 464 89 450 72Z" fill="none" stroke="#d9a85e" stroke-width="1.3" opacity=".85"/>
+  <path d="M450 78 L450 130 M431 103 Q450 112 469 103" fill="none" stroke="#bd7e51" stroke-width="1.3" opacity=".8"/>
+  <path d="M450 140 L450 158" stroke="url(#gold)" stroke-width="3" stroke-linecap="round"/>
+  <!-- Wordmark -->
+  <text x="450" y="246" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="124" letter-spacing="2" fill="url(#gold)" stroke="#4b2b18" stroke-width="1.4" paint-order="stroke">VEGAS</text>
+  <!-- Side flourishes around Arena -->
+  <path d="M192 278 C222 278 235 265 256 265 C276 265 286 278 305 278 L326 278 L343 290 L359 278 L383 278" fill="none" stroke="url(#gold)" stroke-width="2"/>
+  <path d="M708 278 C678 278 665 265 644 265 C624 265 614 278 595 278 L574 278 L557 290 L541 278 L517 278" fill="none" stroke="url(#gold)" stroke-width="2"/>
+  <path d="M194 278 l-14 -8 l4 9 l-4 9Z M706 278 l14 -8 l-4 9 l4 9Z" fill="url(#gold)"/>
+  <text x="450" y="300" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="48" letter-spacing="8" fill="url(#ivory)">АРЕНА</text>
+  <path d="M295 319 Q370 325 425 319 L450 331 L475 319 Q530 325 605 319" fill="none" stroke="url(#gold)" stroke-width="2"/>
+  <path d="M450 325 L458 337 L450 350 L442 337Z" fill="url(#red)" stroke="url(#gold)" stroke-width="1.5"/>
+  <path d="M313 360 Q450 374 587 360" fill="none" stroke="url(#gold)" stroke-width="1" opacity=".6"/>
+</g>
+</svg>

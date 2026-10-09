@@ -5,4 +5,7 @@ export * from './protocol.js';
 export * from './servers.js';
 export * from './rating.js';
 export * from './economy.js';
+export * from './daily.js';
+export * from './chat.js';
+export * from './training.js';
 export * from './tournament.js';
