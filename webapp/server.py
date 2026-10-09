@@ -406,6 +406,16 @@ async def security_headers(request: web.Request, handler):
     return response
 
 
+async def radio_page(request: web.Request):
+    return web.FileResponse(STATIC_DIR / "radio.html", headers={"Cache-Control": "no-cache"})
+
+
+async def radio_stations(request: web.Request):
+    from features.radio import COUNTRIES, public_stations
+
+    return web.json_response({"countries": COUNTRIES, "stations": public_stations()}, headers={"Cache-Control": "max-age=300"})
+
+
 def create_app(bot, bot_token: str) -> web.Application:
     app = web.Application(
         client_max_size=MAX_IMAGE_BYTES + 1024 * 1024,
@@ -423,6 +433,8 @@ def create_app(bot, bot_token: str) -> web.Application:
     app.router.add_get("/", health)
     app.router.add_get("/draw", draw_page)
     app.router.add_get("/fishing", fishing_page)
+    app.router.add_get("/radio", radio_page)
+    app.router.add_get("/api/radio/stations", radio_stations)
     app.router.add_get("/admin", admin_page)
     app.router.add_get("/api/round", api_round)
     app.router.add_get("/api/drawing", api_drawing)

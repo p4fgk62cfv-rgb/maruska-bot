@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d0a1f">
+<title>Радио Маруськи</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root {
+  --bg1: #0d0a1f; --bg2: #1d1140; --card: rgba(255,255,255,.06); --stroke: rgba(255,255,255,.1);
+  --text: #f4f1ff; --muted: #a59fc4; --accent: #ff5fa2; --accent2: #7c5cff; --ok: #3ddc97;
+  --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--text);
+  background: radial-gradient(120% 70% at 50% 0%, #3a1d7a 0%, var(--bg2) 38%, var(--bg1) 75%) fixed; background-color: var(--bg1);
+}
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+.app { max-width: 560px; margin: 0 auto; padding: calc(var(--safe-top) + 14px) 16px calc(var(--safe-bottom) + 24px); }
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.brand b { font-size: 20px; letter-spacing: .02em; }
+.brand small { margin-left: auto; color: var(--muted); font-size: 12px; }
+
+/* Now playing */
+.now { position: relative; display: grid; justify-items: center; gap: 10px; padding: 22px 16px 18px; border-radius: 28px;
+  background: linear-gradient(160deg, rgba(124,92,255,.28), rgba(255,95,162,.16) 60%, rgba(255,255,255,.04)); box-shadow: inset 0 0 0 1px var(--stroke), 0 20px 50px rgba(0,0,0,.35); overflow: hidden; }
+.disc { position: relative; width: 168px; height: 168px; border-radius: 50%; display: grid; place-items: center;
+  background: repeating-radial-gradient(circle at 50% 50%, #17122c 0 2px, #0f0b1f 2px 5px); box-shadow: 0 10px 40px rgba(0,0,0,.6), inset 0 0 0 2px rgba(255,255,255,.06); }
+.disc::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 210deg, transparent 0 40%, rgba(255,255,255,.12) 50%, transparent 60%); }
+.disc .label { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; font-size: 38px;
+  background: radial-gradient(circle, #ff8cc0 0%, var(--accent) 45%, var(--accent2) 100%); box-shadow: 0 0 0 6px rgba(0,0,0,.25); }
+.playing .disc { animation: spin 6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.now h1 { margin: 6px 0 0; font-size: 24px; text-align: center; line-height: 1.15; }
+.now .meta { color: var(--muted); font-size: 14px; text-align: center; }
+.status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.status i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.playing .status { color: #ff8fb8; } .playing .status i { background: #ff4f8b; box-shadow: 0 0 0 0 rgba(255,79,139,.7); animation: pulse 1.6s infinite; }
+@keyframes pulse { 70% { box-shadow: 0 0 0 10px rgba(255,79,139,0); } }
+.eq { display: flex; align-items: flex-end; gap: 4px; height: 26px; }
+.eq span { width: 5px; height: 4px; border-radius: 3px; background: linear-gradient(var(--accent), var(--accent2)); }
+.playing .eq span { animation: eq 1s ease-in-out infinite; }
+.eq span:nth-child(2) { animation-delay: -.6s !important; } .eq span:nth-child(3) { animation-delay: -.3s !important; }
+.eq span:nth-child(4) { animation-delay: -.8s !important; } .eq span:nth-child(5) { animation-delay: -.45s !important; }
+@keyframes eq { 0%, 100% { height: 5px; } 50% { height: 24px; } }
+.controls { display: flex; align-items: center; gap: 22px; margin-top: 4px; }
+.ctl { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.08); }
+.ctl svg { width: 22px; height: 22px; fill: currentColor; }
+.play { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; color: #fff;
+  background: linear-gradient(145deg, var(--accent), var(--accent2)); box-shadow: 0 12px 30px rgba(255,95,162,.45); }
+.play svg { width: 34px; height: 34px; fill: #fff; }
+.play:active, .ctl:active { transform: scale(.94); }
+.fav { position: absolute; top: 14px; right: 14px; width: 40px; height: 40px; border-radius: 50%; font-size: 20px; background: rgba(0,0,0,.25); }
+.hint { min-height: 18px; font-size: 13px; color: var(--muted); text-align: center; }
+.hint.err { color: #ff9b9b; }
+
+/* Tabs and list */
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 18px 0 12px; padding: 4px; border-radius: 16px; background: rgba(255,255,255,.06); }
+.tab { padding: 10px 6px; border-radius: 12px; font-size: 14px; font-weight: 600; color: var(--muted); }
+.tab.on { color: #fff; background: linear-gradient(145deg, rgba(255,95,162,.35), rgba(124,92,255,.35)); box-shadow: inset 0 0 0 1px var(--stroke); }
+.list { display: grid; gap: 8px; }
+.st { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border-radius: 16px; text-align: left; background: var(--card); box-shadow: inset 0 0 0 1px var(--stroke); }
+.st:active { transform: scale(.985); }
+.st .ico { flex: none; width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 24px; background: linear-gradient(145deg, rgba(124,92,255,.35), rgba(255,95,162,.25)); }
+.st .txt { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.st .txt b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st .txt small { font-size: 12px; color: var(--muted); }
+.st .side { flex: none; font-size: 13px; color: var(--muted); }
+.st.on { background: linear-gradient(120deg, rgba(255,95,162,.22), rgba(124,92,255,.18)); box-shadow: inset 0 0 0 1.5px rgba(255,95,162,.65); }
+.st.on .side { color: #ff8fb8; }
+.empty { padding: 26px 10px; text-align: center; color: var(--muted); font-size: 14px; }
+.foot { margin-top: 18px; text-align: center; font-size: 11px; color: var(--muted); opacity: .8; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="brand"><span style="font-size:24px">📻</span><b>Радио Маруськи</b><small id="count"></small></div>
+
+  <section class="now" id="now">
+    <button class="fav" id="fav" aria-label="В избранное">☆</button>
+    <span class="status"><i></i><span id="statusText">Выберите станцию</span></span>
+    <div class="disc"><div class="label" id="discEmoji">🎵</div></div>
+    <h1 id="title">—</h1>
+    <div class="meta" id="meta">Живой эфир</div>
+    <div class="eq" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+    <div class="controls">
+      <button class="ctl" id="prev" aria-label="Предыдущая станция"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+      <button class="play" id="play" aria-label="Играть"><svg viewBox="0 0 24 24" id="playIcon"><path d="M8 5v14l11-7z"/></svg></button>
+      <button class="ctl" id="next" aria-label="Следующая станция"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5l11 7-11 7z"/></svg></button>
+    </div>
+    <div class="hint" id="hint"></div>
+  </section>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" data-tab="ru">🇷🇺 Россия</button>
+    <button class="tab" data-tab="ua">🇺🇦 Україна</button>
+    <button class="tab" data-tab="fav">⭐ Избранное</button>
+  </div>
+  <div class="list" id="list"></div>
+  <div class="foot">Звук идёт напрямую с серверов радиостанций</div>
+</div>
+<audio id="audio" preload="none"></audio>
+<script>
+(() => {
+  const tg = window.Telegram && window.Telegram.WebApp;
+  try { tg && tg.ready(); tg && tg.expand(); tg && tg.setHeaderColor && tg.setHeaderColor('#0d0a1f'); tg && tg.setBackgroundColor && tg.setBackgroundColor('#0d0a1f'); } catch (e) {}
+  const haptic = (k) => { try { tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred(k || 'light'); } catch (e) {} };
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+  };
+  const $ = (id) => document.getElementById(id);
+  const audio = $('audio');
+  const ICON_PLAY = '<path d="M8 5v14l11-7z"/>';
+  const ICON_PAUSE = '<path d="M6 5h4v14H6zm8 0h4v14h-4z"/>';
+
+  let stations = [];
+  let current = null;
+  let streamIndex = 0;
+  let wantPlay = false;
+  let stallTimer = null;
+  let favs = store.get('radio.favs', []);
+  let tab = store.get('radio.tab', 'ru');
+
+  const params = new URLSearchParams(location.search);
+  const startId = params.get('s') || (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param && tg.initDataUnsafe.start_param.replace(/^radio_/, '')) || store.get('radio.last', null);
+
+  function setHint(text, err) { $('hint').textContent = text || ''; $('hint').className = 'hint' + (err ? ' err' : ''); }
+  function setPlaying(on) {
+    $('now').classList.toggle('playing', on);
+    $('playIcon').innerHTML = on ? ICON_PAUSE : ICON_PLAY;
+    $('play').setAttribute('aria-label', on ? 'Пауза' : 'Играть');
+    $('statusText').textContent = on ? 'В эфире' : current ? 'Пауза' : 'Выберите станцию';
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = on ? 'playing' : 'paused';
+  }
+
+  function show(st) {
+    current = st;
+    $('title').textContent = st.name;
+    $('meta').textContent = `${st.flag} ${st.genre}`;
+    $('discEmoji').textContent = st.emoji;
+    $('fav').textContent = favs.includes(st.id) ? '★' : '☆';
+    document.title = `${st.name} — Радио Маруськи`;
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({ title: st.name, artist: `${st.genre} · Радио Маруськи`, album: 'Живой эфир' });
+    }
+    renderList();
+  }
+
+  function startStream() {
+    clearTimeout(stallTimer);
+    if (!current) return;
+    const url = current.streams[streamIndex];
+    if (!url) {
+      wantPlay = false;
+      setPlaying(false);
+      setHint('Станция сейчас не отвечает 😔 Попробуйте другую.', true);
+      return;
+    }
+    audio.src = url;
+    setHint('Подключаемся к эфиру…');
+    const p = audio.play();
+    if (p && p.catch) p.catch((e) => {
+      if (e && e.name === 'NotAllowedError') { setHint('Нажмите ▶️, чтобы включить звук'); setPlaying(false); wantPlay = false; }
+    });
+    // A stream that never starts: try the next address.
+    stallTimer = setTimeout(() => { if (wantPlay && audio.readyState < 3) nextStream(); }, 10000);
+  }
+  function nextStream() { streamIndex++; startStream(); }
+
+  function tune(st, autoplay) {
+    if (current && current.id === st.id && wantPlay) return;
+    show(st);
+    store.set('radio.last', st.id);
+    streamIndex = 0;
+    if (autoplay) { wantPlay = true; startStream(); haptic('light'); }
+  }
+
+  function toggle() {
+    if (!current) { const first = visible()[0] || stations[0]; if (first) tune(first, true); return; }
+    haptic('medium');
+    if (wantPlay) { wantPlay = false; audio.pause(); audio.removeAttribute('src'); audio.load(); setPlaying(false); setHint(''); }
+    else { wantPlay = true; streamIndex = 0; startStream(); }
+  }
+
+  function step(dir) {
+    const list = visible().length ? visible() : stations;
+    if (!list.length) return;
+    const i = Math.max(0, list.findIndex((s) => current && s.id === current.id));
+    tune(list[(i + dir + list.length) % list.length], true);
+  }
+
+  function visible() {
+    if (tab === 'fav') return stations.filter((s) => favs.includes(s.id));
+    return stations.filter((s) => s.country === tab);
+  }
+
+  function renderList() {
+    for (const b of document.querySelectorAll('.tab')) b.classList.toggle('on', b.dataset.tab === tab);
+    const list = visible();
+    const el = $('list');
+    if (!list.length) { el.innerHTML = '<div class="empty">Здесь пока пусто — нажмите ☆ у станции, чтобы добавить её в избранное.</div>'; return; }
+    el.innerHTML = '';
+    for (const s of list) {
+      const b = document.createElement('button');
+      const on = current && current.id === s.id;
+      b.className = 'st' + (on ? ' on' : '');
+      b.innerHTML = `<span class="ico">${s.emoji}</span><span class="txt"><b></b><small></small></span><span class="side">${on && wantPlay ? '● эфир' : favs.includes(s.id) ? '★' : ''}</span>`;
+      b.querySelector('b').textContent = s.name;
+      b.querySelector('small').textContent = `${s.flag} ${s.genre}`;
+      b.onclick = () => tune(s, true);
+      el.appendChild(b);
+    }
+  }
+
+  audio.addEventListener('playing', () => { clearTimeout(stallTimer); setPlaying(true); setHint(''); renderList(); });
+  audio.addEventListener('pause', () => { if (!wantPlay) setPlaying(false); });
+  audio.addEventListener('waiting', () => { if (wantPlay) setHint('Буферизация…'); });
+  audio.addEventListener('error', () => { if (wantPlay) nextStream(); });
+  audio.addEventListener('stalled', () => {
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => { if (wantPlay && audio.readyState < 3) { streamIndex = 0; startStream(); } }, 8000);
+  });
+
+  $('play').onclick = toggle;
+  $('next').onclick = () => step(1);
+  $('prev').onclick = () => step(-1);
+  $('fav').onclick = () => {
+    if (!current) return;
+    favs = favs.includes(current.id) ? favs.filter((x) => x !== current.id) : [...favs, current.id];
+    store.set('radio.favs', favs);
+    $('fav').textContent = favs.includes(current.id) ? '★' : '☆';
+    haptic('light');
+    renderList();
+  };
+  for (const b of document.querySelectorAll('.tab')) b.onclick = () => { tab = b.dataset.tab; store.set('radio.tab', tab); renderList(); };
+
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.setActionHandler('play', () => { if (!wantPlay) toggle(); });
+    navigator.mediaSession.setActionHandler('pause', () => { if (wantPlay) toggle(); });
+    navigator.mediaSession.setActionHandler('nexttrack', () => step(1));
+    navigator.mediaSession.setActionHandler('previoustrack', () => step(-1));
+  }
+
+  fetch('/api/radio/stations').then((r) => r.json()).then((data) => {
+    stations = data.stations;
+    $('count').textContent = `${stations.length} станций`;
+    const st = stations.find((s) => s.id === startId);
+    if (st) { tab = st.country; show(st); wantPlay = true; startStream(); }
+    else renderList();
+  }).catch(() => setHint('Не удалось загрузить станции. Проверьте интернет.', true));
+})();
+</script>
+</body>
+</html>
