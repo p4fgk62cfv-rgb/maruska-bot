@@ -1963,7 +1963,9 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 .coin-shop__note { font-size: 13px; line-height: 1.45; }
 .coin-pack { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
 .coin-pack--hot { border-color: var(--stroke-strong); box-shadow: 0 0 0 1px var(--stroke-strong), 0 8px 24px rgba(255, 207, 90, 0.12); }
-.coin-pack__icon { width: 54px; flex: none; font-size: 22px; letter-spacing: -10px; text-align: center; }
+.coin-pack__icon { display: flex; justify-content: center; width: 62px; flex: none; }
+.coin-pack__icon > * + * { margin-left: -16px; }
+.coin-pack__icon > * { filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35)); }
 .coin-pack__body { display: grid; gap: 4px; flex: 1; min-width: 0; }
 .coin-pack__body strong { font-size: 17px; color: var(--text); }
 .coin-pack__tags { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -1972,7 +1974,7 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
   border-radius: var(--radius-m); background: linear-gradient(100deg, rgba(255, 207, 90, 0.16), rgba(255, 207, 90, 0.04)); color: var(--text);
   font: inherit; text-align: left; cursor: pointer;
 }
-.coin-banner > span:first-child { font-size: 24px; }
+.coin-banner > span:first-child { display: flex; }
 .coin-banner > span:nth-child(2) { display: grid; gap: 2px; flex: 1; }
 .coin-banner small { color: var(--text-2); }
 .coin-banner b { color: var(--gold); white-space: nowrap; }

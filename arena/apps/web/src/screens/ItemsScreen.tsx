@@ -1,5 +1,5 @@
 import { EMOJI_PACKS, smilesOf, type EmojiPackKey, type ItemDto, type ItemKind } from '@arena/shared';
-import { Avatar, Badge, Balance, BottomSheet, Button, Panel, PlayingCard, Tabs } from '@arena/ui';
+import { Avatar, Badge, Balance, BottomSheet, Button, CurrencyIcon, Panel, PlayingCard, Tabs } from '@arena/ui';
 import { useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
 import { backOf, ringOf } from '../lib/cosmetics.js';
@@ -69,7 +69,9 @@ export default function ItemsScreen() {
     <div className="app-stack">
       <ScreenHeader title="Предметы" subtitle="Только внешний вид — на игру не влияют" />
       <button type="button" className="coin-banner" onClick={() => push('coins')}>
-        <span aria-hidden="true">🪙</span>
+        <span aria-hidden="true">
+          <CurrencyIcon kind="coins" size={28} />
+        </span>
         <span>
           <strong>Нужно больше монет?</strong>
           <small>Пакеты за звёзды Telegram</small>

@@ -119,7 +119,7 @@ async def arena_paid(message: Message):
 
     if status == 200:
         coins = data.get("coins", 0)
-        await message.answer(f"✅ Спасибо за покупку! <b>+{coins} 🪙</b> уже на вашем счёте в Арене.")
+        await message.answer(f"✅ Спасибо за покупку! <b>+{coins} монет</b> уже на вашем счёте в Арене.")
     else:
         await message.answer(
             "✅ Оплата получена. Монеты появятся в Арене в течение 10 минут.\n"

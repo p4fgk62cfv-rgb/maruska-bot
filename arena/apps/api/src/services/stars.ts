@@ -149,7 +149,7 @@ export class StarsService {
             credited++;
             log.warn({ orderId: done.order.id }, 'stars payment credited by the sweep');
             await outbox.enqueue(done.userId, 'stars', {
-              text: `✅ Оплата получена: <b>+${done.order.coins} 🪙</b> на вашем счёте в Арене.`,
+              text: `✅ Оплата получена: <b>+${done.order.coins} монет</b> на вашем счёте в Арене.`,
             });
           }
         }

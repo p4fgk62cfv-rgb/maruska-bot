@@ -1,5 +1,5 @@
 import type { StarOrderDto, StarPack } from '@arena/shared';
-import { Badge, Balance, Button, Panel } from '@arena/ui';
+import { Badge, Balance, Button, CurrencyIcon, Panel } from '@arena/ui';
 import { useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
 import { haptic, openInvoice } from '../lib/telegram.js';
@@ -75,7 +75,9 @@ export default function CoinShopScreen() {
               {packs.map((p, i) => (
                 <Panel key={p.key} className={`coin-pack${p.label ? ' coin-pack--hot' : ''}`}>
                   <span className="coin-pack__icon" aria-hidden="true">
-                    {'🪙'.repeat(Math.min(3, i + 1))}
+                    {Array.from({ length: Math.min(3, i + 1) }, (_, k) => (
+                      <CurrencyIcon key={k} kind="coins" size={30} />
+                    ))}
                   </span>
                   <span className="coin-pack__body">
                     <strong>{p.coins.toLocaleString('ru-RU')} монет</strong>
