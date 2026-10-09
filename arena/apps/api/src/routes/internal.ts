@@ -131,4 +131,23 @@ export async function internalRoutes(app: FastifyInstance, ctx: Context): Promis
     games: ctx.realtime.games.count(),
     openRooms: ctx.realtime.rooms.list().filter((r) => r.status === 'waiting' && !r.isPrivate).length,
   }));
+  // ── Telegram Stars: the bot receives the payment updates and passes them on ──
+  const paymentSchema = z.object({
+    payload: z.string().max(128),
+    telegramId: z.coerce.bigint(),
+    stars: z.number().int().positive(),
+  });
+  app.post('/internal/stars/precheckout', { preHandler: check }, async (request) => {
+    const body = paymentSchema.extend({ currency: z.string().max(8) }).parse(request.body);
+    return ctx.stars.precheckout(body.payload, body.telegramId, body.stars, body.currency);
+  });
+  app.post('/internal/stars/paid', { preHandler: check }, async (request) => {
+    const body = paymentSchema.extend({ chargeId: z.string().min(1).max(255) }).parse(request.body);
+    const done = await ctx.stars.paid(body);
+    if (!done) {
+      ctx.alerts.raise('stars', 'Оплата звёздами без заказа в Арене', { payload: body.payload, stars: body.stars, chargeId: body.chargeId });
+      throw new AppError('NOT_FOUND');
+    }
+    return { coins: done.order.coins, status: done.order.status, credited: done.credited };
+  });
 }

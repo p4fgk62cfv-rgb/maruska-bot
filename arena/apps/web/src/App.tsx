@@ -24,6 +24,7 @@ const FriendsScreen = lazy(() => import('./screens/FriendsScreen.js'));
 const ProfileScreen = lazy(() => import('./screens/ProfileScreen.js'));
 const AchievementsScreen = lazy(() => import('./screens/AchievementsScreen.js'));
 const ItemsScreen = lazy(() => import('./screens/ItemsScreen.js'));
+const CoinShopScreen = lazy(() => import('./screens/CoinShopScreen.js'));
 const RulesScreen = lazy(() => import('./screens/RulesScreen.js'));
 const ServersScreen = lazy(() => import('./screens/ServersScreen.js'));
 const NewsScreen = lazy(() => import('./screens/NewsScreen.js'));
@@ -75,6 +76,8 @@ function PageScreen({ page }: { page: Page }) {
       return <AchievementsScreen />;
     case 'items':
       return <ItemsScreen />;
+    case 'coins':
+      return <CoinShopScreen />;
     case 'rules':
       return <RulesScreen />;
     case 'servers':

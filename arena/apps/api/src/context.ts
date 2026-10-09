@@ -15,6 +15,7 @@ import type { Alerts } from './services/alerts.js';
 import type { ChatService } from './services/chat.js';
 import type { Brain } from './brain/brain.js';
 import type { Trainer } from './brain/trainer.js';
+import type { StarsService } from './services/stars.js';
 import type { Presence } from './services/presence.js';
 import { UserService } from './services/users.js';
 import { WalletService } from './services/wallet.js';
@@ -47,6 +48,7 @@ export interface Context extends BaseContext {
   chat: ChatService;
   brain: Brain;
   trainer: Trainer;
+  stars: StarsService;
 }
 
 export function createContext(config: Config, db: Db): BaseContext {

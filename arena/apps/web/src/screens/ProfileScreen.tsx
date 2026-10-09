@@ -21,6 +21,10 @@ const TX_LABEL: Record<string, string> = {
   REFERRAL: 'Приглашение друга',
   EXCHANGE: 'Обмен',
   ADMIN: 'Начисление',
+  QUEST_REWARD: 'Задание',
+  LOGIN_REWARD: 'Календарь входа',
+  STARS_PURCHASE: 'Покупка за звёзды',
+  STARS_REFUND: 'Возврат звёзд',
 };
 
 export default function ProfileScreen() {

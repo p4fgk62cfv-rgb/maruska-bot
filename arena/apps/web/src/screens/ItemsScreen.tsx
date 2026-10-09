@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
 import { backOf, ringOf } from '../lib/cosmetics.js';
 import { primeCache, useQuery } from '../lib/useQuery.js';
+import { useNav } from '../navigation.js';
 import { useMe, useSession } from '../session.js';
 import { useToast } from '../toast.js';
 import { QueryView, ScreenHeader } from './common.js';
@@ -40,6 +41,7 @@ function Preview({ item }: { item: ItemDto }) {
 export default function ItemsScreen() {
   const query = useQuery<ItemDto[]>('/items');
   const { refreshMe } = useSession();
+  const { push } = useNav();
   const toast = useToast();
   const [kind, setKind] = useState<ItemKind | 'ALL'>('ALL');
   const [busy, setBusy] = useState<string | null>(null);
@@ -54,7 +56,10 @@ export default function ItemsScreen() {
       await refreshMe();
       toast(done, 'success');
     } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'Ошибка', 'error');
+      if (e instanceof ApiError && e.code === 'INSUFFICIENT_FUNDS') {
+        toast('Не хватает монет — их можно купить за звёзды', 'info');
+        push('coins');
+      } else toast(e instanceof ApiError ? e.message : 'Ошибка', 'error');
     } finally {
       setBusy(null);
     }
@@ -63,6 +68,14 @@ export default function ItemsScreen() {
   return (
     <div className="app-stack">
       <ScreenHeader title="Предметы" subtitle="Только внешний вид — на игру не влияют" />
+      <button type="button" className="coin-banner" onClick={() => push('coins')}>
+        <span aria-hidden="true">🪙</span>
+        <span>
+          <strong>Нужно больше монет?</strong>
+          <small>Пакеты за звёзды Telegram</small>
+        </span>
+        <b>⭐ Купить</b>
+      </button>
       <Tabs value={kind} onChange={setKind} items={KINDS} />
       <QueryView query={query}>
         {(items) => (

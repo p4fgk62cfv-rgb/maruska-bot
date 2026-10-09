@@ -195,7 +195,7 @@ export function HomeBar() {
         <span className="home-bar__money">
           <Balance kind="coins" value={me.wallet.coins} compact />
           <Balance kind="diamonds" value={me.wallet.diamonds} compact />
-          <button type="button" className="plus" aria-label="Магазин предметов" onClick={() => push('items')}>
+          <button type="button" className="plus" aria-label="Купить монеты" onClick={() => push('coins')}>
             <Icon name="plus" size={16} />
           </button>
         </span>

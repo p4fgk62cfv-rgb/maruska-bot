@@ -62,6 +62,7 @@ model User {
   dailyQuests        DailyQuest[]
   chatMessages       ChatMessage[]
   chatReports        ChatReport[]
+  starOrders         StarOrder[]
 
   @@map("users")
   @@schema("arena")
@@ -140,6 +141,10 @@ enum TransactionType {
   QUEST_REWARD
   /// Login calendar.
   LOGIN_REWARD
+  /// Coins bought with Telegram Stars.
+  STARS_PURCHASE
+  /// Coins taken back when a Stars payment is refunded.
+  STARS_REFUND
 
   @@schema("arena")
 }
@@ -768,5 +773,37 @@ model LoginRequest {
 
   @@index([expiresAt])
   @@map("login_requests")
+  @@schema("arena")
+}
+
+/// A purchase of coins with Telegram Stars. The invoice carries «arena:<id>»; the bot confirms the
+/// payment (pre_checkout_query → successful_payment), and a sweep of the bot's Star transactions
+/// catches any payment whose confirmation did not arrive.
+enum StarOrderStatus {
+  PENDING
+  PAID
+  REFUNDED
+
+  @@schema("arena")
+}
+
+model StarOrder {
+  id         String          @id @default(uuid(7)) @db.Uuid
+  userId     String          @map("user_id") @db.Uuid
+  pack       String          @db.VarChar(32)
+  stars      Int
+  coins      Int
+  status     StarOrderStatus @default(PENDING)
+  /// telegram_payment_charge_id: needed for a refund; one payment credits one order.
+  chargeId   String?         @unique @map("charge_id") @db.VarChar(255)
+  createdAt  DateTime        @default(now()) @map("created_at")
+  paidAt     DateTime?       @map("paid_at")
+  refundedAt DateTime?       @map("refunded_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("star_orders")
   @@schema("arena")
 }

@@ -34,6 +34,7 @@ export type AppErrorCode =
   | 'FRIEND_LIMIT'
   | 'NOT_FRIENDS'
   | 'NOT_IN_ROOM'
+  | 'PAYMENTS_UNAVAILABLE'
   | 'SERVER_ERROR'
   | EngineErrorCode;
 
@@ -77,6 +78,7 @@ export const ERROR_TEXT_RU: Record<AppErrorCode, string> = {
   FRIEND_LIMIT: 'Слишком много друзей и заявок.',
   NOT_FRIENDS: 'Приглашать можно только друзей.',
   NOT_IN_ROOM: 'Сначала создайте игру или войдите в комнату.',
+  PAYMENTS_UNAVAILABLE: 'Оплата звёздами сейчас недоступна. Попробуйте позже.',
   CANNOT_UNDO: 'Вернуть карту уже нельзя.',
   GAME_FINISHED: 'Игра уже закончилась.',
   NOT_A_PLAYER: 'Вы не участвуете в этой игре.',

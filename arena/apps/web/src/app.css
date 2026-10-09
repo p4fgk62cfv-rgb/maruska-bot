@@ -1954,3 +1954,31 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 :root[data-game-design="daylight"] .chat-strip__head { color: #b9770e; }
 .home--vegas .chat-strip { margin-left: 12px; margin-right: 12px; color: #eee2d3; background: linear-gradient(120deg, #1c1517, #130f10); border: 1px solid rgba(201, 151, 78, 0.3); border-radius: 12px; }
 .bp-history li small.bp-history__lost { color: var(--text-2); }
+
+/* ── «Монеты» за звёзды ── */
+.coin-shop { display: grid; gap: 10px; }
+.coin-shop__balance { display: flex; align-items: center; gap: 10px; }
+.coin-shop__balance > span:first-child { color: var(--text-2); }
+.coin-shop__balance > button { margin-left: auto; }
+.coin-shop__note { font-size: 13px; line-height: 1.45; }
+.coin-pack { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+.coin-pack--hot { border-color: var(--stroke-strong); box-shadow: 0 0 0 1px var(--stroke-strong), 0 8px 24px rgba(255, 207, 90, 0.12); }
+.coin-pack__icon { width: 54px; flex: none; font-size: 22px; letter-spacing: -10px; text-align: center; }
+.coin-pack__body { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.coin-pack__body strong { font-size: 17px; color: var(--text); }
+.coin-pack__tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.coin-banner {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; border: 1px solid var(--stroke-strong);
+  border-radius: var(--radius-m); background: linear-gradient(100deg, rgba(255, 207, 90, 0.16), rgba(255, 207, 90, 0.04)); color: var(--text);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.coin-banner > span:first-child { font-size: 24px; }
+.coin-banner > span:nth-child(2) { display: grid; gap: 2px; flex: 1; }
+.coin-banner small { color: var(--text-2); }
+.coin-banner b { color: var(--gold); white-space: nowrap; }
+.star-sales { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.star-sales li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(0, 0, 0, 0.2); }
+.star-sales li > span:first-child { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.star-sales li > span:first-child b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.star-sales li small { color: var(--text-3); }
+.star-sales__refunded { opacity: 0.55; }

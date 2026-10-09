@@ -36,6 +36,8 @@ import { friendRoutes } from './routes/friends.js';
 import { internalRoutes } from './routes/internal.js';
 import { tournamentRoutes } from './routes/tournaments.js';
 import { TournamentService } from './services/tournaments.js';
+import { StarsService } from './services/stars.js';
+import { starsRoutes } from './routes/stars.js';
 
 export interface AppHandle {
   app: FastifyInstance;
@@ -106,7 +108,8 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
     log: app.log,
   });
   base.users.useChat(chat);
-  const ctx: Context = { ...base, realtime, presence, outbox, friends, profiles, tournaments, referrals, alerts, chat, brain, trainer };
+  const stars = new StarsService({ db: base.db, ledger: base.ledger, bot, outbox, log: app.log });
+  const ctx: Context = { ...base, realtime, presence, outbox, friends, profiles, tournaments, referrals, alerts, chat, brain, trainer, stars };
   await base.moderation.loadBans();
   useBanList(base.moderation);
   await base.bots.ensurePool();
@@ -119,6 +122,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   if (config.NODE_ENV !== 'test') {
     outbox.start();
     chat.start();
+    stars.start();
     void realtime.ready.then(() => tournaments.start());
     // One server trains: the one that runs the games (it holds the lease).
     if (config.BOT_TRAINING === 'on') {
@@ -137,6 +141,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   app.addHook('onClose', async () => {
     outbox.stop();
     chat.stop();
+    stars.stop();
     tournaments.stop();
     showcase.stop();
     await trainer.stop();
@@ -203,6 +208,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
       await chatRoutes(api, ctx);
       await ownerRoutes(api, ctx);
       await tournamentRoutes(api, ctx);
+      await starsRoutes(api, ctx);
       await internalRoutes(api, ctx);
     },
     { prefix: '/api' },
