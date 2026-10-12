@@ -2415,3 +2415,36 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 :root[data-game-design="folk"] .pair-grid { gap: 5px; margin-left: -8px; margin-right: -8px; }
 :root[data-game-design="folk"] .pair-card__half { font-size: 11px; letter-spacing: -0.01em; }
 :root[data-game-design="folk"] .pair-card__half span { white-space: normal; text-align: center; line-height: 1.1; }
+
+/* ── Хохлома, calmer: ornament only where it leads the eye ── */
+:root[data-game-design="folk"] body {
+  background:
+    linear-gradient(rgba(252, 241, 212, 0.66), rgba(252, 241, 212, 0.66)),
+    url('/folk/paper.webp') center top / cover no-repeat;
+  background-attachment: fixed; background-color: #f3dfb0;
+}
+/* A thin red-and-gold rule down both edges on every screen */
+:root[data-game-design="folk"] body::before {
+  content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  box-shadow: inset 3px 0 0 #b3121b, inset 5px 0 0 #e9c46a, inset -3px 0 0 #b3121b, inset -5px 0 0 #e9c46a;
+}
+:root[data-game-design="folk"] .app-screen { padding-left: 18px; padding-right: 18px; }
+:root[data-game-design="folk"] .app-header,
+:root[data-game-design="folk"] .home { margin-left: -18px; margin-right: -18px; }
+:root[data-game-design="folk"] .filter-band { margin-left: -18px; margin-right: -18px; padding-left: 16px; padding-right: 16px; }
+:root[data-game-design="folk"] .pair-grid { margin-left: 0; margin-right: 0; }
+/* The side ornament stays on the home screen only, around the logo */
+:root[data-game-design="folk"] .home {
+  background:
+    url('/folk/corner.webp') left 0 top 88px / 120px auto no-repeat,
+    url('/folk/corner-r.webp') right 0 top 88px / 120px auto no-repeat;
+}
+:root[data-game-design="folk"] .folk-logo::after { display: none; }
+:root[data-game-design="folk"] .folk-logo { padding-bottom: 4px; }
+/* Tiles: plain black lacquer with a fine gold rim; the painted icon is the decoration */
+:root[data-game-design="folk"] .grid-tile::before {
+  border: 0; border-image: none; inset: 0; border-radius: 16px;
+  background: radial-gradient(120% 80% at 50% 0%, rgba(179, 18, 27, 0.35), transparent 60%), linear-gradient(180deg, #241008, #120504);
+  box-shadow: inset 0 0 0 1.5px #c99a3c, inset 0 0 0 4px #1a0805, inset 0 0 0 5px rgba(201, 154, 60, 0.35), 0 5px 10px rgba(70, 20, 5, 0.3);
+  filter: none;
+}
