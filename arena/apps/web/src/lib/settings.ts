@@ -22,7 +22,9 @@ export interface Settings {
   rewardAnimations: boolean;
   theme: Theme;
   /** Home screen visual style. Classic preserves the original design. */
-  homeDesign: 'classic' | 'daylight' | 'vegas';
+  homeDesign: 'classic' | 'daylight' | 'vegas' | 'royal';
+  /** «Королевский» became the default once: switched on for everyone a single time. */
+  royalIntroduced?: boolean;
 }
 
 const KEY = 'arena.settings';
@@ -38,11 +40,17 @@ const DEFAULTS: Settings = {
   emojis: true,
   rewardAnimations: true,
   theme: 'light',
-  homeDesign: 'classic',
+  homeDesign: 'royal',
 };
 
 let current: Settings = { ...DEFAULTS, ...safeStorage.get<Partial<Settings>>(KEY, {}) };
-// Migrate the previous experimental theme to the safe classic default.\nif (!['classic', 'daylight', 'vegas'].includes(current.homeDesign as string)) current.homeDesign = 'classic';
+// Migrate an unknown stored design to the default.
+if (!['classic', 'daylight', 'vegas', 'royal'].includes(current.homeDesign as string)) current.homeDesign = 'royal';
+// «Королевский» is the new look: everyone gets it once, and can switch back in the settings.
+if (!current.royalIntroduced) {
+  current = { ...current, homeDesign: 'royal', royalIntroduced: true };
+  safeStorage.set(KEY, current);
+}
 const listeners = new Set<() => void>();
 
 /** Per-device preferences (sound, vibration, animations, hand sorting). */
@@ -74,8 +82,8 @@ export function applyTheme(): void {
   const system = tg?.colorScheme ?? (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   const theme = current.theme === 'system' ? system : current.theme;
   document.documentElement.dataset.theme = theme;
-  document.documentElement.dataset.homeDesign = current.homeDesign ?? 'classic';
-  document.documentElement.dataset.gameDesign = current.homeDesign ?? 'classic';
+  document.documentElement.dataset.homeDesign = current.homeDesign ?? 'royal';
+  document.documentElement.dataset.gameDesign = current.homeDesign ?? 'royal';
 }
 
 if (typeof window !== 'undefined') applyTheme();

@@ -2043,3 +2043,127 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
   background: linear-gradient(180deg, #ffe58a, #f5b528); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 2px 0 #a86a0c;
 }
 .vip-plan > small { color: var(--text-3); font-size: 11px; margin-top: 4px; }
+
+/* ══════════════ «Королевский»: emerald felt, polished gold, art-deco frames (default) ══════════════ */
+:root[data-game-design="royal"] {
+  --felt-hi: #1a6646; --felt: #0d4330; --felt-lo: #04221a;
+  --bg-0: #04221a; --bg-1: #0a3526; --bg-2: #0d4330;
+  --surface: rgba(2, 24, 15, 0.42); --surface-strong: rgba(5, 30, 20, 0.96);
+  --stroke: rgba(214, 178, 96, 0.22); --stroke-strong: rgba(236, 200, 112, 0.6); --line: rgba(214, 178, 96, 0.16);
+  --gold: #f3cf6b; --gold-deep: #c98f27;
+  --royal-gold: linear-gradient(180deg, #fff4c4 0%, #f3cf6b 38%, #d39a2f 72%, #a8701a 100%);
+  --royal-bar: linear-gradient(180deg, #113a29 0%, #0a281c 100%);
+  --royal-ink: #f7ecd0;
+  --royal-ink-2: rgba(247, 236, 208, 0.66);
+  --royal-trim: 0 1px 0 #d6b15c, 0 3px 0 #061a11, 0 4px 0 rgba(214, 177, 92, 0.45), 0 12px 26px rgba(0, 0, 0, 0.38);
+  color-scheme: dark;
+}
+:root[data-game-design="royal"] body {
+  background:
+    var(--felt-texture),
+    radial-gradient(60% 40% at 50% 0%, rgba(255, 214, 120, 0.1), transparent 70%),
+    radial-gradient(130% 90% at 50% 30%, var(--felt-hi) 0%, var(--felt) 50%, var(--felt-lo) 100%);
+  background-attachment: fixed;
+  background-color: var(--felt);
+}
+
+/* Bars: dark emerald with a double gold rule */
+:root[data-game-design="royal"] .app-header,
+:root[data-game-design="royal"] .home-bar { background: var(--royal-bar); color: var(--royal-ink); box-shadow: var(--royal-trim); }
+:root[data-game-design="royal"] .app-header h1 {
+  font-family: Georgia, 'Times New Roman', serif; font-weight: 700; letter-spacing: 0.04em;
+  background: var(--royal-gold); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+:root[data-game-design="royal"] .app-header p { color: var(--royal-ink-2); }
+:root[data-game-design="royal"] .app-header__back { color: var(--gold); }
+:root[data-game-design="royal"] .app-header .ui-icon-btn { background: rgba(255, 230, 160, 0.08); color: var(--gold); box-shadow: inset 0 0 0 1px rgba(214, 177, 92, 0.35); }
+:root[data-game-design="royal"] .home-bar__who strong { color: var(--royal-ink); }
+:root[data-game-design="royal"] .home-bar__who .ui-rank { --rank: #d6b15c; background: rgba(255, 230, 160, 0.06); box-shadow: inset 0 0 0 1px rgba(214, 177, 92, 0.35); }
+:root[data-game-design="royal"] .home-bar__who .ui-rank__value { color: var(--royal-ink); }
+:root[data-game-design="royal"] .home-bar__me .ui-avatar { box-shadow: 0 0 0 2px #0a281c, 0 0 0 4px #d6b15c, 0 6px 14px rgba(0, 0, 0, 0.4); }
+:root[data-game-design="royal"] .home-bar__money .ui-balance--credits { color: #ffd76e; }
+:root[data-game-design="royal"] .home-bar__money .ui-balance--coins { color: #f3cf6b; }
+:root[data-game-design="royal"] .home-bar__money .ui-balance--diamonds { color: #8fe3f0; }
+:root[data-game-design="royal"] .plus { color: var(--gold); box-shadow: inset 0 0 0 1.5px #d6b15c; background: rgba(255, 230, 160, 0.06); }
+:root[data-game-design="royal"] .plus--glow { color: #2a1a00; background: var(--royal-gold); }
+
+/* Bottom bar */
+:root[data-game-design="royal"] .ui-nav {
+  background: linear-gradient(180deg, #0a281c, #113a29); color: rgba(247, 236, 208, 0.62);
+  box-shadow: 0 -1px 0 #d6b15c, 0 -3px 0 #061a11, 0 -4px 0 rgba(214, 177, 92, 0.45), 0 -10px 24px rgba(0, 0, 0, 0.35);
+}
+:root[data-game-design="royal"] .ui-nav__item--on { color: var(--gold); }
+:root[data-game-design="royal"] .ui-nav__item--on .ui-nav__icon { background: var(--royal-gold); color: #2a1a00; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45), 0 0 14px rgba(243, 207, 107, 0.35); }
+:root[data-game-design="royal"] .ui-nav__item--accent .ui-nav__icon { background: var(--royal-gold); box-shadow: 0 0 0 2px #0a281c, 0 0 0 3px rgba(214, 177, 92, 0.6); }
+
+/* Home: a framed «Быстрая игра» plaque */
+:root[data-game-design="royal"] .quick-play {
+  position: relative; margin: 14px 12px 6px; padding: 22px 16px 18px; border: 0; border-radius: 22px;
+  background: radial-gradient(80% 90% at 50% 0%, rgba(255, 214, 120, 0.2), transparent 70%), linear-gradient(180deg, rgba(20, 84, 58, 0.7), rgba(3, 26, 17, 0.75));
+  box-shadow: inset 0 0 0 1px rgba(236, 200, 112, 0.75), inset 0 0 0 5px rgba(4, 28, 19, 0.75), inset 0 0 0 6px rgba(214, 177, 92, 0.3), 0 10px 26px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+:root[data-game-design="royal"] .quick-play::before,
+:root[data-game-design="royal"] .quick-play::after {
+  position: absolute; top: 14px; font: 700 34px/1 Georgia, serif; color: rgba(243, 207, 107, 0.16); pointer-events: none;
+}
+:root[data-game-design="royal"] .quick-play::before { content: '♠'; left: 18px; rotate: -14deg; }
+:root[data-game-design="royal"] .quick-play::after { content: '♥'; right: 18px; rotate: 14deg; color: rgba(230, 90, 90, 0.2); }
+:root[data-game-design="royal"] .quick-play__icon {
+  background: radial-gradient(circle at 35% 28%, #fff6cf, #f3cf6b 45%, #c98f27 80%, #8e5a12);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45), 0 0 0 4px rgba(10, 40, 28, 0.9), 0 0 0 5px rgba(236, 200, 112, 0.7), 0 0 26px rgba(243, 207, 107, 0.35);
+}
+:root[data-game-design="royal"] .quick-play__title,
+:root[data-game-design="royal"] .script-title,
+:root[data-game-design="royal"] .filter-band__title {
+  background: var(--royal-gold); -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: none; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
+}
+:root[data-game-design="royal"] .quick-play__hint { color: var(--royal-ink-2); }
+
+/* Home: tiles become gold-framed cards */
+:root[data-game-design="royal"] .tile-grid { gap: 10px; padding: 10px 12px 14px; }
+:root[data-game-design="royal"] .grid-tile {
+  position: relative; min-height: 104px; border: 0; border-radius: 18px;
+  background: radial-gradient(90% 70% at 50% 0%, rgba(255, 214, 120, 0.1), transparent 70%), linear-gradient(165deg, rgba(22, 88, 60, 0.6), rgba(3, 26, 17, 0.7));
+  box-shadow: inset 0 0 0 1px rgba(214, 177, 92, 0.5), inset 0 1px 0 rgba(255, 240, 200, 0.12), 0 6px 14px rgba(0, 0, 0, 0.28);
+}
+:root[data-game-design="royal"] .grid-tile:nth-child(odd) { border-right: 0; }
+:root[data-game-design="royal"] .grid-tile::before {
+  content: ''; position: absolute; inset: 5px; border-radius: 13px; pointer-events: none;
+  border: 1px solid rgba(214, 177, 92, 0.16);
+}
+:root[data-game-design="royal"] .grid-tile:active { background: linear-gradient(165deg, rgba(30, 110, 75, 0.7), rgba(5, 34, 22, 0.8)); }
+:root[data-game-design="royal"] .grid-tile__icon { color: var(--gold); opacity: 1; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4)); }
+:root[data-game-design="royal"] .grid-tile__title { color: #f6e2ae; font-size: 25px; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.45); }
+:root[data-game-design="royal"] .grid-tile__count { color: var(--royal-ink-2); }
+
+/* Cards on the home screen and elsewhere */
+:root[data-game-design="royal"] .chat-strip,
+:root[data-game-design="royal"] .news-card,
+:root[data-game-design="royal"] .home-shortcut,
+:root[data-game-design="royal"] .install-hint {
+  margin-left: 12px; margin-right: 12px;
+  background: linear-gradient(135deg, rgba(255, 214, 120, 0.12), rgba(3, 26, 17, 0.55));
+  box-shadow: inset 0 0 0 1px rgba(214, 177, 92, 0.42), 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+:root[data-game-design="royal"] .chat-strip--fresh { box-shadow: inset 0 0 0 1.5px rgba(243, 207, 107, 0.85), 0 0 18px rgba(243, 207, 107, 0.2); }
+:root[data-game-design="royal"] .app-screen .ui-panel { box-shadow: inset 0 0 0 1px var(--stroke), inset 0 1px 0 rgba(255, 240, 200, 0.06); }
+
+/* Controls */
+:root[data-game-design="royal"] .ui-btn--primary {
+  color: #2a1c05; background: linear-gradient(180deg, #fff8e2, #ecd9a6);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), inset 0 0 0 1px #c9a24a, inset 0 -2px 0 rgba(120, 80, 10, 0.18);
+}
+:root[data-game-design="royal"] .ui-btn--gold { background: var(--royal-gold); }
+:root[data-game-design="royal"] .ui-btn--ghost { background: rgba(255, 230, 160, 0.06); box-shadow: inset 0 0 0 1px rgba(214, 177, 92, 0.4); }
+:root[data-game-design="royal"] .ui-tabs { background: rgba(2, 20, 13, 0.45); box-shadow: inset 0 0 0 1px rgba(214, 177, 92, 0.3); }
+:root[data-game-design="royal"] .ui-tabs__tab--on { background: var(--royal-gold); color: #2a1a00; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35); }
+:root[data-game-design="royal"] .ui-toggle input:checked + .ui-toggle__track { background: #c98f27; }
+:root[data-game-design="royal"] .filter-band { background: rgba(2, 18, 12, 0.6); border-bottom: 1px solid rgba(214, 177, 92, 0.35); }
+:root[data-game-design="royal"] .ui-sheet__body {
+  background: var(--felt-texture), linear-gradient(180deg, #145238, #08291c);
+  box-shadow: inset 0 1px 0 #d6b15c, inset 0 3px 0 rgba(6, 26, 17, 0.9), inset 0 4px 0 rgba(214, 177, 92, 0.4), 0 -10px 40px rgba(0, 0, 0, 0.5);
+}
+:root[data-game-design="royal"] .ui-toast { background: rgba(6, 34, 23, 0.96); }
+:root[data-game-design="royal"] .result__card { background: var(--felt-texture), linear-gradient(180deg, #1a6646, #0a2f20); }
