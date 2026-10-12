@@ -2379,3 +2379,23 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
   text-shadow: 0 1px 0 #4a0505, 0 2px 4px rgba(0, 0, 0, 0.5); filter: drop-shadow(0 4px 6px rgba(80, 20, 5, 0.35));
 }
 :root[data-game-design="folk"] .ui-btn--primary.ui-btn--sm { border-width: 0 24px; border-image-width: 0 24px; padding: 0 4px; }
+:root[data-game-design="folk"] .grid-tile[data-tile='leaderboard'] .grid-tile__icon { width: 64px; height: 58px; background: url('/folk/icon-leaderboard.webp') center / contain no-repeat; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.55)); }
+:root[data-game-design="folk"] .grid-tile[data-tile='leaderboard'] .grid-tile__icon > svg { display: none; }
+:root[data-game-design="folk"] .grid-tile[data-tile='invite'] .grid-tile__icon { width: 64px; height: 58px; background: url('/folk/icon-invite.webp') center / contain no-repeat; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.55)); }
+:root[data-game-design="folk"] .grid-tile[data-tile='invite'] .grid-tile__icon > svg { display: none; }
+:root[data-game-design="folk"] .grid-tile[data-tile='rules'] .grid-tile__icon { width: 64px; height: 58px; background: url('/folk/icon-rules.webp') center / contain no-repeat; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.55)); }
+:root[data-game-design="folk"] .grid-tile[data-tile='rules'] .grid-tile__icon > svg { display: none; }
+:root[data-game-design="folk"] .grid-tile[data-tile='servers'] .grid-tile__icon { width: 64px; height: 58px; background: url('/folk/icon-servers.webp') center / contain no-repeat; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.55)); }
+:root[data-game-design="folk"] .grid-tile[data-tile='servers'] .grid-tile__icon > svg { display: none; }
+/* Bottom bar: painted icons */
+:root[data-game-design="folk"] .ui-nav__icon { width: 44px; height: 38px; }
+:root[data-game-design="folk"] .ui-nav__item .ui-nav__icon > svg { display: none; }
+:root[data-game-design="folk"] .ui-nav__item .ui-nav__icon { background: center / contain no-repeat; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5)) saturate(0.75) brightness(0.85); }
+:root[data-game-design="folk"] .ui-nav__item--on .ui-nav__icon,
+:root[data-game-design="folk"] .ui-nav__item--accent .ui-nav__icon { background-color: transparent; box-shadow: none; filter: drop-shadow(0 0 6px rgba(242, 193, 78, 0.6)) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5)); transform: translateY(-2px) scale(1.12); }
+:root[data-game-design="folk"] .ui-nav__item[data-key='home'] .ui-nav__icon { background-image: url('/folk/nav-home.webp'); }
+:root[data-game-design="folk"] .ui-nav__item[data-key='open'] .ui-nav__icon { background-image: url('/folk/nav-open.webp'); }
+:root[data-game-design="folk"] .ui-nav__item[data-key='private'] .ui-nav__icon { background-image: url('/folk/nav-private.webp'); }
+:root[data-game-design="folk"] .ui-nav__item[data-key='create'] .ui-nav__icon { background-image: url('/folk/nav-create.webp'); border-radius: 50%; width: 42px; height: 42px; }
+/* Chat strip: the bell */
+:root[data-game-design="folk"] .chat-strip__head > svg { width: 22px; height: 22px; color: transparent; background: url('/folk/icon-bell.webp') center / contain no-repeat; }
