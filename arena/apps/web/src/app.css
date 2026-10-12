@@ -2451,3 +2451,26 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 
 /* The VIP crown rises above the avatar: keep it clear of the status bar's dimmed strip */
 .home-bar:has(.ui-avatar__vip) { padding-top: calc(var(--safe-top) + 24px); }
+
+/* Хохлома: colours that read on the paper (light tints are made for the dark felt) */
+:root[data-game-design="folk"] .app-screen { --green: #17803f; --cyan: #0b6b85; --red: #c0141c; --violet-hi: #b3121b; }
+:root[data-game-design="folk"] .app-screen .ui-badge--green { background: rgba(23, 128, 63, 0.14); }
+:root[data-game-design="folk"] .app-screen .ui-badge--cyan { background: rgba(11, 107, 133, 0.13); }
+:root[data-game-design="folk"] .app-screen .ui-badge--gold { background: rgba(185, 128, 27, 0.16); color: #8a5a06; }
+:root[data-game-design="folk"] .app-screen .ui-badge--muted { background: rgba(59, 22, 8, 0.08); }
+:root[data-game-design="folk"] .stake-head__value.stake-head__value--practice,
+:root[data-game-design="folk"] .room-row__stake--practice { color: #17803f; }
+:root[data-game-design="folk"] .stake-practice { color: var(--folk-ink-2); }
+:root[data-game-design="folk"] .bots-pick__tag { background: rgba(185, 128, 27, 0.16); color: #8a5a06; }
+:root[data-game-design="folk"] .bots-pick__tag--practice { background: rgba(23, 128, 63, 0.14); color: #17803f; }
+:root[data-game-design="folk"] .bots-pick__level { background: rgba(255, 249, 232, 0.9); }
+:root[data-game-design="folk"] .bots-pick__level--on { background: #fff1c8; box-shadow: inset 0 0 0 2px var(--folk-gold-deep); }
+:root[data-game-design="folk"] .app-screen .room-center__sub,
+:root[data-game-design="folk"] .app-screen .room-links { color: var(--folk-ink-2); }
+:root[data-game-design="folk"] .app-screen .pcard__title--rare { color: #0b5f8a; background: rgba(56, 150, 230, 0.14); }
+:root[data-game-design="folk"] .app-screen .pcard__title--epic { color: #6b2bb0; background: rgba(150, 80, 230, 0.13); }
+:root[data-game-design="folk"] .app-screen .ach { opacity: 1; }
+:root[data-game-design="folk"] .app-screen .ui-rank { color: color-mix(in srgb, var(--rank) 45%, #3b1608); }
+:root[data-game-design="folk"] .news-hero,
+:root[data-game-design="folk"] .daily-hero { background: linear-gradient(180deg, #fff6dc, #f5e0ad); box-shadow: inset 0 0 0 1.5px rgba(179, 18, 27, 0.4); }
+:root[data-game-design="folk"] .news-hero strong { color: var(--folk-red); }
