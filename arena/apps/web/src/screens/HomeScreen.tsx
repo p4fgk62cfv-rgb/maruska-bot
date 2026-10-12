@@ -105,17 +105,6 @@ export function HomeScreen() {
 
       <ChatStrip />
 
-      <button type="button" className={`news-card${unseenNews ? ' news-card--fresh' : ''}`} onClick={() => push('news')}>
-        <span className="news-card__icon" aria-hidden="true">📰</span>
-        <span className="news-card__body">
-          <small>
-            Новости · {newsDate(latest.date)}
-            {unseenNews > 0 && <b className="news-card__badge">новое</b>}
-          </small>
-          <strong>{latest.headline}</strong>
-        </span>
-        <span className="news-card__arrow" aria-hidden="true">›</span>
-      </button>
 
       <InstallCard />
 
