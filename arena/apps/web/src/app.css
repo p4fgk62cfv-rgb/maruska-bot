@@ -2285,17 +2285,38 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 }
 :root[data-game-design="folk"] .chat-strip__head .ui-badge, :root[data-game-design="folk"] .chat-strip__head span { font-family: var(--font); }
 /* Painted icons, where the art exists */
-:root[data-game-design="folk"] .grid-tile[data-tile='settings'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='daily'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='chat'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='vip'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='training'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='tournaments'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='news'] .grid-tile__icon,
 :root[data-game-design="folk"] .grid-tile[data-tile='friends'] .grid-tile__icon,
-:root[data-game-design="folk"] .grid-tile[data-tile='achievements'] .grid-tile__icon {
-  width: 60px; height: 56px; background: center / contain no-repeat; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.55));
+:root[data-game-design="folk"] .grid-tile[data-tile='items'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='achievements'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='settings'] .grid-tile__icon {
+  width: 64px; height: 58px; background: center / contain no-repeat; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.55));
 }
-:root[data-game-design="folk"] .grid-tile[data-tile='settings'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='daily'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='chat'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='vip'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='training'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='tournaments'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='news'] .grid-tile__icon > svg,
 :root[data-game-design="folk"] .grid-tile[data-tile='friends'] .grid-tile__icon > svg,
-:root[data-game-design="folk"] .grid-tile[data-tile='achievements'] .grid-tile__icon > svg { display: none; }
-:root[data-game-design="folk"] .grid-tile[data-tile='settings'] .grid-tile__icon { background-image: url('/folk/icon-settings.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='items'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='achievements'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='settings'] .grid-tile__icon > svg { display: none; }
+:root[data-game-design="folk"] .grid-tile[data-tile='daily'] .grid-tile__icon { background-image: url('/folk/icon-daily.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='chat'] .grid-tile__icon { background-image: url('/folk/icon-chat.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='vip'] .grid-tile__icon { background-image: url('/folk/icon-vip.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='training'] .grid-tile__icon { background-image: url('/folk/icon-training.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='tournaments'] .grid-tile__icon { background-image: url('/folk/icon-tournaments.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='news'] .grid-tile__icon { background-image: url('/folk/icon-news.webp'); }
 :root[data-game-design="folk"] .grid-tile[data-tile='friends'] .grid-tile__icon { background-image: url('/folk/icon-friends.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='items'] .grid-tile__icon { background-image: url('/folk/icon-items.webp'); }
 :root[data-game-design="folk"] .grid-tile[data-tile='achievements'] .grid-tile__icon { background-image: url('/folk/icon-achievements.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='settings'] .grid-tile__icon { background-image: url('/folk/icon-settings.webp'); }
 
 /* Home: cream cards with a red-and-gold edge */
 :root[data-game-design="folk"] .chat-strip,
@@ -2335,3 +2356,26 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 :root[data-game-design="folk"] .daily-hero strong { font-family: var(--folk-font); text-transform: uppercase; font-size: 24px; color: var(--folk-red); }
 :root[data-game-design="folk"] .coin-banner b, :root[data-game-design="folk"] .vip-banner > b { color: var(--folk-red); }
 :root[data-game-design="folk"] .coin-banner { background: linear-gradient(100deg, #fff6d8, #f6dfa6); box-shadow: inset 0 0 0 1.5px var(--folk-gold-deep); border: 0; }
+
+/* Ornament borders down both sides of the paper, corners under the top bar */
+:root[data-game-design="folk"] body {
+  background:
+    url('/folk/corner.webp') left 0 top calc(var(--safe-top) + 60px) / 150px auto no-repeat,
+    url('/folk/corner-r.webp') right 0 top calc(var(--safe-top) + 60px) / 150px auto no-repeat,
+    url('/folk/border.webp') left -6px top 0 / 34px auto repeat-y,
+    url('/folk/border-r.webp') right -6px top 0 / 34px auto repeat-y,
+    linear-gradient(rgba(252, 241, 212, 0.45), rgba(252, 241, 212, 0.45)),
+    url('/folk/paper.webp') center top / cover no-repeat;
+  background-attachment: fixed; background-color: #f3dfb0;
+}
+:root[data-game-design="folk"] .folk-logo { display: flex; flex-direction: column; align-items: center; padding: 10px 40px 0; }
+:root[data-game-design="folk"] .folk-logo img { width: min(78%, 300px); height: auto; filter: drop-shadow(0 6px 10px rgba(70, 20, 5, 0.35)); }
+:root[data-game-design="folk"] .folk-logo::after { content: ''; display: block; width: min(86%, 340px); aspect-ratio: 1000 / 255; margin-top: -6px; background: url('/folk/divider.webp') center / contain no-repeat; }
+:root[data-game-design="folk"] .quick-play { margin-top: 2px; }
+/* Main buttons: the painted lacquer pill */
+:root[data-game-design="folk"] .ui-btn--primary {
+  color: var(--folk-gold); background: none; box-shadow: none; border-style: solid; border-width: 0 34px;
+  border-image: url('/folk/pill.webp') 0 260 fill / 0 34px stretch;
+  text-shadow: 0 1px 0 #4a0505, 0 2px 4px rgba(0, 0, 0, 0.5); filter: drop-shadow(0 4px 6px rgba(80, 20, 5, 0.35));
+}
+:root[data-game-design="folk"] .ui-btn--primary.ui-btn--sm { border-width: 0 24px; border-image-width: 0 24px; padding: 0 4px; }

@@ -70,6 +70,12 @@ export function HomeScreen() {
     <div className={`home${homeDesign === 'daylight' ? ' home--premium' : ''}${homeDesign === 'vegas' ? ' home--vegas' : ''}`}>
       <HomeBar />
 
+      {homeDesign === 'folk' && (
+        <div className="folk-logo">
+          <img src="/folk/logo.webp" alt="Маруська Арена" width={800} height={531} decoding="async" />
+        </div>
+      )}
+
       {(homeDesign === 'daylight' || homeDesign === 'vegas') && (
       <section className={`arena-hero${homeDesign === 'vegas' ? ' arena-hero--vegas-logo' : ''}`} aria-label={homeDesign === 'vegas' ? 'VEGAS Арена' : 'Маруська Арена'}>
         {homeDesign === 'vegas' ? (
