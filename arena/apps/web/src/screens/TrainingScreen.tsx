@@ -8,6 +8,7 @@ import { ScreenFallback, ScreenHeader } from './common.js';
 export default function TrainingScreen() {
   const { socket } = useRealtime();
   const [tables, setTables] = useState<TrainingTableDto[] | null>(null);
+  const training = tables?.some((t) => t.training) ?? false;
 
   useEffect(() => {
     const offMsg = socket.onMessage((m) => {
@@ -29,11 +30,18 @@ export default function TrainingScreen() {
 
   return (
     <div className="app-stack training-hall">
-      <ScreenHeader title="Тренировочный зал" subtitle="Боты учатся играть — карты открыты" />
-      <p className="training-hall__intro">
-        За каждым столом <b>Чемпион</b> — лучшая на сейчас версия бота — играет с <b>Претендентом</b>, изменённой копией, которую
-        обучение проверяет прямо сейчас. Здесь партии идут в обычном темпе, а в фоне те же боты успевают сыграть тысячи партий в минуту.
-      </p>
+      <ScreenHeader title="Зал ботов" subtitle={training ? 'Боты учатся играть — карты открыты' : 'Боты играют между собой — карты открыты'} />
+      {training ? (
+        <p className="training-hall__intro">
+          За каждым столом <b>Чемпион</b> — лучшая на сейчас версия бота — играет с <b>Претендентом</b>, изменённой копией, которую
+          обучение проверяет прямо сейчас. Здесь партии идут в обычном темпе, а в фоне те же боты успевают сыграть тысячи партий в минуту.
+        </p>
+      ) : (
+        <p className="training-hall__intro">
+          Здесь играют между собой максимальные боты Арены — те же, что садятся за столы с людьми. Карты открыты: смотрите, когда
+          они переводят, что подкидывают и чем бьются.
+        </p>
+      )}
       {tables === null ? (
         <ScreenFallback />
       ) : tables.length === 0 ? (
@@ -55,7 +63,8 @@ function TrainingTable({ n, table }: { n: number; table: TrainingTableDto }) {
         <span className="tt__title">
           <strong>{table.title}</strong>
           <small>
-            Партия №{table.game} · Чемпион {table.score.champion} : {table.score.challenger} Претендент
+            Партия №{table.game}
+            {table.training && ` · Чемпион ${table.score.champion} : ${table.score.challenger} Претендент`}
           </small>
         </span>
       </header>

@@ -125,15 +125,15 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
     stars.start();
     void realtime.ready.then(() => tournaments.start());
     // One server trains: the one that runs the games (it holds the lease).
-    if (config.BOT_TRAINING === 'on') {
-      void realtime.ready
-        .then(() => trainer.start())
-        .then((on) => {
-          if (on) app.log.info('bot training started');
-          showcase.start();
-        })
-        .catch((err: unknown) => app.log.error({ err }, 'bot training did not start'));
-    }
+    // Self-play training has plateaued (exams flat for a week): off unless BOT_TRAINING=on.
+    // «Зал ботов» runs either way.
+    void realtime.ready
+      .then(() => (config.BOT_TRAINING === 'on' ? trainer.start() : false))
+      .then((on) => {
+        if (on) app.log.info('bot training started');
+        showcase.start();
+      })
+      .catch((err: unknown) => app.log.error({ err }, 'bot training did not start'));
   }
   app.addHook('onRequest', async (request) => {
     if (request.url.startsWith('/api/rooms') || request.url.startsWith('/api/friends') || request.url.startsWith('/api/tournaments')) await realtime.ready;
