@@ -1984,3 +1984,62 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 .star-sales li > span:first-child b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .star-sales li small { color: var(--text-3); }
 .star-sales__refunded { opacity: 0.55; }
+
+/* ── VIP ── */
+.vip-badge {
+  display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; vertical-align: middle;
+  font-size: 12px; font-weight: 900; letter-spacing: 0.06em; color: #4a2a00;
+  background: linear-gradient(180deg, #fff3b0, #ffd23f 45%, #e39a12); box-shadow: 0 1px 0 #8a5a0c, 0 0 10px rgba(255, 207, 90, 0.45);
+}
+.vip-banner {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 1px solid rgba(255, 214, 120, 0.55);
+  border-radius: var(--radius-m); color: var(--text); font: inherit; text-align: left; cursor: pointer;
+  background: radial-gradient(120% 140% at 0% 0%, rgba(255, 214, 90, 0.28), transparent 60%), linear-gradient(100deg, #3a2a05, #2a1d07 60%, #1d2a2e);
+  box-shadow: inset 0 1px 0 rgba(255, 240, 190, 0.18), 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+.vip-banner__crown { width: 46px; flex: none; rotate: -12deg; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4)) drop-shadow(0 0 8px rgba(255, 200, 60, 0.5)); }
+.vip-banner > span { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.vip-banner strong { color: #ffe08a; font-size: 16px; }
+.vip-banner small { color: rgba(255, 240, 210, 0.7); }
+.vip-banner > b { color: var(--gold); white-space: nowrap; }
+.vip-banner--small { padding: 9px 12px; margin: 4px 0; }
+.vip-banner--small .vip-banner__crown { width: 36px; }
+
+.vip-hero {
+  position: relative; display: grid; justify-items: center; gap: 8px; padding: 34px 16px 20px; border-radius: 22px; overflow: hidden;
+  background: radial-gradient(90% 80% at 50% 0%, rgba(255, 210, 80, 0.32), transparent 70%), linear-gradient(180deg, #2b2006, #17262b);
+  border: 1px solid rgba(255, 214, 120, 0.45);
+}
+.vip-hero__glow {
+  position: absolute; top: -40%; left: 50%; width: 160%; aspect-ratio: 1; translate: -50% 0; pointer-events: none;
+  background: conic-gradient(from 0deg, transparent 0 8%, rgba(255, 220, 120, 0.14) 10% 14%, transparent 16% 33%, rgba(255, 220, 120, 0.12) 35% 39%, transparent 41% 58%, rgba(255, 220, 120, 0.14) 60% 64%, transparent 66% 83%, rgba(255, 220, 120, 0.12) 85% 89%, transparent 91%);
+  animation: vip-rays 24s linear infinite;
+}
+@keyframes vip-rays { to { rotate: 360deg; } }
+@media (prefers-reduced-motion: reduce) { .vip-hero__glow { animation: none; } }
+.vip-hero .ui-avatar { margin-top: 10px; }
+.vip-hero__name { font-size: 20px; color: #fff3cf; }
+.vip-hero__status { color: rgba(255, 240, 210, 0.75); font-size: 14px; }
+.vip-hero--on .vip-hero__status { color: #ffd76a; font-weight: 700; }
+
+.vip-perks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.vip-perks li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--stroke); }
+.vip-perks__icon { font-size: 24px; width: 32px; text-align: center; flex: none; }
+.vip-perks li > span:last-child { display: grid; gap: 2px; }
+.vip-perks small { color: var(--text-2); }
+
+.vip-plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.vip-plan {
+  position: relative; display: grid; justify-items: center; align-content: start; gap: 2px; padding: 18px 6px 10px; border-radius: 16px;
+  border: 1px solid var(--stroke); background: var(--surface); color: var(--text); font: inherit; cursor: pointer;
+}
+.vip-plan:disabled { opacity: 0.75; cursor: default; }
+.vip-plan--hot { border-color: rgba(255, 214, 120, 0.7); background: linear-gradient(180deg, rgba(255, 210, 80, 0.18), var(--surface)); box-shadow: 0 0 0 1px rgba(255, 214, 120, 0.35), 0 8px 22px rgba(255, 190, 50, 0.15); }
+.vip-plan > .ui-badge, .vip-plan > span:first-child.ui-badge { position: absolute; top: -9px; white-space: nowrap; font-size: 11px; }
+.vip-plan > strong { font-size: 30px; line-height: 1.1; color: #ffe08a; }
+.vip-plan > span { color: var(--text-2); font-size: 13px; }
+.vip-plan__price {
+  margin-top: 8px; width: 100%; padding: 7px 0; border-radius: 999px; font-weight: 800; color: #3b2400 !important; font-size: 15px !important;
+  background: linear-gradient(180deg, #ffe58a, #f5b528); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 2px 0 #a86a0c;
+}
+.vip-plan > small { color: var(--text-3); font-size: 11px; margin-top: 4px; }

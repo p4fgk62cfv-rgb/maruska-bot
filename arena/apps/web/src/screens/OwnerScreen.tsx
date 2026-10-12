@@ -522,7 +522,7 @@ function StarSales() {
     setBusy(id);
     try {
       await api(`/owner/stars/${id}/refund`, { method: 'POST' });
-      toast('Звёзды возвращены покупателю, монеты списаны', 'success');
+      toast('Звёзды возвращены покупателю, покупка отменена', 'success');
       query.reload();
     } catch (e) {
       toast(errText(e), 'error');
@@ -536,7 +536,7 @@ function StarSales() {
   if (!d) return <p className="app-muted">Загрузка…</p>;
   return (
     <Panel className="owner-card">
-      <h3 className="owner-sub">Продажи монет за звёзды</h3>
+      <h3 className="owner-sub">Продажи за звёзды: монеты и VIP</h3>
       <div className="training-stats">
         <span><b>⭐ {starNum.format(d.totals.today)}</b><small>сегодня</small></span>
         <span><b>⭐ {starNum.format(d.totals.month)}</b><small>за 30 дней</small></span>
@@ -559,7 +559,7 @@ function StarSales() {
                 <small>{o.paidAt ? when(o.paidAt) : ''}</small>
               </span>
               <span>
-                ⭐ {o.stars} → <Balance kind="coins" value={o.coins} compact />
+                ⭐ {o.stars} → {o.days > 0 ? <b className="vip-badge">VIP {o.days} дн.</b> : <Balance kind="coins" value={o.coins} compact />}
               </span>
               {o.status === 'REFUNDED' ? (
                 <small>возврат</small>

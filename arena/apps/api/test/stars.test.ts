@@ -169,4 +169,30 @@ describe.skipIf(!url)('Telegram Stars', () => {
     const res = await handle.app.inject({ method: 'POST', url: '/api/internal/stars/paid', payload: { payload: 'arena:x', telegramId: 1, stars: 1, chargeId: 'x' } });
     expect(res.statusCode).toBe(401);
   });
+  it('VIP: days add up, the profile shows it, a refund takes the days back', async () => {
+    const p = await login();
+    const until = async () => (await db.profile.findUniqueOrThrow({ where: { userId: p.id } })).premiumUntil?.getTime() ?? 0;
+    const day = 86_400_000;
+    const coinsBefore = await coins(p.id);
+
+    const first = await order(p.token, 'vip_30');
+    expect(first.order).toMatchObject({ stars: 249, days: 30, coins: 0 });
+    expect(calls.findLast((c) => c.method === 'createInvoiceLink')!.body).toMatchObject({ title: 'VIP на 30 дней', prices: [{ amount: 249 }] });
+    const t0 = Date.now();
+    expect((await internal('paid', { payload: `arena:${first.order.id}`, telegramId: p.tg, stars: 249, chargeId: `vip-a-${first.order.id}` })).json()).toMatchObject({ days: 30, credited: true });
+    expect(Math.abs((await until()) - (t0 + 30 * day))).toBeLessThan(60_000);
+
+    const second = await order(p.token, 'vip_7');
+    await internal('paid', { payload: `arena:${second.order.id}`, telegramId: p.tg, stars: 75, chargeId: `vip-b-${second.order.id}` });
+    expect(Math.abs((await until()) - (t0 + 37 * day))).toBeLessThan(60_000);
+    expect(await coins(p.id)).toBe(coinsBefore);
+
+    const me = await handle.app.inject({ method: 'GET', url: '/api/me', headers: { authorization: `Bearer ${p.token}` } });
+    expect(Date.parse(me.json().premiumUntil)).toBeGreaterThan(t0 + 36 * day);
+
+    const owner = await login(OWNER_TG);
+    const refund = await handle.app.inject({ method: 'POST', url: `/api/owner/stars/${second.order.id}/refund`, headers: { authorization: `Bearer ${owner.token}` } });
+    expect(refund.json()).toMatchObject({ status: 'REFUNDED' });
+    expect(Math.abs((await until()) - (t0 + 30 * day))).toBeLessThan(60_000);
+  });
 });

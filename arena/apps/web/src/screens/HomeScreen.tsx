@@ -13,6 +13,7 @@ import { InstallCard } from './InstallCard.js';
 import { NEWS, newsDate, useUnseenNews } from '../lib/news.js';
 import { chatHasNew } from '../lib/chat.js';
 import { ChatStrip } from './ChatStrip.js';
+import { isVip } from '../lib/vip.js';
 
 interface Tile {
   icon: IconName;
@@ -23,12 +24,13 @@ interface Tile {
 const TILES: Tile[] = [
   { icon: 'gift', title: 'Задания', page: 'daily' },
   { icon: 'chat', title: 'Чат', page: 'chat' },
+  { icon: 'crown', title: 'VIP', page: 'vip' },
   { icon: 'cards', title: 'Зал ботов', page: 'training' },
   { icon: 'trophy', title: 'Турниры', page: 'tournaments' },
   { icon: 'news', title: 'Новости', page: 'news' },
   { icon: 'users', title: 'Друзья', page: 'friends' },
   { icon: 'bag', title: 'Предметы', page: 'items' },
-  { icon: 'crown', title: 'Доска почёта', page: 'leaderboard' },
+  { icon: 'medal', title: 'Доска почёта', page: 'leaderboard' },
   { icon: 'star', title: 'Достижения', page: 'achievements' },
   { icon: 'settings', title: 'Настройки', page: 'settings' },
   { icon: 'share', title: 'Пригласить', page: 'invite' },
@@ -179,6 +181,7 @@ export function HomeBar() {
           size={60}
           ring={me.equipped.frame ? ringOf(me.equipped.frame) : undefined}
           crown={Boolean(me.equipped.crown)}
+          vip={isVip(me.premiumUntil)}
         />
         <span className="home-bar__who">
           <strong>{me.name}</strong>

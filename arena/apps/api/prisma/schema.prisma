@@ -793,6 +793,8 @@ model StarOrder {
   pack       String          @db.VarChar(32)
   stars      Int
   coins      Int
+  /// VIP days bought (0 for coins).
+  days       Int             @default(0)
   status     StarOrderStatus @default(PENDING)
   /// telegram_payment_charge_id: needed for a refund; one payment credits one order.
   chargeId   String?         @unique @map("charge_id") @db.VarChar(255)

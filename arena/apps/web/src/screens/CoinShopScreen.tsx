@@ -1,60 +1,18 @@
-import type { StarOrderDto, StarPack } from '@arena/shared';
-import { Badge, Balance, Button, CurrencyIcon, Panel } from '@arena/ui';
-import { useState } from 'react';
-import { ApiError, api } from '../lib/api.js';
-import { haptic, openInvoice } from '../lib/telegram.js';
+import type { StarPack, VipPlan } from '@arena/shared';
+import { Badge, Balance, Button, CurrencyIcon, Panel, VipCrown } from '@arena/ui';
+import { useStarsPurchase } from '../lib/stars.js';
 import { useQuery } from '../lib/useQuery.js';
+import { isVip } from '../lib/vip.js';
 import { useNav } from '../navigation.js';
-import { useMe, useSession } from '../session.js';
-import { useToast } from '../toast.js';
+import { useMe } from '../session.js';
 import { QueryView, ScreenHeader } from './common.js';
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** Telegram has taken the stars; the bot's confirmation reaches the server a moment later. */
-async function waitPaid(id: string, ms: number): Promise<StarOrderDto | null> {
-  const until = Date.now() + ms;
-  while (Date.now() < until) {
-    const order = await api<StarOrderDto>(`/stars/orders/${id}`).catch(() => null);
-    if (order?.status === 'PAID') return order;
-    await sleep(1500);
-  }
-  return null;
-}
 
 /** «Монеты»: packs of coins for Telegram Stars. */
 export default function CoinShopScreen() {
-  const query = useQuery<{ enabled: boolean; packs: StarPack[] }>('/stars/packs');
+  const query = useQuery<{ enabled: boolean; packs: StarPack[]; vip: VipPlan[] }>('/stars/packs');
   const me = useMe();
-  const { refreshMe } = useSession();
   const { push } = useNav();
-  const toast = useToast();
-  const [busy, setBusy] = useState<string | null>(null);
-
-  const buy = async (pack: StarPack) => {
-    setBusy(pack.key);
-    try {
-      const { order, link } = await api<{ order: StarOrderDto; link: string }>('/stars/orders', { method: 'POST', body: { pack: pack.key } });
-      const status = await openInvoice(link);
-      if (status === 'cancelled') return;
-      if (status === 'failed') {
-        toast('Оплата не прошла', 'error');
-        return;
-      }
-      const paid = await waitPaid(order.id, status === 'paid' ? 30_000 : 120_000);
-      if (paid) {
-        haptic.success();
-        toast(`+${paid.coins} монет — спасибо за покупку!`, 'success');
-        await refreshMe();
-      } else if (status === 'paid') {
-        toast('Оплата получена, монеты появятся в течение нескольких минут', 'info');
-      }
-    } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'Ошибка', 'error');
-    } finally {
-      setBusy(null);
-    }
-  };
+  const { buy, busy } = useStarsPurchase((order) => `+${order.coins} монет — спасибо за покупку!`);
 
   return (
     <div className="app-stack">
@@ -66,6 +24,14 @@ export default function CoinShopScreen() {
           Магазин предметов
         </Button>
       </Panel>
+      <button type="button" className="vip-banner" onClick={() => push('vip')}>
+        <VipCrown className="vip-banner__crown" />
+        <span>
+          <strong>{isVip(me.premiumUntil) ? 'Вы VIP' : 'Стать VIP'}</strong>
+          <small>Золотая корона, подсветка ходов, ×2 рейтинга</small>
+        </span>
+        <b>{isVip(me.premiumUntil) ? 'Продлить' : 'Подробнее'} ›</b>
+      </button>
       <QueryView query={query}>
         {({ enabled, packs }) =>
           !enabled ? (
@@ -86,7 +52,7 @@ export default function CoinShopScreen() {
                       {p.label && <Badge tone="gold">{p.label}</Badge>}
                     </span>
                   </span>
-                  <Button size="sm" variant="gold" loading={busy === p.key} disabled={busy !== null && busy !== p.key} onClick={() => void buy(p)}>
+                  <Button size="sm" variant="gold" loading={busy === p.key} disabled={busy !== null && busy !== p.key} onClick={() => void buy(p.key)}>
                     ⭐ {p.stars}
                   </Button>
                 </Panel>

@@ -44,6 +44,7 @@ export interface TileSeat {
   photoUrl: string | null;
   frame: string | null;
   crown: string | null;
+  vip?: boolean;
 }
 
 export interface SeatTileProps {
@@ -96,7 +97,7 @@ export const SeatTile = memo(function SeatTile({ seat, cards = 0, back = 'classi
         </span>
       )}
       <span className="seat-tile__frame" {...(anchor ? { 'data-seat': seat.id } : {})}>
-        <Avatar id={seat.id} name={seat.name} photoUrl={seat.photoUrl} size={size} ring={ringOf(seat.frame)} crown={Boolean(seat.crown)} status={offline ? 'offline' : undefined} />
+        <Avatar id={seat.id} name={seat.name} photoUrl={seat.photoUrl} size={size} ring={ringOf(seat.frame)} crown={Boolean(seat.crown)} vip={seat.vip} status={offline ? 'offline' : undefined} />
         <span className="seat-tile__name">{seat.name}</span>
         {bot && <span className="seat-tile__bot">бот</span>}
         {cards > 0 && <span className="seat-tile__count">{cards}</span>}

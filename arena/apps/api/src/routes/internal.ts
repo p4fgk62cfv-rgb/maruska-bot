@@ -148,6 +148,6 @@ export async function internalRoutes(app: FastifyInstance, ctx: Context): Promis
       ctx.alerts.raise('stars', 'Оплата звёздами без заказа в Арене', { payload: body.payload, stars: body.stars, chargeId: body.chargeId });
       throw new AppError('NOT_FOUND');
     }
-    return { coins: done.order.coins, status: done.order.status, credited: done.credited };
+    return { coins: done.order.coins, days: done.order.days, status: done.order.status, credited: done.credited };
   });
 }

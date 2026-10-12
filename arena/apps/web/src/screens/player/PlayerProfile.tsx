@@ -117,12 +117,12 @@ function Hero({ card, presence, atTable, onChange }: { card: PlayerProfileDto; p
     <section className="pcard__hero">
       <div className="pcard__glow" aria-hidden="true" />
       <div className="pcard__portrait">
-        <Avatar id={card.id} name={card.name} photoUrl={card.photoUrl} size={96} ring={card.frame ? ringOf(card.frame) : 'gold'} crown={Boolean(card.crown)} status={self ? undefined : presence} />
+        <Avatar id={card.id} name={card.name} photoUrl={card.photoUrl} size={96} ring={card.frame ? ringOf(card.frame) : 'gold'} crown={Boolean(card.crown)} vip={card.premium} status={self ? undefined : presence} />
         <span className="pcard__level">{ratingBadge(card.rating).level}</span>
       </div>
       <h2 className="pcard__name">
         {card.name}
-        {card.premium && <Icon name="crown" size={18} />}
+        {card.premium && <span className="vip-badge">VIP</span>}
       </h2>
       {card.title && (
         <span className={`pcard__title pcard__title--${card.title.tier}`}>

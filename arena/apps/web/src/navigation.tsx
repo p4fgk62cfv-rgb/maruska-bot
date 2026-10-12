@@ -10,6 +10,7 @@ export type Page =
   | 'achievements'
   | 'items'
   | 'coins'
+  | 'vip'
   | 'rules'
   | 'servers'
   | 'leaderboard'

@@ -48,6 +48,7 @@ class Msg:
 async def main():
     seen = []
     mode = {"precheckout": 200, "paid": 200}
+    vip_mode = {"on": False}
 
     async def precheckout(request):
         body = await request.json()
@@ -62,6 +63,8 @@ async def main():
         seen.append(("paid", body, None))
         if mode["paid"] != 200:
             return web.json_response({}, status=mode["paid"])
+        if vip_mode["on"]:
+            return web.json_response({"coins": 0, "days": 30, "status": "PAID", "credited": True})
         return web.json_response({"coins": 160, "status": "PAID", "credited": True})
 
     app = web.Application()
@@ -97,6 +100,12 @@ async def main():
     await arena_pay.arena_paid(m)
     check(seen[-1][1] == {"payload": "arena:good", "telegramId": 111, "stars": 75, "chargeId": "ch-1"}, f"paid тело: {seen[-1][1]}")
     check(m.replies and "+160" in m.replies[0], f"ответ после оплаты: {m.replies}")
+
+    vip_mode["on"] = True
+    m = Msg("arena:vip")
+    await arena_pay.arena_paid(m)
+    check(m.replies and "VIP на 30" in m.replies[0], f"ответ после VIP: {m.replies}")
+    vip_mode["on"] = False
 
     mode["paid"] = 404
     m = Msg("arena:lost")

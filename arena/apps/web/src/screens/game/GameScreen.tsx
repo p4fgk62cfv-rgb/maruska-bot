@@ -311,7 +311,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
   };
   const seatOf = (id: string) => {
     const info = infoOf(id);
-    return { id, name: info?.name ?? 'Игрок', photoUrl: info?.photoUrl ?? null, frame: info?.frame ?? null, crown: info?.crown ?? null };
+    return { id, name: info?.name ?? 'Игрок', photoUrl: info?.photoUrl ?? null, frame: info?.frame ?? null, crown: info?.crown ?? null, vip: info?.premium ?? false };
   };
   const back = backOf(me.equipped.cardBack);
   const { rules } = view;

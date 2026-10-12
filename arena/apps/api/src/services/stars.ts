@@ -1,4 +1,4 @@
-import { STAR_PACKS, starPack, type OwnerStarsDto, type StarOrderDto } from '@arena/shared';
+import { STAR_PACKS, VIP_PLANS, starPack, vipPlan, type OwnerStarsDto, type StarOrderDto } from '@arena/shared';
 import type { FastifyBaseLogger } from 'fastify';
 import type { Db } from '../db.js';
 import type { StarOrder } from '../generated/prisma/client.js';
@@ -8,6 +8,7 @@ import type { Outbox, TelegramBot } from './notifier.js';
 import { displayName } from './users.js';
 
 const PREFIX = 'arena:';
+const DAY = 86_400_000;
 /** Where the sweep of the bot's Star transactions has got to. */
 const SWEEP_KEY = 'stars_sweep_offset';
 /** Unpaid orders a player may have open within an hour (each one is an invoice link). */
@@ -27,6 +28,7 @@ const orderDto = (o: StarOrder): StarOrderDto => ({
   pack: o.pack,
   stars: o.stars,
   coins: o.coins,
+  days: o.days,
   status: o.status,
   createdAt: o.createdAt.toISOString(),
   paidAt: o.paidAt?.toISOString() ?? null,
@@ -38,8 +40,14 @@ const orderId = (payload: string): string | null => {
   return /^[0-9a-f-]{36}$/.test(id) ? id : null;
 };
 
+/** Russian «день/дня/дней». */
+const daysText = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'день' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'дня' : 'дней'}`;
+
+/** What an order buys, in words: «350 монет», «VIP на 30 дней». */
+export const orderTitle = (o: { coins: number; days: number }) => (o.days > 0 ? `VIP на ${daysText(o.days)}` : `${o.coins} монет`);
+
 /**
- * Coins for Telegram Stars. The player asks for an invoice link here, pays in Telegram's own form,
+ * Coins and VIP for Telegram Stars. The player asks for an invoice link here, pays in Telegram's own form,
  * and the bot (which receives the payment updates) asks this service to check and then to credit
  * the order. Crediting is keyed by the order, so a repeated notice or the sweep never pays twice.
  */
@@ -52,22 +60,27 @@ export class StarsService {
   ) {}
 
   packs() {
-    return { enabled: this.deps.bot !== null, packs: STAR_PACKS };
+    return { enabled: this.deps.bot !== null, packs: STAR_PACKS, vip: VIP_PLANS };
   }
 
   async createOrder(userId: string, packKey: string): Promise<{ order: StarOrderDto; link: string }> {
     const { db, bot } = this.deps;
-    const pack = starPack(packKey);
+    const coins = starPack(packKey);
+    const vip = vipPlan(packKey);
+    const pack = coins ? { key: coins.key, stars: coins.stars, coins: coins.coins, days: 0 } : vip ? { key: vip.key, stars: vip.stars, coins: 0, days: vip.days } : null;
     if (!pack) throw new AppError('NOT_FOUND');
     if (!bot) throw new AppError('PAYMENTS_UNAVAILABLE');
     const open = await db.starOrder.count({ where: { userId, status: 'PENDING', createdAt: { gt: new Date(Date.now() - 3600_000) } } });
     if (open >= OPEN_LIMIT) throw new AppError('RATE_LIMITED');
-    const order = await db.starOrder.create({ data: { userId, pack: pack.key, stars: pack.stars, coins: pack.coins } });
+    const order = await db.starOrder.create({ data: { userId, pack: pack.key, stars: pack.stars, coins: pack.coins, days: pack.days } });
+    const title = orderTitle(pack);
     const link = await bot.createStarsInvoice({
-      title: `${pack.coins} монет`,
-      description: `${pack.coins} монет для Маруська Арены: рубашки, рамки, смайлы и подсказки в игре.`,
+      title,
+      description: pack.days
+        ? `VIP в Маруська Арене на ${daysText(pack.days)}: золотая корона на аватарке, бесплатная подсветка ходов, ×2 рейтинга за победы.`
+        : `${pack.coins} монет для Маруська Арены: рубашки, рамки, смайлы и подсказки в игре.`,
       payload: `${PREFIX}${order.id}`,
-      label: `${pack.coins} монет`,
+      label: title,
       stars: pack.stars,
     });
     if (!link) {
@@ -110,19 +123,27 @@ export class StarsService {
       // Only one of two concurrent notices moves the order on.
       const moved = await tx.starOrder.updateMany({ where: { id, status: 'PENDING' }, data: { status: 'PAID', chargeId: notice.chargeId, paidAt: new Date() } });
       if (moved.count !== 1) return { order, credited: false };
-      await ledger.postIn(tx, {
-        userId: order.userId,
-        currency: 'COINS',
-        amount: BigInt(order.coins),
-        type: 'STARS_PURCHASE',
-        source: `stars:${order.id}`,
-        idempotencyKey: `stars:${order.id}`,
-        meta: { stars: order.stars, pack: order.pack },
-      });
+      if (order.coins > 0) {
+        await ledger.postIn(tx, {
+          userId: order.userId,
+          currency: 'COINS',
+          amount: BigInt(order.coins),
+          type: 'STARS_PURCHASE',
+          source: `stars:${order.id}`,
+          idempotencyKey: `stars:${order.id}`,
+          meta: { stars: order.stars, pack: order.pack },
+        });
+      }
+      if (order.days > 0) {
+        // Added to the VIP time left, or from now when there is none.
+        const profile = await tx.profile.findUniqueOrThrow({ where: { userId: order.userId }, select: { premiumUntil: true } });
+        const from = Math.max(Date.now(), profile.premiumUntil?.getTime() ?? 0);
+        await tx.profile.update({ where: { userId: order.userId }, data: { premiumUntil: new Date(from + order.days * DAY) } });
+      }
       return { order: await tx.starOrder.findUniqueOrThrow({ where: { id } }), credited: true };
     });
     if (!result) return null;
-    if (result.credited) log.info({ orderId: id, stars: result.order.stars, coins: result.order.coins }, 'stars payment credited');
+    if (result.credited) log.info({ orderId: id, stars: result.order.stars, coins: result.order.coins, days: result.order.days }, 'stars payment credited');
     return { order: orderDto(result.order), userId: result.order.userId, credited: result.credited };
   }
 
@@ -149,7 +170,7 @@ export class StarsService {
             credited++;
             log.warn({ orderId: done.order.id }, 'stars payment credited by the sweep');
             await outbox.enqueue(done.userId, 'stars', {
-              text: `✅ Оплата получена: <b>+${done.order.coins} монет</b> на вашем счёте в Арене.`,
+              text: done.order.days > 0 ? `👑 Оплата получена: <b>${orderTitle(done.order)}</b> уже действует в Арене.` : `✅ Оплата получена: <b>+${done.order.coins} монет</b> на вашем счёте в Арене.`,
             });
           }
         }
@@ -203,7 +224,7 @@ export class StarsService {
     };
   }
 
-  /** Stars back to the buyer; the coins are taken back as far as the balance allows. */
+  /** Stars back to the buyer; the coins are taken back as far as the balance allows, VIP days in full. */
   async refund(id: string): Promise<StarOrderDto> {
     const { db, ledger, bot, log } = this.deps;
     const order = await db.starOrder.findUnique({ where: { id }, include: { user: { select: { telegramId: true } } } });
@@ -212,6 +233,11 @@ export class StarsService {
     if (!bot || !(await bot.refundStars(order.user.telegramId, order.chargeId))) throw new AppError('PAYMENTS_UNAVAILABLE');
     const updated = await db.$transaction(async (tx) => {
       const wallet = await tx.wallet.findUnique({ where: { userId_currency: { userId: order.userId, currency: 'COINS' } } });
+      if (order.days > 0) {
+        const profile = await tx.profile.findUniqueOrThrow({ where: { userId: order.userId }, select: { premiumUntil: true } });
+        const left = (profile.premiumUntil?.getTime() ?? 0) - order.days * DAY;
+        await tx.profile.update({ where: { userId: order.userId }, data: { premiumUntil: left > Date.now() ? new Date(left) : null } });
+      }
       const back = BigInt(Math.min(order.coins, Number(wallet?.balance ?? 0n)));
       if (back > 0n) {
         await ledger.postIn(tx, {

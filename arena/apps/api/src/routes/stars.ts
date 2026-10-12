@@ -1,4 +1,4 @@
-import type { OwnerStarsDto, StarOrderDto, StarPack } from '@arena/shared';
+import type { OwnerStarsDto, StarOrderDto, StarPack, VipPlan } from '@arena/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireSession, sessionOf } from '../auth/plugin.js';
@@ -12,7 +12,7 @@ export async function starsRoutes(app: FastifyInstance, ctx: Context): Promise<v
   const auth = { preHandler: requireSession(ctx.config.SESSION_SECRET) };
   const buy = { ...auth, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } };
 
-  app.get('/stars/packs', auth, async (): Promise<{ enabled: boolean; packs: readonly StarPack[] }> => ctx.stars.packs());
+  app.get('/stars/packs', auth, async (): Promise<{ enabled: boolean; packs: readonly StarPack[]; vip: readonly VipPlan[] }> => ctx.stars.packs());
 
   app.post('/stars/orders', buy, async (request): Promise<{ order: StarOrderDto; link: string }> => {
     const { pack } = z.object({ pack: z.string().max(32) }).parse(request.body);
