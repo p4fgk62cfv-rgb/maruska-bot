@@ -2167,3 +2167,171 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 }
 :root[data-game-design="royal"] .ui-toast { background: rgba(6, 34, 23, 0.96); }
 :root[data-game-design="royal"] .result__card { background: var(--felt-texture), linear-gradient(180deg, #1a6646, #0a2f20); }
+
+/* ══════════════ «Хохлома»: cream paper, black-and-red lacquer, gold leaf (art from /folk) ══════════════ */
+@font-face {
+  font-family: 'Ruslan Display'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('/fonts/ruslan-display-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Ruslan Display'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('/fonts/ruslan-display-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+:root[data-game-design="folk"] {
+  --folk-red: #b3121b; --folk-red-hi: #e0301f; --folk-black: #170707; --folk-gold: #f2c14e; --folk-gold-deep: #b9801b;
+  --folk-ink: #3b1608; --folk-ink-2: rgba(59, 22, 8, 0.72); --folk-cream: #fbecc4;
+  --folk-gold-text: linear-gradient(180deg, #fff3b8 0%, #f6cf55 45%, #d68e1c 100%);
+  --folk-font: 'Ruslan Display', Georgia, serif;
+  --felt: #f3dfb0; --gold: #f2c14e; --gold-deep: #b9801b;
+  --stroke: rgba(150, 70, 20, 0.28); --stroke-strong: rgba(185, 128, 27, 0.7); --line: rgba(150, 70, 20, 0.22);
+  color-scheme: light;
+}
+:root[data-game-design="folk"] body {
+  background: linear-gradient(90deg, rgba(90, 18, 8, 0.35), transparent 7%, transparent 93%, rgba(90, 18, 8, 0.35)), linear-gradient(rgba(252, 241, 212, 0.45), rgba(252, 241, 212, 0.45)), url('/folk/paper.webp') center top / cover no-repeat;
+  background-attachment: fixed; background-color: #f3dfb0;
+}
+/* Ordinary screens: dark ink on the paper */
+:root[data-game-design="folk"] .app-screen {
+  --text: var(--folk-ink); --text-2: var(--folk-ink-2); --text-3: rgba(59, 22, 8, 0.6);
+  /* Gold that reads on paper; the bars keep the bright leaf gold. */
+  --gold: #a35f08; --violet-hi: #b3121b; --cyan: #0f6f86;
+  --surface: rgba(255, 249, 232, 0.94); --surface-strong: rgba(255, 246, 222, 0.98);
+  color: var(--text);
+}
+:root[data-game-design="folk"] .app-screen .ui-panel { box-shadow: inset 0 0 0 1.5px rgba(179, 18, 27, 0.35), inset 0 0 0 4px rgba(255, 250, 235, 0.6), 0 4px 12px rgba(80, 30, 5, 0.15); }
+
+/* Top bar: lacquer black with a red-and-gold rule */
+:root[data-game-design="folk"] .app-header,
+:root[data-game-design="folk"] .home-bar {
+  background: linear-gradient(180deg, #2a0b07, #170707); color: var(--folk-cream);
+  box-shadow: 0 2px 0 var(--folk-gold), 0 5px 0 var(--folk-red), 0 6px 0 var(--folk-gold-deep), 0 12px 22px rgba(60, 20, 5, 0.35);
+}
+:root[data-game-design="folk"] .app-header h1 {
+  font-family: var(--folk-font); font-weight: 400; letter-spacing: 0.04em; text-transform: uppercase;
+  background: var(--folk-gold-text); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+:root[data-game-design="folk"] .app-header p { color: rgba(251, 236, 196, 0.7); }
+:root[data-game-design="folk"] .app-header__back { color: var(--folk-gold); }
+:root[data-game-design="folk"] .app-header .ui-icon-btn { background: rgba(242, 193, 78, 0.1); color: var(--folk-gold); }
+:root[data-game-design="folk"] .home-bar__who strong { color: var(--folk-cream); font-family: var(--folk-font); font-weight: 400; letter-spacing: 0.03em; }
+:root[data-game-design="folk"] .home-bar__who .ui-rank__value { color: var(--folk-cream); }
+:root[data-game-design="folk"] .home-bar__me .ui-avatar { border-radius: 50%; box-shadow: 0 0 0 2px #170707, 0 0 0 5px var(--folk-gold), 0 0 0 7px var(--folk-red), 0 6px 14px rgba(0, 0, 0, 0.45); }
+:root[data-game-design="folk"] .home-bar__me .ui-avatar img, :root[data-game-design="folk"] .home-bar__me .ui-avatar .ui-avatar__initials { border-radius: 50%; }
+:root[data-game-design="folk"] .home-bar__money .ui-balance {
+  padding: 2px 10px 2px 4px; border-radius: 999px; background: linear-gradient(180deg, #3a0f08, #1d0806);
+  box-shadow: inset 0 0 0 1.5px var(--folk-gold-deep); color: var(--folk-cream);
+}
+:root[data-game-design="folk"] .plus { color: var(--folk-gold); box-shadow: inset 0 0 0 1.5px var(--folk-gold); background: rgba(179, 18, 27, 0.35); border-radius: 50%; }
+
+/* Bottom bar: dark red lacquer */
+:root[data-game-design="folk"] .ui-nav {
+  background: linear-gradient(180deg, #4a0c0a, #1d0605); color: rgba(251, 236, 196, 0.75);
+  box-shadow: 0 -2px 0 var(--folk-gold), 0 -5px 0 var(--folk-red), 0 -6px 0 var(--folk-gold-deep), 0 -10px 22px rgba(60, 20, 5, 0.3);
+}
+:root[data-game-design="folk"] .ui-nav__item { font-family: var(--folk-font); font-weight: 400; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
+:root[data-game-design="folk"] .ui-nav__item--on { color: var(--folk-gold); }
+:root[data-game-design="folk"] .ui-nav__item--on .ui-nav__icon { background: radial-gradient(circle at 40% 30%, var(--folk-red-hi), var(--folk-red) 60%, #6d0b0f); color: var(--folk-gold); box-shadow: inset 0 0 0 1.5px var(--folk-gold), 0 4px 10px rgba(0, 0, 0, 0.4); }
+:root[data-game-design="folk"] .ui-nav__item--accent .ui-nav__icon { background: radial-gradient(circle at 40% 30%, var(--folk-red-hi), var(--folk-red) 60%, #6d0b0f); color: var(--folk-gold); box-shadow: inset 0 0 0 2px var(--folk-gold); }
+
+/* Home: «Быстрая игра» on the lacquered plaque, the painted play button beside the title */
+:root[data-game-design="folk"] .quick-play {
+  position: relative; grid-template-columns: auto 1fr; align-items: center; justify-items: start; column-gap: 12px;
+  margin: 14px 10px 6px; padding: 30px 30px 30px 34px; min-height: 168px; border: 0;
+  border-style: solid; border-width: 0; background: none;
+}
+:root[data-game-design="folk"] .quick-play::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  border-style: solid; border-width: 52px; border-image: url('/folk/plaque.webp') 190 fill / 52px round;
+  filter: drop-shadow(0 8px 14px rgba(70, 20, 5, 0.4));
+}
+:root[data-game-design="folk"] .quick-play > * { position: relative; z-index: 1; }
+:root[data-game-design="folk"] .quick-play__icon {
+  grid-row: span 2; width: 104px; height: 104px; margin: 0; background: url('/folk/play.webp') center / contain no-repeat; box-shadow: none;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5));
+}
+:root[data-game-design="folk"] .quick-play__icon svg { display: none; }
+:root[data-game-design="folk"] .quick-play__title {
+  font-family: var(--folk-font); font-size: 34px; line-height: 1; text-transform: uppercase; letter-spacing: 0.02em;
+  background: var(--folk-gold-text); -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: none; filter: drop-shadow(0 2px 0 #5a0d06) drop-shadow(0 3px 4px rgba(0, 0, 0, 0.6));
+}
+:root[data-game-design="folk"] .quick-play__hint { color: rgba(251, 236, 196, 0.8); font-size: 12px; }
+:root[data-game-design="folk"] .quick-play:active { transform: scale(0.99); }
+
+/* Home: lacquer tiles, three in a row */
+:root[data-game-design="folk"] .tile-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 10px 10px 16px; }
+:root[data-game-design="folk"] .grid-tile {
+  position: relative; min-height: 118px; padding: 16px 6px 14px; gap: 6px; border: 0; background: none; align-content: end;
+}
+:root[data-game-design="folk"] .grid-tile:nth-child(odd) { border-right: 0; }
+:root[data-game-design="folk"] .grid-tile::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  border-style: solid; border-width: 30px; border-image: url('/folk/tile.webp') 200 fill / 30px stretch;
+  filter: drop-shadow(0 5px 8px rgba(70, 20, 5, 0.35));
+}
+:root[data-game-design="folk"] .grid-tile > * { position: relative; z-index: 1; }
+:root[data-game-design="folk"] .grid-tile:active { transform: scale(0.97); }
+:root[data-game-design="folk"] .grid-tile__icon { color: var(--folk-gold); filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6)); }
+:root[data-game-design="folk"] .grid-tile__icon > svg { width: 40px; height: 40px; }
+:root[data-game-design="folk"] .grid-tile__title {
+  font-family: var(--folk-font); font-size: 11px; padding: 0 4px; overflow-wrap: anywhere; line-height: 1.15; letter-spacing: 0.02em; text-transform: uppercase; text-align: center;
+  color: var(--folk-cream); text-shadow: 0 1px 0 #000, 0 2px 4px rgba(0, 0, 0, 0.7);
+}
+:root[data-game-design="folk"] .grid-tile__count:not(.grid-tile__count--alert) {
+  left: auto; right: -30px; top: -10px; translate: none; padding: 1px 6px; border-radius: 999px; font-size: 11px; color: var(--folk-cream);
+  background: rgba(23, 7, 7, 0.85); box-shadow: inset 0 0 0 1px var(--folk-gold-deep);
+}
+:root[data-game-design="folk"] .chat-strip__head .ui-badge, :root[data-game-design="folk"] .chat-strip__head span { font-family: var(--font); }
+/* Painted icons, where the art exists */
+:root[data-game-design="folk"] .grid-tile[data-tile='settings'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='friends'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='achievements'] .grid-tile__icon {
+  width: 60px; height: 56px; background: center / contain no-repeat; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.55));
+}
+:root[data-game-design="folk"] .grid-tile[data-tile='settings'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='friends'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='achievements'] .grid-tile__icon > svg { display: none; }
+:root[data-game-design="folk"] .grid-tile[data-tile='settings'] .grid-tile__icon { background-image: url('/folk/icon-settings.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='friends'] .grid-tile__icon { background-image: url('/folk/icon-friends.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='achievements'] .grid-tile__icon { background-image: url('/folk/icon-achievements.webp'); }
+
+/* Home: cream cards with a red-and-gold edge */
+:root[data-game-design="folk"] .chat-strip,
+:root[data-game-design="folk"] .news-card,
+:root[data-game-design="folk"] .home-shortcut,
+:root[data-game-design="folk"] .install-hint {
+  margin-left: 10px; margin-right: 10px; color: var(--folk-ink);
+  background: linear-gradient(180deg, #fff8e3, #f7e3b6);
+  box-shadow: inset 0 0 0 2px var(--folk-red), inset 0 0 0 4px #fff6dc, inset 0 0 0 5px var(--folk-gold-deep), 0 4px 10px rgba(80, 30, 5, 0.2);
+}
+:root[data-game-design="folk"] .chat-strip__head { color: var(--folk-red); font-family: var(--folk-font); letter-spacing: 0.03em; }
+
+/* Titles, tabs, buttons */
+:root[data-game-design="folk"] .script-title,
+:root[data-game-design="folk"] .filter-band__title {
+  font-family: var(--folk-font); text-transform: uppercase; font-size: 24px; letter-spacing: 0.03em; color: var(--folk-red);
+  text-shadow: 0 1px 0 #fff3cf;
+}
+:root[data-game-design="folk"] .filter-band { background: linear-gradient(180deg, #2a0b07, #170707); color: var(--folk-cream); --text: var(--folk-cream); --text-2: rgba(251,236,196,.75); border-bottom: 2px solid var(--folk-gold-deep); }
+:root[data-game-design="folk"] .filter-band__title { color: var(--folk-gold); text-shadow: none; }
+:root[data-game-design="folk"] .ui-tabs { background: rgba(255, 246, 222, 0.85); box-shadow: inset 0 0 0 1.5px rgba(179, 18, 27, 0.4); }
+:root[data-game-design="folk"] .ui-tabs__tab { color: var(--folk-ink-2); }
+:root[data-game-design="folk"] .ui-tabs__tab--on { background: radial-gradient(circle at 40% 20%, var(--folk-red-hi), var(--folk-red) 65%, #7a0c10); color: var(--folk-gold); box-shadow: inset 0 0 0 1.5px var(--folk-gold), 0 3px 8px rgba(80, 20, 5, 0.35); }
+:root[data-game-design="folk"] .ui-btn--primary { color: var(--folk-gold); background: radial-gradient(circle at 40% 15%, var(--folk-red-hi), var(--folk-red) 60%, #7a0c10); box-shadow: inset 0 0 0 2px var(--folk-gold), 0 4px 12px rgba(80, 20, 5, 0.35); }
+:root[data-game-design="folk"] .ui-btn--gold { color: #3b1608; background: var(--folk-gold-text); box-shadow: inset 0 0 0 1.5px #9a6512, 0 4px 12px rgba(80, 20, 5, 0.3); }
+:root[data-game-design="folk"] .ui-btn--ghost { color: var(--folk-ink); background: rgba(255, 246, 222, 0.7); box-shadow: inset 0 0 0 1.5px rgba(179, 18, 27, 0.45); }
+:root[data-game-design="folk"] .ui-sheet__body {
+  --text: var(--folk-ink); --text-2: var(--folk-ink-2); --text-3: rgba(59, 22, 8, 0.55); color: var(--folk-ink);
+  background: url('/folk/paper.webp') center / 768px auto, #f6e3b8;
+  box-shadow: inset 0 3px 0 var(--folk-red), inset 0 5px 0 var(--folk-gold-deep), 0 -10px 40px rgba(0, 0, 0, 0.4);
+}
+:root[data-game-design="folk"] .ui-toast { background: rgba(32, 9, 6, 0.96); color: var(--folk-cream); }
+:root[data-game-design="folk"] .app-section { font-family: var(--folk-font); font-weight: 400; color: var(--folk-red); text-transform: uppercase; letter-spacing: 0.03em; }
+
+:root[data-game-design="folk"] .app-screen .ui-balance--coins { color: #9a6a06; }
+:root[data-game-design="folk"] .app-screen .ui-empty__icon { background: rgba(179, 18, 27, 0.12); color: var(--folk-red); }
+:root[data-game-design="folk"] .daily-hero strong { font-family: var(--folk-font); text-transform: uppercase; font-size: 24px; color: var(--folk-red); }
+:root[data-game-design="folk"] .coin-banner b, :root[data-game-design="folk"] .vip-banner > b { color: var(--folk-red); }
+:root[data-game-design="folk"] .coin-banner { background: linear-gradient(100deg, #fff6d8, #f6dfa6); box-shadow: inset 0 0 0 1.5px var(--folk-gold-deep); border: 0; }

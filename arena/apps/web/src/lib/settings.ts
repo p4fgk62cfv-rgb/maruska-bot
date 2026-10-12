@@ -22,7 +22,7 @@ export interface Settings {
   rewardAnimations: boolean;
   theme: Theme;
   /** Home screen visual style. Classic preserves the original design. */
-  homeDesign: 'classic' | 'daylight' | 'vegas' | 'royal';
+  homeDesign: 'classic' | 'daylight' | 'vegas' | 'royal' | 'folk';
   /** «Королевский» became the default once: switched on for everyone a single time. */
   royalIntroduced?: boolean;
 }
@@ -45,7 +45,7 @@ const DEFAULTS: Settings = {
 
 let current: Settings = { ...DEFAULTS, ...safeStorage.get<Partial<Settings>>(KEY, {}) };
 // Migrate an unknown stored design to the default.
-if (!['classic', 'daylight', 'vegas', 'royal'].includes(current.homeDesign as string)) current.homeDesign = 'royal';
+if (!['classic', 'daylight', 'vegas', 'royal', 'folk'].includes(current.homeDesign as string)) current.homeDesign = 'royal';
 // «Королевский» is the new look: everyone gets it once, and can switch back in the settings.
 if (!current.royalIntroduced) {
   current = { ...current, homeDesign: 'royal', royalIntroduced: true };

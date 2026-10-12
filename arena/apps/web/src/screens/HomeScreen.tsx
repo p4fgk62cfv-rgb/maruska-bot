@@ -128,7 +128,7 @@ export function HomeScreen() {
         {(me.owner ? [...TILES, { icon: 'flame', title: 'Прогресс бота', page: 'botprogress' } as Tile, { icon: 'crown', title: 'Управление', page: 'owner' } as Tile] : TILES).map((tile) => {
           const count = counter(tile);
           return (
-            <button key={tile.title} type="button" className="grid-tile" onClick={() => tile.page && push(tile.page)}>
+            <button key={tile.title} type="button" className="grid-tile" data-tile={tile.page} onClick={() => tile.page && push(tile.page)}>
               <span className="grid-tile__icon">
                 <Icon name={tile.icon} size={36} />
                 {count !== null && <span className={`grid-tile__count${typeof count === 'number' ? ' grid-tile__count--alert' : ''}`}>{count}</span>}
