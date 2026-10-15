@@ -1,21 +1,29 @@
 """
 Игры прямо в чате, на кнопках — без мини-приложения.
 
-  /игры (/games)             — меню
-  /крестики (/ttt)           — крестики-нолики
-  /шашки (/checkers)         — русские шашки
-  /морской (/seabattle)      — морской бой 8×8
-  /кнб (/rps)                — камень-ножницы-бумага
-  /орел, /орёл (/heads)      — орёл или решка: угадай; ответом на сообщение — дуэль
+  /игры (/games)               — меню
+  /крестики (/ttt)             — крестики-нолики
+  /шашки [ставка] (/checkers)  — русские шашки, картинка доски
+  /морской [ставка]            — морской бой 8×8, картинка полей
+  /кнб [ставка] (/rps)         — камень-ножницы-бумага
+  /орел [ставка] (/heads)      — орёл или решка: угадай; ответом на сообщение — дуэль
 
 Соперника зовут ответом на его сообщение (вызов только ему) или без ответа —
 тогда играет первый, кто нажмёт «Играю». В личке и кнопкой «С Маруськой» —
-против бота. Партии живут в памяти: после перезапуска бота начинаются заново.
+против бота.
+
+Экономика (если в группе включена): ставка в 💎 — проигравший отдаёт её
+победителю; за победу над человеком — награда и опыт из настроек; за победы
+над Маруськой и в играх на удачу — меньше и не больше N раз в день.
+Партии живут в памяти: после перезапуска бота начинаются заново (ставки
+списываются только в конце партии, поэтому при перезапуске никто не теряет).
 """
 
 import asyncio
+import datetime
 import logging
 import random
+import re
 import secrets
 import time
 from dataclasses import dataclass, field
@@ -24,13 +32,16 @@ from html import escape
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import (
+    BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Message,
+)
 
 from botcontext import display_name_of
+from games import table_art as art
 from games.table_core import (
     RPS, SIZE, Checkers, Sea, rps_result, sea_bot_target, side_of, ttt_bot_move, ttt_line, ttt_winner,
 )
-from settings.store import is_enabled
+from settings.store import get_number, is_enabled
 
 logger = logging.getLogger("maruska.table")
 router = Router(name="table_games")
@@ -39,14 +50,18 @@ BOT_ID = 0
 BOT_NAME = "Маруська"
 IDLE = 2 * 3600
 BLANK = "⠀"
-LETTERS = "АБВГДЕЖЗ"
+SEA_LETTERS = "АБВГДЕЖЗ"
+MAX_STAKE = 10_000
 
 TITLES = {
     "ttt": "❌⭕ Крестики-нолики",
     "checkers": "⚫ Шашки",
     "sea": "🚢 Морской бой",
     "rps": "✊ Камень, ножницы, бумага",
+    "coin": "🪙 Орёл или решка",
 }
+PHOTO_KINDS = {"checkers", "sea", "rps"}
+LUCK_KINDS = {"rps", "coin"}
 
 
 @dataclass
@@ -63,7 +78,10 @@ class Game:
     selected: int | None = None                # шашки: выбранная шашка
     picks: dict = field(default_factory=dict)  # кнб: выборы
     score: list[int] = field(default_factory=lambda: [0, 0])
+    last_winner: int | None = None
+    stake: int = 0
     note: str = ""
+    payout: str = ""
     touched: float = field(default_factory=time.monotonic)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -71,11 +89,18 @@ class Game:
     def vs_bot(self) -> bool:
         return len(self.players) == 2 and self.players[1][0] == BOT_ID
 
+    @property
+    def photo(self) -> bool:
+        return self.kind in PHOTO_KINDS
+
     def index_of(self, user_id: int) -> int | None:
         for i, (pid, _) in enumerate(self.players):
             if pid == user_id:
                 return i
         return None
+
+    def plain(self, i: int) -> str:
+        return self.players[i][1]
 
     def name(self, i: int) -> str:
         return f"<b>{escape(self.players[i][1])}</b>"
@@ -95,30 +120,157 @@ def games_on(chat_id: int) -> bool:
     return chat_id > 0 or is_enabled(chat_id, "game_table")
 
 
+OFF_TEXT = "♟ Игры в чате выключены в этой группе. Включить: /settings → Развлечения → «Игры в чате» или панель → Игры."
+
+
 def btn(text: str, gid: str, act: str, arg: str | int = "") -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=f"tg:{gid}:{act}:{arg}")
 
 
-def cell_name(pos: int, size: int) -> str:
-    r, c = divmod(pos, size)
-    return f"{LETTERS[c]}{r + 1}"
+def checkers_cell(pos: int) -> str:
+    r, c = divmod(pos, 8)
+    return f"{'abcdefgh'[c]}{8 - r}"
+
+
+def sea_cell_name(pos: int) -> str:
+    r, c = divmod(pos, SIZE)
+    return f"{SEA_LETTERS[c]}{r + 1}"
+
+
+def strip_tags(text: str) -> str:
+    text = re.sub(r"<[^>]+>", "", text)
+    for mark in ("🏆 ", "🤝 ", "🏳 ", " 🏆", " 🦅", " 🪙"):
+        text = text.replace(mark, " " if mark.startswith(" ") else "")
+    return text.strip()
 
 
 # =========================================================
-# ЛОББИ
+# ЭКОНОМИКА
 # =========================================================
 
-def lobby_view(game: Game) -> tuple[str, InlineKeyboardMarkup]:
+def economy_on(chat_id: int) -> bool:
+    return is_enabled(chat_id, "economy")
+
+
+def setting(chat_id: int, key: str, fallback: int) -> int:
+    """Числа из настроек группы (в личке — значения по умолчанию)."""
+    if chat_id >= 0:
+        return fallback
+    value = {
+        "reward_table_win": lambda: get_number(chat_id, "reward_table_win"),
+        "reward_table_luck": lambda: get_number(chat_id, "reward_table_luck"),
+        "xp_table_win": lambda: get_number(chat_id, "xp_table_win"),
+        "table_daily_cap": lambda: get_number(chat_id, "table_daily_cap"),
+    }[key]()
+    return fallback if value is None else value
+
+
+_rewarded: dict[tuple[int, str], int] = {}
+
+
+def _daily_left(user_id: int, chat_id: int) -> int:
+    today = datetime.date.today().isoformat()
+    for key in [k for k in _rewarded if k[1] != today]:
+        _rewarded.pop(key, None)
+    return setting(chat_id, "table_daily_cap", 10) - _rewarded.get((user_id, today), 0)
+
+
+def _spend_daily(user_id: int) -> None:
+    key = (user_id, datetime.date.today().isoformat())
+    _rewarded[key] = _rewarded.get(key, 0) + 1
+
+
+def parse_stake(message: Message) -> int:
+    parts = (message.text or "").split()
+    if len(parts) > 1 and parts[1].isdigit():
+        return min(int(parts[1]), MAX_STAKE)
+    return 0
+
+
+async def balance(user_id: int) -> int:
+    from database.repository import get_balance
+
+    try:
+        return await get_balance(user_id)
+    except Exception:
+        logger.exception("TABLE: balance failed")
+        return 0
+
+
+async def settle(game: Game, winner: int | None) -> str:
+    """Ставка, награды, опыт и статистика по итогам партии. Возвращает строки для подписи."""
+    from database.repository import bump_game_stats, change_balance
+    from economy.service import CURRENCY
+
+    chat_id = game.chat_id
+    title = TITLES.get(game.kind, "Игра")
+    lines = []
+    try:
+        for i in range(2):
+            if game.players[i][0] != BOT_ID:
+                await bump_game_stats(game.players[i][0], played=1, won=1 if i == winner else 0, display_name=game.plain(i))
+    except Exception:
+        logger.exception("TABLE: stats failed")
+    if not economy_on(chat_id):
+        return ""
+    try:
+        if game.stake and winner is not None and not game.vs_bot:
+            loser = 1 - winner
+            take = min(game.stake, await balance(game.players[loser][0]))
+            if take > 0:
+                await change_balance(game.players[loser][0], -take, "game_stake", f"Проигрыш: {title}", chat_id, game.plain(loser))
+                await change_balance(game.players[winner][0], take, "game_win", f"Выигрыш ставки: {title}", chat_id, game.plain(winner))
+                lines.append(f"{CURRENCY} {game.name(winner)} забирает ставку: <b>+{take}</b>")
+        if winner is not None and game.players[winner][0] != BOT_ID:
+            uid = game.players[winner][0]
+            luck = game.kind in LUCK_KINDS
+            prize = setting(chat_id, "reward_table_luck" if luck else "reward_table_win", 3 if luck else 15)
+            xp = setting(chat_id, "xp_table_win", 30) // (3 if luck else 1)
+            if game.vs_bot or luck:
+                if _daily_left(uid, chat_id) <= 0:
+                    lines.append("⏳ Награды за такие победы на сегодня закончились")
+                    return "\n".join(lines)
+                _spend_daily(uid)
+                if game.vs_bot and not luck:
+                    prize, xp = prize // 2, xp // 2
+            if prize:
+                await change_balance(uid, prize, "game_win", f"Победа: {title}", chat_id, game.plain(winner))
+                lines.append(f"🏆 Награда {game.name(winner)}: {CURRENCY} <b>+{prize}</b>")
+            if xp and is_enabled(chat_id, "progress"):
+                from progress.service import award, level_up_text
+
+                outcome = await award(telegram_id=uid, amount=xp, display_name=game.plain(winner), chat_id=chat_id)
+                lines.append(f"✨ +{xp} опыта")
+                if outcome.get("level_up"):
+                    lines.append(level_up_text(game.plain(winner), outcome["level"]))
+    except Exception:
+        logger.exception("TABLE: settle failed")
+    return "\n".join(lines)
+
+
+# =========================================================
+# ЛОББИ И СТАРТ
+# =========================================================
+
+def stake_line(game: Game) -> str:
+    return f"\n💎 Ставка: <b>{game.stake}</b> — проигравший отдаёт победителю" if game.stake else ""
+
+
+def lobby_view(game: Game):
     title = TITLES[game.kind]
     gid = game.gid
     if game.invited:
-        text = f"{title}\n\n{game.name(0)} вызывает {escape(game.note)} на партию!"
+        text = f"{title}\n\n{game.name(0)} вызывает <b>{escape(game.note)}</b> на партию!"
+        line = f"{game.plain(0)} вызывает {game.note}"
         rows = [[btn("✅ Принять вызов", gid, "join")]]
     else:
         text = f"{title}\n\n{game.name(0)} ищет соперника. Кто сыграет?"
+        line = f"{game.plain(0)} ищет соперника"
         rows = [[btn("🙋 Играю!", gid, "join")]]
+    text += stake_line(game)
     rows.append([btn("🤖 С Маруськой", gid, "bot"), btn("✖️ Отмена", gid, "cancel")])
-    return text, InlineKeyboardMarkup(inline_keyboard=rows)
+    image = (lambda: art.cover_image(game.kind, line, game.stake)) if game.photo else None
+    return text, InlineKeyboardMarkup(inline_keyboard=rows), image
 
 
 def start(game: Game) -> None:
@@ -126,13 +278,13 @@ def start(game: Game) -> None:
     game.selected = None
     game.picks = {}
     game.note = ""
+    game.payout = ""
     if game.kind == "ttt":
         game.state = [""] * 9
     elif game.kind == "checkers":
         game.state = Checkers()
     elif game.kind == "sea":
-        game.state = (Sea(), Sea())   # флот игрока 0 и игрока 1
-    # Кто начинает — по жребию; в реванше — по очереди
+        game.state = (Sea(), Sea())
     game.turn = random.randrange(2) if game.kind != "rps" else 0
 
 
@@ -148,15 +300,16 @@ def footer(game: Game, extra: list | None = None) -> list:
     return [row]
 
 
-def ttt_view(game: Game) -> tuple[str, InlineKeyboardMarkup]:
+def with_payout(game: Game, text: str) -> str:
+    return text + (f"\n\n{game.payout}" if game.payout else "")
+
+
+def ttt_view(game: Game):
     cells = game.state
     marks = ("❌", "⭕")
     line = ttt_line(cells) or ()
     head = f"{TITLES['ttt']}\n❌ {game.name(0)}  vs  ⭕ {game.name(1)}\n\n"
-    if game.status == "over":
-        head += game.note
-    else:
-        head += f"Ходит {marks[game.turn]} {game.name(game.turn)}"
+    head += game.note if game.status == "over" else f"Ходит {marks[game.turn]} {game.name(game.turn)}"
     rows = []
     for r in range(3):
         row = []
@@ -167,103 +320,134 @@ def ttt_view(game: Game) -> tuple[str, InlineKeyboardMarkup]:
                 mark = {"X": "✖️", "O": "🟢"}[cells[i]]
             row.append(btn(mark, game.gid, "m", i))
         rows.append(row)
-    return head, InlineKeyboardMarkup(inline_keyboard=rows + footer(game))
+    return with_payout(game, head), InlineKeyboardMarkup(inline_keyboard=rows + footer(game)), None
 
 
 PIECES = {"w": "⚪", "W": "🤍", "b": "⚫", "B": "🖤"}
 
 
-def checkers_view(game: Game) -> tuple[str, InlineKeyboardMarkup]:
+def checkers_view(game: Game):
     g: Checkers = game.state
-    # Игрок 0 играет белыми, если начинает он
-    white = game.turn_white
-    sides = {"w": white, "b": 1 - white}
-    head = (
-        f"{TITLES['checkers']}\n⚪ {game.name(sides['w'])} ({g.count('w')})  vs  "
-        f"⚫ {game.name(sides['b'])} ({g.count('b')})\n\n"
-    )
-    if game.status == "over":
+    sides = {"w": game.turn_white, "b": 1 - game.turn_white}
+    head = f"{TITLES['checkers']}: ⚪ {game.name(sides['w'])} vs ⚫ {game.name(sides['b'])}{stake_line(game)}\n\n"
+    over = game.status == "over"
+    if over:
         head += game.note
     else:
-        who = sides[g.turn]
-        hint = "бей дальше!" if g.chain is not None else ("куда ходим?" if game.selected is not None else "выбери шашку")
-        head += f"Ходит {PIECES[g.turn]} {game.name(who)} — {hint}"
+        hint = "бей дальше!" if g.chain is not None else ("куда ходим? (🟩)" if game.selected is not None else "нажми свою шашку на кнопках")
+        head += f"Ходит {PIECES[g.turn]} {game.name(sides[g.turn])} — {hint}"
         if game.note:
             head += f"\n{game.note}"
-    opts = g.options() if game.status == "playing" else {}
-    targets = set(opts.get(game.selected, [])) if game.selected is not None else set()
+    opts = g.options() if not over else {}
+    targets = tuple(opts.get(game.selected, [])) if game.selected is not None else ()
     rows = []
-    for r in range(8):
-        row = []
-        for c in range(8):
-            pos = r * 8 + c
-            if (r + c) % 2 == 0:
-                text = BLANK
-            elif pos == game.selected:
-                text = "🟡"
-            elif pos in targets:
-                text = "🟩"
-            elif pos in g.captured:
-                text = "💥"
-            else:
-                text = PIECES.get(g.board[pos], "·")
-            row.append(btn(text, game.gid, "c", pos))
-        rows.append(row)
-    return head, InlineKeyboardMarkup(inline_keyboard=rows + footer(game))
+    if not over:
+        for r in range(8):
+            row = []
+            for c in range(8):
+                pos = r * 8 + c
+                if (r + c) % 2 == 0:
+                    text = BLANK
+                elif pos == game.selected:
+                    text = "🟡"
+                elif pos in targets:
+                    text = "🟩"
+                else:
+                    text = PIECES.get(g.board[pos], "·")
+                row.append(btn(text, game.gid, "c", pos))
+            rows.append(row)
+    board, names = list(g.board), (game.plain(sides["w"]), game.plain(sides["b"]))
+    counts, turn, selected = (g.count("w"), g.count("b")), None if over else g.turn, game.selected
+    captured, last, result = tuple(g.captured), g.last, strip_tags(game.note) if over else None
+
+    def image():
+        return art.checkers_image(board, names, counts, turn, selected=selected, targets=targets,
+                                  captured=captured, last=last, result=result)
+    return with_payout(game, head), InlineKeyboardMarkup(inline_keyboard=rows + footer(game)), image
 
 
-def sea_cell(sea: Sea, pos: int, reveal: bool) -> str:
+def sea_cell(sea: Sea, pos: int) -> str:
     ship = sea.ship_at(pos)
     if pos in sea.shots:
         if not ship:
             return "•"
-        return "❌" if ship <= sea.shots else "💥"
-    if reveal and ship:
-        return "🚢"
+        return "🔥" if ship <= sea.shots else "💥"
     return "·"
 
 
-def sea_view(game: Game) -> tuple[str, InlineKeyboardMarkup]:
+def sea_view(game: Game):
     shooter = game.turn
     target = 1 - shooter
     seas: tuple[Sea, Sea] = game.state
-    board = seas[target]
-    head = (
-        f"{TITLES['sea']}\n{game.name(0)} 🚢{seas[0].alive()}  vs  🚢{seas[1].alive()} {game.name(1)}\n\n"
-    )
-    if game.status == "over":
+    over = game.status == "over"
+    head = f"{TITLES['sea']}: {game.name(0)} vs {game.name(1)}{stake_line(game)}\n\n"
+    if over:
         head += game.note
-        board = seas[1] if game.vs_bot else board
     else:
-        head += f"🎯 Стреляет {game.name(shooter)} — по флоту {game.name(target)}"
+        head += f"🎯 Стреляет {game.name(shooter)} — по полю {game.name(target)} (кнопки ниже)"
         if game.note:
             head += f"\n{game.note}"
-    reveal = game.status == "over"
-    rows = [[btn(sea_cell(board, r * SIZE + c, reveal), game.gid, "s", r * SIZE + c) for c in range(SIZE)] for r in range(SIZE)]
-    return head, InlineKeyboardMarkup(inline_keyboard=rows + footer(game, [btn("👁 Мои корабли", game.gid, "fleet")]))
+    board = seas[target]
+    rows = [] if over else [
+        [btn(sea_cell(board, r * SIZE + c), game.gid, "s", r * SIZE + c) for c in range(SIZE)] for r in range(SIZE)
+    ]
+    names = (game.plain(0), game.plain(1))
+    result = strip_tags(game.note) if over else None
+
+    def image():
+        return art.sea_image(seas, names, None if over else target, reveal=over, result=result)
+    markup = InlineKeyboardMarkup(inline_keyboard=rows + footer(game, [btn("👁 Мои корабли", game.gid, "fleet")]))
+    return with_payout(game, head), markup, image
 
 
-def rps_view(game: Game) -> tuple[str, InlineKeyboardMarkup]:
-    head = f"{TITLES['rps']}\n{game.name(0)}  {game.score[0]} : {game.score[1]}  {game.name(1)}\n\n"
+def rps_view(game: Game):
+    head = f"{TITLES['rps']}\n{game.name(0)}  {game.score[0]} : {game.score[1]}  {game.name(1)}{stake_line(game)}\n\n"
+    names = (game.plain(0), game.plain(1))
     if game.status == "over":
-        head += game.note
-        return head, InlineKeyboardMarkup(inline_keyboard=[[btn("🔄 Ещё раз", game.gid, "again")]])
+        picks = tuple(game.picks.get(game.players[i][0]) for i in range(2))
+        winner = game.last_winner
+        result = strip_tags(game.note.split("\n")[-1])
+
+        def image():
+            return art.rps_image(names, picks, result, winner)
+        return with_payout(game, head + game.note), InlineKeyboardMarkup(inline_keyboard=[[btn("🔄 Ещё раз", game.gid, "again")]]), image
     waiting = [game.name(i) for i in range(2) if game.players[i][0] not in game.picks and game.players[i][0] != BOT_ID]
     head += "Выбирайте! Выбор соперника скрыт до конца раунда.\nЖдём: " + ", ".join(waiting)
     row = [btn(f"{e} {n}", game.gid, "r", key) for key, (e, n) in RPS.items()]
-    return head, InlineKeyboardMarkup(inline_keyboard=[row, [btn("✖️ Выйти", game.gid, "give")]])
+
+    def image():
+        return art.rps_image(names, (None, None))
+    return head, InlineKeyboardMarkup(inline_keyboard=[row, [btn("✖️ Выйти", game.gid, "give")]]), image
 
 
-def view(game: Game) -> tuple[str, InlineKeyboardMarkup]:
+def view(game: Game):
     if game.status == "lobby":
         return lobby_view(game)
     return {"ttt": ttt_view, "checkers": checkers_view, "sea": sea_view, "rps": rps_view}[game.kind](game)
 
 
-async def redraw(message: Message, game: Game) -> None:
-    text, markup = view(game)
+async def render(image) -> BufferedInputFile:
+    data = await asyncio.to_thread(image)
+    return BufferedInputFile(data, filename="game.jpg")
+
+
+async def send(message: Message, game: Game) -> Message:
+    text, markup, image = view(game)
+    if game.photo:
+        return await message.answer_photo(await render(image), caption=text, reply_markup=markup)
+    return await message.answer(text, reply_markup=markup)
+
+
+async def redraw(message: Message, game: Game, picture: bool = True) -> None:
+    text, markup, image = view(game)
     try:
-        await message.edit_text(text, reply_markup=markup)
+        if game.photo and picture:
+            media = InputMediaPhoto(media=await render(image), caption=text, parse_mode="HTML")
+            await message.edit_media(media, reply_markup=markup)
+        elif game.photo:
+            await message.edit_caption(caption=text, reply_markup=markup)
+        else:
+            await message.edit_text(text, reply_markup=markup)
     except TelegramBadRequest as error:
         if "not modified" not in str(error):
             logger.warning("TABLE: redraw failed: %s", error)
@@ -273,11 +457,13 @@ async def redraw(message: Message, game: Game) -> None:
 # ХОДЫ
 # =========================================================
 
-def finish(game: Game, winner: int | None, text: str) -> None:
+async def finish(game: Game, winner: int | None, text: str) -> None:
     game.status = "over"
+    game.last_winner = winner
     if winner is not None:
         game.score[winner] += 1
     game.note = text
+    game.payout = await settle(game, winner)
 
 
 def ttt_play(game: Game, i: int) -> str | None:
@@ -288,35 +474,34 @@ def ttt_play(game: Game, i: int) -> str | None:
     return None
 
 
-def ttt_after(game: Game) -> None:
+async def ttt_after(game: Game) -> None:
     win = ttt_winner(game.state)
     if win == "draw":
-        finish(game, None, "🤝 Ничья! Силы равны.")
+        await finish(game, None, "🤝 Ничья! Силы равны.")
     elif win:
         w = "XO".index(win)
-        finish(game, w, f"🏆 Побеждает {game.name(w)}!")
+        await finish(game, w, f"🏆 Побеждает {game.name(w)}!")
     else:
         game.turn = 1 - game.turn
 
 
-def checkers_after(game: Game) -> None:
+async def checkers_after(game: Game) -> None:
     g: Checkers = game.state
-    white = game.turn_white
-    sides = {"w": white, "b": 1 - white}
+    sides = {"w": game.turn_white, "b": 1 - game.turn_white}
     if g.winner == "draw":
-        finish(game, None, "🤝 Ничья: 30 ходов дамками без взятий.")
+        await finish(game, None, "🤝 Ничья: 30 ходов дамками без взятий.")
     elif g.winner:
         w = sides[g.winner]
-        finish(game, w, f"🏆 Побеждает {game.name(w)}!")
+        await finish(game, w, f"🏆 Побеждает {game.name(w)}!")
     else:
         game.turn = sides[g.turn]
 
 
-def sea_fire(game: Game, pos: int) -> str:
+async def sea_fire(game: Game, pos: int) -> str:
     target = 1 - game.turn
     sea: Sea = game.state[target]
     result = sea.shoot(pos)
-    where = cell_name(pos, SIZE)
+    where = sea_cell_name(pos)
     if result == "again":
         return "again"
     if result == "miss":
@@ -325,9 +510,9 @@ def sea_fire(game: Game, pos: int) -> str:
     elif result == "hit":
         game.note = f"{game.name(game.turn)}: {where} — 💥 ранил! Стреляй ещё"
     else:
-        game.note = f"{game.name(game.turn)}: {where} — ❌ потопил! Стреляй ещё"
+        game.note = f"{game.name(game.turn)}: {where} — 🔥 потопил! Стреляй ещё"
     if sea.lost():
-        finish(game, game.turn, f"🏆 {game.name(game.turn)} потопил(а) весь флот соперника!")
+        await finish(game, game.turn, f"🏆 Побеждает {game.name(game.turn)} — флот соперника на дне!")
     return result
 
 
@@ -337,7 +522,7 @@ async def bot_turns(message: Message, game: Game) -> None:
         await asyncio.sleep(0.8)
         if game.kind == "ttt":
             ttt_play(game, ttt_bot_move(game.state, "O"))
-            ttt_after(game)
+            await ttt_after(game)
         elif game.kind == "checkers":
             g: Checkers = game.state
             step = g.bot_step()
@@ -345,27 +530,27 @@ async def bot_turns(message: Message, game: Game) -> None:
                 break
             game.selected = None
             g.move(*step)
-            game.note = f"Маруська: {cell_name(step[0], 8)} → {cell_name(step[1], 8)}"
-            if g.chain is None:
-                checkers_after(game)
+            game.note = f"Маруська: {checkers_cell(step[0])} → {checkers_cell(step[1])}"
+            if g.chain is not None:
+                continue  # бьёт дальше — картинку обновим в конце серии
+            await checkers_after(game)
         elif game.kind == "sea":
-            pos = sea_bot_target(game.state[0])
-            sea_fire(game, pos)
+            await sea_fire(game, sea_bot_target(game.state[0]))
         else:
             break
         await redraw(message, game)
 
 
-def resolve_rps(game: Game) -> None:
+async def resolve_rps(game: Game) -> None:
     a = game.picks[game.players[0][0]]
     b = game.picks[game.players[1][0]]
     res = rps_result(a, b)
-    shown = f"{RPS[a][0]} {game.name(0)}  vs  {game.name(1)} {RPS[b][0]}\n\n"
+    shown = f"{RPS[a][0]} {game.name(0)}  vs  {game.name(1)} {RPS[b][0]}\n"
     if res == 0:
-        finish(game, None, shown + "🤝 Ничья!")
+        await finish(game, None, shown + "🤝 Ничья!")
     else:
         w = 0 if res == 1 else 1
-        finish(game, w, shown + f"🏆 Побеждает {game.name(w)}!")
+        await finish(game, w, shown + f"🏆 Побеждает {game.name(w)}!")
 
 
 # =========================================================
@@ -380,14 +565,28 @@ def command_is(*names: str):
     return check
 
 
-async def create(message: Message, kind: str, opener=None) -> None:
+async def check_stake(message: Message, user_id: int, stake: int) -> bool:
+    if not stake:
+        return True
+    if not economy_on(message.chat.id):
+        await message.answer("💎 Экономика в этой группе выключена — играем без ставки.")
+        return False
+    if await balance(user_id) < stake:
+        await message.answer(f"💎 Не хватает алмазов на ставку {stake} — играем без ставки. Баланс: /balance")
+        return False
+    return True
+
+
+async def create(message: Message, kind: str, opener=None, stake: int = 0) -> None:
     _cleanup()
     user = opener or message.from_user
     if not games_on(message.chat.id):
-        await message.answer("♟ Игры в чате выключены в этой группе. Включить: /settings → Развлечения → «Игры в чате» или панель → Игры.")
+        await message.answer(OFF_TEXT)
         return
+    if message.chat.type == "private" or not await check_stake(message, user.id, stake):
+        stake = 0
     game = Game(gid=secrets.token_hex(4), kind=kind, chat_id=message.chat.id,
-                players=[(user.id, display_name_of(user))])
+                players=[(user.id, display_name_of(user))], stake=stake)
     reply = message.reply_to_message if opener is None else None
     if reply and reply.from_user and not reply.from_user.is_bot and reply.from_user.id != user.id:
         game.invited = reply.from_user.id
@@ -396,28 +595,30 @@ async def create(message: Message, kind: str, opener=None) -> None:
     if message.chat.type == "private":
         game.players.append((BOT_ID, BOT_NAME))
         start(game)
-        if kind == "checkers":
-            game.turn_white = game.turn
-    text, markup = view(game)
-    sent = await message.answer(text, reply_markup=markup)
+        game.turn_white = game.turn
+    sent = await send(message, game)
     if game.status == "playing" and game.vs_bot and game.turn == 1:
         async with game.lock:
             await bot_turns(sent, game)
+
+
+KINDS = {
+    "ttt": "ttt", "крестики": "ttt", "checkers": "checkers", "шашки": "checkers",
+    "seabattle": "sea", "морской": "sea", "rps": "rps", "кнб": "rps",
+    "heads": "coin", "orel": "coin", "орел": "coin", "орёл": "coin", "монетка": "coin",
+}
 
 
 @router.message(Command("games", "ttt", "checkers", "seabattle", "rps", "heads", "orel"))
 @router.message(command_is("/игры", "/крестики", "/шашки", "/морской", "/кнб", "/орел", "/орёл", "/монетка"))
 async def table_command(message: Message):
     head = (message.text or "").strip().split(maxsplit=1)[0].lower().split("@", 1)[0].lstrip("/")
-    kind = {
-        "ttt": "ttt", "крестики": "ttt", "checkers": "checkers", "шашки": "checkers",
-        "seabattle": "sea", "морской": "sea", "rps": "rps", "кнб": "rps",
-        "heads": "coin", "orel": "coin", "орел": "coin", "орёл": "coin", "монетка": "coin",
-    }.get(head)
+    kind = KINDS.get(head)
+    stake = parse_stake(message)
     if kind == "coin":
-        await coin_start(message)
+        await coin_start(message, stake=stake)
     elif kind:
-        await create(message, kind)
+        await create(message, kind, stake=stake)
     else:
         await menu(message)
 
@@ -431,9 +632,10 @@ async def menu(message: Message) -> None:
         [InlineKeyboardButton(text="🪙 Орёл или решка", callback_data="tm:coin")],
     ]
     await message.answer(
-        "🎲 <b>Игры Маруськи</b>\n\nВыбери игру — Маруська откроет стол прямо здесь.\n"
-        "Чтобы вызвать конкретного человека, ответь на его сообщение командой: "
-        "/крестики, /шашки, /морской, /кнб, /орел.",
+        "🎲 <b>Игры Маруськи</b>\n\nВыбери игру — Маруська откроет стол прямо здесь.\n\n"
+        "• Вызвать человека — ответь на его сообщение командой: /шашки, /морской, /кнб, /орел, /крестики\n"
+        "• Сыграть на алмазы — добавь ставку: <code>/шашки 50</code> — проигравший отдаёт её победителю\n"
+        "• За победы — 💎 и опыт; против Маруськи — поменьше",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )
 
@@ -454,26 +656,36 @@ async def menu_pick(callback: CallbackQuery):
 # ОРЁЛ ИЛИ РЕШКА
 # =========================================================
 
-async def coin_start(message: Message, opener=None) -> None:
+def photo(data: bytes) -> BufferedInputFile:
+    return BufferedInputFile(data, filename="coin.jpg")
+
+
+async def coin_start(message: Message, opener=None, stake: int = 0) -> None:
     if not games_on(message.chat.id):
-        await message.answer("♟ Игры в чате выключены в этой группе. Включить: /settings → Развлечения → «Игры в чате» или панель → Игры.")
+        await message.answer(OFF_TEXT)
         return
     user = opener or message.from_user
     reply = message.reply_to_message if opener is None else None
     if reply and reply.from_user and not reply.from_user.is_bot and reply.from_user.id != user.id:
-        a, b = escape(display_name_of(user)), escape(display_name_of(reply.from_user))
-        sent = await message.answer(f"🪙 Дуэль! <b>{a}</b> — 🦅 орёл, <b>{b}</b> — решка.\nПодбрасываем…")
+        if message.chat.type == "private" or not await check_stake(message, user.id, stake):
+            stake = 0
+        game = Game(gid=secrets.token_hex(4), kind="coin", chat_id=message.chat.id, stake=stake,
+                    players=[(user.id, display_name_of(user)), (reply.from_user.id, display_name_of(reply.from_user))])
+        head = f"🪙 Дуэль! {game.name(0)} — 🦅 орёл, {game.name(1)} — решка.{stake_line(game)}\n\n"
+        cover = await asyncio.to_thread(art.coin_image, "Подбрасываем…", None, f"{game.plain(0)} против {game.plain(1)}")
+        sent = await message.answer_photo(photo(cover), caption=head + "Монетка в воздухе…")
         await asyncio.sleep(1.5)
         heads = random.random() < 0.5
-        winner = a if heads else b
-        await sent.edit_text(
-            f"🪙 Дуэль! <b>{a}</b> — 🦅 орёл, <b>{b}</b> — решка.\n\n"
-            f"Выпал{'' if heads else 'а'} <b>{'орёл 🦅' if heads else 'решка 🪙'}</b>! Победа за <b>{winner}</b> 🏆"
-        )
+        w = 0 if heads else 1
+        await finish(game, w, f"Выпал{'' if heads else 'а'} {'орёл 🦅' if heads else 'решка 🪙'}! Победа за {game.name(w)} 🏆")
+        image = await asyncio.to_thread(art.coin_image, "Выпал орёл!" if heads else "Выпала решка!", heads, f"Победа за {game.plain(w)}")
+        await sent.edit_media(InputMediaPhoto(media=photo(image), caption=with_payout(game, head + game.note), parse_mode="HTML"))
         return
     rows = [[InlineKeyboardButton(text="🦅 Орёл", callback_data="tc:heads"),
              InlineKeyboardButton(text="🪙 Решка", callback_data="tc:tails")]]
-    await message.answer("🪙 <b>Орёл или решка?</b>\nУгадай, что выпадет!", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+    image = await asyncio.to_thread(art.coin_image, "Орёл или решка?", None, "Угадай, что выпадет")
+    await message.answer_photo(photo(image), caption="🪙 <b>Орёл или решка?</b>\nУгадай, что выпадет!",
+                               reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
 
 _flipping: set[tuple[int, int]] = set()
@@ -490,24 +702,28 @@ async def coin_guess(callback: CallbackQuery):
     if key in _flipping:
         return  # кто-то уже нажал раньше
     _flipping.add(key)
-    name = escape(display_name_of(callback.from_user))
+    user = callback.from_user
+    name = escape(display_name_of(user))
     said = "орёл 🦅" if guess == "heads" else "решку 🪙"
     try:
-        await message.edit_text(f"🪙 <b>{name}</b> ставит на {said}…\nМонетка в воздухе…")
+        await message.edit_caption(caption=f"🪙 <b>{name}</b> ставит на {said}…\nМонетка в воздухе…")
     except TelegramBadRequest:
         return
     await asyncio.sleep(1.5)
     heads = random.random() < 0.5
     won = heads == (guess == "heads")
+    game = Game(gid="coin", kind="coin", chat_id=message.chat.id, players=[(user.id, display_name_of(user)), (BOT_ID, BOT_NAME)])
+    await finish(game, 0 if won else 1, "")
     result = "орёл 🦅" if heads else "решка 🪙"
     tail = random.choice(("Везунчик! 🍀", "Интуиция не подвела 😎", "Чистая победа 🏆")) if won else random.choice(
         ("Не повезло 🙈", "Монетка сегодня не на твоей стороне", "В следующий раз точно!")
     )
+    image = await asyncio.to_thread(art.coin_image, "Выпал орёл!" if heads else "Выпала решка!", heads,
+                                    f"{display_name_of(user)}: {'угадано' if won else 'мимо'}")
     rows = [[InlineKeyboardButton(text="🔄 Ещё раз", callback_data="tc:new")]]
-    await message.edit_text(
-        f"🪙 <b>{name}</b> ставил(а) на {said}\nВыпал{'' if heads else 'а'} <b>{result}</b>!\n\n{tail}",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
-    )
+    caption = f"🪙 <b>{name}</b> ставил(а) на {said}\nВыпал{'' if heads else 'а'} <b>{result}</b>!\n\n{tail}"
+    await message.edit_media(InputMediaPhoto(media=photo(image), caption=with_payout(game, caption), parse_mode="HTML"),
+                             reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
 
 @router.callback_query(F.data == "tc:new")
@@ -540,7 +756,13 @@ async def table_press(callback: CallbackQuery):
                 return
             _games.pop(gid, None)
             await callback.answer()
-            await message.edit_text(f"{TITLES[game.kind]}\n\nСтол закрыт.")
+            try:
+                if game.photo:
+                    await message.edit_caption(caption=f"{TITLES[game.kind]}\n\nСтол закрыт.")
+                else:
+                    await message.edit_text(f"{TITLES[game.kind]}\n\nСтол закрыт.")
+            except TelegramBadRequest:
+                pass
             return
 
         if act in ("join", "bot"):
@@ -551,6 +773,7 @@ async def table_press(callback: CallbackQuery):
                 if me != 0:
                     await callback.answer("Позвать Маруську может только тот, кто открыл стол")
                     return
+                game.stake = 0  # с Маруськой — без ставки
                 game.players.append((BOT_ID, BOT_NAME))
             else:
                 if me == 0:
@@ -559,10 +782,12 @@ async def table_press(callback: CallbackQuery):
                 if game.invited and user.id != game.invited:
                     await callback.answer("Этот вызов не тебе 😉")
                     return
+                if game.stake and await balance(user.id) < game.stake:
+                    await callback.answer(f"Не хватает алмазов на ставку {game.stake} 💎", show_alert=True)
+                    return
                 game.players.append((user.id, display_name_of(user)))
             start(game)
-            if game.kind == "checkers":
-                game.turn_white = game.turn
+            game.turn_white = game.turn
             await callback.answer("Поехали!")
             await redraw(message, game)
             await bot_turns(message, game)
@@ -572,11 +797,16 @@ async def table_press(callback: CallbackQuery):
             if game.status != "over" or me is None:
                 await callback.answer("Реванш могут начать только игроки")
                 return
+            if game.stake and not game.vs_bot:
+                for i in range(2):
+                    if await balance(game.players[i][0]) < game.stake:
+                        game.stake = 0
             first = 1 - game.turn_white
             start(game)
             if game.kind == "checkers":
-                game.turn_white = first
-                game.turn = first
+                game.turn_white = game.turn = first
+            else:
+                game.turn_white = game.turn
             await callback.answer("Реванш!")
             await redraw(message, game)
             await bot_turns(message, game)
@@ -587,8 +817,14 @@ async def table_press(callback: CallbackQuery):
                 await callback.answer("Это для игроков")
                 return
             sea: Sea = game.state[me]
-            marks = {"·": "·", "•": "•", "💥": "×", "❌": "×", "🚢": "■"}
-            lines = ["".join(marks[sea_cell(sea, r * SIZE + c, True)] for c in range(SIZE)) for r in range(SIZE)]
+            lines = []
+            for r in range(SIZE):
+                row = ""
+                for c in range(SIZE):
+                    pos = r * SIZE + c
+                    ship = sea.ship_at(pos)
+                    row += ("×" if pos in sea.shots else "■") if ship else ("•" if pos in sea.shots else "·")
+                lines.append(row)
             await callback.answer("Твой флот (■ корабль, × подбит, • мимо):\n" + "\n".join(lines), show_alert=True)
             return
 
@@ -601,7 +837,7 @@ async def table_press(callback: CallbackQuery):
 
         if act == "give":
             other = 1 - me
-            finish(game, other, f"🏳 {game.name(me)} сдаётся. Победа за {game.name(other)}!")
+            await finish(game, other, f"🏳 {game.name(me)} сдаётся. Победа за {game.name(other)}!")
             await callback.answer()
             await redraw(message, game)
             return
@@ -618,8 +854,10 @@ async def table_press(callback: CallbackQuery):
                 game.picks[BOT_ID] = random.choice(list(RPS))
             await callback.answer(f"Принято: {RPS[arg][1]}")
             if len(game.picks) == 2:
-                resolve_rps(game)
-            await redraw(message, game)
+                await resolve_rps(game)
+                await redraw(message, game)
+            else:
+                await redraw(message, game, picture=False)
             return
 
         if me != game.turn:
@@ -637,7 +875,7 @@ async def table_press(callback: CallbackQuery):
             if problem:
                 await callback.answer(problem)
                 return
-            ttt_after(game)
+            await ttt_after(game)
 
         elif game.kind == "checkers" and act == "c":
             g: Checkers = game.state
@@ -657,10 +895,10 @@ async def table_press(callback: CallbackQuery):
             game.note = ""
             game.selected = g.chain
             if g.chain is None:
-                checkers_after(game)
+                await checkers_after(game)
 
         elif game.kind == "sea" and act == "s":
-            if sea_fire(game, pos) == "again":
+            if await sea_fire(game, pos) == "again":
                 await callback.answer("Сюда уже стреляли")
                 return
 
