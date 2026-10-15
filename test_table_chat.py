@@ -75,7 +75,7 @@ async def main():
     # Крестики: открытый стол, Боря присоединяется, Вася не может ходить
     await t.table_command(Msg(text="/крестики", user=a))
     m = Msg.sent[-1]
-    check("ищет соперника" in m.body, "лобби")
+    check("ищет соперника" in m.body, f"лобби: {m.body}")
     cb = await press(a, m, "Играю")
     check("Ждём соперника" in (cb.alert or ""), "сам с собой нельзя")
     await press(b, m, "Играю")

@@ -91,7 +91,8 @@ def _cleanup() -> None:
 
 
 def games_on(chat_id: int) -> bool:
-    return chat_id > 0 or (is_enabled(chat_id, "games") and is_enabled(chat_id, "game_table"))
+    # Отдельно от общего «Игры» (он по умолчанию выключен): эти игры включены сразу
+    return chat_id > 0 or is_enabled(chat_id, "game_table")
 
 
 def btn(text: str, gid: str, act: str, arg: str | int = "") -> InlineKeyboardButton:
@@ -383,7 +384,7 @@ async def create(message: Message, kind: str, opener=None) -> None:
     _cleanup()
     user = opener or message.from_user
     if not games_on(message.chat.id):
-        await message.answer("🎲 Игры в этой группе выключены (/settings).")
+        await message.answer("♟ Игры в чате выключены в этой группе. Включить: /settings → Развлечения → «Игры в чате» или панель → Игры.")
         return
     game = Game(gid=secrets.token_hex(4), kind=kind, chat_id=message.chat.id,
                 players=[(user.id, display_name_of(user))])
@@ -455,7 +456,7 @@ async def menu_pick(callback: CallbackQuery):
 
 async def coin_start(message: Message, opener=None) -> None:
     if not games_on(message.chat.id):
-        await message.answer("🎲 Игры в этой группе выключены (/settings).")
+        await message.answer("♟ Игры в чате выключены в этой группе. Включить: /settings → Развлечения → «Игры в чате» или панель → Игры.")
         return
     user = opener or message.from_user
     reply = message.reply_to_message if opener is None else None
