@@ -62,6 +62,7 @@ from games.crocodile import (
     set_bot_username,
 )
 from games.dice import router as dice_router
+from games.table import router as table_router
 from games.fishing import router as fishing_router
 from games.arena import router as arena_router
 
@@ -149,6 +150,7 @@ dp.include_router(shop_router)
 dp.include_router(progress_router)
 dp.include_router(digest_router)
 dp.include_router(dice_router)
+dp.include_router(table_router)
 dp.include_router(fishing_router)
 dp.include_router(arena_router)
 dp.include_router(rating_router)

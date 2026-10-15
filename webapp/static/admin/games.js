@@ -44,6 +44,10 @@
         + (st.top.length ? '<div style="margin-top:10px"><div class="dim" style="margin-bottom:6px">Чаще всех угадывают</div>' + M.bars(st.top) + "</div>" : "")
         + "</div>"
 
+        + '<div class="card"><div class="card-title">♟ Игры в чате</div>'
+        + toggle("game_table", "Включены", "Крестики-нолики, шашки, морской бой, камень-ножницы-бумага, орёл или решка")
+        + '<div class="dim">Команда /игры — меню. Ответом на сообщение — вызов конкретному человеку.</div></div>'
+
         + '<div class="card"><div class="card-title">🎲 Кубики и рандом</div>'
         + toggle("game_dice", "Включены", "Кубики, монетка, выбор, шар судьбы")
         + (m ? '<div class="kv"><span class="k">Пауза для одного человека</span><span>' + (m.dice_cooldown.value ? m.dice_cooldown.label : "нет") + "</span></div>" : "")

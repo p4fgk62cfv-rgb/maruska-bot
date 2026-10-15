@@ -174,6 +174,13 @@ FEATURES: tuple[Feature, ...] = (
         group="Развлечения",
     ),
     Feature(
+        key="game_table",
+        title="Игры в чате",
+        emoji="♟",
+        description="/игры: крестики-нолики, шашки, морской бой, камень-ножницы-бумага, орёл или решка. Работает, если включены игры",
+        group="Развлечения",
+    ),
+    Feature(
         key="automod",
         title="Автомодерация",
         emoji="🛡",
