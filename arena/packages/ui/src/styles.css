@@ -326,6 +326,18 @@ h1, h2, h3, p { margin: 0; }
 }
 .ui-avatar--ring-silver { box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 4px #d8dee9, 0 0 16px rgba(216, 222, 233, 0.55); }
 .ui-avatar__crown { position: absolute; left: 50%; top: -0.55em; translate: -50% 0; font-size: 0.7em; color: #fb3f6c; text-shadow: 0 0 8px rgba(251, 63, 108, 0.8), 0 1px 0 #7f1d1d; line-height: 1; }
+.ui-avatar__vip {
+  position: absolute; left: -0.42em; top: -0.78em; width: 1.5em; height: auto; z-index: 2; rotate: -24deg; overflow: visible;
+  filter: drop-shadow(0 0.04em 0.06em rgba(60, 30, 0, 0.55)) drop-shadow(0 0 0.18em rgba(255, 200, 60, 0.55));
+  pointer-events: none;
+}
+.ui-vip-sparkle { transform-box: fill-box; transform-origin: center; animation: ui-vip-sparkle 2.8s ease-in-out infinite; }
+@keyframes ui-vip-sparkle {
+  0%, 62%, 100% { opacity: 0; scale: 0.3; }
+  72% { opacity: 1; scale: 1.15; }
+  84% { opacity: 0.2; scale: 0.6; }
+}
+@media (prefers-reduced-motion: reduce) { .ui-vip-sparkle { animation: none; opacity: 0.8; } }
 
 /* Illustrated faces: the picture is the whole card, the frame keeps shadows and highlights */
 .ui-card--art { background: #f7efdc; }

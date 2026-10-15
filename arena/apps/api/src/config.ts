@@ -39,7 +39,7 @@ const schema = z.object({
   /** Threads where the strong bots think (0: inline, small searches — tests). */
   BRAIN_THREADS: z.coerce.number().int().min(0).max(8).default(3),
   /** Self-play training of the bots in the background: «on» or «off». */
-  BOT_TRAINING: z.enum(['on', 'off']).default('on'),
+  BOT_TRAINING: z.enum(['on', 'off']).default('off'),
   /** Share of one CPU core the training may use. */
   BOT_TRAINING_DUTY: z.coerce.number().min(0.05).max(0.9).default(0.5),
   CORS_ORIGINS: z.string().default(''),

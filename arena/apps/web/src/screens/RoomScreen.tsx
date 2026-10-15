@@ -11,6 +11,7 @@ import { useToast } from '../toast.js';
 import { DockAction, EmptySeat, SeatTile, TableDock, TableTop } from './game/TableChrome.js';
 import { EmojiSheet, useSeatEmojis } from './game/emoji.js';
 import { PlayerSheet } from './game/PlayerSheet.js';
+import { isVip } from '../lib/vip.js';
 
 /** Waiting room: the same felt as the game — chairs fill up live, everyone presses «Готов», the server deals. */
 export function RoomScreen({ room }: { room: RoomDto }) {
@@ -91,7 +92,7 @@ export function RoomScreen({ room }: { room: RoomDto }) {
               onClick={() => (seating ? setAskTarget({ userId: seat.userId, name: seat.name }) : setProfileOf(seat.userId))}
             >
               <SeatTile
-                seat={{ id: seat.userId, name: seat.name, photoUrl: seat.photoUrl, frame: seat.frame, crown: seat.crown }}
+                seat={{ id: seat.userId, name: seat.name, photoUrl: seat.photoUrl, frame: seat.frame, crown: seat.crown, vip: seat.premium }}
                 size={tileSize}
                 number={number}
                 active={seat.ready}
@@ -153,7 +154,7 @@ export function RoomScreen({ room }: { room: RoomDto }) {
         me={
           <button type="button" className="table-dock__avatar" onClick={() => setSmiles((v) => !v)} data-emoji-toggle aria-label="Отправить смайлик" aria-expanded={smiles}>
             <SeatTile
-              seat={{ id: me.id, name: me.name, photoUrl: me.photoUrl, frame: me.equipped.frame, crown: me.equipped.crown }}
+              seat={{ id: me.id, name: me.name, photoUrl: me.photoUrl, frame: me.equipped.frame, crown: me.equipped.crown, vip: isVip(me.premiumUntil) }}
               size={56}
               active={mySeat?.ready}
               number={mySeat ? mySeat.seat + 1 : undefined}

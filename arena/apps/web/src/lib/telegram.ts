@@ -6,6 +6,8 @@ import { settings } from './settings.js';
  */
 interface SafeAreaInset { top: number; bottom: number; left: number; right: number }
 
+export type InvoiceStatus = 'paid' | 'cancelled' | 'failed' | 'pending';
+
 export type HomeScreenStatus = 'unsupported' | 'unknown' | 'added' | 'missed';
 
 interface TelegramWebApp {
@@ -28,6 +30,8 @@ interface TelegramWebApp {
   disableClosingConfirmation(): void;
   lockOrientation?(): void;
   openTelegramLink(url: string): void;
+  /** Bot API 6.1: Telegram's own payment form for an invoice link. */
+  openInvoice?(url: string, callback?: (status: InvoiceStatus) => void): void;
   /** try_browser: Telegram opens the link in that browser (if installed) instead of its own window. */
   openLink?(url: string, options?: { try_instant_view?: boolean; try_browser?: string }): void;
   onEvent(event: string, handler: (payload?: unknown) => void): void;
@@ -107,4 +111,17 @@ export function setBackButton(handler: (() => void) | null): () => void {
     tg.BackButton.offClick(handler);
     tg.BackButton.hide();
   };
+}
+
+/**
+ * Opens Telegram's payment form and resolves with how it ended. Outside Telegram the link opens in
+ * a new tab and the result is unknown («pending»): the caller then watches the order itself.
+ */
+export function openInvoice(link: string): Promise<InvoiceStatus> {
+  if (tg?.openInvoice && tg.isVersionAtLeast('6.1')) {
+    const open = tg.openInvoice.bind(tg);
+    return new Promise((resolve) => open(link, resolve));
+  }
+  window.open(link, '_blank', 'noopener');
+  return Promise.resolve('pending');
 }

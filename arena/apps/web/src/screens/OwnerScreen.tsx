@@ -1,4 +1,4 @@
-import type { AnnouncementDto, BotSettingsDto, OwnerPlayerDto, ReferralSettingsDto, WelcomeGiftDto } from '@arena/shared';
+import type { AnnouncementDto, BotSettingsDto, OwnerPlayerDto, OwnerStarsDto, ReferralSettingsDto, WelcomeGiftDto } from '@arena/shared';
 import { Avatar, Balance, Button, Panel, Tabs, Toggle } from '@arena/ui';
 import { useEffect, useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
@@ -8,7 +8,7 @@ import { useToast } from '../toast.js';
 import { ScreenHeader } from './common.js';
 import { useNav } from '../navigation.js';
 
-type Section = 'announcement' | 'gifts' | 'bonus' | 'bots';
+type Section = 'announcement' | 'gifts' | 'bonus' | 'bots' | 'stars';
 interface GiftItem { key: string; name: string; kind: string; owned: boolean }
 
 const KIND_RU: Record<string, string> = { CARD_BACK: 'Рубашка', FRAME: 'Рамка', CROWN: 'Корона', EFFECT: 'Эффект', EMOJI: 'Смайлы', TABLE: 'Стол', AVATAR: 'Аватар' };
@@ -20,8 +20,8 @@ export default function OwnerScreen() {
   return (
     <div className="app-stack owner">
       <ScreenHeader title="Управление" subtitle="Видно только владельцу" />
-      <Tabs<Section> value={section} onChange={setSection} items={[{ value: 'announcement', label: 'Объявление' }, { value: 'gifts', label: 'Подарки' }, { value: 'bonus', label: 'Бонусы' }, { value: 'bots', label: 'Боты' }]} />
-      {section === 'announcement' ? <AnnouncementEditor /> : section === 'gifts' ? <Gifts /> : section === 'bots' ? <><Bots /><Training /></> : <Bonuses />}
+      <Tabs<Section> value={section} onChange={setSection} items={[{ value: 'announcement', label: 'Объявление' }, { value: 'gifts', label: 'Подарки' }, { value: 'bonus', label: 'Бонусы' }, { value: 'bots', label: 'Боты' }, { value: 'stars', label: 'Звёзды' }]} />
+      {section === 'announcement' ? <AnnouncementEditor /> : section === 'gifts' ? <Gifts /> : section === 'bots' ? <><Bots /><Training /></> : section === 'stars' ? <StarSales /> : <Bonuses />}
     </div>
   );
 }
@@ -454,6 +454,12 @@ function Training() {
   return (
     <Panel className="owner-card training">
       <h3 className="owner-sub">Обучение максимальных ботов</h3>
+      {!t.running && (
+        <p className="app-muted">
+          <b>Обучение остановлено.</b> За неделю экзамены стояли на месте (около 65% побед над прежним ботом) — веса упёрлись в
+          потолок. За столами с людьми играет лучшая найденная версия. Включить снова — переменная BOT_TRAINING=on.
+        </p>
+      )}
       <p className="app-muted">
         Боты круглосуточно играют друг с другом за тремя столами. Немного изменённая копия бота играет с текущим чемпионом на одинаковых
         раздачах; если она уверенно сильнее — становится чемпионом, и за столами с людьми максимальные боты сразу начинают играть
@@ -491,6 +497,77 @@ function Training() {
               <span>{when(e.at)} · v{e.version}</span>
               <b className={e.winRate >= 0.5 ? 'training-exams__good' : ''}>{Math.round(e.winRate * 100)}% побед</b>
               <small>{e.games} партий</small>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+const starNum = new Intl.NumberFormat('ru-RU');
+
+/** Coin purchases for Telegram Stars: totals, the latest payments, refunds. */
+function StarSales() {
+  const query = useQuery<OwnerStarsDto>('/owner/stars');
+  const toast = useToast();
+  const [asking, setAsking] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const refund = async (id: string) => {
+    if (asking !== id) {
+      setAsking(id);
+      return;
+    }
+    setBusy(id);
+    try {
+      await api(`/owner/stars/${id}/refund`, { method: 'POST' });
+      toast('Звёзды возвращены покупателю, покупка отменена', 'success');
+      query.reload();
+    } catch (e) {
+      toast(errText(e), 'error');
+    } finally {
+      setBusy(null);
+      setAsking(null);
+    }
+  };
+
+  const d = query.data;
+  if (!d) return <p className="app-muted">Загрузка…</p>;
+  return (
+    <Panel className="owner-card">
+      <h3 className="owner-sub">Продажи за звёзды: монеты и VIP</h3>
+      <div className="training-stats">
+        <span><b>⭐ {starNum.format(d.totals.today)}</b><small>сегодня</small></span>
+        <span><b>⭐ {starNum.format(d.totals.month)}</b><small>за 30 дней</small></span>
+        <span><b>⭐ {starNum.format(d.totals.all)}</b><small>всего</small></span>
+        <span><b>{starNum.format(d.totals.buyers)}</b><small>покупателей</small></span>
+      </div>
+      <p className="app-muted">
+        Звёзды копятся на балансе бота. Вывести их можно через @BotFather → бот → Balance (через Fragment), каждая покупка становится
+        доступной к выводу через 21 день.
+      </p>
+      <h3 className="owner-sub">Последние покупки</h3>
+      {d.orders.length === 0 ? (
+        <p className="app-muted">Покупок пока не было.</p>
+      ) : (
+        <ul className="star-sales">
+          {d.orders.map((o) => (
+            <li key={o.id} className={o.status === 'REFUNDED' ? 'star-sales__refunded' : ''}>
+              <span>
+                <b>{o.name}</b>
+                <small>{o.paidAt ? when(o.paidAt) : ''}</small>
+              </span>
+              <span>
+                ⭐ {o.stars} → {o.days > 0 ? <b className="vip-badge">VIP {o.days} дн.</b> : <Balance kind="coins" value={o.coins} compact />}
+              </span>
+              {o.status === 'REFUNDED' ? (
+                <small>возврат</small>
+              ) : (
+                <Button size="sm" variant={asking === o.id ? 'danger' : 'ghost'} loading={busy === o.id} onClick={() => void refund(o.id)}>
+                  {asking === o.id ? 'Точно?' : 'Вернуть'}
+                </Button>
+              )}
             </li>
           ))}
         </ul>

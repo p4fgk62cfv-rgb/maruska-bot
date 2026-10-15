@@ -1,5 +1,5 @@
 import { QUESTS_BONUS_KEY, type DailyDto, type QuestDto, type Reward } from '@arena/shared';
-import { Balance, Button, ProgressBar } from '@arena/ui';
+import { Balance, Button, CurrencyIcon, ProgressBar } from '@arena/ui';
 import { useEffect, useState } from 'react';
 import { ApiError, api } from '../lib/api.js';
 import { haptic } from '../lib/telegram.js';
@@ -95,7 +95,7 @@ export default function DailyScreen() {
                     return (
                       <li key={n} className={`daily-day${done ? ' daily-day--done' : ''}${current ? ' daily-day--today' : ''}${n === 7 ? ' daily-day--chest' : ''}`}>
                         <small>{n === 7 ? 'Сундук' : `День ${n}`}</small>
-                        <span className="daily-day__icon" aria-hidden="true">{done ? '✓' : n === 7 ? '🎁' : reward.coins ? '🪙' : '💵'}</span>
+                        <span className="daily-day__icon" aria-hidden="true">{done ? '✓' : n === 7 ? '🎁' : <CurrencyIcon kind={reward.coins ? 'coins' : 'credits'} size={30} />}</span>
                         <RewardView reward={reward} compact />
                       </li>
                     );

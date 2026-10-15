@@ -9,6 +9,8 @@ export type Page =
   | 'profile'
   | 'achievements'
   | 'items'
+  | 'coins'
+  | 'vip'
   | 'rules'
   | 'servers'
   | 'leaderboard'

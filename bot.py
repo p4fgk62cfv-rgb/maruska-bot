@@ -53,6 +53,7 @@ from features.social import router as social_router
 from features.rating import router as rating_router
 from features.weather import router as weather_router
 from features.radio import router as radio_router
+from features.arena_pay import router as arena_pay_router
 
 from games.crocodile import (
     drawing_enabled,
@@ -117,6 +118,9 @@ dp.callback_query.outer_middleware(SettingsMiddleware())
 
 # Статистика для графиков — до роутеров, чтобы видеть все сообщения
 dp.message.outer_middleware(StatsMiddleware())
+
+# Оплата звёздами — раньше всех: подтверждение платежа нельзя потерять
+dp.include_router(arena_pay_router)
 
 # Панель первой: /settings должен работать, даже если всё выключено
 dp.include_router(settings_router)

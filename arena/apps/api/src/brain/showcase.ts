@@ -44,9 +44,9 @@ export interface ShowcaseDeps {
 }
 
 /**
- * The three training tables people can watch: the current champion plays the copy that the
- * self-play is trying right now, at a human pace and with every hand open. The real training
- * runs thousands of games a minute in the background; these show what it looks like.
+ * The three tables of «Зал ботов», at a human pace and with every hand open. While the training
+ * runs, the current champion plays the copy it is trying; with the training off, the bots that sit
+ * at the tables with people play each other. The games move only while someone watches.
  */
 export class Showcase {
   private readonly tables: Table[] = TRAINING_TABLES.map((t) => ({
@@ -83,23 +83,29 @@ export class Showcase {
     return this.tables.filter((t) => t.state).map((t) => this.dto(t));
   }
 
+  /** With the training off, every seat plays the weights the bots use at the tables with people. */
   private players() {
     const live = this.deps.players();
-    if (live) return live;
+    if (live) return { ...live, training: true };
     const { params, version } = this.deps.fallback();
-    return { champion: params, challenger: params, version };
+    return { champion: params, challenger: params, version, training: false };
   }
 
   private deal(t: Table): void {
-    const { version } = this.players();
+    const { version, training } = this.players();
     t.game++;
     const n = t.settings.players;
-    // Seats move round every game: the challenger sits everywhere in turn.
     const ids = Array.from({ length: n }, (_, i) => `s${i}`);
-    const hero = ids[t.game % n]!;
-    t.roles = Object.fromEntries(ids.map((id) => [id, id === hero ? 'challenger' : 'champion']));
-    let k = 0;
-    t.names = Object.fromEntries(ids.map((id) => [id, id === hero ? 'Претендент' : n > 2 ? `Чемпион v${version} · ${++k}` : `Чемпион v${version}`]));
+    if (training) {
+      // Seats move round every game: the challenger sits everywhere in turn.
+      const hero = ids[t.game % n]!;
+      t.roles = Object.fromEntries(ids.map((id) => [id, id === hero ? 'challenger' : 'champion']));
+      let k = 0;
+      t.names = Object.fromEntries(ids.map((id) => [id, id === hero ? 'Претендент' : n > 2 ? `Чемпион v${version} · ${++k}` : `Чемпион v${version}`]));
+    } else {
+      t.roles = Object.fromEntries(ids.map((id) => [id, 'champion']));
+      t.names = Object.fromEntries(ids.map((id, i) => [id, `Бот ${i + 1}`]));
+    }
     t.state = newGame(t.settings, ids, Math.random);
     t.called = new Set();
     t.last = 'Новая раздача';
@@ -108,6 +114,8 @@ export class Showcase {
   }
 
   private tick(): void {
+    // Nobody is watching: the tables wait (no CPU spent on games no one sees).
+    if (!this.deps.watched()) return;
     const now = Date.now();
     for (const t of this.tables) {
       if (!t.state || now < t.nextAt) continue;
@@ -159,6 +167,7 @@ export class Showcase {
       game: t.game,
       score: t.score,
       championVersion: this.players().version,
+      training: this.players().training,
       seats: s.players.map((p) => ({
         id: p.id,
         name: t.names[p.id] ?? p.id,

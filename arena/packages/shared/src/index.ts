@@ -9,3 +9,4 @@ export * from './daily.js';
 export * from './chat.js';
 export * from './training.js';
 export * from './tournament.js';
+export * from './stars.js';

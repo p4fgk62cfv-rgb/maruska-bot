@@ -1954,3 +1954,523 @@ button.install-hint, .install-hint__head { display: flex; flex-direction: row; a
 :root[data-game-design="daylight"] .chat-strip__head { color: #b9770e; }
 .home--vegas .chat-strip { margin-left: 12px; margin-right: 12px; color: #eee2d3; background: linear-gradient(120deg, #1c1517, #130f10); border: 1px solid rgba(201, 151, 78, 0.3); border-radius: 12px; }
 .bp-history li small.bp-history__lost { color: var(--text-2); }
+
+/* ── «Монеты» за звёзды ── */
+.coin-shop { display: grid; gap: 10px; }
+.coin-shop__balance { display: flex; align-items: center; gap: 10px; }
+.coin-shop__balance > span:first-child { color: var(--text-2); }
+.coin-shop__balance > button { margin-left: auto; }
+.coin-shop__note { font-size: 13px; line-height: 1.45; }
+.coin-pack { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+.coin-pack--hot { border-color: var(--stroke-strong); box-shadow: 0 0 0 1px var(--stroke-strong), 0 8px 24px rgba(255, 207, 90, 0.12); }
+.coin-pack__icon { display: flex; justify-content: center; width: 62px; flex: none; }
+.coin-pack__icon > * + * { margin-left: -16px; }
+.coin-pack__icon > * { filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35)); }
+.coin-pack__body { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.coin-pack__body strong { font-size: 17px; color: var(--text); }
+.coin-pack__tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.coin-banner {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; border: 1px solid var(--stroke-strong);
+  border-radius: var(--radius-m); background: linear-gradient(100deg, rgba(255, 207, 90, 0.16), rgba(255, 207, 90, 0.04)); color: var(--text);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.coin-banner > span:first-child { display: flex; }
+.coin-banner > span:nth-child(2) { display: grid; gap: 2px; flex: 1; }
+.coin-banner small { color: var(--text-2); }
+.coin-banner b { color: var(--gold); white-space: nowrap; }
+.star-sales { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.star-sales li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(0, 0, 0, 0.2); }
+.star-sales li > span:first-child { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.star-sales li > span:first-child b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.star-sales li small { color: var(--text-3); }
+.star-sales__refunded { opacity: 0.55; }
+
+/* ── VIP ── */
+.vip-badge {
+  display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; vertical-align: middle;
+  font-size: 12px; font-weight: 900; letter-spacing: 0.06em; color: #4a2a00;
+  background: linear-gradient(180deg, #fff3b0, #ffd23f 45%, #e39a12); box-shadow: 0 1px 0 #8a5a0c, 0 0 10px rgba(255, 207, 90, 0.45);
+}
+.vip-banner {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 1px solid rgba(255, 214, 120, 0.55);
+  border-radius: var(--radius-m); color: var(--text); font: inherit; text-align: left; cursor: pointer;
+  background: radial-gradient(120% 140% at 0% 0%, rgba(255, 214, 90, 0.28), transparent 60%), linear-gradient(100deg, #3a2a05, #2a1d07 60%, #1d2a2e);
+  box-shadow: inset 0 1px 0 rgba(255, 240, 190, 0.18), 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+.vip-banner__crown { width: 46px; flex: none; rotate: -12deg; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4)) drop-shadow(0 0 8px rgba(255, 200, 60, 0.5)); }
+.vip-banner > span { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.vip-banner strong { color: #ffe08a; font-size: 16px; }
+.vip-banner small { color: rgba(255, 240, 210, 0.7); }
+.vip-banner > b { color: var(--gold); white-space: nowrap; }
+.vip-banner--small { padding: 9px 12px; margin: 4px 0; }
+.vip-banner--small .vip-banner__crown { width: 36px; }
+
+.vip-hero {
+  position: relative; display: grid; justify-items: center; gap: 8px; padding: 34px 16px 20px; border-radius: 22px; overflow: hidden;
+  background: radial-gradient(90% 80% at 50% 0%, rgba(255, 210, 80, 0.32), transparent 70%), linear-gradient(180deg, #2b2006, #17262b);
+  border: 1px solid rgba(255, 214, 120, 0.45);
+}
+.vip-hero__glow {
+  position: absolute; top: -40%; left: 50%; width: 160%; aspect-ratio: 1; translate: -50% 0; pointer-events: none;
+  background: conic-gradient(from 0deg, transparent 0 8%, rgba(255, 220, 120, 0.14) 10% 14%, transparent 16% 33%, rgba(255, 220, 120, 0.12) 35% 39%, transparent 41% 58%, rgba(255, 220, 120, 0.14) 60% 64%, transparent 66% 83%, rgba(255, 220, 120, 0.12) 85% 89%, transparent 91%);
+  animation: vip-rays 24s linear infinite;
+}
+@keyframes vip-rays { to { rotate: 360deg; } }
+@media (prefers-reduced-motion: reduce) { .vip-hero__glow { animation: none; } }
+.vip-hero .ui-avatar { margin-top: 10px; }
+.vip-hero__name { font-size: 20px; color: #fff3cf; }
+.vip-hero__status { color: rgba(255, 240, 210, 0.75); font-size: 14px; }
+.vip-hero--on .vip-hero__status { color: #ffd76a; font-weight: 700; }
+
+.vip-perks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.vip-perks li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--stroke); }
+.vip-perks__icon { font-size: 24px; width: 32px; text-align: center; flex: none; }
+.vip-perks li > span:last-child { display: grid; gap: 2px; }
+.vip-perks small { color: var(--text-2); }
+
+.vip-plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.vip-plan {
+  position: relative; display: grid; justify-items: center; align-content: start; gap: 2px; padding: 18px 6px 10px; border-radius: 16px;
+  border: 1px solid var(--stroke); background: var(--surface); color: var(--text); font: inherit; cursor: pointer;
+}
+.vip-plan:disabled { opacity: 0.75; cursor: default; }
+.vip-plan--hot { border-color: rgba(255, 214, 120, 0.7); background: linear-gradient(180deg, rgba(255, 210, 80, 0.18), var(--surface)); box-shadow: 0 0 0 1px rgba(255, 214, 120, 0.35), 0 8px 22px rgba(255, 190, 50, 0.15); }
+.vip-plan > .ui-badge, .vip-plan > span:first-child.ui-badge { position: absolute; top: -9px; white-space: nowrap; font-size: 11px; }
+.vip-plan > strong { font-size: 30px; line-height: 1.1; color: #ffe08a; }
+.vip-plan > span { color: var(--text-2); font-size: 13px; }
+.vip-plan__price {
+  margin-top: 8px; width: 100%; padding: 7px 0; border-radius: 999px; font-weight: 800; color: #3b2400 !important; font-size: 15px !important;
+  background: linear-gradient(180deg, #ffe58a, #f5b528); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 2px 0 #a86a0c;
+}
+.vip-plan > small { color: var(--text-3); font-size: 11px; margin-top: 4px; }
+
+/* ══════════════ «Королевский»: emerald felt, polished gold, art-deco frames (default) ══════════════ */
+:root[data-game-design="royal"] {
+  --felt-hi: #1a6646; --felt: #0d4330; --felt-lo: #04221a;
+  --bg-0: #04221a; --bg-1: #0a3526; --bg-2: #0d4330;
+  --surface: rgba(2, 24, 15, 0.42); --surface-strong: rgba(5, 30, 20, 0.96);
+  --stroke: rgba(214, 178, 96, 0.22); --stroke-strong: rgba(236, 200, 112, 0.6); --line: rgba(214, 178, 96, 0.16);
+  --gold: #f3cf6b; --gold-deep: #c98f27;
+  --royal-gold: linear-gradient(180deg, #fff4c4 0%, #f3cf6b 38%, #d39a2f 72%, #a8701a 100%);
+  --royal-bar: linear-gradient(180deg, #113a29 0%, #0a281c 100%);
+  --royal-ink: #f7ecd0;
+  --royal-ink-2: rgba(247, 236, 208, 0.66);
+  --royal-trim: 0 1px 0 #d6b15c, 0 3px 0 #061a11, 0 4px 0 rgba(214, 177, 92, 0.45), 0 12px 26px rgba(0, 0, 0, 0.38);
+  color-scheme: dark;
+}
+:root[data-game-design="royal"] body {
+  background:
+    var(--felt-texture),
+    radial-gradient(60% 40% at 50% 0%, rgba(255, 214, 120, 0.1), transparent 70%),
+    radial-gradient(130% 90% at 50% 30%, var(--felt-hi) 0%, var(--felt) 50%, var(--felt-lo) 100%);
+  background-attachment: fixed;
+  background-color: var(--felt);
+}
+
+/* Bars: dark emerald with a double gold rule */
+:root[data-game-design="royal"] .app-header,
+:root[data-game-design="royal"] .home-bar { background: var(--royal-bar); color: var(--royal-ink); box-shadow: var(--royal-trim); }
+:root[data-game-design="royal"] .app-header h1 {
+  font-family: Georgia, 'Times New Roman', serif; font-weight: 700; letter-spacing: 0.04em;
+  background: var(--royal-gold); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+:root[data-game-design="royal"] .app-header p { color: var(--royal-ink-2); }
+:root[data-game-design="royal"] .app-header__back { color: var(--gold); }
+:root[data-game-design="royal"] .app-header .ui-icon-btn { background: rgba(255, 230, 160, 0.08); color: var(--gold); box-shadow: inset 0 0 0 1px rgba(214, 177, 92, 0.35); }
+:root[data-game-design="royal"] .home-bar__who strong { color: var(--royal-ink); }
+:root[data-game-design="royal"] .home-bar__who .ui-rank { --rank: #d6b15c; background: rgba(255, 230, 160, 0.06); box-shadow: inset 0 0 0 1px rgba(214, 177, 92, 0.35); }
+:root[data-game-design="royal"] .home-bar__who .ui-rank__value { color: var(--royal-ink); }
+:root[data-game-design="royal"] .home-bar__me .ui-avatar { box-shadow: 0 0 0 2px #0a281c, 0 0 0 4px #d6b15c, 0 6px 14px rgba(0, 0, 0, 0.4); }
+:root[data-game-design="royal"] .home-bar__money .ui-balance--credits { color: #ffd76e; }
+:root[data-game-design="royal"] .home-bar__money .ui-balance--coins { color: #f3cf6b; }
+:root[data-game-design="royal"] .home-bar__money .ui-balance--diamonds { color: #8fe3f0; }
+:root[data-game-design="royal"] .plus { color: var(--gold); box-shadow: inset 0 0 0 1.5px #d6b15c; background: rgba(255, 230, 160, 0.06); }
+:root[data-game-design="royal"] .plus--glow { color: #2a1a00; background: var(--royal-gold); }
+
+/* Bottom bar */
+:root[data-game-design="royal"] .ui-nav {
+  background: linear-gradient(180deg, #0a281c, #113a29); color: rgba(247, 236, 208, 0.62);
+  box-shadow: 0 -1px 0 #d6b15c, 0 -3px 0 #061a11, 0 -4px 0 rgba(214, 177, 92, 0.45), 0 -10px 24px rgba(0, 0, 0, 0.35);
+}
+:root[data-game-design="royal"] .ui-nav__item--on { color: var(--gold); }
+:root[data-game-design="royal"] .ui-nav__item--on .ui-nav__icon { background: var(--royal-gold); color: #2a1a00; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45), 0 0 14px rgba(243, 207, 107, 0.35); }
+:root[data-game-design="royal"] .ui-nav__item--accent .ui-nav__icon { background: var(--royal-gold); box-shadow: 0 0 0 2px #0a281c, 0 0 0 3px rgba(214, 177, 92, 0.6); }
+
+/* Home: a framed «Быстрая игра» plaque */
+:root[data-game-design="royal"] .quick-play {
+  position: relative; margin: 14px 12px 6px; padding: 22px 16px 18px; border: 0; border-radius: 22px;
+  background: radial-gradient(80% 90% at 50% 0%, rgba(255, 214, 120, 0.2), transparent 70%), linear-gradient(180deg, rgba(20, 84, 58, 0.7), rgba(3, 26, 17, 0.75));
+  box-shadow: inset 0 0 0 1px rgba(236, 200, 112, 0.75), inset 0 0 0 5px rgba(4, 28, 19, 0.75), inset 0 0 0 6px rgba(214, 177, 92, 0.3), 0 10px 26px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+:root[data-game-design="royal"] .quick-play::before,
+:root[data-game-design="royal"] .quick-play::after {
+  position: absolute; top: 14px; font: 700 34px/1 Georgia, serif; color: rgba(243, 207, 107, 0.16); pointer-events: none;
+}
+:root[data-game-design="royal"] .quick-play::before { content: '♠'; left: 18px; rotate: -14deg; }
+:root[data-game-design="royal"] .quick-play::after { content: '♥'; right: 18px; rotate: 14deg; color: rgba(230, 90, 90, 0.2); }
+:root[data-game-design="royal"] .quick-play__icon {
+  background: radial-gradient(circle at 35% 28%, #fff6cf, #f3cf6b 45%, #c98f27 80%, #8e5a12);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45), 0 0 0 4px rgba(10, 40, 28, 0.9), 0 0 0 5px rgba(236, 200, 112, 0.7), 0 0 26px rgba(243, 207, 107, 0.35);
+}
+:root[data-game-design="royal"] .quick-play__title,
+:root[data-game-design="royal"] .script-title,
+:root[data-game-design="royal"] .filter-band__title {
+  background: var(--royal-gold); -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: none; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
+}
+:root[data-game-design="royal"] .quick-play__hint { color: var(--royal-ink-2); }
+
+/* Home: tiles become gold-framed cards */
+:root[data-game-design="royal"] .tile-grid { gap: 10px; padding: 10px 12px 14px; }
+:root[data-game-design="royal"] .grid-tile {
+  position: relative; min-height: 104px; border: 0; border-radius: 18px;
+  background: radial-gradient(90% 70% at 50% 0%, rgba(255, 214, 120, 0.1), transparent 70%), linear-gradient(165deg, rgba(22, 88, 60, 0.6), rgba(3, 26, 17, 0.7));
+  box-shadow: inset 0 0 0 1px rgba(214, 177, 92, 0.5), inset 0 1px 0 rgba(255, 240, 200, 0.12), 0 6px 14px rgba(0, 0, 0, 0.28);
+}
+:root[data-game-design="royal"] .grid-tile:nth-child(odd) { border-right: 0; }
+:root[data-game-design="royal"] .grid-tile::before {
+  content: ''; position: absolute; inset: 5px; border-radius: 13px; pointer-events: none;
+  border: 1px solid rgba(214, 177, 92, 0.16);
+}
+:root[data-game-design="royal"] .grid-tile:active { background: linear-gradient(165deg, rgba(30, 110, 75, 0.7), rgba(5, 34, 22, 0.8)); }
+:root[data-game-design="royal"] .grid-tile__icon { color: var(--gold); opacity: 1; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4)); }
+:root[data-game-design="royal"] .grid-tile__title { color: #f6e2ae; font-size: 25px; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.45); }
+:root[data-game-design="royal"] .grid-tile__count { color: var(--royal-ink-2); }
+
+/* Cards on the home screen and elsewhere */
+:root[data-game-design="royal"] .chat-strip,
+:root[data-game-design="royal"] .news-card,
+:root[data-game-design="royal"] .home-shortcut,
+:root[data-game-design="royal"] .install-hint {
+  margin-left: 12px; margin-right: 12px;
+  background: linear-gradient(135deg, rgba(255, 214, 120, 0.12), rgba(3, 26, 17, 0.55));
+  box-shadow: inset 0 0 0 1px rgba(214, 177, 92, 0.42), 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+:root[data-game-design="royal"] .chat-strip--fresh { box-shadow: inset 0 0 0 1.5px rgba(243, 207, 107, 0.85), 0 0 18px rgba(243, 207, 107, 0.2); }
+:root[data-game-design="royal"] .app-screen .ui-panel { box-shadow: inset 0 0 0 1px var(--stroke), inset 0 1px 0 rgba(255, 240, 200, 0.06); }
+
+/* Controls */
+:root[data-game-design="royal"] .ui-btn--primary {
+  color: #2a1c05; background: linear-gradient(180deg, #fff8e2, #ecd9a6);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), inset 0 0 0 1px #c9a24a, inset 0 -2px 0 rgba(120, 80, 10, 0.18);
+}
+:root[data-game-design="royal"] .ui-btn--gold { background: var(--royal-gold); }
+:root[data-game-design="royal"] .ui-btn--ghost { background: rgba(255, 230, 160, 0.06); box-shadow: inset 0 0 0 1px rgba(214, 177, 92, 0.4); }
+:root[data-game-design="royal"] .ui-tabs { background: rgba(2, 20, 13, 0.45); box-shadow: inset 0 0 0 1px rgba(214, 177, 92, 0.3); }
+:root[data-game-design="royal"] .ui-tabs__tab--on { background: var(--royal-gold); color: #2a1a00; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35); }
+:root[data-game-design="royal"] .ui-toggle input:checked + .ui-toggle__track { background: #c98f27; }
+:root[data-game-design="royal"] .filter-band { background: rgba(2, 18, 12, 0.6); border-bottom: 1px solid rgba(214, 177, 92, 0.35); }
+:root[data-game-design="royal"] .ui-sheet__body {
+  background: var(--felt-texture), linear-gradient(180deg, #145238, #08291c);
+  box-shadow: inset 0 1px 0 #d6b15c, inset 0 3px 0 rgba(6, 26, 17, 0.9), inset 0 4px 0 rgba(214, 177, 92, 0.4), 0 -10px 40px rgba(0, 0, 0, 0.5);
+}
+:root[data-game-design="royal"] .ui-toast { background: rgba(6, 34, 23, 0.96); }
+:root[data-game-design="royal"] .result__card { background: var(--felt-texture), linear-gradient(180deg, #1a6646, #0a2f20); }
+
+/* ══════════════ «Хохлома»: cream paper, black-and-red lacquer, gold leaf (art from /folk) ══════════════ */
+@font-face {
+  font-family: 'Ruslan Display'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('/fonts/ruslan-display-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Ruslan Display'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('/fonts/ruslan-display-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+:root[data-game-design="folk"] {
+  --folk-red: #b3121b; --folk-red-hi: #e0301f; --folk-black: #170707; --folk-gold: #f2c14e; --folk-gold-deep: #b9801b;
+  --folk-ink: #3b1608; --folk-ink-2: rgba(59, 22, 8, 0.72); --folk-cream: #fbecc4;
+  --folk-gold-text: linear-gradient(180deg, #fff3b8 0%, #f6cf55 45%, #d68e1c 100%);
+  --folk-font: 'Ruslan Display', Georgia, serif;
+  --felt: #f3dfb0; --gold: #f2c14e; --gold-deep: #b9801b;
+  --stroke: rgba(150, 70, 20, 0.28); --stroke-strong: rgba(185, 128, 27, 0.7); --line: rgba(150, 70, 20, 0.22);
+  color-scheme: light;
+}
+:root[data-game-design="folk"] body {
+  background: linear-gradient(90deg, rgba(90, 18, 8, 0.35), transparent 7%, transparent 93%, rgba(90, 18, 8, 0.35)), linear-gradient(rgba(252, 241, 212, 0.45), rgba(252, 241, 212, 0.45)), url('/folk/paper.webp') center top / cover no-repeat;
+  background-attachment: fixed; background-color: #f3dfb0;
+}
+/* Ordinary screens: dark ink on the paper */
+:root[data-game-design="folk"] .app-screen {
+  --text: var(--folk-ink); --text-2: var(--folk-ink-2); --text-3: rgba(59, 22, 8, 0.6);
+  /* Gold that reads on paper; the bars keep the bright leaf gold. */
+  --gold: #a35f08; --violet-hi: #b3121b; --cyan: #0f6f86;
+  --surface: rgba(255, 249, 232, 0.94); --surface-strong: rgba(255, 246, 222, 0.98);
+  color: var(--text);
+}
+:root[data-game-design="folk"] .app-screen .ui-panel { box-shadow: inset 0 0 0 1.5px rgba(179, 18, 27, 0.35), inset 0 0 0 4px rgba(255, 250, 235, 0.6), 0 4px 12px rgba(80, 30, 5, 0.15); }
+
+/* Top bar: lacquer black with a red-and-gold rule */
+:root[data-game-design="folk"] .app-header,
+:root[data-game-design="folk"] .home-bar {
+  background: linear-gradient(180deg, #2a0b07, #170707); color: var(--folk-cream);
+  box-shadow: 0 2px 0 var(--folk-gold), 0 5px 0 var(--folk-red), 0 6px 0 var(--folk-gold-deep), 0 12px 22px rgba(60, 20, 5, 0.35);
+}
+:root[data-game-design="folk"] .app-header h1 {
+  font-family: var(--folk-font); font-weight: 400; letter-spacing: 0.04em; text-transform: uppercase;
+  background: var(--folk-gold-text); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+:root[data-game-design="folk"] .app-header p { color: rgba(251, 236, 196, 0.7); }
+:root[data-game-design="folk"] .app-header__back { color: var(--folk-gold); }
+:root[data-game-design="folk"] .app-header .ui-icon-btn { background: rgba(242, 193, 78, 0.1); color: var(--folk-gold); }
+:root[data-game-design="folk"] .home-bar__who strong { color: var(--folk-cream); font-family: var(--folk-font); font-weight: 400; letter-spacing: 0.03em; }
+:root[data-game-design="folk"] .home-bar__who .ui-rank__value { color: var(--folk-cream); }
+:root[data-game-design="folk"] .home-bar__me .ui-avatar { border-radius: 50%; box-shadow: 0 0 0 2px #170707, 0 0 0 5px var(--folk-gold), 0 0 0 7px var(--folk-red), 0 6px 14px rgba(0, 0, 0, 0.45); }
+:root[data-game-design="folk"] .home-bar__me .ui-avatar img, :root[data-game-design="folk"] .home-bar__me .ui-avatar .ui-avatar__initials { border-radius: 50%; }
+:root[data-game-design="folk"] .home-bar__money .ui-balance {
+  padding: 2px 10px 2px 4px; border-radius: 999px; background: linear-gradient(180deg, #3a0f08, #1d0806);
+  box-shadow: inset 0 0 0 1.5px var(--folk-gold-deep); color: var(--folk-cream);
+}
+:root[data-game-design="folk"] .plus { color: var(--folk-gold); box-shadow: inset 0 0 0 1.5px var(--folk-gold); background: rgba(179, 18, 27, 0.35); border-radius: 50%; }
+
+/* Bottom bar: dark red lacquer */
+:root[data-game-design="folk"] .ui-nav {
+  background: linear-gradient(180deg, #4a0c0a, #1d0605); color: rgba(251, 236, 196, 0.75);
+  box-shadow: 0 -2px 0 var(--folk-gold), 0 -5px 0 var(--folk-red), 0 -6px 0 var(--folk-gold-deep), 0 -10px 22px rgba(60, 20, 5, 0.3);
+}
+:root[data-game-design="folk"] .ui-nav__item { font-family: var(--folk-font); font-weight: 400; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
+:root[data-game-design="folk"] .ui-nav__item--on { color: var(--folk-gold); }
+:root[data-game-design="folk"] .ui-nav__item--on .ui-nav__icon { background: radial-gradient(circle at 40% 30%, var(--folk-red-hi), var(--folk-red) 60%, #6d0b0f); color: var(--folk-gold); box-shadow: inset 0 0 0 1.5px var(--folk-gold), 0 4px 10px rgba(0, 0, 0, 0.4); }
+:root[data-game-design="folk"] .ui-nav__item--accent .ui-nav__icon { background: radial-gradient(circle at 40% 30%, var(--folk-red-hi), var(--folk-red) 60%, #6d0b0f); color: var(--folk-gold); box-shadow: inset 0 0 0 2px var(--folk-gold); }
+
+/* Home: «Быстрая игра» on the lacquered plaque, the painted play button beside the title */
+:root[data-game-design="folk"] .quick-play {
+  position: relative; grid-template-columns: auto 1fr; align-items: center; justify-items: start; column-gap: 12px;
+  margin: 14px 10px 6px; padding: 30px 30px 30px 34px; min-height: 168px; border: 0;
+  border-style: solid; border-width: 0; background: none;
+}
+:root[data-game-design="folk"] .quick-play::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  border-style: solid; border-width: 52px; border-image: url('/folk/plaque.webp') 190 fill / 52px round;
+  filter: drop-shadow(0 8px 14px rgba(70, 20, 5, 0.4));
+}
+:root[data-game-design="folk"] .quick-play > * { position: relative; z-index: 1; }
+:root[data-game-design="folk"] .quick-play__icon {
+  grid-row: span 2; width: 104px; height: 104px; margin: 0; background: url('/folk/play.webp') center / contain no-repeat; box-shadow: none;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5));
+}
+:root[data-game-design="folk"] .quick-play__icon svg { display: none; }
+:root[data-game-design="folk"] .quick-play__title {
+  font-family: var(--folk-font); font-size: 34px; line-height: 1; text-transform: uppercase; letter-spacing: 0.02em;
+  background: var(--folk-gold-text); -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: none; filter: drop-shadow(0 2px 0 #5a0d06) drop-shadow(0 3px 4px rgba(0, 0, 0, 0.6));
+}
+:root[data-game-design="folk"] .quick-play__hint { color: rgba(251, 236, 196, 0.8); font-size: 12px; }
+:root[data-game-design="folk"] .quick-play:active { transform: scale(0.99); }
+
+/* Home: lacquer tiles, three in a row */
+:root[data-game-design="folk"] .tile-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 10px 10px 16px; }
+:root[data-game-design="folk"] .grid-tile {
+  position: relative; min-height: 118px; padding: 16px 6px 14px; gap: 6px; border: 0; background: none; align-content: end;
+}
+:root[data-game-design="folk"] .grid-tile:nth-child(odd) { border-right: 0; }
+:root[data-game-design="folk"] .grid-tile::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  border-style: solid; border-width: 30px; border-image: url('/folk/tile.webp') 200 fill / 30px stretch;
+  filter: drop-shadow(0 5px 8px rgba(70, 20, 5, 0.35));
+}
+:root[data-game-design="folk"] .grid-tile > * { position: relative; z-index: 1; }
+:root[data-game-design="folk"] .grid-tile:active { transform: scale(0.97); }
+:root[data-game-design="folk"] .grid-tile__icon { color: var(--folk-gold); filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6)); }
+:root[data-game-design="folk"] .grid-tile__icon > svg { width: 40px; height: 40px; }
+:root[data-game-design="folk"] .grid-tile__title {
+  font-family: var(--folk-font); font-size: 11px; padding: 0 4px; overflow-wrap: anywhere; line-height: 1.15; letter-spacing: 0.02em; text-transform: uppercase; text-align: center;
+  color: var(--folk-cream); text-shadow: 0 1px 0 #000, 0 2px 4px rgba(0, 0, 0, 0.7);
+}
+:root[data-game-design="folk"] .grid-tile__count:not(.grid-tile__count--alert) {
+  left: auto; right: -30px; top: -10px; translate: none; padding: 1px 6px; border-radius: 999px; font-size: 11px; color: var(--folk-cream);
+  background: rgba(23, 7, 7, 0.85); box-shadow: inset 0 0 0 1px var(--folk-gold-deep);
+}
+:root[data-game-design="folk"] .chat-strip__head .ui-badge, :root[data-game-design="folk"] .chat-strip__head span { font-family: var(--font); }
+/* Painted icons, where the art exists */
+:root[data-game-design="folk"] .grid-tile[data-tile='daily'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='chat'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='vip'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='training'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='tournaments'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='news'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='friends'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='items'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='achievements'] .grid-tile__icon,
+:root[data-game-design="folk"] .grid-tile[data-tile='settings'] .grid-tile__icon {
+  width: 64px; height: 58px; background: center / contain no-repeat; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.55));
+}
+:root[data-game-design="folk"] .grid-tile[data-tile='daily'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='chat'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='vip'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='training'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='tournaments'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='news'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='friends'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='items'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='achievements'] .grid-tile__icon > svg,
+:root[data-game-design="folk"] .grid-tile[data-tile='settings'] .grid-tile__icon > svg { display: none; }
+:root[data-game-design="folk"] .grid-tile[data-tile='daily'] .grid-tile__icon { background-image: url('/folk/icon-daily.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='chat'] .grid-tile__icon { background-image: url('/folk/icon-chat.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='vip'] .grid-tile__icon { background-image: url('/folk/icon-vip.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='training'] .grid-tile__icon { background-image: url('/folk/icon-training.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='tournaments'] .grid-tile__icon { background-image: url('/folk/icon-tournaments.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='news'] .grid-tile__icon { background-image: url('/folk/icon-news.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='friends'] .grid-tile__icon { background-image: url('/folk/icon-friends.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='items'] .grid-tile__icon { background-image: url('/folk/icon-items.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='achievements'] .grid-tile__icon { background-image: url('/folk/icon-achievements.webp'); }
+:root[data-game-design="folk"] .grid-tile[data-tile='settings'] .grid-tile__icon { background-image: url('/folk/icon-settings.webp'); }
+
+/* Home: cream cards with a red-and-gold edge */
+:root[data-game-design="folk"] .chat-strip,
+:root[data-game-design="folk"] .news-card,
+:root[data-game-design="folk"] .home-shortcut,
+:root[data-game-design="folk"] .install-hint {
+  margin-left: 10px; margin-right: 10px; color: var(--folk-ink);
+  background: linear-gradient(180deg, #fff8e3, #f7e3b6);
+  box-shadow: inset 0 0 0 2px var(--folk-red), inset 0 0 0 4px #fff6dc, inset 0 0 0 5px var(--folk-gold-deep), 0 4px 10px rgba(80, 30, 5, 0.2);
+}
+:root[data-game-design="folk"] .chat-strip__head { color: var(--folk-red); font-family: var(--folk-font); letter-spacing: 0.03em; }
+
+/* Titles, tabs, buttons */
+:root[data-game-design="folk"] .script-title,
+:root[data-game-design="folk"] .filter-band__title {
+  font-family: var(--folk-font); text-transform: uppercase; font-size: 24px; letter-spacing: 0.03em; color: var(--folk-red);
+  text-shadow: 0 1px 0 #fff3cf;
+}
+:root[data-game-design="folk"] .filter-band { background: linear-gradient(180deg, #2a0b07, #170707); color: var(--folk-cream); --text: var(--folk-cream); --text-2: rgba(251,236,196,.75); border-bottom: 2px solid var(--folk-gold-deep); }
+:root[data-game-design="folk"] .filter-band__title { color: var(--folk-gold); text-shadow: none; }
+:root[data-game-design="folk"] .ui-tabs { background: rgba(255, 246, 222, 0.85); box-shadow: inset 0 0 0 1.5px rgba(179, 18, 27, 0.4); }
+:root[data-game-design="folk"] .ui-tabs__tab { color: var(--folk-ink-2); }
+:root[data-game-design="folk"] .ui-tabs__tab--on { background: radial-gradient(circle at 40% 20%, var(--folk-red-hi), var(--folk-red) 65%, #7a0c10); color: var(--folk-gold); box-shadow: inset 0 0 0 1.5px var(--folk-gold), 0 3px 8px rgba(80, 20, 5, 0.35); }
+:root[data-game-design="folk"] .ui-btn--primary { color: var(--folk-gold); background: radial-gradient(circle at 40% 15%, var(--folk-red-hi), var(--folk-red) 60%, #7a0c10); box-shadow: inset 0 0 0 2px var(--folk-gold), 0 4px 12px rgba(80, 20, 5, 0.35); }
+:root[data-game-design="folk"] .ui-btn--gold { color: #3b1608; background: var(--folk-gold-text); box-shadow: inset 0 0 0 1.5px #9a6512, 0 4px 12px rgba(80, 20, 5, 0.3); }
+:root[data-game-design="folk"] .ui-btn--ghost { color: var(--folk-ink); background: rgba(255, 246, 222, 0.7); box-shadow: inset 0 0 0 1.5px rgba(179, 18, 27, 0.45); }
+:root[data-game-design="folk"] .ui-sheet__body {
+  --text: var(--folk-ink); --text-2: var(--folk-ink-2); --text-3: rgba(59, 22, 8, 0.55); color: var(--folk-ink);
+  background: url('/folk/paper.webp') center / 768px auto, #f6e3b8;
+  box-shadow: inset 0 3px 0 var(--folk-red), inset 0 5px 0 var(--folk-gold-deep), 0 -10px 40px rgba(0, 0, 0, 0.4);
+}
+:root[data-game-design="folk"] .ui-toast { background: rgba(32, 9, 6, 0.96); color: var(--folk-cream); }
+:root[data-game-design="folk"] .app-section { font-family: var(--folk-font); font-weight: 400; color: var(--folk-red); text-transform: uppercase; letter-spacing: 0.03em; }
+
+:root[data-game-design="folk"] .app-screen .ui-balance--coins { color: #9a6a06; }
+:root[data-game-design="folk"] .app-screen .ui-empty__icon { background: rgba(179, 18, 27, 0.12); color: var(--folk-red); }
+:root[data-game-design="folk"] .daily-hero strong { font-family: var(--folk-font); text-transform: uppercase; font-size: 24px; color: var(--folk-red); }
+:root[data-game-design="folk"] .coin-banner b, :root[data-game-design="folk"] .vip-banner > b { color: var(--folk-red); }
+:root[data-game-design="folk"] .coin-banner { background: linear-gradient(100deg, #fff6d8, #f6dfa6); box-shadow: inset 0 0 0 1.5px var(--folk-gold-deep); border: 0; }
+
+/* Ornament borders down both sides of the paper, corners under the top bar */
+:root[data-game-design="folk"] body {
+  background:
+    url('/folk/border.webp') left -6px top 0 / 34px auto repeat-y,
+    url('/folk/border-r.webp') right -6px top 0 / 34px auto repeat-y,
+    linear-gradient(rgba(252, 241, 212, 0.45), rgba(252, 241, 212, 0.45)),
+    url('/folk/paper.webp') center top / cover no-repeat;
+  background-attachment: fixed; background-color: #f3dfb0;
+}
+:root[data-game-design="folk"] .folk-logo { display: flex; flex-direction: column; align-items: center; padding: 10px 40px 0; }
+:root[data-game-design="folk"] .folk-logo img { width: min(78%, 300px); height: auto; filter: drop-shadow(0 6px 10px rgba(70, 20, 5, 0.35)); }
+:root[data-game-design="folk"] .folk-logo::after { content: ''; display: block; width: min(86%, 340px); aspect-ratio: 1000 / 255; margin-top: -6px; background: url('/folk/divider.webp') center / contain no-repeat; }
+:root[data-game-design="folk"] .quick-play { margin-top: 2px; }
+/* Main buttons: the painted lacquer pill */
+:root[data-game-design="folk"] .ui-btn--primary {
+  color: var(--folk-gold); background: none; box-shadow: none; border-style: solid; border-width: 0 34px;
+  border-image: url('/folk/pill.webp') 0 260 fill / 0 34px stretch;
+  text-shadow: 0 1px 0 #4a0505, 0 2px 4px rgba(0, 0, 0, 0.5); filter: drop-shadow(0 4px 6px rgba(80, 20, 5, 0.35));
+}
+:root[data-game-design="folk"] .ui-btn--primary.ui-btn--sm { border-width: 0 24px; border-image-width: 0 24px; padding: 0 4px; }
+:root[data-game-design="folk"] .grid-tile[data-tile='leaderboard'] .grid-tile__icon { width: 64px; height: 58px; background: url('/folk/icon-leaderboard.webp') center / contain no-repeat; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.55)); }
+:root[data-game-design="folk"] .grid-tile[data-tile='leaderboard'] .grid-tile__icon > svg { display: none; }
+:root[data-game-design="folk"] .grid-tile[data-tile='invite'] .grid-tile__icon { width: 64px; height: 58px; background: url('/folk/icon-invite.webp') center / contain no-repeat; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.55)); }
+:root[data-game-design="folk"] .grid-tile[data-tile='invite'] .grid-tile__icon > svg { display: none; }
+:root[data-game-design="folk"] .grid-tile[data-tile='rules'] .grid-tile__icon { width: 64px; height: 58px; background: url('/folk/icon-rules.webp') center / contain no-repeat; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.55)); }
+:root[data-game-design="folk"] .grid-tile[data-tile='rules'] .grid-tile__icon > svg { display: none; }
+:root[data-game-design="folk"] .grid-tile[data-tile='servers'] .grid-tile__icon { width: 64px; height: 58px; background: url('/folk/icon-servers.webp') center / contain no-repeat; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.55)); }
+:root[data-game-design="folk"] .grid-tile[data-tile='servers'] .grid-tile__icon > svg { display: none; }
+/* Bottom bar: painted icons */
+:root[data-game-design="folk"] .ui-nav__icon { width: 44px; height: 38px; }
+:root[data-game-design="folk"] .ui-nav__item .ui-nav__icon > svg { display: none; }
+:root[data-game-design="folk"] .ui-nav__item .ui-nav__icon { background: center / contain no-repeat; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5)) saturate(0.75) brightness(0.85); }
+:root[data-game-design="folk"] .ui-nav__item--on .ui-nav__icon,
+:root[data-game-design="folk"] .ui-nav__item--accent .ui-nav__icon { background-color: transparent; box-shadow: none; filter: drop-shadow(0 0 6px rgba(242, 193, 78, 0.6)) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5)); transform: translateY(-2px) scale(1.12); }
+:root[data-game-design="folk"] .ui-nav__item[data-key='home'] .ui-nav__icon { background-image: url('/folk/nav-home.webp'); }
+:root[data-game-design="folk"] .ui-nav__item[data-key='open'] .ui-nav__icon { background-image: url('/folk/nav-open.webp'); }
+:root[data-game-design="folk"] .ui-nav__item[data-key='private'] .ui-nav__icon { background-image: url('/folk/nav-private.webp'); }
+:root[data-game-design="folk"] .ui-nav__item[data-key='create'] .ui-nav__icon { background-image: url('/folk/nav-create.webp'); border-radius: 50%; width: 42px; height: 42px; }
+/* Chat strip: the bell */
+:root[data-game-design="folk"] .chat-strip__head > svg { width: 22px; height: 22px; color: transparent; background: url('/folk/icon-bell.webp') center / contain no-repeat; }
+
+/* Content keeps clear of the side ornament; the corners sit only on the home screen */
+:root[data-game-design="folk"] .app-screen { padding-left: 30px; padding-right: 30px; }
+:root[data-game-design="folk"] .app-header,
+:root[data-game-design="folk"] .home { margin-left: -30px; margin-right: -30px; }
+:root[data-game-design="folk"] .filter-band { margin-left: -30px; margin-right: -30px; padding-left: 28px; padding-right: 28px; }
+:root[data-game-design="folk"] .home {
+  background: url('/folk/corner.webp') left 0 top 0 / 130px auto no-repeat, url('/folk/corner-r.webp') right 0 top 0 / 130px auto no-repeat;
+  background-position: left 0 top 88px, right 0 top 88px;
+}
+:root[data-game-design="folk"] .stake-head .script-title { text-shadow: 0 1px 0 #fff3cf, 0 0 6px #fff3cf; }
+/* Favourite star: visible on paper */
+:root[data-game-design="folk"] .people-row__btn { color: rgba(140, 50, 10, 0.55); background: rgba(255, 246, 222, 0.85); box-shadow: inset 0 0 0 1.5px rgba(179, 18, 27, 0.35); }
+:root[data-game-design="folk"] .people-row__btn--on { color: var(--folk-red); background: #ffe7a6; box-shadow: inset 0 0 0 1.5px var(--folk-gold-deep); }
+:root[data-game-design="folk"] .people-row__btn--on svg { fill: currentColor; }
+:root[data-game-design="folk"] .pair-grid { gap: 5px; margin-left: -8px; margin-right: -8px; }
+:root[data-game-design="folk"] .pair-card__half { font-size: 11px; letter-spacing: -0.01em; }
+:root[data-game-design="folk"] .pair-card__half span { white-space: normal; text-align: center; line-height: 1.1; }
+
+/* ── Хохлома, calmer: ornament only where it leads the eye ── */
+:root[data-game-design="folk"] body {
+  background:
+    linear-gradient(rgba(252, 241, 212, 0.66), rgba(252, 241, 212, 0.66)),
+    url('/folk/paper.webp') center top / cover no-repeat;
+  background-attachment: fixed; background-color: #f3dfb0;
+}
+/* A thin red-and-gold rule down both edges on every screen */
+:root[data-game-design="folk"] body::before {
+  content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  box-shadow: inset 3px 0 0 #b3121b, inset 5px 0 0 #e9c46a, inset -3px 0 0 #b3121b, inset -5px 0 0 #e9c46a;
+}
+:root[data-game-design="folk"] .app-screen { padding-left: 18px; padding-right: 18px; }
+:root[data-game-design="folk"] .app-header,
+:root[data-game-design="folk"] .home { margin-left: -18px; margin-right: -18px; }
+:root[data-game-design="folk"] .filter-band { margin-left: -18px; margin-right: -18px; padding-left: 16px; padding-right: 16px; }
+:root[data-game-design="folk"] .pair-grid { margin-left: 0; margin-right: 0; }
+/* The side ornament stays on the home screen only, around the logo */
+:root[data-game-design="folk"] .home {
+  background:
+    url('/folk/corner.webp') left 0 top 88px / 120px auto no-repeat,
+    url('/folk/corner-r.webp') right 0 top 88px / 120px auto no-repeat;
+}
+:root[data-game-design="folk"] .folk-logo::after { display: none; }
+:root[data-game-design="folk"] .folk-logo { padding-bottom: 4px; }
+/* Tiles: plain black lacquer with a fine gold rim; the painted icon is the decoration */
+:root[data-game-design="folk"] .grid-tile::before {
+  border: 0; border-image: none; inset: 0; border-radius: 16px;
+  background: radial-gradient(120% 80% at 50% 0%, rgba(179, 18, 27, 0.35), transparent 60%), linear-gradient(180deg, #241008, #120504);
+  box-shadow: inset 0 0 0 1.5px #c99a3c, inset 0 0 0 4px #1a0805, inset 0 0 0 5px rgba(201, 154, 60, 0.35), 0 5px 10px rgba(70, 20, 5, 0.3);
+  filter: none;
+}
+
+/* The VIP crown rises above the avatar: keep it clear of the status bar's dimmed strip */
+.home-bar:has(.ui-avatar__vip) { padding-top: calc(var(--safe-top) + 24px); }
+
+/* Хохлома: colours that read on the paper (light tints are made for the dark felt) */
+:root[data-game-design="folk"] .app-screen { --green: #17803f; --cyan: #0b6b85; --red: #c0141c; --violet-hi: #b3121b; }
+:root[data-game-design="folk"] .app-screen .ui-badge--green { background: rgba(23, 128, 63, 0.14); }
+:root[data-game-design="folk"] .app-screen .ui-badge--cyan { background: rgba(11, 107, 133, 0.13); }
+:root[data-game-design="folk"] .app-screen .ui-badge--gold { background: rgba(185, 128, 27, 0.16); color: #8a5a06; }
+:root[data-game-design="folk"] .app-screen .ui-badge--muted { background: rgba(59, 22, 8, 0.08); }
+:root[data-game-design="folk"] .stake-head__value.stake-head__value--practice,
+:root[data-game-design="folk"] .room-row__stake--practice { color: #17803f; }
+:root[data-game-design="folk"] .stake-practice { color: var(--folk-ink-2); }
+:root[data-game-design="folk"] .bots-pick__tag { background: rgba(185, 128, 27, 0.16); color: #8a5a06; }
+:root[data-game-design="folk"] .bots-pick__tag--practice { background: rgba(23, 128, 63, 0.14); color: #17803f; }
+:root[data-game-design="folk"] .bots-pick__level { background: rgba(255, 249, 232, 0.9); }
+:root[data-game-design="folk"] .bots-pick__level--on { background: #fff1c8; box-shadow: inset 0 0 0 2px var(--folk-gold-deep); }
+:root[data-game-design="folk"] .app-screen .room-center__sub,
+:root[data-game-design="folk"] .app-screen .room-links { color: var(--folk-ink-2); }
+:root[data-game-design="folk"] .app-screen .pcard__title--rare { color: #0b5f8a; background: rgba(56, 150, 230, 0.14); }
+:root[data-game-design="folk"] .app-screen .pcard__title--epic { color: #6b2bb0; background: rgba(150, 80, 230, 0.13); }
+:root[data-game-design="folk"] .app-screen .ach { opacity: 1; }
+:root[data-game-design="folk"] .app-screen .ui-rank { color: color-mix(in srgb, var(--rank) 45%, #3b1608); }
+:root[data-game-design="folk"] .news-hero,
+:root[data-game-design="folk"] .daily-hero { background: linear-gradient(180deg, #fff6dc, #f5e0ad); box-shadow: inset 0 0 0 1.5px rgba(179, 18, 27, 0.4); }
+:root[data-game-design="folk"] .news-hero strong { color: var(--folk-red); }

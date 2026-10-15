@@ -86,7 +86,7 @@ export default function BotProgressScreen() {
           return (
             <>
               <section className="bp-hero">
-                <span className={`bp-status${d.running ? ' bp-status--on' : ''}`}>{d.running ? '● учится прямо сейчас' : '○ на паузе'}</span>
+                <span className={`bp-status${d.running ? ' bp-status--on' : ''}`}>{d.running ? '● учится прямо сейчас' : '○ обучение остановлено — достигнут потолок'}</span>
                 <strong className="bp-hero__value">{last ? pct(last.winRate) : '—'}</strong>
                 <span className="bp-hero__label">побед над прежним максимальным ботом на последнем экзамене</span>
                 {last && first && last !== first && (

@@ -13,6 +13,7 @@ import { InstallCard } from './InstallCard.js';
 import { NEWS, newsDate, useUnseenNews } from '../lib/news.js';
 import { chatHasNew } from '../lib/chat.js';
 import { ChatStrip } from './ChatStrip.js';
+import { isVip } from '../lib/vip.js';
 
 interface Tile {
   icon: IconName;
@@ -23,12 +24,13 @@ interface Tile {
 const TILES: Tile[] = [
   { icon: 'gift', title: 'Задания', page: 'daily' },
   { icon: 'chat', title: 'Чат', page: 'chat' },
+  { icon: 'crown', title: 'VIP', page: 'vip' },
   { icon: 'cards', title: 'Зал ботов', page: 'training' },
   { icon: 'trophy', title: 'Турниры', page: 'tournaments' },
   { icon: 'news', title: 'Новости', page: 'news' },
   { icon: 'users', title: 'Друзья', page: 'friends' },
   { icon: 'bag', title: 'Предметы', page: 'items' },
-  { icon: 'crown', title: 'Доска почёта', page: 'leaderboard' },
+  { icon: 'medal', title: 'Доска почёта', page: 'leaderboard' },
   { icon: 'star', title: 'Достижения', page: 'achievements' },
   { icon: 'settings', title: 'Настройки', page: 'settings' },
   { icon: 'share', title: 'Пригласить', page: 'invite' },
@@ -68,6 +70,12 @@ export function HomeScreen() {
     <div className={`home${homeDesign === 'daylight' ? ' home--premium' : ''}${homeDesign === 'vegas' ? ' home--vegas' : ''}`}>
       <HomeBar />
 
+      {homeDesign === 'folk' && (
+        <div className="folk-logo">
+          <img src="/folk/logo.webp" alt="Маруська Арена" width={800} height={531} decoding="async" />
+        </div>
+      )}
+
       {(homeDesign === 'daylight' || homeDesign === 'vegas') && (
       <section className={`arena-hero${homeDesign === 'vegas' ? ' arena-hero--vegas-logo' : ''}`} aria-label={homeDesign === 'vegas' ? 'VEGAS Арена' : 'Маруська Арена'}>
         {homeDesign === 'vegas' ? (
@@ -97,17 +105,6 @@ export function HomeScreen() {
 
       <ChatStrip />
 
-      <button type="button" className={`news-card${unseenNews ? ' news-card--fresh' : ''}`} onClick={() => push('news')}>
-        <span className="news-card__icon" aria-hidden="true">📰</span>
-        <span className="news-card__body">
-          <small>
-            Новости · {newsDate(latest.date)}
-            {unseenNews > 0 && <b className="news-card__badge">новое</b>}
-          </small>
-          <strong>{latest.headline}</strong>
-        </span>
-        <span className="news-card__arrow" aria-hidden="true">›</span>
-      </button>
 
       <InstallCard />
 
@@ -126,7 +123,7 @@ export function HomeScreen() {
         {(me.owner ? [...TILES, { icon: 'flame', title: 'Прогресс бота', page: 'botprogress' } as Tile, { icon: 'crown', title: 'Управление', page: 'owner' } as Tile] : TILES).map((tile) => {
           const count = counter(tile);
           return (
-            <button key={tile.title} type="button" className="grid-tile" onClick={() => tile.page && push(tile.page)}>
+            <button key={tile.title} type="button" className="grid-tile" data-tile={tile.page} onClick={() => tile.page && push(tile.page)}>
               <span className="grid-tile__icon">
                 <Icon name={tile.icon} size={36} />
                 {count !== null && <span className={`grid-tile__count${typeof count === 'number' ? ' grid-tile__count--alert' : ''}`}>{count}</span>}
@@ -179,6 +176,7 @@ export function HomeBar() {
           size={60}
           ring={me.equipped.frame ? ringOf(me.equipped.frame) : undefined}
           crown={Boolean(me.equipped.crown)}
+          vip={isVip(me.premiumUntil)}
         />
         <span className="home-bar__who">
           <strong>{me.name}</strong>
@@ -195,7 +193,7 @@ export function HomeBar() {
         <span className="home-bar__money">
           <Balance kind="coins" value={me.wallet.coins} compact />
           <Balance kind="diamonds" value={me.wallet.diamonds} compact />
-          <button type="button" className="plus" aria-label="Магазин предметов" onClick={() => push('items')}>
+          <button type="button" className="plus" aria-label="Купить монеты" onClick={() => push('coins')}>
             <Icon name="plus" size={16} />
           </button>
         </span>

@@ -51,6 +51,51 @@ export class TelegramBot {
       return 'retry';
     }
   }
+
+  /** Any Bot API method; the result, or null when Telegram refused or did not answer. */
+  async call<T>(method: string, body: Record<string, unknown>): Promise<T | null> {
+    try {
+      const res = await this.http(`${this.apiUrl}/bot${this.token}/${method}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json()) as { ok: boolean; result?: T };
+      return data.ok && data.result !== undefined ? data.result : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** A link that opens the Telegram Stars payment form (Telegram.WebApp.openInvoice). */
+  createStarsInvoice(invoice: { title: string; description: string; payload: string; label: string; stars: number }): Promise<string | null> {
+    return this.call<string>('createInvoiceLink', {
+      title: invoice.title,
+      description: invoice.description,
+      payload: invoice.payload,
+      currency: 'XTR',
+      prices: [{ label: invoice.label, amount: invoice.stars }],
+    });
+  }
+
+  async refundStars(telegramId: bigint, chargeId: string): Promise<boolean> {
+    return (await this.call<boolean>('refundStarPayment', { user_id: Number(telegramId), telegram_payment_charge_id: chargeId })) === true;
+  }
+
+  /** The bot's Star transactions, oldest first. */
+  async starTransactions(offset: number, limit = 100): Promise<StarTransaction[] | null> {
+    const result = await this.call<{ transactions: StarTransaction[] }>('getStarTransactions', { offset, limit });
+    return result ? result.transactions : null;
+  }
+}
+
+/** The part of Telegram's StarTransaction the sweep needs. */
+export interface StarTransaction {
+  id: string;
+  amount: number;
+  date: number;
+  /** Set for incoming payments. */
+  source?: { type: string; user?: { id: number }; invoice_payload?: string };
 }
 
 const MAX_ATTEMPTS = 5;

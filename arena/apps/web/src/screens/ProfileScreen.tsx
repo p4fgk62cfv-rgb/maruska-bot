@@ -1,6 +1,7 @@
 import type { TransactionDto } from '@arena/shared';
 import { ratingBadge, RATING } from '@arena/shared';
-import { Badge, Balance, Panel, ProgressBar, formatAmount } from '@arena/ui';
+import { Badge, Balance, Panel, ProgressBar, VipCrown, formatAmount } from '@arena/ui';
+import { isVip } from '../lib/vip.js';
 import { useQuery } from '../lib/useQuery.js';
 import { useNav } from '../navigation.js';
 import { useMe } from '../session.js';
@@ -21,6 +22,10 @@ const TX_LABEL: Record<string, string> = {
   REFERRAL: 'Приглашение друга',
   EXCHANGE: 'Обмен',
   ADMIN: 'Начисление',
+  QUEST_REWARD: 'Задание',
+  LOGIN_REWARD: 'Календарь входа',
+  STARS_PURCHASE: 'Покупка за звёзды',
+  STARS_REFUND: 'Возврат звёзд',
 };
 
 export default function ProfileScreen() {
@@ -42,9 +47,14 @@ export default function ProfileScreen() {
           <Balance kind="coins" value={me.wallet.coins} />
           <Balance kind="diamonds" value={me.wallet.diamonds} />
         </div>
-        {me.premiumUntil && new Date(me.premiumUntil) > new Date() && (
-          <Badge tone="gold">Премиум до {new Date(me.premiumUntil).toLocaleDateString('ru-RU')}</Badge>
-        )}
+        <button type="button" className="vip-banner vip-banner--small" onClick={() => push('vip')}>
+          <VipCrown className="vip-banner__crown" />
+          <span>
+            <strong>{isVip(me.premiumUntil) ? `VIP до ${new Date(me.premiumUntil!).toLocaleDateString('ru-RU')}` : 'Стать VIP'}</strong>
+            <small>Золотая корона, подсветка ходов, ×2 рейтинга</small>
+          </span>
+          <b>›</b>
+        </button>
         <div className="league-card__row">
           <strong style={{ color: badge.league.color }}>{badge.league.name} лига</strong>
           <span className="app-muted">{'★'.repeat(badge.stars)}{'|'.repeat(badge.bars)}</span>

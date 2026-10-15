@@ -20,6 +20,8 @@ export interface TrainingTableDto {
   game: number;
   score: { champion: number; challenger: number };
   championVersion: number;
+  /** Self-play training is running (champion vs challenger); otherwise all seats are the live bots. */
+  training: boolean;
   seats: TrainingSeatDto[];
   table: { attack: CardId; defense: CardId | null }[];
   trump: { card: CardId; inStock: boolean };

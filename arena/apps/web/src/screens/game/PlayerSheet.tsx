@@ -125,7 +125,7 @@ export function PlayerSheet({ userId, gameId, onClose, onNote }: { userId: strin
       ) : (
         <div className="player-card">
           <div className="player-card__head">
-            <Avatar id={card.id} name={card.name} photoUrl={card.photoUrl} size={72} ring={ringOf(card.frame)} crown={Boolean(card.crown)} />
+            <Avatar id={card.id} name={card.name} photoUrl={card.photoUrl} size={72} ring={ringOf(card.frame)} crown={Boolean(card.crown)} vip={card.premium} />
             <div className="player-card__who">
               <strong>{card.name}</strong>
               {card.username && <span className="app-muted">@{card.username}</span>}

@@ -18,6 +18,7 @@ export function NavigationBar<T extends string>({ items, active, onSelect }: { i
           type="button"
           className={`ui-nav__item${item.key === active ? ' ui-nav__item--on' : ''}${item.accent ? ' ui-nav__item--accent' : ''}`}
           aria-current={item.key === active ? 'page' : undefined}
+          data-key={item.key}
           onClick={() => onSelect(item.key)}
         >
           <span className="ui-nav__icon">
