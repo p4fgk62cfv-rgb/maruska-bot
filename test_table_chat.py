@@ -13,6 +13,14 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import games.table as t  # noqa: E402
 
 t.is_enabled = lambda chat_id, key: True
+t.economy_on = lambda chat_id: False
+
+
+async def _no_settle(game, winner):
+    return ""
+
+
+t.settle = _no_settle
 errors = []
 
 
@@ -44,6 +52,23 @@ class Msg:
     async def edit_text(self, text, reply_markup=None, **kw):
         self.body, self.markup = text, reply_markup
 
+    async def answer_photo(self, photo, caption="", reply_markup=None, **kw):
+        assert photo.data[:2] == b"\xff\xd8", "не JPEG"
+        m = await self.answer(caption, reply_markup=reply_markup)
+        m.photo = photo
+        return m
+
+    async def edit_media(self, media, reply_markup=None, **kw):
+        assert media.media.data[:2] == b"\xff\xd8", "не JPEG"
+        self.body, self.photo = media.caption, media.media
+        if reply_markup is not None:
+            self.markup = reply_markup
+
+    async def edit_caption(self, caption="", reply_markup=None, **kw):
+        self.body = caption
+        if reply_markup is not None:
+            self.markup = reply_markup
+
 
 class Cb:
     def __init__(self, user, message, data):
@@ -69,7 +94,7 @@ async def press(user, m, label_or_data):
 
 async def main():
     real_sleep = asyncio.sleep
-    t.asyncio = types.SimpleNamespace(sleep=lambda *_: real_sleep(0), Lock=asyncio.Lock)
+    t.asyncio = types.SimpleNamespace(sleep=lambda *_: real_sleep(0), Lock=asyncio.Lock, to_thread=asyncio.to_thread)
     a, b, c = User(1, "Аня"), User(2, "Боря"), User(3, "Вася")
 
     # Крестики: открытый стол, Боря присоединяется, Вася не может ходить
