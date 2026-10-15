@@ -1,0 +1,174 @@
+"""
+Игры в чате через кнопки: лобби, вызов, ходы, Маруська-соперник, реванш.
+Telegram заменён заглушками. Запуск:  python test_table_chat.py
+"""
+
+import asyncio
+import pathlib
+import sys
+import types
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+
+import games.table as t  # noqa: E402
+
+t.is_enabled = lambda chat_id, key: True
+errors = []
+
+
+def check(ok, what):
+    if not ok:
+        errors.append(what)
+
+
+class User:
+    def __init__(self, uid, name):
+        self.id, self.first_name, self.last_name, self.username, self.is_bot, self.full_name = uid, name, None, None, False, name
+
+
+class Msg:
+    sent = []
+
+    def __init__(self, chat_id=-100, text="", user=None, reply=None):
+        self.chat = types.SimpleNamespace(id=chat_id, type="private" if chat_id > 0 else "supergroup")
+        self.text, self.from_user, self.reply_to_message = text, user, reply
+        self.message_id = len(Msg.sent) + 1
+        self.body, self.markup = "", None
+
+    async def answer(self, text, reply_markup=None, **kw):
+        m = Msg(self.chat.id)
+        m.body, m.markup = text, reply_markup
+        Msg.sent.append(m)
+        return m
+
+    async def edit_text(self, text, reply_markup=None, **kw):
+        self.body, self.markup = text, reply_markup
+
+
+class Cb:
+    def __init__(self, user, message, data):
+        self.from_user, self.message, self.data, self.alert = user, message, data, None
+
+    async def answer(self, text=None, show_alert=False, **kw):
+        self.alert = text
+
+
+def buttons(m):
+    return [b for row in (m.markup.inline_keyboard if m.markup else []) for b in row]
+
+
+async def press(user, m, label_or_data):
+    data = label_or_data if ":" in label_or_data else next(b.callback_data for b in buttons(m) if label_or_data in b.text)
+    cb = Cb(user, m, data)
+    if data.startswith("tg:"):
+        await t.table_press(cb)
+    elif data.startswith("tm:"):
+        await t.menu_pick(cb)
+    return cb
+
+
+async def main():
+    real_sleep = asyncio.sleep
+    t.asyncio = types.SimpleNamespace(sleep=lambda *_: real_sleep(0), Lock=asyncio.Lock)
+    a, b, c = User(1, "Аня"), User(2, "Боря"), User(3, "Вася")
+
+    # Крестики: открытый стол, Боря присоединяется, Вася не может ходить
+    await t.table_command(Msg(text="/крестики", user=a))
+    m = Msg.sent[-1]
+    check("ищет соперника" in m.body, "лобби")
+    cb = await press(a, m, "Играю")
+    check("Ждём соперника" in (cb.alert or ""), "сам с собой нельзя")
+    await press(b, m, "Играю")
+    check("Ходит" in m.body, f"старт: {m.body}")
+    gid = buttons(m)[0].callback_data.split(":")[1]
+    g = t._games[gid]
+    first = g.players[g.turn][0]
+    mover = a if first == 1 else b
+    other = b if mover is a else a
+    cb = await press(c, m, f"tg:{gid}:m:0")
+    check("не в этой партии" in (cb.alert or ""), "чужой не ходит")
+    cb = await press(other, m, f"tg:{gid}:m:0")
+    check("не твой ход" in (cb.alert or ""), "не в свой ход")
+    for cell, who in ((0, mover), (3, other), (1, mover), (4, other), (2, mover)):
+        await press(who, m, f"tg:{gid}:m:{cell}")
+    check("Побеждает" in m.body and g.status == "over", f"победа: {m.body}")
+    await press(a, m, "Реванш")
+    check(g.status == "playing" and g.state == [""] * 9, "реванш")
+
+    # Вызов ответом: принять может только приглашённый
+    await t.table_command(Msg(text="/шашки", user=a, reply=Msg(user=b)))
+    m = Msg.sent[-1]
+    check("вызывает" in m.body, "вызов")
+    cb = await press(c, m, "Принять")
+    check("не тебе" in (cb.alert or ""), "чужой вызов")
+    await press(b, m, "Принять")
+    gid = buttons(m)[0].callback_data.split(":")[1]
+    g = t._games[gid]
+    white = a if g.players[g.turn_white][0] == 1 else b
+    black = b if white is a else a
+    cb = await press(white, m, f"tg:{gid}:c:{5 * 8 + 0}")
+    check(g.selected == 40, "выбор шашки")
+    check(any(x.text == "🟩" for x in buttons(m)), "подсветка ходов")
+    await press(white, m, f"tg:{gid}:c:{4 * 8 + 1}")
+    check(g.state.turn == "b" and g.players[g.turn][0] == black.id, "ход перешёл")
+    await press(black, m, "Сдаться")
+    check(g.status == "over" and "сдаётся" in m.body, "сдача")
+
+    # Шашки с Маруськой: доигрываем случайными ходами до конца
+    await t.table_command(Msg(text="/шашки", user=a))
+    m = Msg.sent[-1]
+    await press(a, m, "С Маруськой")
+    gid = buttons(m)[0].callback_data.split(":")[1]
+    g = t._games[gid]
+    for _ in range(400):
+        if g.status != "playing":
+            break
+        opts = g.state.options()
+        src = g.state.chain if g.state.chain is not None else next(iter(opts))
+        if g.selected != src:
+            await press(a, m, f"tg:{gid}:c:{src}")
+        await press(a, m, f"tg:{gid}:c:{opts[src][0]}")
+    check(g.status == "over", "партия с Маруськой не закончилась")
+
+    # Морской бой с Маруськой
+    await t.table_command(Msg(text="/морской", user=a))
+    m = Msg.sent[-1]
+    await press(a, m, "С Маруськой")
+    gid = buttons(m)[0].callback_data.split(":")[1]
+    g = t._games[gid]
+    cb = await press(a, m, "Мои корабли")
+    check(cb.alert and "■" in cb.alert and len(cb.alert) <= 200, f"флот: {cb.alert!r}")
+    for pos in range(64):
+        if g.status != "playing":
+            break
+        if pos not in g.state[1].shots:
+            await press(a, m, f"tg:{gid}:s:{pos}")
+    check(g.status == "over", "морской бой не закончился")
+
+    # КНБ вдвоём: выбор скрыт до второго
+    await t.table_command(Msg(text="/кнб", user=a))
+    m = Msg.sent[-1]
+    await press(b, m, "Играю")
+    gid = buttons(m)[0].callback_data.split(":")[1]
+    await press(a, m, f"tg:{gid}:r:rock")
+    check("Ждём" in m.body and "🪨" not in m.body, "выбор скрыт")
+    await press(b, m, f"tg:{gid}:r:scissors")
+    check("Побеждает <b>Аня</b>" in m.body, f"кнб итог: {m.body}")
+
+    # Меню и личка
+    await t.table_command(Msg(text="/игры", user=a))
+    check("Игры Маруськи" in Msg.sent[-1].body, "меню")
+    await t.table_command(Msg(chat_id=5, text="/крестики", user=a))
+    check("Маруська" in Msg.sent[-1].body and "Ходит" in Msg.sent[-1].body or "Побеждает" in Msg.sent[-1].body, "в личке сразу с ботом")
+
+    # Все данные кнопок влезают в 64 байта
+    for m in Msg.sent:
+        for x in buttons(m):
+            check(len(x.callback_data.encode()) <= 64, f"длинные данные {x.callback_data}")
+
+
+asyncio.run(main())
+if errors:
+    print("❌ " + "\n❌ ".join(errors[:20]))
+    sys.exit(1)
+print("✅ Игры в чате: лобби, ходы, бот и реванш работают.")
