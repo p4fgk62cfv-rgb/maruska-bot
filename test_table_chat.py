@@ -89,6 +89,8 @@ async def press(user, m, label_or_data):
         await t.table_press(cb)
     elif data.startswith("tm:"):
         await t.menu_pick(cb)
+    elif data.startswith("tc:"):
+        await t.coin_press(cb)
     return cb
 
 
@@ -179,6 +181,41 @@ async def main():
     check("Ждём" in m.body and "🪨" not in m.body, "выбор скрыт")
     await press(b, m, f"tg:{gid}:r:scissors")
     check("Побеждает <b>Аня</b>" in m.body, f"кнб итог: {m.body}")
+
+    # Орёл или решка: автор выбирает сторону, соперник берёт другую
+    await t.table_command(Msg(text="/орел", user=a))
+    m = Msg.sent[-1]
+    check("выбери свою сторону" in m.body, f"монетка: {m.body}")
+    cb = await press(b, m, "Орёл")
+    check("выбирает тот, кто начал" in (cb.alert or ""), "сторону выбирает автор")
+    gid = buttons(m)[0].callback_data.split(":")[1]
+    cb = await press(b, m, f"tc:{gid}:join:")
+    check("Сначала" in (cb.alert or ""), "до выбора стороны нельзя присоединиться")
+    await press(a, m, "Решка")
+    check("за решку" in m.body and any("Играю за орла" in x.text for x in buttons(m)), f"сторона: {m.body}")
+    cb = await press(a, m, "Играю")
+    check("Ждём соперника" in (cb.alert or ""), "сам с собой нельзя")
+    await press(b, m, "Играю")
+    check(("Выпал орёл" in m.body or "Выпала решка" in m.body) and "Победа за" in m.body, f"итог монетки: {m.body}")
+    check("Боря" in m.body and "Аня" in m.body, "оба игрока в итоге")
+    cb = await press(a, m, "Ещё раз")
+    check("выбери свою сторону" in Msg.sent[-1].body, "ещё раз")
+
+    # Вызов ответом: принять может только приглашённый; или против Маруськи
+    await t.table_command(Msg(text="/орел", user=a, reply=Msg(user=b)))
+    m = Msg.sent[-1]
+    await press(a, m, "Орёл")
+    check("Принять (решка)" in buttons(m)[0].text, "кнопка приглашённому")
+    cb = await press(c, m, "Принять")
+    check("не тебе" in (cb.alert or ""), "чужой вызов монетки")
+    await press(a, m, "Против Маруськи")
+    check("Маруська" in m.body and "Победа за" in m.body, f"против Маруськи: {m.body}")
+
+    # В личке — сразу против Маруськи после выбора стороны
+    await t.table_command(Msg(chat_id=5, text="/орел", user=a))
+    m = Msg.sent[-1]
+    await press(a, m, "Орёл")
+    check("Победа за" in m.body, f"монетка в личке: {m.body}")
 
     # Меню и личка
     await t.table_command(Msg(text="/игры", user=a))

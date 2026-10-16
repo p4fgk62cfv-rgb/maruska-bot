@@ -35,7 +35,7 @@ from games.dice_core import (
 )
 
 
-COIN_SIDES = (("🪙", "Орёл"), ("🪙", "Решка"))
+COIN_SIDES = (("🦅", "Орёл"), ("💰", "Решка"))
 
 
 def games_on(message: Message) -> bool:

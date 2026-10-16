@@ -8,6 +8,8 @@
 import io
 import math
 import random
+import re
+import unicodedata
 from functools import lru_cache
 from pathlib import Path
 
@@ -58,7 +60,20 @@ def radial(size: int, inner: tuple, outer: tuple) -> Image.Image:
     return im
 
 
+# Что умеет шрифт: латиница, кириллица, цифры, обычная пунктуация
+_DRAWABLE = re.compile(r"[^\u0020-\u024F\u0400-\u04FF\u2010-\u2027\u2116]")
+
+
+def drawable(text: str) -> str:
+    """Ник для картинки: «𝑳𝒆𝒔𝒚𝒂 🦋» → «Lesya». Эмодзи и узоры шрифт рисует квадратиками — убираем."""
+    text = unicodedata.normalize("NFKC", text)
+    text = "".join(ch for ch in text if unicodedata.category(ch) not in ("Mn", "Me", "Cf") and not 0xFE00 <= ord(ch) <= 0xFE0F)
+    text = " ".join(_DRAWABLE.sub(" ", text).split())
+    return text or "Игрок"
+
+
 def fit_text(draw: ImageDraw.ImageDraw, text: str, size: int, width: int) -> tuple[str, ImageFont.FreeTypeFont]:
+    text = drawable(text)
     f = font(size)
     while draw.textlength(text, font=f) > width and size > 14:
         size -= 2
