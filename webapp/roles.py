@@ -46,8 +46,10 @@ PERMISSIONS = {
 
 # Какие настройки к какому праву относятся — по разделу панели
 SECTION_PERMISSION = {
-    "Общение": "content",
-    "Сообщество": "settings",
+    "Маруська": "content",
+    "Действия": "content",
+    "Экономика": "economy",
+    "Жизнь чата": "settings",
     "Модерация": "moderation",
     "Антимат": "moderation",
     "Развлечения": "games",

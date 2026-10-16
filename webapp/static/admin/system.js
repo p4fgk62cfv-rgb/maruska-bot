@@ -132,7 +132,7 @@
         }).join("") + "</div>";
 
         if (d.settings.length) html += '<div class="card"><div class="card-title">Настройки</div>' + d.settings.map(function (s) {
-          return '<div class="list-item tap" data-open="settings" data-arg="' + esc(s.group) + '"><span style="font-size:20px">' + s.emoji + '</span><div class="grow"><div class="t">' + esc(s.title) + '</div><div class="s">' + esc(s.group) + "</div></div></div>";
+          return '<div class="list-item tap" data-open="settings" data-arg="' + esc("keys:" + s.title + ":" + s.key) + '"><span style="font-size:20px">' + s.emoji + '</span><div class="grow"><div class="t">' + esc(s.title) + '</div><div class="s">' + esc(s.group) + "</div></div></div>";
         }).join("") + "</div>";
 
         if (d.groups.length) html += '<div class="card"><div class="card-title">Группы</div>' + d.groups.map(function (g) {

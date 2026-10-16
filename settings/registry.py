@@ -44,63 +44,63 @@ FEATURES: tuple[Feature, ...] = (
         title="Ответы Мары",
         emoji="💬",
         description="Отвечает, когда зовут по имени или отвечают на её сообщение",
-        group="Общение",
+        group="Маруська",
     ),
     Feature(
         key="reactions",
         title="Реакции Мары",
         emoji="😁",
         description="Мара сама ставит реакции: 🤣 на ржач, ❤ на милое, 🍾 когда кого-то угощают",
-        group="Общение",
+        group="Маруська",
     ),
     Feature(
         key="actions",
         title="Действия",
         emoji="🎲",
         description="Пиво, обнять, цветы и ещё 200 действий с картинками",
-        group="Общение",
+        group="Действия",
     ),
     Feature(
         key="cats",
         title="Котики",
         emoji="🐱",
         description="«Покажи меня» и «мяу»",
-        group="Общение",
+        group="Действия",
     ),
     Feature(
         key="weather",
         title="Погода",
         emoji="🌤",
         description="«Мара, погода в Праге» и /weather",
-        group="Общение",
+        group="Маруська",
     ),
     Feature(
         key="fortune",
         title="Предсказания",
         emoji="🔮",
         description="«Мара, предскажи» и /future — стиль задаётся в разделе «Предсказания»",
-        group="Предсказания",
+        group="Маруська",
     ),
     Feature(
         key="greeting",
         title="Приветствие",
         emoji="👋",
         description="Здороваться с новыми участниками и подсказывать команды",
-        group="Сообщество",
+        group="Жизнь чата",
     ),
     Feature(
         key="digest",
         title="Итоги недели",
         emoji="📊",
         description="Раз в неделю подводить итоги: кто активнее, богаче, удачливее",
-        group="Сообщество",
+        group="Жизнь чата",
     ),
     Feature(
         key="top_chatters",
         title="Топ болтунов",
         emoji="🗣",
         description="«топ болтунов» или /chatters — кто больше всех написал сегодня",
-        group="Сообщество",
+        group="Жизнь чата",
     ),
     Feature(
         key="fishing",
@@ -121,14 +121,14 @@ FEATURES: tuple[Feature, ...] = (
         title="Пара дня",
         emoji="💞",
         description="«пара дня» или /pair — раз в сутки Мара выбирает пару из активных участников",
-        group="Сообщество",
+        group="Жизнь чата",
     ),
     Feature(
         key="marriages",
         title="Браки",
         emoji="💍",
         description="/marry в ответ на сообщение — предложение, счётчик дней вместе, /divorce",
-        group="Сообщество",
+        group="Экономика",
     ),
     Feature(
         key="marry_ring",
@@ -136,35 +136,35 @@ FEATURES: tuple[Feature, ...] = (
         emoji="💎",
         description="Для предложения нужно 💍 Кольцо из магазина",
         default=False,
-        group="Сообщество",
+        group="Экономика",
     ),
     Feature(
         key="gifts",
         title="Подарки друг другу",
         emoji="🎁",
         description="/gift — подарить вещь из магазина. Работает, если включена экономика",
-        group="Сообщество",
+        group="Экономика",
     ),
     Feature(
         key="library",
         title="Моя коллекция картинок",
         emoji="📚",
         description="Сначала картинки из коллекции владельца, потом из Pixabay",
-        group="Общение",
+        group="Действия",
     ),
     Feature(
         key="memory",
         title="Память Мары",
         emoji="🧠",
         description="Мара помнит последние сообщения и отвечает с учётом разговора",
-        group="Общение",
+        group="Маруська",
     ),
     Feature(
         key="autoreplies",
         title="Автоответы",
         emoji="💬",
         description="Мара отвечает на ключевые слова заготовленными фразами",
-        group="Общение",
+        group="Маруська",
     ),
     Feature(
         key="game_crocodile",
@@ -237,21 +237,21 @@ FEATURES: tuple[Feature, ...] = (
         title="Рейтинг",
         emoji="⭐",
         description="Плюсы и минусы реплаем, /top и /profile",
-        group="Сообщество",
+        group="Экономика",
     ),
     Feature(
         key="progress",
         title="Уровни и достижения",
         emoji="🎚",
         description="Опыт за активность, уровни и 20 достижений",
-        group="Сообщество",
+        group="Экономика",
     ),
     Feature(
         key="economy",
         title="Алмазы",
         emoji="💎",
         description="Баланс, ежедневный бонус, награды за игры",
-        group="Сообщество",
+        group="Экономика",
     ),
     Feature(
         key="games",
@@ -327,7 +327,7 @@ CHOICES: tuple[Choice, ...] = (
             ("en", "English", "🇬🇧"),
         ),
         default="ru",
-        group="Общение",
+        group="Маруська",
     ),
     Choice(
         key="timezone",
@@ -344,7 +344,7 @@ CHOICES: tuple[Choice, ...] = (
             ("UTC", "UTC", "🌐"),
         ),
         default="Europe/Prague",
-        group="Сообщество",
+        group="Жизнь чата",
     ),
     Choice(
         key="act_flood",
@@ -504,7 +504,7 @@ CHOICES: tuple[Choice, ...] = (
             ("fun", "Развлекательная", "🎉"),
         ),
         default="normal",
-        group="Общение",
+        group="Маруська",
     ),
     Choice(
         key="fortune_mode",
@@ -519,7 +519,7 @@ CHOICES: tuple[Choice, ...] = (
             ("brutal", "Жёсткий", "💀"),
         ),
         default="roast",
-        group="Предсказания",
+        group="Маруська",
     ),
     Choice(
         key="persona",
@@ -528,7 +528,7 @@ CHOICES: tuple[Choice, ...] = (
         description="Как она себя ведёт: добрая, весёлая, дерзкая, романтичная или тролль",
         options=_persona_options(),
         default="funny",
-        group="Общение",
+        group="Маруська",
     ),
 )
 
@@ -596,7 +596,7 @@ NUMBERS: tuple[Number, ...] = (
         description="Сколько последних сообщений Мара видит как контекст",
         default=8, minimum=2, maximum=30, step=2,
         env="CONTEXT_MESSAGES", unit="сообщ.",
-        group="Общение",
+        group="Маруська",
     ),
 
     Number(
@@ -606,7 +606,7 @@ NUMBERS: tuple[Number, ...] = (
         description="Шанс реакции на смешное и милое. На угощения Мара реагирует чаще, на фото — реже",
         default=40, minimum=10, maximum=100, step=10,
         unit="%",
-        group="Общение",
+        group="Маруська",
     ),
 
     # Алмазы
@@ -617,7 +617,7 @@ NUMBERS: tuple[Number, ...] = (
         description="Нижняя граница ежедневного бонуса",
         default=50, minimum=10, maximum=1000, step=10,
         env="BONUS_MIN", unit="💎",
-        group="Сообщество",
+        group="Экономика",
     ),
     Number(
         key="bonus_max",
@@ -626,7 +626,7 @@ NUMBERS: tuple[Number, ...] = (
         description="Верхняя граница ежедневного бонуса",
         default=150, minimum=20, maximum=2000, step=10,
         env="BONUS_MAX", unit="💎",
-        group="Сообщество",
+        group="Экономика",
     ),
     Number(
         key="jackpot_chance",
@@ -635,7 +635,7 @@ NUMBERS: tuple[Number, ...] = (
         description="Как часто вместо бонуса выпадает крупный выигрыш",
         default=5, minimum=0, maximum=50, step=1,
         unit="%",
-        group="Сообщество",
+        group="Экономика",
     ),
 
     # Прогресс
@@ -646,7 +646,7 @@ NUMBERS: tuple[Number, ...] = (
         description="Сколько дней хранить сообщения группы в базе",
         default=30, minimum=1, maximum=365, step=1,
         unit="дн",
-        group="Общение",
+        group="Маруська",
     ),
     Number(
         key="ai_daily_limit",
@@ -654,7 +654,7 @@ NUMBERS: tuple[Number, ...] = (
         emoji="🤖",
         description="Сколько раз в сутки Мара отвечает в группе. 0 — без ограничений",
         default=0, minimum=0, maximum=5000, step=50,
-        group="Общение",
+        group="Маруська",
     ),
     Number(
         key="ai_cooldown",
@@ -663,7 +663,7 @@ NUMBERS: tuple[Number, ...] = (
         description="Не чаще, чем раз в N секунд одному и тому же человеку. 0 — без паузы",
         default=0, minimum=0, maximum=600, step=5,
         unit="сек",
-        group="Общение",
+        group="Маруська",
     ),
     Number(
         key="image_limit_hour",
@@ -671,7 +671,7 @@ NUMBERS: tuple[Number, ...] = (
         emoji="🖼",
         description="Сколько картинок действий в час. Сверх лимита — действие без картинки. 0 — без ограничений",
         default=0, minimum=0, maximum=500, step=5,
-        group="Общение",
+        group="Действия",
     ),
     Number(
         key="dice_cooldown",
@@ -689,7 +689,7 @@ NUMBERS: tuple[Number, ...] = (
         description="Выбирать только тех, кто писал за последние N дней",
         default=7, minimum=1, maximum=60, step=1,
         unit="дн",
-        group="Сообщество",
+        group="Жизнь чата",
     ),
     Number(
         key="marry_cost",
@@ -697,7 +697,7 @@ NUMBERS: tuple[Number, ...] = (
         emoji="💍",
         description="Сколько алмазов списать с того, кто сделал предложение, когда его приняли. 0 — бесплатно",
         default=0, minimum=0, maximum=100000, step=100,
-        group="Сообщество",
+        group="Экономика",
     ),
     Number(
         key="top_chatters_size",
@@ -705,7 +705,7 @@ NUMBERS: tuple[Number, ...] = (
         emoji="🗣",
         description="Сколько человек показывать в топе болтунов",
         default=10, minimum=3, maximum=30, step=1,
-        group="Сообщество",
+        group="Жизнь чата",
     ),
     Number(
         key="xp_message",
@@ -714,15 +714,15 @@ NUMBERS: tuple[Number, ...] = (
         description="Сколько опыта даёт одно сообщение",
         default=2, minimum=0, maximum=20, step=1,
         env="XP_MESSAGE",
-        group="Сообщество",
+        group="Экономика",
     ),
     Number(
         key="xp_action",
-        title="Опыт за Action",
+        title="Опыт за действие",
         emoji="⚡",
         description="Сколько опыта получает тот, кто сделал действие: угостил, обнял…",
         default=3, minimum=0, maximum=50, step=1,
-        group="Сообщество",
+        group="Экономика",
     ),
     Number(
         key="xp_daily_cap",
@@ -731,7 +731,7 @@ NUMBERS: tuple[Number, ...] = (
         description="Больше этого за сообщения не начислится — защита от флуда",
         default=120, minimum=20, maximum=2000, step=20,
         env="XP_DAILY_CAP",
-        group="Сообщество",
+        group="Экономика",
     ),
     Number(
         key="rating_cooldown",
@@ -740,7 +740,7 @@ NUMBERS: tuple[Number, ...] = (
         description="Как часто можно оценивать одного и того же человека",
         default=24, minimum=1, maximum=168, step=1,
         unit="ч",
-        group="Сообщество",
+        group="Экономика",
     ),
 
     # Модерация
@@ -839,7 +839,7 @@ NUMBERS: tuple[Number, ...] = (
         description="В какой день недели подводить итоги",
         default=6, minimum=0, maximum=6, step=1,
         env="DIGEST_WEEKDAY",
-        group="Сообщество",
+        group="Жизнь чата",
     ),
     Number(
         key="digest_hour",
@@ -848,7 +848,7 @@ NUMBERS: tuple[Number, ...] = (
         description="Во сколько подводить итоги, по UTC",
         default=17, minimum=0, maximum=23, step=1,
         env="DIGEST_HOUR", unit="ч UTC",
-        group="Сообщество",
+        group="Жизнь чата",
     ),
 
     # Игры
@@ -1027,7 +1027,7 @@ TEXTS: tuple[Text, ...] = (
         description="Команды, которые в группе работают только у админов. Через запятую: /dice, /coin",
         default="",
         max_length=500,
-        group="Сообщество",
+        group="Модерация",
         allow_empty=True,
     ),
     Text(
@@ -1037,7 +1037,7 @@ TEXTS: tuple[Text, ...] = (
         description="Чьи сообщения Мара не запоминает: @username или ID через запятую",
         default="",
         max_length=1000,
-        group="Общение",
+        group="Маруська",
         allow_empty=True,
     ),
     Text(
@@ -1084,7 +1084,7 @@ TEXTS: tuple[Text, ...] = (
         default=DEFAULT_GREETING,
         placeholders=("name",),
         max_length=300,
-        group="Сообщество",
+        group="Жизнь чата",
     ),
     Text(
         key="greeting_hint",
@@ -1093,7 +1093,7 @@ TEXTS: tuple[Text, ...] = (
         description="Что бот пишет новичку после приветствия",
         default=DEFAULT_GREETING_HINT,
         max_length=800,
-        group="Сообщество",
+        group="Жизнь чата",
     ),
     Text(
         key="antimat_words",
@@ -1147,14 +1147,19 @@ def option_label(key: str, value: str) -> str:
     return value
 
 
+# Порядок разделов — как в меню панели
+GROUP_ORDER = ("Маруська", "Действия", "Развлечения", "Экономика", "Жизнь чата", "Модерация", "Антимат")
+
+
 def groups() -> list[str]:
-    seen = []
+    seen = [name for name in GROUP_ORDER]
 
     for item in list(FEATURES) + list(CHOICES) + list(NUMBERS) + list(TEXTS):
         if item.group not in seen:
             seen.append(item.group)
 
-    return seen
+    used = {item.group for item in list(FEATURES) + list(CHOICES) + list(NUMBERS) + list(TEXTS)}
+    return [name for name in seen if name in used]
 
 
 def by_group(name: str) -> list[Feature]:

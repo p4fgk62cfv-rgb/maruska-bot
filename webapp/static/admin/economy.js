@@ -112,7 +112,7 @@
         + row("❤️", "Карма", "Голоса и рейтинг", "karma")
         + row("🏆", "Достижения", "Условия, награды, статистика", "achievements")
         + row("🛍", "Магазин", "Цены, наличие, покупки", "shop")
-        + row("⚙️", "Настройки экономики", "Бонус, джекпот, награды", "settings", "Сообщество");
+        + row("⚙️", "Настройки экономики", "Бонус, джекпот, награды", "settings", "Экономика");
 
       M.bind();
     }).catch(M.fail);
@@ -163,8 +163,8 @@
     M.api("/api/admin/levels" + M.chatQuery()).then(function (d) {
       M.app.innerHTML = M.backButton("Экономика") + M.chatPicker()
         + '<div class="card"><div class="card-title">Как начисляется опыт</div>'
-        + '<div class="dim" style="margin-bottom:8px">За сообщения, Actions, победы и ведение игр, бонус и подарки. Сколько именно — в настройках.</div>'
-        + '<div class="btns"><button class="btn" data-open="settings" data-arg="Сообщество">✨ За сообщения и Actions</button>'
+        + '<div class="dim" style="margin-bottom:8px">За сообщения, действия, победы и ведение игр, бонус и подарки. Сколько именно — в настройках.</div>'
+        + '<div class="btns"><button class="btn" data-open="settings" data-arg="keys:Опыт:progress,xp_message,xp_action,xp_daily_cap">✨ За сообщения и действия</button>'
         + '<button class="btn" data-open="settings" data-arg="Развлечения">🎮 За игры</button></div></div>'
 
         + '<div class="card"><div class="card-title">Лидеры по опыту</div>' + M.bars(d.top, " xp") + "</div>"
@@ -188,7 +188,7 @@
       M.app.innerHTML = M.backButton("Экономика") + M.chatPicker()
         + '<div class="card"><div class="card-title">Правила</div>'
         + '<div class="dim" style="margin-bottom:8px">Карму дают ответом «+» или «−» на сообщение, за игры и вручную из профиля.</div>'
-        + '<div class="btns"><button class="btn" data-open="settings" data-arg="Сообщество">⏱ Пауза между голосами</button>'
+        + '<div class="btns"><button class="btn" data-open="settings" data-arg="keys:Карма и рейтинг:rating,rating_cooldown">⏱ Пауза между голосами</button>'
         + '<button class="btn" data-open="settings" data-arg="Развлечения">🎮 Карма за игры</button></div></div>'
 
         + '<div class="card"><div class="card-title">Лидеры по карме</div>' + M.bars(d.top) + "</div>"

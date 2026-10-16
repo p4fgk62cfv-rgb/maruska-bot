@@ -10,7 +10,10 @@
   // НАСТРОЙКИ (весь список или один раздел)
   // =========================================================
 
-  var SECTION_PERMISSION = { "Общение": "content", "Сообщество": "settings", "Модерация": "moderation", "Антимат": "moderation", "Развлечения": "games" };
+  var SECTION_PERMISSION = {
+    "Маруська": "content", "Действия": "content", "Экономика": "economy", "Жизнь чата": "settings",
+    "Модерация": "moderation", "Антимат": "moderation", "Развлечения": "games"
+  };
 
   M.screen("settings", function (only) {
     if (!M.state.chat) {
@@ -20,20 +23,42 @@
     }
 
     M.api("/api/admin/settings" + M.chatQuery()).then(function (d) {
-      var sections = d.sections.filter(function (s) { return !only || s.name === only; });
+      // Аргумент — раздел («Экономика») или подборка «keys:Заголовок:ключ1,ключ2»
+      // для экранов-хабов: открывается только то, о чём строка
+      var picked = null, pickedTitle = "";
+      if (only && only.indexOf("keys:") === 0) {
+        var rest = only.slice(5), cut = rest.lastIndexOf(":");
+        pickedTitle = rest.slice(0, cut);
+        picked = rest.slice(cut + 1).split(",");
+      }
+
+      var sections = d.sections.filter(function (s) { return picked || !only || s.name === only; });
+      if (picked) {
+        sections = sections.map(function (s) {
+          return { name: s.name, items: s.items.filter(function (i) { return picked.indexOf(i.key) >= 0; }) };
+        }).filter(function (s) { return s.items.length; });
+        // В порядке, в каком ключи перечислены в подборке
+        var flat = [];
+        sections.forEach(function (s) { s.items.forEach(function (i) { i._section = s.name; flat.push(i); }); });
+        flat.sort(function (a, b) { return picked.indexOf(a.key) - picked.indexOf(b.key); });
+        sections = flat.length ? [{ name: pickedTitle, items: flat, picked: true }] : [];
+      }
       var index = {};
 
       var html = M.backButton() + M.chatPicker(false);
 
       sections.forEach(function (sec) {
-        var editable = M.can(SECTION_PERMISSION[sec.name] || "settings");
+        var canSection = function (name) { return M.can(SECTION_PERMISSION[name] || "settings"); };
+        var editable = sec.picked
+          ? sec.items.every(function (i) { return canSection(i._section); })
+          : canSection(sec.name);
 
         html += '<div class="card"><div class="card-title">' + esc(sec.name)
           + (editable ? "" : ' <span class="tag">только просмотр</span>') + "</div>";
 
         sec.items.forEach(function (it) {
           index[it.key] = it;
-          it.editable = editable;
+          it.editable = sec.picked ? canSection(it._section) : editable;
 
           html += '<div class="setting" data-key="' + it.key + '"><div class="ico">' + it.emoji + "</div>"
             + '<div class="grow"><div class="t">' + esc(it.title) + '</div><div class="s">' + esc(it.description) + "</div>";
@@ -133,35 +158,65 @@
   // ЕЩЁ
   // =========================================================
 
-  var MORE = [
-    ["changelog", "new", "Обновления", "Что нового в Маре", false, "pink"],
-    ["settings", "settings", "Все настройки", "Каждый параметр группы", false, "purple"],
-    ["analytics", "chart", "Аналитика", "Графики и тепловая карта", false, "blue"],
-    ["economy", "diamond", "Экономика", "Алмазы и операции", false, "gold"],
-    ["games", "game", "Игры", "Крокодил, кубики, награды", false, "green"],
-    ["arena", "game", "Арена", "Дурак онлайн: игроки, деньги, турниры", true, "gold"],
-    ["broadcasts", "megaphone", "Рассылки", "Фото, видео, кнопки, расписание", false, "blue"],
-    ["journal", "journal", "Журнал", "Кто что сделал", false, "purple"],
-    ["owners", "crown", "Главные админы", "Права как у создателя", true, "gold"],
-    ["roles", "crown", "Роли", "Права администраторов", false, "gold"],
-    ["groups", "group", "Группы", "Где работает Мара", false, "green"],
-    ["achievements", "trophy", "Достижения", "Кто что открыл", false, "gold"],
-    ["shop", "bag", "Магазин", "Товары и продажи", false, "pink"],
-    ["logs", "file", "Логи", "Только для владельца", true, "red"],
-    ["system", "database", "Система", "Только для владельца", true, "red"]
-  ];
-
+  // Разделы сгруппированы по задачам: развлечения, экономика, жизнь чата,
+  // контроль, управление. Каждая строка показывает текущее состояние.
   M.screen("more", function () {
     var owner = M.state.session.user.owner;
 
-    M.app.innerHTML = M.header("Ещё", "Все разделы панели", "menu", "blue")
-      + '<div class="menu-grid">' + MORE.filter(function (r) { return owner || !r[4]; }).map(function (r) {
-          var fresh = r[0] === "changelog" && M.hasUpdate();
-          return '<div class="menu-tile" data-open="' + r[0] + '">' + M.tile(r[1], r[5], 20)
-            + '<div class="t">' + r[2] + (fresh ? ' <span class="tag new">новое</span>' : "") + "</div>"
-            + '<div class="s">' + r[3] + "</div></div>";
-        }).join("") + "</div>";
+    M.settingsIndex().then(function (k) {
+      var has = Object.keys(k).length > 0;
+      var v = function (key) { return k[key] ? k[key].value : null; };
+      var l = function (key) { return k[key] ? k[key].label : "—"; };
+      var R = M.hubRow, on = M.onOff;
+      var fresh = M.hasUpdate() ? ' <span class="tag new">новое</span>' : "";
+      var games = has ? [v("game_table") && "игры в чате", v("game_crocodile") && "крокодил", v("game_dice") && "кубики", v("fishing") && "рыбалка"].filter(Boolean) : [];
 
-    M.bind();
+      var html = M.header("Ещё", "Все разделы панели", "menu", "blue")
+        + '<div class="list-item tap hub-search" data-open="search">' + M.icon("search", 19)
+        + '<div class="grow">Найти настройку, человека, действие…</div></div>'
+
+        + M.hubSection("Развлечения", [
+            R("zap", "gold", "Действия и картинки",
+              has ? on(v("actions"), "Включены", "Выключены") + " · " + (v("image_limit_hour") ? "до " + l("image_limit_hour") + " картинок в час" : "картинки без лимита") : "Пиво, обнять, цветы и ещё 200", "content"),
+            R("game", "green", "Игры", has ? (games.length ? games.join(", ") : on(false, "", "Все выключены")) : "Игры в чате, крокодил, кубики, рыбалка", "games"),
+            owner ? R("game", "gold", "Арена", "Дурак онлайн: игроки, деньги, турниры", "arena") : ""
+          ])
+
+        + M.hubSection("Экономика", [
+            R("diamond", "gold", "Алмазы", has ? (v("economy") ? "Бонус " + v("bonus_min") + "–" + l("bonus_max") + " · джекпот " + l("jackpot_chance") : on(false)) : "Балансы, бонус, джекпот", "diamonds"),
+            R("star", "purple", "Опыт и уровни", has ? (v("progress") ? v("xp_message") + " XP за сообщение · до " + v("xp_daily_cap") + " в сутки" : on(false)) : "Опыт, уровни, таблица", "levels"),
+            R("trophy", "gold", "Достижения", "Условия, награды, кто что открыл", "achievements"),
+            R("heart", "red", "Карма и рейтинг", has ? on(v("rating"), "Рейтинг включён", "Рейтинг выключен") : "Голоса и рейтинг", "karma"),
+            R("bag", "pink", "Магазин", "Товары, цены, покупки", "shop"),
+            R("gift", "pink", "Браки и подарки", has ? (v("marriages") ? (v("marry_cost") ? "Свадьба " + l("marry_cost") : "Свадьба бесплатно") : on(false, "", "Браки выключены")) + " · подарки " + (v("gifts") ? "есть" : "выкл.") : "Свадьбы, подарки друг другу",
+              "settings", "keys:Браки и подарки:marriages,marry_ring,marry_cost,gifts"),
+            R("settings", "purple", "Все настройки экономики", "Бонус, опыт, рейтинг, свадьбы", "settings", "Экономика")
+          ])
+
+        + M.hubSection("Жизнь чата", [
+            R("megaphone", "blue", "Рассылки", "Фото, видео, кнопки, расписание", "broadcasts"),
+            R("calendar", "purple", "Итоги недели и топы", has ? on(v("digest"), "Итоги включены", "Итоги выключены") + " · топ " + (v("top_chatters") ? l("top_chatters_size") : "выкл.") : "Итоги, топ болтунов, часовой пояс",
+              "settings", "keys:Итоги недели и топы:digest,digest_weekday,digest_hour,top_chatters,top_chatters_size,timezone"),
+            R("heart", "pink", "Пара дня", has ? on(v("pair_of_day")) : "Кто сегодня пара", "settings", "keys:Пара дня:pair_of_day,pair_active_days")
+          ])
+
+        + M.hubSection("Контроль", [
+            R("chart", "blue", "Аналитика", "Графики и тепловая карта", "analytics"),
+            R("journal", "purple", "Журнал", "Кто что сделал", "journal")
+          ])
+
+        + M.hubSection("Управление", [
+            R("group", "green", "Группы", "Где работает Мара", "groups"),
+            owner ? R("crown", "gold", "Главные админы", "Права как у создателя", "owners") : "",
+            owner ? R("database", "red", "Система", "Здоровье, база, перезапуск", "system") : "",
+            owner ? R("file", "red", "Логи", "Ошибки и события бота", "logs") : "",
+            R("new", "pink", "Обновления", "Что нового в Маре · v" + M.version, "changelog", null, fresh)
+          ]);
+
+      if (!has) html += '<div class="dim" style="margin-top:10px">Выбери группу на главной — тут появятся её текущие значения.</div>';
+
+      M.app.innerHTML = html;
+      M.bind();
+    }).catch(M.fail);
   });
 })();
