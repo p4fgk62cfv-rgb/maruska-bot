@@ -30,6 +30,7 @@ from database.database import close_db, init_db
 from database.repository import backfill_daily_stats
 
 from actions.handler import router as actions_router
+from features.draw import router as draw_router
 from actions.providers import available_providers
 
 from economy.handler import router as economy_router
@@ -155,6 +156,8 @@ dp.include_router(progress_router)
 dp.include_router(digest_router)
 dp.include_router(dice_router)
 dp.include_router(table_router)
+# «Мара, нарисуй …» — раньше крокодила, действий и общего AI
+dp.include_router(draw_router)
 dp.include_router(fishing_router)
 dp.include_router(arena_router)
 dp.include_router(rating_router)
@@ -289,6 +292,10 @@ async def main():
 
         for line in await fallback.self_check():
             logger.info("Запасная нейросеть — %s", line)
+
+        from ai import images
+
+        logger.info("Рисунки — %s", await images.self_check())
 
     asyncio.create_task(check_fallback())
 
