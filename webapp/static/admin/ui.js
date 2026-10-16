@@ -48,6 +48,34 @@
   };
 
   // Стрелка в строках списков
+  // Строка хаба: цветная иконка, название, состояние, стрелка.
+  // open — экран, arg — его аргумент (раздел или «keys:Заголовок:ключи»)
+  M.hubRow = function (icon, tint, title, sub, open, arg, tag) {
+    return '<div class="list-item tap" data-open="' + open + '"' + (arg ? ' data-arg="' + M.esc(arg) + '"' : "") + ">"
+      + M.tile(icon, tint, 19) + '<div class="grow"><div class="t">' + title + (tag || "") + "</div>"
+      + '<div class="s">' + sub + "</div></div>" + M.chev() + "</div>";
+  };
+
+  M.hubSection = function (title, rows, extra) {
+    rows = rows.filter(Boolean);
+    return rows.length ? '<div class="hub-sec">' + title + (extra || "") + "</div>" + rows.join("") : "";
+  };
+
+  // Включено/выключено зелёным и серым в подписи строки
+  M.onOff = function (on, yes, no) {
+    return on ? '<span class="on">' + (yes || "Включено") + "</span>" : '<span class="off">' + (no || "Выключено") + "</span>";
+  };
+
+  // Значения настроек группы одним словарём: {ключ: {value, label}}
+  M.settingsIndex = function () {
+    if (!M.state.chat) return Promise.resolve({});
+    return M.api("/api/admin/settings" + M.chatQuery()).then(function (d) {
+      var byKey = {};
+      d.sections.forEach(function (s) { s.items.forEach(function (i) { byKey[i.key] = i; }); });
+      return byKey;
+    }).catch(function () { return {}; });
+  };
+
   M.chev = function () { return '<span class="chev">' + M.icon("chevron", 18) + "</span>"; };
 
   M.metric = function (icon, value, label, delta, tint) {

@@ -38,7 +38,7 @@
       M.app.innerHTML = M.backButton() + M.chatPicker()
         + '<input data-jq placeholder="🔍  Имя, действие или подробности" value="' + esc(f.q) + '" style="margin-bottom:10px">'
         + '<div class="chips">' + chip("", "Все") + chip("moderation", "🛡 Модерация") + chip("economy", "💎 Экономика")
-        + chip("actions", "⚡ Actions") + chip("member", "👥 Участники") + chip("settings", "⚙️ Настройки") + chip("broadcast", "📣 Рассылки") + "</div>"
+        + chip("actions", "⚡ Действия") + chip("member", "👥 Участники") + chip("settings", "⚙️ Настройки") + chip("broadcast", "📣 Рассылки") + "</div>"
         + '<div class="card"><div class="card-title">Фильтры' + (active ? ' <span class="link" data-jreset>Сбросить</span>' : "") + "</div>"
         + '<select data-jwho style="margin-bottom:8px"><option value="">Кто: все</option>'
         + '<option value="admin"' + (f.who === "admin" ? " selected" : "") + ">👤 Любой администратор</option>"

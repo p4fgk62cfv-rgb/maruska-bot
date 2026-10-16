@@ -64,7 +64,7 @@
         + '<div class="metrics">'
         + M.metric("👥", "+" + num(c.new_users), "Новых участников", "", "rgba(52,211,153,.18)")
         + M.metric("⚠️", num(c.warnings), "Нарушений", "", "rgba(248,113,113,.18)")
-        + M.metric("⚡", num(c.actions), "Actions")
+        + M.metric("⚡", num(c.actions), "Действий")
         + M.metric("🤖", num(c.ai_requests), "AI-запросов", "", "rgba(96,165,250,.18)")
         + "</div>"
 
@@ -78,7 +78,7 @@
         + "</div>"
 
         + '<div class="card"><div class="card-title">Маруська</div>'
-        + kv("Actions", num(c.actions), ch.actions)
+        + kv("Действия", num(c.actions), ch.actions)
         + kv("Картинок отправлено", num(c.images), ch.images)
         + kv("AI-ответов", num(c.ai_requests), ch.ai_requests)
         + kv("Команд", num(c.commands), ch.commands)

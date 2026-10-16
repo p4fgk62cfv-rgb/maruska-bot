@@ -55,6 +55,7 @@
       };
 
       var html = M.header("Участники", "Управление пользователями", "users", "pink") + M.chatPicker()
+        + M.hubRow("crown", "gold", "Роли и админы", "Кто управляет группой и что может", "roles")
         + '<input data-search placeholder="🔍  Имя, @username или ID" value="' + esc(query) + '" style="margin-bottom:10px">'
         + '<div class="chips">' + FILTERS.map(function (f) {
             return '<span class="chip' + (filter === f[0] ? " on" : "") + '" data-filter="' + f[0] + '">' + f[1] + "</span>";
@@ -177,7 +178,7 @@
         + M.metric("✨", num(c.xp), "XP", "", "rgba(251,191,36,.18)")
         + M.metric("❤️", (c.karma > 0 ? "+" : "") + c.karma, "Карма", "", "rgba(248,113,113,.18)")
         + M.metric("💬", num(m.group_messages || c.messages), "Сообщений")
-        + M.metric("⚡", num(m.actions), "Actions")
+        + M.metric("⚡", num(m.actions), "Действий")
         + M.metric("🎮", num(m.games || c.games_played), "Игр")
         + M.metric("🤖", num(m.ai_requests), "AI-запросов")
         + M.metric("⚠️", m.warnings, "Предупр. сейчас", "", m.warnings ? "rgba(248,113,113,.18)" : "")

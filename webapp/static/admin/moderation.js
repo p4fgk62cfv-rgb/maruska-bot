@@ -119,7 +119,7 @@
 
   M.screen("moderation", function () {
     if (!M.state.chat) {
-      M.app.innerHTML = M.header("Модерация", "Выбери группу", "shield", "purple") + M.chatPicker(false)
+      M.app.innerHTML = M.header("Порядок", "Выбери группу", "shield", "purple") + M.chatPicker(false)
         + '<div class="center muted">Защита настраивается для каждой группы отдельно.</div>';
       M.bind();
       return;
@@ -146,7 +146,7 @@
       var canRestrict = !!rights.restrict;
       var canDelete = !!rights.delete;
 
-      var TILE_ICONS = { "🌊": "wind", "🔁": "repeat", "🔗": "link", "🚫": "ban", "🔣": "alert", "🎭": "image", "🤬": "alert" };
+      var TILE_ICONS = { "🌊": "wind", "🔁": "repeat", "🔗": "link", "🚫": "ban", "🔣": "alert", "🎭": "image", "🤬": "alert", "🤖": "lock", "🐣": "user", "⌨️": "settings", "⚖️": "mute" };
 
       var tile = function (icon, title, active, state, section) {
         return '<div class="menu-tile" data-open="settings" data-arg="' + (section || "Модерация") + '">' + M.tile(TILE_ICONS[icon] || "shield", active ? "purple" : "blue", 19)
@@ -156,8 +156,9 @@
 
       var linkState = { allow: "Разрешены", newbies: "Нельзя новичкам", everyone: "Запрещены" };
       var words = (val("stop_words") || "").split(",").filter(function (w) { return w.trim(); }).length;
+      var cmds = String(val("disabled_commands") || "").split(/[,\s;]+/).filter(function (w) { return w.trim(); }).length;
 
-      var html = M.header("Модерация", "Защита и порядок", "shield", "purple") + M.chatPicker(false);
+      var html = M.header("Порядок", "Правила чата и защита", "shield", "purple") + M.chatPicker(false);
 
       // Без права удаления автомодерация не уберёт ни одного нарушения
       if (!canDelete) {
@@ -177,19 +178,21 @@
         + '<div class="switch' + (on ? " on" : "") + (canEdit ? "" : " locked") + '" data-automod></div></div></div>'
 
         + '<div class="menu-grid" style="margin-bottom:12px">'
-        + tile("🌊", "Антифлуд", true, val("flood_messages") + " за " + val("flood_seconds") + " сек")
-        + tile("🔁", "Антиспам", val("automod_repeats"), val("automod_repeats") ? "Повторы: ON" : "OFF")
-        + tile("🔗", "Ссылки", val("link_policy") !== "allow", linkState[val("link_policy")] || "")
+        + tile("⚖️", "Наказания", true, val("warn_limit") + " предупр. → " + ((byKey.warn_action && byKey.warn_action.label) || "мут"), "keys:Наказания:warn_limit,warn_action,punish_minutes,mute_minutes,moderation")
+        + tile("🌊", "Антифлуд", true, val("flood_messages") + " за " + val("flood_seconds") + " сек", "keys:Антифлуд:flood_messages,flood_seconds,act_flood")
+        + tile("🔁", "Повторы", val("automod_repeats"), val("automod_repeats") ? "Удаляются" : "Не проверяются", "keys:Повторы:automod_repeats,act_repeat")
+        + tile("🔗", "Ссылки", val("link_policy") !== "allow", linkState[val("link_policy")] || "", "keys:Ссылки:link_policy,link_whitelist,link_blacklist,act_link")
         + tile("🤬", "Антимат", mat.antimat, mat.antimat
             ? matWords + " слов · " + (mat.antimat_mute_minutes ? "мут " + mat.antimat_mute_minutes + " мин" : "только предупр.")
-            : "OFF", "Антимат")
-        + tile("🚫", "Стоп-слова", words > 0, words + " слов")
-        + tile("🔣", "Символы", val("automod_symbols"), val("automod_symbols") ? "ON" : "OFF")
-        + tile("🤖", "Капча", val("captcha"), val("captcha") ? val("captcha_minutes") + " мин на ответ" : "OFF")
+            : "Выключен", "Антимат")
+        + tile("🚫", "Стоп-слова", words > 0, words + " слов", "keys:Стоп-слова:stop_words,stop_words_except,act_stop_word")
+        + tile("🔣", "Символы", val("automod_symbols"), val("automod_symbols") ? "Проверяются" : "Не проверяются", "keys:Спам символами:automod_symbols,act_symbols")
+        + tile("🤖", "Капча", val("captcha"), val("captcha") ? val("captcha_minutes") + " мин на ответ" : "Выключена", "keys:Капча:captcha,captcha_minutes")
         + tile("🐣", "Новички", val("newbie_no_media") || val("newbie_slowmode"),
-            (val("newbie_no_media") ? "без медиа" : "медиа можно") + (val("newbie_slowmode") ? " · 1 сообщ. в " + val("newbie_slowmode") + "с" : ""))
+            (val("newbie_no_media") ? "без медиа" : "медиа можно") + (val("newbie_slowmode") ? " · 1 сообщ. в " + val("newbie_slowmode") + "с" : ""), "keys:Новички:newbie_no_media,newbie_slowmode,newbie_hours,act_newbie")
         + tile("🎭", "Стикеры/медиа", val("sticker_limit") || val("media_limit"),
-            (val("sticker_limit") || "∞") + " / " + (val("media_limit") || "∞") + " в мин")
+            (val("sticker_limit") || "∞") + " / " + (val("media_limit") || "∞") + " в мин", "keys:Стикеры и медиа:sticker_limit,media_limit,act_stickers,act_media")
+        + tile("⌨️", "Команды", !!cmds, cmds ? cmds + " отключено" : "Все работают", "keys:Отключённые команды:disabled_commands")
         + "</div>";
 
       // --- последние нарушители с быстрыми кнопками ---
@@ -244,7 +247,7 @@
         + (res[3].events.length ? res[3].events.slice(0, 8).map(M.eventRow).join("") : '<div class="dim">Пока пусто</div>')
         + "</div>"
 
-        + '<button class="btn primary" data-open="settings" data-arg="Модерация">⚙️ Настроить правила</button>';
+        + '<button class="btn primary" data-open="settings" data-arg="Модерация">⚙️ Все настройки порядка</button>';
 
       M.app.innerHTML = html;
       M.bind();

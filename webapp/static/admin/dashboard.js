@@ -48,7 +48,7 @@
         + '<div style="margin-top:10px">'
         + sys("Telegram API", st.telegram) + sys("База данных", st.database)
         + sys("AI (Gemini)", st.ai, "без ошибок") + sys("Картинки", st.images, "без ошибок")
-        + sys("Actions", st.actions, st.actions && st.actions.count + " действий")
+        + sys("Действия", st.actions, st.actions && st.actions.count + " действий")
         + "</div></div>"
 
         + '<div class="metrics">'
@@ -70,15 +70,15 @@
 
       html += '<div class="card"><div class="card-title">Сегодня</div><div class="metrics three">'
         + M.metric("mute", t.mutes, "Мутов") + M.metric("ban", t.bans, "Банов") + M.metric("alert", t.warnings, "Предупр.")
-        + M.metric("zap", t.actions, "Actions") + M.metric("game", t.games, "Игр") + M.metric("bot", t.ai_requests, "AI-ответов")
+        + M.metric("zap", t.actions, "Действий") + M.metric("game", t.games, "Игр") + M.metric("bot", t.ai_requests, "AI-ответов")
         + M.metric("star", num(t.xp), "Выдано XP") + M.metric("trash", t.deleted, "Удалено") + M.metric("gift", t.gifts, "Подарков")
         + "</div></div>"
 
         + '<div class="card"><div class="card-title">Быстрые действия</div><div class="btns four">'
         + '<div class="quick" data-open="search"><span class="ic">' + M.icon("user", 22) + "</span>Найти</div>"
-        + '<div class="quick" data-go-tab="moderation"><span class="ic">' + M.icon("shield", 22) + "</span>Модерация</div>"
+        + '<div class="quick" data-go-tab="moderation"><span class="ic">' + M.icon("shield", 22) + "</span>Порядок</div>"
         + '<div class="quick" data-open="economy"><span class="ic">' + M.icon("diamond", 22) + "</span>Экономика</div>"
-        + '<div class="quick" data-open="actions"><span class="ic">' + M.icon("zap", 22) + "</span>Actions</div>"
+        + '<div class="quick" data-open="actions"><span class="ic">' + M.icon("zap", 22) + "</span>Действия</div>"
         + '<div class="quick" data-open="broadcasts"><span class="ic">' + M.icon("megaphone", 22) + "</span>Рассылка</div>"
         + '<div class="quick" data-open="analytics"><span class="ic">' + M.icon("chart", 22) + "</span>Аналитика</div>"
         + '<div class="quick" data-open="journal"><span class="ic">' + M.icon("journal", 22) + "</span>Журнал</div>"

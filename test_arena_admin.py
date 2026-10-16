@@ -204,7 +204,7 @@ def main() -> int:
     html = (ROOT / "webapp" / "static" / "admin.html").read_text(encoding="utf-8")
     expect("скрипт в панели", "/admin-assets/arena.js" in html, True)
     settings_js = (ROOT / "webapp" / "static" / "admin" / "settings.js").read_text(encoding="utf-8")
-    expect("пункт в «Ещё» только для владельца", '["arena", "game", "Арена"' in settings_js and '"Дурак онлайн: игроки, деньги, турниры", true' in settings_js, True)
+    expect("пункт в «Ещё» только для владельца", 'owner ? R("game", "gold", "Арена"' in settings_js, True)
     server = (ROOT / "webapp" / "server.py").read_text(encoding="utf-8")
     expect("маршруты на сервере", "setup_arena_admin_routes(app)" in server, True)
 

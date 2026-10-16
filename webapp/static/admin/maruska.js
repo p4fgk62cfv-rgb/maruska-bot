@@ -22,37 +22,32 @@
       var label = function (k) { return byKey[k] ? byKey[k].label : "—"; };
       var ai = v("ai");
 
-      var MARA_ICONS = {
-        "💬": ["message", "purple"], "🧠": ["brain", "pink"], "⚡": ["zap", "gold"], "🖼": ["image", "blue"],
-        "🎮": ["game", "green"], "🔥": ["flame", "red"], "🎭": ["mask", "purple"], "👋": ["wave", "gold"]
-      };
-
-      var row = function (icon, title, sub, open, arg) {
-        var look = MARA_ICONS[icon] || ["sparkles", "purple"];
-        return '<div class="list-item tap" data-open="' + open + '"' + (arg ? ' data-arg="' + arg + '"' : "") + ">"
-          + M.tile(look[0], look[1], 19) + '<div class="grow"><div class="t">' + title
-          + '</div><div class="s">' + sub + '</div></div>' + M.chev() + '</div>';
-      };
-
-      var html = M.header("Маруська 💜", "AI и автоматизация") + M.chatPicker();
+      var R = M.hubRow, on = M.onOff;
+      var html = M.header("Маруська 💜", "Как она общается") + M.chatPicker();
 
       if (!needChat) {
         html += '<div class="card glow" style="' + (ai ? "border-color:rgba(52,211,153,.45)" : "") + '"><div class="setting" style="border:0;padding:0"><div class="ico">🤖</div>'
           + '<div class="grow"><div class="t">' + (ai ? "AI активна" : "AI выключена") + "</div>"
-          + '<div class="s">' + (ai ? "Готова общаться и помогать" : "Мара молчит, действия и игры работают") + "</div></div>"
+          + '<div class="s">' + (ai ? "Отвечает, когда зовут по имени" : "Мара молчит, действия и игры работают") + "</div></div>"
           + '<div class="switch' + (ai ? " on" : "") + (M.can("content") ? "" : " locked") + '" data-ai></div></div></div>';
       }
 
-      html += row("💬", "Автоответы", v("autoreplies") === false ? "Выключены" : "Ответы на ключевые слова", "autoreplies")
-        + row("🧠", "Память и контекст", needChat ? "Что Мара помнит" : (v("memory") ? "Помнит " + label("context_messages") + " · хранит " + label("memory_days") : "Выключена"), "memory")
-        + row("⚡", "Actions", "Настройка действий", "actions")
-        + row("🖼", "Изображения", "Источники и подбор", "images")
-        + (M.state.session.user.owner ? row("📚", "Моя коллекция", "Свои картинки: #пиво в личку Маре", "library") : "")
-        + row("🎮", "Игры", "Крокодил, кубики, награды", "games")
-        + row("🔥", "Интенсивность AI", needChat ? "Режим и лимиты" : label("chattiness") + (v("ai_daily_limit") ? " · до " + v("ai_daily_limit") + " в сутки" : ""), "ai")
-        + row("🎭", "Личность Маруськи", needChat ? "Характер" : label("persona"), "ai")
-        + row("👋", "Приветствие", "Текст для новичков", "settings", "Сообщество")
-        + row("🌍", "Язык", needChat ? "Русский или English" : label("language"), "settings", "Общение");
+      html += M.hubSection("Характер", [
+          R("mask", "purple", "Личность", needChat ? "Какой у Мары характер" : label("persona"), "ai"),
+          R("flame", "red", "Болтливость и лимиты", needChat ? "Как часто отвечает" : label("chattiness") + (v("ai_daily_limit") ? " · до " + v("ai_daily_limit") + " ответов в сутки" : ""), "ai"),
+          R("message", "blue", "Язык", needChat ? "Русский или English" : label("language"), "settings", "keys:Язык Мары:language")
+        ])
+        + M.hubSection("Как общается", [
+          R("star", "gold", "Реакции", needChat ? "🤣 на ржач, ❤ на милое, 🍾 на угощения" : on(v("reactions"), "Включены", "Выключены") + (v("reactions") ? " · шанс " + label("reaction_chance") : ""),
+            "settings", "keys:Реакции Мары:reactions,reaction_chance"),
+          R("message", "purple", "Автоответы", needChat ? "Ответы на ключевые слова" : on(v("autoreplies") !== false, "Включены", "Выключены") + " · ответы на ключевые слова", "autoreplies"),
+          R("wave", "gold", "Приветствие новичков", needChat ? "Текст и подсказка" : on(v("greeting")), "settings", "keys:Приветствие новичков:greeting,greeting_text,greeting_hint"),
+          R("sparkles", "pink", "Предсказания и погода", needChat ? "Стиль предсказаний, погода" : (v("fortune") ? label("fortune_mode") : on(false, "", "Предсказания выключены")) + " · погода " + (v("weather") ? "есть" : "выкл."),
+            "settings", "keys:Предсказания и погода:fortune,fortune_mode,weather")
+        ])
+        + M.hubSection("Память", [
+          R("brain", "pink", "Память и контекст", needChat ? "Что Мара помнит" : (v("memory") ? "Помнит " + label("context_messages") + " · хранит " + label("memory_days") : on(false, "", "Выключена")), "memory")
+        ]);
 
       if (needChat) html += '<div class="dim" style="margin-top:6px">Выбери группу, чтобы видеть текущие значения.</div>';
 
@@ -67,6 +62,33 @@
           .then(function () { M.toast(next ? "Мара снова отвечает" : "Мара молчит"); M.render(); })
           .catch(function (e) { sw.classList.toggle("on", !next); M.toast(e.message); });
       };
+    }).catch(M.fail);
+  });
+
+  // =========================================================
+  // ДЕЙСТВИЯ И КАРТИНКИ
+  // =========================================================
+
+  M.screen("content", function () {
+    M.settingsIndex().then(function (k) {
+      var has = Object.keys(k).length > 0;
+      var v = function (key) { return k[key] ? k[key].value : null; };
+      var l = function (key) { return k[key] ? k[key].label : "—"; };
+      var R = M.hubRow, on = M.onOff;
+
+      var html = M.backButton() + M.chatPicker(false)
+        + M.hubSection("Действия", [
+            R("zap", "gold", "Все действия", has ? on(v("actions"), "Включены", "Выключены") + " · подписи, слова, картинки" : "Подписи, свои слова, картинки", "actions"),
+            R("heart", "pink", "Котики", has ? on(v("cats")) + " · «покажи меня» и «мяу»" : "«Покажи меня» и «мяу»", "settings", "keys:Котики:cats")
+          ])
+        + M.hubSection("Картинки", [
+            R("image", "blue", "Источники картинок", has ? (v("image_limit_hour") ? "До " + l("image_limit_hour") + " в час" : "Без лимита в час") : "Откуда Мара берёт картинки", "images"),
+            M.state.session.user.owner ? R("image", "purple", "Моя коллекция", has ? on(v("library")) + " · свои картинки: #пиво в личку Маре" : "Свои картинки: #пиво в личку Маре", "library") : ""
+          ])
+        + '<button class="btn block" data-open="settings" data-arg="Действия" style="margin-top:10px">⚙️ Все настройки действий</button>';
+
+      M.app.innerHTML = html;
+      M.bind();
     }).catch(M.fail);
   });
 
@@ -111,7 +133,7 @@
         + '<div class="kv"><span class="k">Ответов в сутки</span><span>' + (m.ai_daily_limit.value || "без ограничений") + "</span></div>"
         + '<div class="kv"><span class="k">Пауза для одного человека</span><span>' + (m.ai_cooldown.value ? m.ai_cooldown.label : "нет") + "</span></div>"
         + '<div class="kv"><span class="k">Сообщений в контексте</span><span>' + m.context_messages.label + "</span></div>"
-        + '<button class="btn block" data-open="settings" data-arg="Общение" style="margin-top:8px">Изменить лимиты</button></div>'
+        + '<button class="btn block" data-open="settings" data-arg="keys:Болтливость и лимиты:chattiness,ai_daily_limit,ai_cooldown" style="margin-top:8px">Изменить лимиты</button></div>'
         + '<div class="card-title" style="font-size:17px;margin-top:6px">🎭 Личность</div>' + cards("persona");
 
       M.bind();
@@ -152,7 +174,7 @@
         + '<textarea data-except rows="2" placeholder="@username, 123456789"' + (canEdit ? "" : " disabled") + ">" + esc(m.memory_except.value) + "</textarea>"
         + (canEdit ? '<button class="btn block" data-save-except style="margin-top:8px">Сохранить</button>' : "") + "</div>"
 
-        + '<button class="btn block" data-open="settings" data-arg="Общение" style="margin-bottom:8px">⚙️ Размер контекста и срок хранения</button>'
+        + '<button class="btn block" data-open="settings" data-arg="keys:Память:memory,context_messages,memory_days,memory_except" style="margin-bottom:8px">⚙️ Размер контекста и срок хранения</button>'
         + (canEdit ? '<button class="btn danger block" data-clear>🗑 Очистить память группы</button>' : "");
 
       M.bind();
@@ -318,7 +340,7 @@
         + '<div class="card"><div class="card-title">Подбор</div>'
         + '<div class="setting"><div class="ico">🔁</div><div class="grow"><div class="t">Защита от повторов</div><div class="s">Картинка не повторится, пока не покажут всю коллекцию</div></div><span class="tag ok">всегда</span></div>'
         + (m ? '<div class="setting"><div class="ico">⏱</div><div class="grow"><div class="t">Лимит в час</div><div class="s">Сверх лимита действие уходит текстом</div></div><span class="tag">' + (m.image_limit_hour.value || "∞") + "</span></div>"
-          + '<button class="btn block" data-open="settings" data-arg="Общение" style="margin-top:8px">Изменить лимит</button>' : "")
+          + '<button class="btn block" data-open="settings" data-arg="keys:Картинки:image_limit_hour" style="margin-top:8px">Изменить лимит</button>' : "")
         + "</div>"
 
         + '<div class="card"><div class="card-title">Категории</div>'

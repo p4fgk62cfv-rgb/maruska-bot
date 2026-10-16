@@ -47,7 +47,7 @@ expect("пустой id", handler.is_owner(None), False)
 
 # Панель: пункт только у создателя, скрипт подключён, маршруты на сервере.
 settings_js = (ROOT / "webapp/static/admin/settings.js").read_text(encoding="utf-8")
-expect("пункт меню для владельцев", '["owners", "crown", "Главные админы", "Права как у создателя", true' in settings_js, True)
+expect("пункт меню для владельцев", 'owner ? R("crown", "gold", "Главные админы"' in settings_js, True)
 expect("скрипт в панели", "/admin-assets/owners.js" in (ROOT / "webapp/static/admin.html").read_text(encoding="utf-8"), True)
 expect("маршруты на сервере", "setup_owner_routes(app)" in (ROOT / "webapp/server.py").read_text(encoding="utf-8"), True)
 expect("загрузка при старте", "owners.load()" in (ROOT / "bot.py").read_text(encoding="utf-8"), True)
