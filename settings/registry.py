@@ -61,13 +61,6 @@ FEATURES: tuple[Feature, ...] = (
         group="Маруська",
     ),
     Feature(
-        key="draw_safe",
-        title="Рисунки: защита от 18+",
-        emoji="🛡",
-        description="Откровенные запросы не рисуются, а готовую картинку проверяет Gemini — нагота и эротика в чат не попадут",
-        group="Маруська",
-    ),
-    Feature(
         key="draw_gemini",
         title="Художник: Gemini",
         emoji="✨",

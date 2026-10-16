@@ -105,7 +105,8 @@ async def make_picture(message: Message, prompt: str) -> None:
 
     from ai import images
 
-    safe = is_enabled(chat_id, "draw_safe")
+    # Защита от 18+ не выключается: фильтр запроса и проверка каждой картинки
+    safe = True
 
     # Откровенный запрос отсекаем сразу — без «Рисую…» и без траты лимита
     if safe and images.unsafe_prompt(prompt):
@@ -133,6 +134,9 @@ async def make_picture(message: Message, prompt: str) -> None:
     except images.DrawRefused as error:
         logger.info("DRAW REFUSED: %s", error)
         await _edit(wait, "Получилось неприлично — такое не покажу 🙈 Попробуй сформулировать иначе")
+        return
+    except images.DrawUnchecked:
+        await _edit(wait, "Нарисовала, но не смогла проверить картинку — без проверки не покажу 🛡 Попробуй чуть позже")
         return
     except images.NoArtist as error:
         logger.warning("DRAW: %s", error)

@@ -16,6 +16,8 @@ import botcontext  # noqa: E402
 import features.draw as d  # noqa: E402
 import ai.images as images  # noqa: E402
 
+REAL_CHECK = images.image_is_unsafe
+
 errors = []
 
 
@@ -114,7 +116,12 @@ async def main():
         pass
     check(await images.draw("кот", primary="pollinations", safe=False) == (b"JPG", "Pollinations"), "без защиты проверки нет")
     verdict["v"] = None
-    check(await images.draw("кот", primary="pollinations") == (b"JPG", "Pollinations"), "проверка недоступна — показываем")
+    try:
+        await images.draw("кот", primary="pollinations")
+        check(False, "без проверки картинку показывать нельзя")
+    except images.DrawUnchecked:
+        pass
+    verdict["v"] = False
 
     # Без ключа Hugging Face пропускается
     os.environ.pop("HF_TOKEN")
@@ -122,6 +129,60 @@ async def main():
 
 
 asyncio.run(main())
+
+
+# Художнику уходит только сам запрос — без «одеты», «no nudity» и т. п.
+async def prompt_sent():
+    import httpx
+
+    sent = []
+
+    async def tr(p):
+        return "Flag of France"
+
+    images.translate = tr
+
+    def h(req):
+        sent.append(str(req.url))
+        return httpx.Response(200, content=b"\xff\xd8x", headers={"content-type": "image/jpeg"})
+
+    real = httpx.AsyncClient
+    images.httpx.AsyncClient = lambda **kw: real(transport=httpx.MockTransport(h), **kw)
+    await images.pollinations_draw("флаг Франции", True)
+    images.httpx.AsyncClient = real
+    url = sent[0].lower()
+    for bad in ("clothed", "nudity", "nude", "family", "safe%20for"):
+        check(bad not in url, f"в запрос художнику попало «{bad}»: {url}")
+
+
+asyncio.run(prompt_sent())
+
+
+# Разбор ответа проверки: SAFE / UNSAFE / пусто (раздумье съело токены) / блок фильтра
+async def verdicts():
+    import ai.gemini as g
+
+    answers = {"text": ""}
+
+    class Models:
+        async def generate_content(self, **kw):
+            return types.SimpleNamespace(text=answers["text"], prompt_feedback=answers.get("fb"))
+
+    real = g.client
+    images.image_is_unsafe = REAL_CHECK
+    g.client = types.SimpleNamespace(aio=types.SimpleNamespace(models=Models()))
+    answers["text"] = "SAFE"
+    check(await images.image_is_unsafe(b"\xff\xd8") is False, "SAFE → можно")
+    answers["text"] = "UNSAFE"
+    check(await images.image_is_unsafe(b"\xff\xd8") is True, "UNSAFE → нельзя")
+    answers["text"] = ""
+    check(await images.image_is_unsafe(b"\xff\xd8") is None, "пустой ответ → не проверено")
+    answers["fb"] = types.SimpleNamespace(block_reason="PROHIBITED_CONTENT")
+    check(await images.image_is_unsafe(b"\xff\xd8") is True, "блок фильтра → нельзя")
+    g.client = real
+
+
+asyncio.run(verdicts())
 
 if errors:
     print("❌ " + "\n❌ ".join(errors))
