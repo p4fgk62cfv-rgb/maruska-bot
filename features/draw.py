@@ -18,7 +18,7 @@ from aiogram.filters import Command, CommandObject
 from aiogram.types import BufferedInputFile, Message
 
 from botcontext import TRIGGER_RE, is_addressed
-from settings.store import get_number, is_blocked, is_enabled
+from settings.store import get_number, get_value, is_blocked, is_enabled
 
 
 logger = logging.getLogger("maruska.draw")
@@ -103,19 +103,40 @@ async def make_picture(message: Message, prompt: str) -> None:
         await message.reply(problem)
         return
 
+    from ai import images
+
+    safe = is_enabled(chat_id, "draw_safe")
+
+    # Откровенный запрос отсекаем сразу — без «Рисую…» и без траты лимита
+    if safe and images.unsafe_prompt(prompt):
+        await message.reply("Такое я рисовать не буду 🙈 У нас тут приличный чат — попроси что-нибудь другое")
+        return
+
+    enabled = {name for name, on in (
+        ("gemini", is_enabled(chat_id, "draw_gemini")),
+        ("pollinations", is_enabled(chat_id, "draw_pollinations")),
+        ("huggingface", is_enabled(chat_id, "draw_huggingface")),
+    ) if on}
+    if not enabled:
+        await message.reply("Все художники выключены в админке 🎨 Включи хотя бы одного: Маруська → Рисунки")
+        return
+
     note(chat_id, user_id)
     prompt = prompt[:700]
     wait = await message.reply(f"🎨 Рисую «{escape(prompt[:80])}{'…' if len(prompt) > 80 else ''}»…")
     stop = asyncio.Event()
     typing = asyncio.create_task(_keep_typing(message, stop))
 
-    from ai import images
-
     try:
-        data, who = await images.draw(prompt)
+        data, who = await images.draw(prompt, primary=get_value(chat_id, "draw_primary") or "pollinations",
+                                      enabled=enabled, safe=safe)
     except images.DrawRefused as error:
         logger.info("DRAW REFUSED: %s", error)
-        await _edit(wait, "Такое я рисовать не буду 🙈 Попробуй что-нибудь другое")
+        await _edit(wait, "Получилось неприлично — такое не покажу 🙈 Попробуй сформулировать иначе")
+        return
+    except images.NoArtist as error:
+        logger.warning("DRAW: %s", error)
+        await _edit(wait, "Сейчас все мои художники заняты 😔 Попробуй через пару минут")
         return
     except Exception as error:
         logger.error("DRAW ERROR: %s %s", type(error).__name__, error)

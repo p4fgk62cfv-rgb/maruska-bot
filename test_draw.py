@@ -59,39 +59,66 @@ check("лимит" in (d.limit_problem(-1, 3) or ""), "суточный лими
 
 async def main():
     calls = []
+    verdict = {"v": False}
 
-    async def gemini_ok(prompt):
+    async def ok(name, result):
+        async def f(prompt, safe):
+            calls.append(name)
+            return result
+        return f
+
+    async def quota(prompt, safe):
         calls.append("gemini")
-        return b"PNG"
+        raise RuntimeError("429 RESOURCE_EXHAUSTED: You exceeded your current quota")
 
-    async def gemini_quota(prompt):
-        calls.append("gemini")
-        raise RuntimeError("429 RESOURCE_EXHAUSTED: quota for image generation is 0 on free tier")
+    async def check_img(data):
+        return verdict["v"]
 
-    async def gemini_refuse(prompt):
-        raise images.DrawRefused("safety")
+    images.image_is_unsafe = check_img
+    images.DRAWERS["pollinations"] = await ok("pollinations", b"JPG")
+    images.DRAWERS["huggingface"] = await ok("huggingface", b"HF")
+    images.DRAWERS["gemini"] = await ok("gemini", b"PNG")
+    os.environ["HF_TOKEN"] = "x"
 
-    async def free(prompt):
-        calls.append("free")
-        return b"JPG"
+    check(await images.draw("кот", primary="gemini") == (b"PNG", "Gemini"), "основной Gemini")
+    check(await images.draw("кот", primary="pollinations") == (b"JPG", "Pollinations"), "основной Pollinations")
+    check(await images.draw("кот", primary="gemini", enabled={"huggingface"}) == (b"HF", "Hugging Face"), "только включённый")
 
-    images.free_draw = free
-
-    images.gemini_draw = gemini_ok
-    check(await images.draw("кот") == (b"PNG", "Gemini"), "рисует Gemini")
-
-    images.gemini_draw = gemini_quota
-    check(await images.draw("кот") == (b"JPG", "Pollinations"), "лимит → запасной художник")
+    images.DRAWERS["gemini"] = quota
+    check(await images.draw("кот", primary="gemini") == (b"JPG", "Pollinations"), "лимит Gemini → следующий включённый")
     n = calls.count("gemini")
-    check(await images.draw("кот") == (b"JPG", "Pollinations") and calls.count("gemini") == n, "на паузе Gemini не дёргаем")
+    await images.draw("кот", primary="gemini")
+    check(calls.count("gemini") == n, "на паузе Gemini не дёргаем")
 
-    images._paused_until = 0
-    images.gemini_draw = gemini_refuse
     try:
-        await images.draw("что-то запрещённое")
-        check(False, "отказ фильтра должен дойти до пользователя")
+        await images.draw("кот", primary="gemini", enabled={"gemini"})
+        check(False, "некому рисовать — NoArtist")
+    except images.NoArtist:
+        pass
+
+    # Защита 18+: запрос и готовая картинка
+    for bad in ("голая девушка", "девушка в бикини", "эротичная поза", "nude woman", "сиськи"):
+        check(images.unsafe_prompt(bad), f"не отсеян запрос: {bad}")
+    for fine in ("кот в шляпе", "голубое небо", "грузовик на мосту", "попугай", "членистоногие"):
+        check(not images.unsafe_prompt(fine), f"зря отсеян: {fine}")
+    try:
+        await images.draw("голая девушка")
+        check(False, "откровенный запрос не должен рисоваться")
     except images.DrawRefused:
         pass
+    verdict["v"] = True
+    try:
+        await images.draw("кот", primary="pollinations")
+        check(False, "картинка 18+ не должна показываться")
+    except images.DrawRefused:
+        pass
+    check(await images.draw("кот", primary="pollinations", safe=False) == (b"JPG", "Pollinations"), "без защиты проверки нет")
+    verdict["v"] = None
+    check(await images.draw("кот", primary="pollinations") == (b"JPG", "Pollinations"), "проверка недоступна — показываем")
+
+    # Без ключа Hugging Face пропускается
+    os.environ.pop("HF_TOKEN")
+    check(await images.draw("кот", primary="huggingface") == (b"JPG", "Pollinations"), "нет ключа HF — следующий")
 
 
 asyncio.run(main())
