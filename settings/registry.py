@@ -54,6 +54,13 @@ FEATURES: tuple[Feature, ...] = (
         group="Маруська",
     ),
     Feature(
+        key="ai_draw",
+        title="Рисунки Мары",
+        emoji="🎨",
+        description="«Мара, нарисуй кота в шляпе» — рисует через Gemini, а если нельзя — через бесплатного художника",
+        group="Маруська",
+    ),
+    Feature(
         key="actions",
         title="Действия",
         emoji="🎲",
@@ -599,6 +606,15 @@ NUMBERS: tuple[Number, ...] = (
         group="Маруська",
     ),
 
+    Number(
+        key="draw_daily_limit",
+        title="Рисунков в сутки",
+        emoji="🎨",
+        description="Сколько картинок Мара рисует группе за день. 0 — без лимита",
+        default=30, minimum=0, maximum=500, step=10,
+        unit="шт.",
+        group="Маруська",
+    ),
     Number(
         key="reaction_chance",
         title="Как часто реакции",
