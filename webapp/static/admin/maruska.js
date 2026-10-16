@@ -51,6 +51,7 @@
         + row("🎮", "Игры", "Крокодил, кубики, награды", "games")
         + row("🔥", "Интенсивность AI", needChat ? "Режим и лимиты" : label("chattiness") + (v("ai_daily_limit") ? " · до " + v("ai_daily_limit") + " в сутки" : ""), "ai")
         + row("🎭", "Личность Маруськи", needChat ? "Характер" : label("persona"), "ai")
+        + row("😁", "Реакции", needChat ? "Ржач, милое, угощения" : (v("reactions") === false ? "Выключены" : "Шанс " + label("reaction_chance")), "settings", "Общение")
         + row("👋", "Приветствие", "Текст для новичков", "settings", "Сообщество")
         + row("🌍", "Язык", needChat ? "Русский или English" : label("language"), "settings", "Общение");
 

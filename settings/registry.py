@@ -47,6 +47,13 @@ FEATURES: tuple[Feature, ...] = (
         group="Общение",
     ),
     Feature(
+        key="reactions",
+        title="Реакции Мары",
+        emoji="😁",
+        description="Мара сама ставит реакции: 🤣 на ржач, ❤ на милое, 🍾 когда кого-то угощают",
+        group="Общение",
+    ),
+    Feature(
         key="actions",
         title="Действия",
         emoji="🎲",
@@ -589,6 +596,16 @@ NUMBERS: tuple[Number, ...] = (
         description="Сколько последних сообщений Мара видит как контекст",
         default=8, minimum=2, maximum=30, step=2,
         env="CONTEXT_MESSAGES", unit="сообщ.",
+        group="Общение",
+    ),
+
+    Number(
+        key="reaction_chance",
+        title="Как часто реакции",
+        emoji="😁",
+        description="Шанс реакции на смешное и милое. На угощения Мара реагирует чаще, на фото — реже",
+        default=40, minimum=10, maximum=100, step=10,
+        unit="%",
         group="Общение",
     ),
 

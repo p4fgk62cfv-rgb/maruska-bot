@@ -73,6 +73,7 @@ from settings.handler import (
     set_bot_username as set_settings_username,
 )
 from settings.middleware import SettingsMiddleware, StatsMiddleware
+from features.reactions import ReactionsMiddleware
 from settings.registry import CHOICES, FEATURES
 
 from webapp.server import public_url, start_web_server
@@ -119,6 +120,9 @@ dp.callback_query.outer_middleware(SettingsMiddleware())
 
 # Статистика для графиков — до роутеров, чтобы видеть все сообщения
 dp.message.outer_middleware(StatsMiddleware())
+
+# Реакции Мары — после обработки: видят и действия, и обычные сообщения
+dp.message.outer_middleware(ReactionsMiddleware())
 
 # Оплата звёздами — раньше всех: подтверждение платежа нельзя потерять
 dp.include_router(arena_pay_router)
