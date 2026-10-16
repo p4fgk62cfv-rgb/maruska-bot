@@ -283,6 +283,15 @@ async def main():
     logger.info("PostgreSQL: подключён")
     logger.info("Gemini: подключён")
 
+    # Запасные нейросети — проверка в фоне, чтобы не задерживать старт
+    async def check_fallback():
+        from ai import fallback
+
+        for line in await fallback.self_check():
+            logger.info("Запасная нейросеть — %s", line)
+
+    asyncio.create_task(check_fallback())
+
     providers = available_providers()
     logger.info(
         "Картинки: %s",
