@@ -100,6 +100,49 @@ class RingHandler(logging.Handler):
 ring = RingHandler()
 
 
+class RestartConflictFilter(logging.Filter):
+    """
+    «Conflict: terminated by other getUpdates request» при выкатке — не ошибка.
+
+    Railway запускает новую копию бота, пока старая ещё работает, и пару
+    секунд обе спрашивают Telegram об обновлениях. Telegram ругается,
+    aiogram сам повторяет запрос, старая копия выключается — всё.
+    Первые GRACE секунд после старта такие строки пишем спокойным INFO.
+    Если конфликт держится дольше — значит, бот правда запущен дважды
+    (например, локально с тем же токеном), и это остаётся ошибкой.
+    """
+
+    GRACE = 120.0
+
+    def __init__(self):
+        super().__init__()
+        import time as _time
+
+        self.started = _time.monotonic()
+        self._time = _time
+        self.told = False
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if self._time.monotonic() - self.started > self.GRACE:
+            return True
+
+        text = record.getMessage()
+
+        if "TelegramConflictError" in text:
+            if self.told:
+                return False
+            self.told = True
+            record.levelno, record.levelname = logging.INFO, "INFO"
+            record.msg, record.args = "Перезапуск: старая копия бота ещё выключается — жду пару секунд (это нормально)", None
+            return True
+
+        # «Sleep for 1 second and try again» после такого конфликта — тоже шум
+        if self.told and "Sleep for" in text and "try again" in text:
+            return False
+
+        return True
+
+
 def setup(level: int = logging.INFO) -> None:
     handler = logging.StreamHandler(sys.stdout)
 
@@ -122,3 +165,6 @@ def setup(level: int = logging.INFO) -> None:
 
     # aiogram шумит на каждое сообщение — оставляем только важное
     logging.getLogger("aiogram.event").setLevel(logging.WARNING)
+
+    # Конфликт двух копий при выкатке на Railway — не ошибка, см. фильтр
+    logging.getLogger("aiogram.dispatcher").addFilter(RestartConflictFilter())
