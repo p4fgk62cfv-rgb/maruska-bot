@@ -161,6 +161,18 @@ async def api_me(request):
 # Состояние систем и разбор ошибок
 # ---------------------------------------------------------
 
+def _fallback_status() -> dict:
+    """Запасная нейросеть: подключена ли и кто сейчас отвечает."""
+    from ai import fallback, router
+
+    names = [p.name for p in fallback.configured()]
+    if not names:
+        return {"ok": False, "configured": False}
+    now = names[0] if router.gemini_paused() else "Gemini"
+    return {"ok": True, "configured": True, "providers": names, "answering": now,
+            "fallback_answers": router.stats["fallback"]}
+
+
 ERROR_SOURCES = {
     "ai": ("🤖", "AI (Gemini)"),
     "images": ("🖼", "Источники картинок"),
@@ -175,7 +187,7 @@ def classify_error(record: dict) -> str:
     text = (record.get("message") or "").upper()
     source = (record.get("logger") or "").lower()
 
-    if "GEMINI" in text or "gemini" in source or "genai" in source:
+    if "GEMINI" in text or "AI FALLBACK" in text or "gemini" in source or "genai" in source:
         return "ai"
     if "maruska.images" in source or any(w in text for w in ("IMAGE", "PIXABAY", "UNSPLASH", "PHOTO", "PROVIDER")):
         return "images"
@@ -254,6 +266,7 @@ async def system_status(bot) -> dict:
         "images": {"ok": (bool(available_providers()) or library_ok) and not errors.get("images", (0, 0))[0],
                    "configured": bool(available_providers()) or library_ok, "errors": errors.get("images", (0, 0))[0]},
         "actions": {"ok": len(ACTIONS) > 0, "count": len(ACTIONS)},
+        "fallback": _fallback_status(),
     }
 
     status["online"] = status["telegram"]["ok"]

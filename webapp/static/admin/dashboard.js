@@ -47,7 +47,10 @@
         + '<div class="s">' + (ok ? "Все системы отвечают" : "Одна или несколько систем с проблемами — детали ниже") + "</div></div></div>"
         + '<div style="margin-top:10px">'
         + sys("Telegram API", st.telegram) + sys("База данных", st.database)
-        + sys("AI (Gemini)", st.ai, "без ошибок") + sys("Картинки", st.images, "без ошибок")
+        + sys("AI (Gemini)", st.ai, "без ошибок")
+        + sys("Запасная нейросеть", st.fallback, st.fallback && st.fallback.configured
+            ? st.fallback.providers.join(", ") + (st.fallback.answering !== "Gemini" ? " · отвечает сейчас" : " · наготове") : "")
+        + sys("Картинки", st.images, "без ошибок")
         + sys("Действия", st.actions, st.actions && st.actions.count + " действий")
         + "</div></div>"
 

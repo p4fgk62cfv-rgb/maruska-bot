@@ -17,7 +17,7 @@ from aiogram.types import Message
 
 import context_cache
 
-from ai.gemini import ask_gemini
+from ai.router import ask_ai
 
 from botcontext import display_name_of, is_addressed
 
@@ -255,11 +255,8 @@ async def ai_handler(message: Message):
     )
 
     try:
-        answer, _sources = await ask_gemini(
-            prompt,
-            use_search=False,
-            persona=get_value(message.chat.id, "persona"),
-        )
+        # Gemini, а если у неё кончился лимит — запасная нейросеть
+        answer = await ask_ai(prompt, persona=get_value(message.chat.id, "persona"))
     except Exception as error:
         logger.error("GEMINI ERROR: %s %s", type(error).__name__, error)
         await message.reply("Что-то я задумалась 🤔")
