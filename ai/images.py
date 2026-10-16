@@ -13,9 +13,11 @@
 
 Защита от 18+ (тумблер «Защита от 18+», включена по умолчанию):
   1. запрос с откровенными словами не отправляется никому;
-  2. к запросу дописывается «семейно, одетые люди»;
-  3. готовую картинку проверяет Gemini-зрение: если там нагота или
-     эротика — картинку не показываем.
+  2. к запросу ничего не дописываем: «одеты», «без наготы» художники
+     понимают как просьбу нарисовать людей и одежду;
+  3. готовую картинку проверяет Gemini-зрение. Нагота, бельё, купальники,
+     дети в откровенной одежде — не показываем. Не удалось проверить —
+     тоже не показываем.
 """
 
 import logging
@@ -55,15 +57,19 @@ STYLE = (
     "Нарисуй яркую, красивую, детализированную картинку по запросу ниже. "
     "Без текста и надписей на картинке, если о них не просят. Запрос: "
 )
-SAFE_STYLE = (
-    "Картинка для семейного чата: никакой наготы, эротики, белья и откровенных поз, "
-    "люди полностью одеты. "
-)
-SAFE_EN = ", family friendly, safe for work, fully clothed, no nudity"
+# В запрос художнику НЕ дописываем «одеты», «без наготы» и т. п.: нейросети-художники
+# не понимают отрицаний, и слова «одежда/нагота» сами добавляют на картинку людей.
+# Так «флаг Франции» однажды превратился в людей в белье. Защита — только фильтр
+# запроса до рисования и проверка готовой картинки после.
+SAFE_STYLE = "Картинка для семейного чата. "
 
 
 class DrawRefused(Exception):
     """Рисовать это не будем: откровенный запрос или картинка не прошла проверку."""
+
+
+class DrawUnchecked(Exception):
+    """Картинку не удалось проверить на 18+ — без проверки не показываем."""
 
 
 class NoArtist(Exception):
@@ -95,33 +101,56 @@ def _mime(data: bytes) -> str:
     return "image/jpeg"
 
 
+CHECK_QUESTION = (
+    "You are a strict safety filter for a family group chat. Look at the image. "
+    "Answer UNSAFE if ANY of these is true: nudity or partial nudity; exposed breasts, buttocks or genitals; "
+    "people in underwear, lingerie or swimwear; any child or teenager shown undressed, in underwear, "
+    "swimwear or revealing clothing; sexual, erotic or suggestive content or poses; graphic gore. "
+    "Otherwise answer SAFE. Reply with exactly one word: SAFE or UNSAFE."
+)
+
+
 async def image_is_unsafe(data: bytes) -> bool | None:
-    """Gemini смотрит на картинку. True — 18+, False — можно, None — проверить не удалось."""
+    """
+    Gemini смотрит на картинку. True — нельзя, False — можно, None — проверить не удалось.
+    None тоже значит «не показывать»: картинку без проверки в чат не отправляем.
+    """
+    from google.genai import types
+
+    from ai.gemini import MODEL_NAME, client
+
+    contents = [types.Part.from_bytes(data=data, mime_type=_mime(data)), CHECK_QUESTION]
+
+    # Gemini 3 по умолчанию долго «думает», и на маленьком лимите ответ приходил
+    # пустым — поэтому запас токенов и короткое раздумье
+    configs = []
     try:
-        from google.genai import types
+        configs.append(types.GenerateContentConfig(
+            temperature=0, max_output_tokens=600, thinking_config=types.ThinkingConfig(thinking_level="low"),
+        ))
+    except Exception:
+        pass
+    configs.append(types.GenerateContentConfig(temperature=0, max_output_tokens=600))
 
-        from ai.gemini import MODEL_NAME, client
+    for config in configs:
+        try:
+            response = await client.aio.models.generate_content(model=MODEL_NAME, contents=contents, config=config)
+        except Exception as error:
+            logger.warning("DRAW CHECK: ошибка проверки — %s %s", type(error).__name__, str(error)[:160])
+            continue
 
-        response = await client.aio.models.generate_content(
-            model=MODEL_NAME,
-            contents=[
-                types.Part.from_bytes(data=data, mime_type=_mime(data)),
-                "Is there nudity, exposed breasts or genitals, underwear or lingerie focus, sexual or erotic "
-                "content, or graphic gore in this image? Answer with exactly one word: YES or NO.",
-            ],
-            config=types.GenerateContentConfig(temperature=0, max_output_tokens=5),
-        )
         text = (response.text or "").strip().upper()
-        if text.startswith("YES"):
-            return True
-        if text.startswith("NO"):
-            return False
         # Фильтр Gemini иногда сам блокирует ответ на откровенную картинку
         blocked = getattr(getattr(response, "prompt_feedback", None), "block_reason", None)
-        return True if blocked else None
-    except Exception as error:
-        logger.info("DRAW CHECK: проверить не удалось — %s %s", type(error).__name__, str(error)[:120])
-        return None
+        if blocked or "UNSAFE" in text:
+            logger.info("DRAW CHECK: UNSAFE (%s)", blocked or text[:20])
+            return True
+        if text.startswith("SAFE"):
+            logger.info("DRAW CHECK: SAFE")
+            return False
+        logger.warning("DRAW CHECK: непонятный ответ «%s»", text[:40])
+
+    return None
 
 
 # ---------------------------------------------------------
@@ -220,7 +249,7 @@ async def pollinations_draw(prompt: str, safe: bool) -> bytes:
     """
     import asyncio
 
-    english = await translate(prompt) + (SAFE_EN if safe else "")
+    english = await translate(prompt)
     token = os.getenv("POLLINATIONS_TOKEN", "").strip()
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     last = ""
@@ -253,7 +282,7 @@ async def huggingface_draw(prompt: str, safe: bool) -> bytes:
     if not token:
         raise NoArtist("Hugging Face: нет ключа HF_TOKEN")
 
-    english = await translate(prompt) + (SAFE_EN if safe else "")
+    english = await translate(prompt)
     async with httpx.AsyncClient(timeout=120) as client:
         response = await client.post(
             HF_URL.format(model=HF_MODEL),
@@ -316,6 +345,9 @@ async def draw(prompt: str, primary: str = "gemini", enabled: set[str] | None = 
             if verdict:
                 logger.warning("DRAW: картинка от %s не прошла проверку 18+ — не показываю", TITLES[name])
                 raise DrawRefused("картинка не прошла проверку 18+")
+            if verdict is None:
+                logger.warning("DRAW: картинку от %s не удалось проверить — не показываю", TITLES[name])
+                raise DrawUnchecked("проверка недоступна")
 
         return data, TITLES[name]
 

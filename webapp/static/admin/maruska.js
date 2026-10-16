@@ -41,8 +41,8 @@
           R("star", "gold", "Реакции", needChat ? "🤣 на ржач, ❤ на милое, 🍾 на угощения" : on(v("reactions"), "Включены", "Выключены") + (v("reactions") ? " · шанс " + label("reaction_chance") : ""),
             "settings", "keys:Реакции Мары:reactions,reaction_chance"),
           R("image", "pink", "Рисунки", needChat ? "«Мара, нарисуй кота в шляпе»" : on(v("ai_draw"), "Рисует", "Не рисует")
-            + (v("ai_draw") ? " · " + label("draw_primary") + (v("draw_safe") ? " · 🛡 18+" : " · без защиты") : ""),
-            "settings", "keys:Рисунки Мары:ai_draw,draw_safe,draw_primary,draw_pollinations,draw_huggingface,draw_gemini,draw_daily_limit"),
+            + (v("ai_draw") ? " · " + label("draw_primary") + " · 🛡 проверка 18+" : ""),
+            "settings", "keys:Рисунки Мары:ai_draw,draw_primary,draw_pollinations,draw_huggingface,draw_gemini,draw_daily_limit"),
           R("message", "purple", "Автоответы", needChat ? "Ответы на ключевые слова" : on(v("autoreplies") !== false, "Включены", "Выключены") + " · ответы на ключевые слова", "autoreplies"),
           R("wave", "gold", "Приветствие новичков", needChat ? "Текст и подсказка" : on(v("greeting")), "settings", "keys:Приветствие новичков:greeting,greeting_text,greeting_hint"),
           R("sparkles", "pink", "Предсказания и погода", needChat ? "Стиль предсказаний, погода" : (v("fortune") ? label("fortune_mode") : on(false, "", "Предсказания выключены")) + " · погода " + (v("weather") ? "есть" : "выкл."),
