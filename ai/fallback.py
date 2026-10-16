@@ -153,3 +153,18 @@ async def ask_fallback(system: str, prompt: str, temperature: float, max_tokens:
         problems.append(f"{provider.name}: пустой ответ")
 
     raise RuntimeError("; ".join(problems) or "запасные нейросети не подключены")
+
+
+async def self_check() -> list[str]:
+    """Строки для лога на старте: кто из запасных реально отвечает. Ключи не печатаются."""
+    lines = []
+    for provider in PROVIDERS:
+        if not provider.key:
+            lines.append(f"{provider.name}: ключ не задан ({provider.key_env})")
+            continue
+        try:
+            answer = await _ask_one(provider, "Ответь одним словом.", "Скажи: работает", 0.0, 20)
+            lines.append(f"{provider.name}: отвечает ({_working.get(provider.name, '?')}) — «{answer[:40]}»")
+        except Exception as error:
+            lines.append(f"{provider.name}: НЕ ОТВЕЧАЕТ — {type(error).__name__} {str(error)[:160]}")
+    return lines
