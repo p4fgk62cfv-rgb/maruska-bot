@@ -55,7 +55,7 @@ PROVIDERS = (
         url="https://api.groq.com/openai/v1/chat/completions",
         key_env="GROQ_API_KEY",
         model_env="GROQ_MODEL",
-        default_models=("llama-3.3-70b-versatile", "openai/gpt-oss-120b", "qwen/qwen3-32b", "llama-3.1-8b-instant"),
+        default_models=("openai/gpt-oss-120b", "llama-3.3-70b-versatile", "qwen/qwen3-32b", "llama-3.1-8b-instant"),
     ),
     Provider(
         name="OpenRouter",
@@ -92,6 +92,41 @@ def _model_gone(status: int, text: str) -> bool:
     )
 
 
+def _try_next(status: int, text: str) -> bool:
+    """Эту модель сейчас не получить, но у провайдера есть другие.
+
+    429/503 у бесплатных моделей — перегружена именно эта модель, а не ключ.
+    401/403 — плохой ключ: остальные модели тоже не ответят.
+    """
+    return _model_gone(status, text) or status in (408, 429, 500, 502, 503, 504)
+
+
+def _payload(model: str, system: str, prompt: str, temperature: float, max_tokens: int) -> dict:
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+
+    # «Думающие» модели тратят токены на рассуждения: без запаса ответ
+    # приходит пустым. Просим думать поменьше и даём место на ответ.
+    name = model.lower()
+    if "gpt-oss" in name:
+        payload["reasoning_effort"] = "low"
+        payload["max_tokens"] = max(max_tokens, 1500)
+    elif "qwen3" in name:
+        payload["reasoning_format"] = "hidden"
+        payload["max_tokens"] = max(max_tokens, 1500)
+    elif "reasoning" in name or "deepseek-r1" in name:
+        payload["max_tokens"] = max(max_tokens, 1500)
+
+    return payload
+
+
 async def _ask_one(provider: Provider, system: str, prompt: str, temperature: float, max_tokens: int) -> str:
     headers = {"Authorization": f"Bearer {provider.key}"}
     if provider.name == "OpenRouter":
@@ -100,23 +135,16 @@ async def _ask_one(provider: Provider, system: str, prompt: str, temperature: fl
     last = ""
 
     for model in provider.models:
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
-
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-            response = await client.post(provider.url, json=payload, headers=headers)
+            response = await client.post(
+                provider.url, json=_payload(model, system, prompt, temperature, max_tokens), headers=headers,
+            )
 
         if response.status_code != 200:
             last = f"{provider.name} {model} HTTP {response.status_code}: {response.text[:200]}"
-            if _model_gone(response.status_code, response.text):
-                logger.warning("AI FALLBACK: модели %s у %s больше нет, беру следующую", model, provider.name)
+            if _try_next(response.status_code, response.text):
+                logger.warning("AI FALLBACK: %s у %s сейчас недоступна (HTTP %s), беру следующую",
+                               model, provider.name, response.status_code)
                 continue
             raise RuntimeError(last)
 
@@ -124,7 +152,12 @@ async def _ask_one(provider: Provider, system: str, prompt: str, temperature: fl
         choice = (data.get("choices") or [{}])[0]
         answer = clean((choice.get("message") or {}).get("content") or "")
 
-        if answer and choice.get("finish_reason") == "length":
+        if not answer:
+            last = f"{provider.name} {model}: пустой ответ ({choice.get('finish_reason')})"
+            logger.warning("AI FALLBACK: %s", last)
+            continue
+
+        if choice.get("finish_reason") == "length":
             from ai.gemini import trim_to_sentence
 
             answer = trim_to_sentence(answer)
@@ -163,7 +196,7 @@ async def self_check() -> list[str]:
             lines.append(f"{provider.name}: ключ не задан ({provider.key_env})")
             continue
         try:
-            answer = await _ask_one(provider, "Ответь одним словом.", "Скажи: работает", 0.0, 20)
+            answer = await _ask_one(provider, "Ответь коротко, по-русски.", "Скажи одним словом: работает", 0.0, 300)
             lines.append(f"{provider.name}: отвечает ({_working.get(provider.name, '?')}) — «{answer[:40]}»")
         except Exception as error:
             lines.append(f"{provider.name}: НЕ ОТВЕЧАЕТ — {type(error).__name__} {str(error)[:160]}")
