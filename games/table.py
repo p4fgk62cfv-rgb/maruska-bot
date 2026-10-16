@@ -660,77 +660,157 @@ def photo(data: bytes) -> BufferedInputFile:
     return BufferedInputFile(data, filename="coin.jpg")
 
 
+SIDE = {"heads": ("🦅", "орёл", "за орла"), "tails": ("🪙", "решка", "за решку")}
+
+
+def other_side(side: str) -> str:
+    return "tails" if side == "heads" else "heads"
+
+
+def coin_btn(text: str, gid: str, act: str, arg: str = "") -> InlineKeyboardButton:
+    return InlineKeyboardButton(text=text, callback_data=f"tc:{gid}:{act}:{arg}")
+
+
+def coin_view(game: Game) -> tuple[str, InlineKeyboardMarkup | None]:
+    gid = game.gid
+    side = game.picks.get("side")
+    head = f"🪙 <b>Орёл или решка</b>{stake_line(game)}\n\n"
+    if side is None:
+        head += f"{game.name(0)}, выбери свою сторону 👇"
+        if game.invited:
+            head += f"\nСоперник — <b>{escape(game.note)}</b>"
+        rows = [[coin_btn("🦅 Орёл", gid, "side", "heads"), coin_btn("🪙 Решка", gid, "side", "tails")],
+                [coin_btn("✖️ Отмена", gid, "cancel")]]
+        return head, InlineKeyboardMarkup(inline_keyboard=rows)
+    mine, theirs = SIDE[side], SIDE[other_side(side)]
+    head += f"{game.name(0)} играет {mine[2]} {mine[0]}\n"
+    if game.invited:
+        head += f"<b>{escape(game.note)}</b>, принимаешь? Тебе — {theirs[1]} {theirs[0]}"
+        rows = [[coin_btn(f"✅ Принять ({theirs[1]})", gid, "join")]]
+    else:
+        head += f"Кто против? Тебе достанется {theirs[1]} {theirs[0]}"
+        rows = [[coin_btn(f"🙋 Играю {theirs[2]}", gid, "join")]]
+    rows.append([coin_btn("🤖 Против Маруськи", gid, "bot"), coin_btn("✖️ Отмена", gid, "cancel")])
+    return head, InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 async def coin_start(message: Message, opener=None, stake: int = 0) -> None:
     if not games_on(message.chat.id):
         await message.answer(OFF_TEXT)
         return
+    _cleanup()
     user = opener or message.from_user
+    if message.chat.type == "private" or not await check_stake(message, user.id, stake):
+        stake = 0
+    game = Game(gid=secrets.token_hex(4), kind="coin", chat_id=message.chat.id, stake=stake,
+                players=[(user.id, display_name_of(user))])
     reply = message.reply_to_message if opener is None else None
     if reply and reply.from_user and not reply.from_user.is_bot and reply.from_user.id != user.id:
-        if message.chat.type == "private" or not await check_stake(message, user.id, stake):
-            stake = 0
-        game = Game(gid=secrets.token_hex(4), kind="coin", chat_id=message.chat.id, stake=stake,
-                    players=[(user.id, display_name_of(user)), (reply.from_user.id, display_name_of(reply.from_user))])
-        head = f"🪙 Дуэль! {game.name(0)} — 🦅 орёл, {game.name(1)} — решка.{stake_line(game)}\n\n"
-        cover = await asyncio.to_thread(art.coin_image, "Подбрасываем…", None, f"{game.plain(0)} против {game.plain(1)}")
-        sent = await message.answer_photo(photo(cover), caption=head + "Монетка в воздухе…")
-        await asyncio.sleep(1.5)
-        heads = random.random() < 0.5
-        w = 0 if heads else 1
-        await finish(game, w, f"Выпал{'' if heads else 'а'} {'орёл 🦅' if heads else 'решка 🪙'}! Победа за {game.name(w)} 🏆")
-        image = await asyncio.to_thread(art.coin_image, "Выпал орёл!" if heads else "Выпала решка!", heads, f"Победа за {game.plain(w)}")
-        await sent.edit_media(InputMediaPhoto(media=photo(image), caption=with_payout(game, head + game.note), parse_mode="HTML"))
-        return
-    rows = [[InlineKeyboardButton(text="🦅 Орёл", callback_data="tc:heads"),
-             InlineKeyboardButton(text="🪙 Решка", callback_data="tc:tails")]]
-    image = await asyncio.to_thread(art.coin_image, "Орёл или решка?", None, "Угадай, что выпадет")
-    await message.answer_photo(photo(image), caption="🪙 <b>Орёл или решка?</b>\nУгадай, что выпадет!",
-                               reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+        game.invited = reply.from_user.id
+        game.note = display_name_of(reply.from_user)
+    _games[game.gid] = game
+    text, markup = coin_view(game)
+    image = await asyncio.to_thread(art.coin_image, "Орёл или решка?", None, f"{game.plain(0)} выбирает сторону")
+    await message.answer_photo(photo(image), caption=text, reply_markup=markup)
 
 
-_flipping: set[tuple[int, int]] = set()
-
-
-@router.callback_query(F.data.in_({"tc:heads", "tc:tails"}))
-async def coin_guess(callback: CallbackQuery):
-    guess = (callback.data or "").split(":", 1)[1]
-    await callback.answer()
-    message = callback.message
-    if message is None:
-        return
-    key = (message.chat.id, message.message_id)
-    if key in _flipping:
-        return  # кто-то уже нажал раньше
-    _flipping.add(key)
-    user = callback.from_user
-    name = escape(display_name_of(user))
-    said = "орёл 🦅" if guess == "heads" else "решку 🪙"
+async def coin_flip(message: Message, game: Game) -> None:
+    side = game.picks["side"]
+    first, second = SIDE[side], SIDE[other_side(side)]
+    head = (f"🪙 <b>Орёл или решка</b>{stake_line(game)}\n\n"
+            f"{first[0]} {game.name(0)} — {first[1]}\n{second[0]} {game.name(1)} — {second[1]}\n\n")
     try:
-        await message.edit_caption(caption=f"🪙 <b>{name}</b> ставит на {said}…\nМонетка в воздухе…")
+        await message.edit_caption(caption=head + "Монетка в воздухе… 🌀")
     except TelegramBadRequest:
-        return
+        pass
     await asyncio.sleep(1.5)
-    heads = random.random() < 0.5
-    won = heads == (guess == "heads")
-    game = Game(gid="coin", kind="coin", chat_id=message.chat.id, players=[(user.id, display_name_of(user)), (BOT_ID, BOT_NAME)])
-    await finish(game, 0 if won else 1, "")
-    result = "орёл 🦅" if heads else "решка 🪙"
-    tail = random.choice(("Везунчик! 🍀", "Интуиция не подвела 😎", "Чистая победа 🏆")) if won else random.choice(
-        ("Не повезло 🙈", "Монетка сегодня не на твоей стороне", "В следующий раз точно!")
-    )
-    image = await asyncio.to_thread(art.coin_image, "Выпал орёл!" if heads else "Выпала решка!", heads,
-                                    f"{display_name_of(user)}: {'угадано' if won else 'мимо'}")
-    rows = [[InlineKeyboardButton(text="🔄 Ещё раз", callback_data="tc:new")]]
-    caption = f"🪙 <b>{name}</b> ставил(а) на {said}\nВыпал{'' if heads else 'а'} <b>{result}</b>!\n\n{tail}"
-    await message.edit_media(InputMediaPhoto(media=photo(image), caption=with_payout(game, caption), parse_mode="HTML"),
+    result = random.choice(("heads", "tails"))
+    w = 0 if result == side else 1
+    word = "Выпал орёл" if result == "heads" else "Выпала решка"
+    await finish(game, w, f"{word}! Победа за {game.name(w)} 🏆")
+    image = await asyncio.to_thread(art.coin_image, f"{word}!", result == "heads", f"Победа за {game.plain(w)}")
+    rows = [[coin_btn("🔄 Ещё раз", game.gid, "new")]]
+    await message.edit_media(InputMediaPhoto(media=photo(image), caption=with_payout(game, head + game.note), parse_mode="HTML"),
                              reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
 
-@router.callback_query(F.data == "tc:new")
-async def coin_again(callback: CallbackQuery):
-    await callback.answer()
-    if callback.message:
-        await coin_start(callback.message, opener=callback.from_user)
+@router.callback_query(F.data.startswith("tc:"))
+async def coin_press(callback: CallbackQuery):
+    _, gid, act, arg = ((callback.data or "") + ":::").split(":")[:4]
+    game = _games.get(gid)
+    message = callback.message
+    user = callback.from_user
+    if act == "new":
+        await callback.answer()
+        if message:
+            await coin_start(message, opener=user, stake=game.stake if game else 0)
+        return
+    if game is None or message is None:
+        await callback.answer("Игра устарела — начните новую: /орел", show_alert=True)
+        return
+    async with game.lock:
+        game.touched = time.monotonic()
+        if game.status != "lobby":
+            await callback.answer("Монетка уже подброшена")
+            return
+        me = game.index_of(user.id)
+        if act == "cancel":
+            if me != 0:
+                await callback.answer("Отменить может только тот, кто начал")
+                return
+            _games.pop(gid, None)
+            await callback.answer()
+            try:
+                await message.edit_caption(caption="🪙 Орёл или решка — отменено.")
+            except TelegramBadRequest:
+                pass
+            return
+        if act == "side":
+            if me != 0:
+                await callback.answer("Сторону выбирает тот, кто начал игру")
+                return
+            if arg not in SIDE:
+                await callback.answer()
+                return
+            game.picks["side"] = arg
+            await callback.answer(f"Ты играешь {SIDE[arg][2]}")
+            if message.chat.type == "private":
+                game.players.append((BOT_ID, BOT_NAME))
+                game.status = "playing"
+                await coin_flip(message, game)
+                return
+            text, markup = coin_view(game)
+            try:
+                await message.edit_caption(caption=text, reply_markup=markup)
+            except TelegramBadRequest:
+                pass
+            return
+        if "side" not in game.picks:
+            await callback.answer("Сначала автор выбирает сторону")
+            return
+        if act == "bot":
+            if me != 0:
+                await callback.answer("Позвать Маруську может только тот, кто начал")
+                return
+            game.stake = 0
+            game.players.append((BOT_ID, BOT_NAME))
+        elif act == "join":
+            if me == 0:
+                await callback.answer("Ждём соперника — или нажми «Против Маруськи»")
+                return
+            if game.invited and user.id != game.invited:
+                await callback.answer("Этот вызов не тебе 😉")
+                return
+            if game.stake and await balance(user.id) < game.stake:
+                await callback.answer(f"Не хватает алмазов на ставку {game.stake} 💎", show_alert=True)
+                return
+            game.players.append((user.id, display_name_of(user)))
+        else:
+            await callback.answer()
+            return
+        game.status = "playing"
+        await callback.answer("Подбрасываем!")
+        await coin_flip(message, game)
 
 
 # =========================================================
