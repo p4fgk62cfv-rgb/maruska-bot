@@ -531,6 +531,21 @@ ITEM_PHRASES = {
 }
 
 
+# Ещё подписи из actions/phrases_more.py — у каждого предмета и действия свои
+def _merge() -> None:
+    from actions import phrases_more as more
+
+    for group in (more.ALCOHOL, more.DRINK, more.FOOD, more.SWEET, more.FRUIT, more.FLOWER, more.GIFT, more.PET):
+        for key, extra in group.items():
+            ITEM_PHRASES[key] = tuple(ITEM_PHRASES.get(key, ())) + tuple(extra)
+    for table, group in ((CALLS, more.CALLS), (PAIR, more.PAIR)):
+        for key, extra in group.items():
+            table[key] = tuple(table.get(key, ())) + tuple(extra)
+
+
+_merge()
+
+
 CATEGORY_PHRASES = {
     "alcohol": ALCOHOL,
     "drink": DRINK,
