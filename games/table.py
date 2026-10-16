@@ -58,7 +58,7 @@ TITLES = {
     "checkers": "⚫ Шашки",
     "sea": "🚢 Морской бой",
     "rps": "✊ Камень, ножницы, бумага",
-    "coin": "🪙 Орёл или решка",
+    "coin": "🦅 Орёл или решка",
 }
 PHOTO_KINDS = {"checkers", "sea", "rps"}
 LUCK_KINDS = {"rps", "coin"}
@@ -139,7 +139,7 @@ def sea_cell_name(pos: int) -> str:
 
 def strip_tags(text: str) -> str:
     text = re.sub(r"<[^>]+>", "", text)
-    for mark in ("🏆 ", "🤝 ", "🏳 ", " 🏆", " 🦅", " 🪙"):
+    for mark in ("🏆 ", "🤝 ", "🏳 ", " 🏆", " 🦅", " 💰"):
         text = text.replace(mark, " " if mark.startswith(" ") else "")
     return text.strip()
 
@@ -629,7 +629,7 @@ async def menu(message: Message) -> None:
          InlineKeyboardButton(text="⚫ Шашки", callback_data="tm:checkers")],
         [InlineKeyboardButton(text="🚢 Морской бой", callback_data="tm:sea"),
          InlineKeyboardButton(text="✊ Камень-ножницы", callback_data="tm:rps")],
-        [InlineKeyboardButton(text="🪙 Орёл или решка", callback_data="tm:coin")],
+        [InlineKeyboardButton(text="🦅 Орёл или решка", callback_data="tm:coin")],
     ]
     await message.answer(
         "🎲 <b>Игры Маруськи</b>\n\nВыбери игру — Маруська откроет стол прямо здесь.\n\n"
@@ -660,7 +660,7 @@ def photo(data: bytes) -> BufferedInputFile:
     return BufferedInputFile(data, filename="coin.jpg")
 
 
-SIDE = {"heads": ("🦅", "орёл", "за орла"), "tails": ("🪙", "решка", "за решку")}
+SIDE = {"heads": ("🦅", "орёл", "за орла"), "tails": ("💰", "решка", "за решку")}
 
 
 def other_side(side: str) -> str:
@@ -674,12 +674,12 @@ def coin_btn(text: str, gid: str, act: str, arg: str = "") -> InlineKeyboardButt
 def coin_view(game: Game) -> tuple[str, InlineKeyboardMarkup | None]:
     gid = game.gid
     side = game.picks.get("side")
-    head = f"🪙 <b>Орёл или решка</b>{stake_line(game)}\n\n"
+    head = f"🦅 <b>Орёл или решка</b>{stake_line(game)}\n\n"
     if side is None:
         head += f"{game.name(0)}, выбери свою сторону 👇"
         if game.invited:
             head += f"\nСоперник — <b>{escape(game.note)}</b>"
-        rows = [[coin_btn("🦅 Орёл", gid, "side", "heads"), coin_btn("🪙 Решка", gid, "side", "tails")],
+        rows = [[coin_btn("🦅 Орёл", gid, "side", "heads"), coin_btn("💰 Решка", gid, "side", "tails")],
                 [coin_btn("✖️ Отмена", gid, "cancel")]]
         return head, InlineKeyboardMarkup(inline_keyboard=rows)
     mine, theirs = SIDE[side], SIDE[other_side(side)]
@@ -717,7 +717,7 @@ async def coin_start(message: Message, opener=None, stake: int = 0) -> None:
 async def coin_flip(message: Message, game: Game) -> None:
     side = game.picks["side"]
     first, second = SIDE[side], SIDE[other_side(side)]
-    head = (f"🪙 <b>Орёл или решка</b>{stake_line(game)}\n\n"
+    head = (f"🦅 <b>Орёл или решка</b>{stake_line(game)}\n\n"
             f"{first[0]} {game.name(0)} — {first[1]}\n{second[0]} {game.name(1)} — {second[1]}\n\n")
     try:
         await message.edit_caption(caption=head + "Монетка в воздухе… 🌀")
@@ -761,7 +761,7 @@ async def coin_press(callback: CallbackQuery):
             _games.pop(gid, None)
             await callback.answer()
             try:
-                await message.edit_caption(caption="🪙 Орёл или решка — отменено.")
+                await message.edit_caption(caption="🦅 Орёл или решка — отменено.")
             except TelegramBadRequest:
                 pass
             return
