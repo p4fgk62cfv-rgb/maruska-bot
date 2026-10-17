@@ -3,7 +3,7 @@
 
 Художники (каждый включается и выключается в админке, основной выбирается там же):
 
-    gemini        — Gemini (gemini-2.5-flash-image и др.). На бесплатном
+    gemini        — Gemini (gemini-3.1-flash-lite-image и др., ~$0.034 за картинку). На бесплатном
                     ключе Google лимит картинок нулевой — нужен платный тариф.
     pollinations  — бесплатно. Без ключа — общая очередь, часто занята;
                     с ключом POLLINATIONS_TOKEN (enter.pollinations.ai) надёжнее.
@@ -37,7 +37,7 @@ TITLES = {"gemini": "Gemini", "pollinations": "Pollinations", "huggingface": "Hu
 GEMINI_MODELS = tuple(
     m.strip() for m in (
         os.getenv("GEMINI_IMAGE_MODEL", "")
-        or "gemini-2.5-flash-image,gemini-3-pro-image-preview,gemini-2.0-flash-preview-image-generation"
+        or "gemini-3.1-flash-lite-image,gemini-nano-banana-2.1,gemini-3.1-flash-image,gemini-2.5-flash-image"
     ).split(",") if m.strip()
 )
 

@@ -316,7 +316,22 @@ def is_action_message(message: Message) -> bool:
         if reply.from_user.id != message.from_user.id:
             return True
 
-    return bool(USERNAME_RE.search(message.text))
+    if USERNAME_RE.search(message.text):
+        return True
+
+    return mara_serves(message)
+
+
+def mara_serves(message: Message) -> bool:
+    """«Мара, кофе» или «кофе» ответом на сообщение Мары — угощает сама Маруська."""
+    from botcontext import BOT_ID, TRIGGER_RE
+
+    if USERNAME_RE.search(message.text or ""):
+        return False
+    reply = message.reply_to_message
+    if reply and reply.from_user:
+        return reply.from_user.id == BOT_ID
+    return bool(TRIGGER_RE.search(message.text or ""))
 
 
 async def find_target(message: Message) -> Target | None:
@@ -362,7 +377,16 @@ async def action_handler(message: Message):
 
     target = await find_target(message)
 
-    if target is None or target.telegram_id == message.from_user.id:
+    # Адресата нет, но просили Мару — она угощает автора сама
+    serves = target is None and mara_serves(message)
+    if serves:
+        target = Target(
+            telegram_id=message.from_user.id,
+            username=message.from_user.username,
+            first_name=message.from_user.first_name,
+        )
+
+    if target is None or (target.telegram_id == message.from_user.id and not serves):
         return
 
     await save_user(
@@ -384,10 +408,10 @@ async def action_handler(message: Message):
         message=message.text,
     )
 
-    actor_name = get_display_name(message.from_user)
+    actor_name = "Маруська" if serves else get_display_name(message.from_user)
     target_name = get_display_name(target)
 
-    actor_gender = infer_gender(actor_name)
+    actor_gender = "female" if serves else infer_gender(actor_name)
     target_gender = infer_gender(target_name)
 
     pair = "neutral"

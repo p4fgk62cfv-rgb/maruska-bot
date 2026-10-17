@@ -2,6 +2,7 @@
 Котики: «покажи меня» и «мяу».
 """
 
+import asyncio
 import logging
 from html import escape
 
@@ -13,6 +14,7 @@ from actions.service import get_image_for_action
 from actions.show_me import (
     is_meow,
     is_show_me,
+    is_show_other,
     pick_caption,
     pick_meow_caption,
     pick_mood,
@@ -25,6 +27,36 @@ from settings.store import is_enabled
 logger = logging.getLogger("maruska.cats")
 
 router = Router(name="cats")
+
+
+# Пара котиков наготове: поиск в Pixabay, скачивание и загрузка занимают
+# несколько секунд, а заранее подобранный котик уходит почти сразу
+READY_SIZE = 2
+_ready: list = []
+_refilling = False
+
+
+async def _fetch_cat():
+    try:
+        return await get_image_for_action(pick_mood())
+    except Exception as error:
+        logger.error("CAT: %s %s", type(error).__name__, error)
+        return None
+
+
+async def _refill() -> None:
+    global _refilling
+    if _refilling:
+        return
+    _refilling = True
+    try:
+        while len(_ready) < READY_SIZE:
+            picked = await _fetch_cat()
+            if picked is None:
+                break
+            _ready.append(picked)
+    finally:
+        _refilling = False
 
 
 async def send_cat(message: Message, caption: str):
@@ -45,13 +77,10 @@ async def send_cat(message: Message, caption: str):
         except Exception as error:
             logger.error("LIBRARY CAT: %s %s", type(error).__name__, error)
 
-    mood = pick_mood()
+    picked = _ready.pop(0) if _ready else await _fetch_cat()
 
-    try:
-        picked = await get_image_for_action(mood)
-    except Exception as error:
-        logger.error("CAT: %s %s", type(error).__name__, error)
-        picked = None
+    # Следующих котиков готовим в фоне, пока этот отправляется
+    asyncio.create_task(_refill())
 
     if picked is None:
         await message.reply("Котики закончились, попробуй попозже 🐾")
@@ -100,3 +129,60 @@ def is_meow_request(message: Message) -> bool:
 @router.message(is_meow_request)
 async def meow_handler(message: Message):
     await send_cat(message, pick_meow_caption())
+
+
+async def other_name(message: Message) -> str | None:
+    """Кого показать: автор сообщения, на которое ответили, или @ник."""
+    from botcontext import BOT_ID
+
+    reply = message.reply_to_message
+    if reply and reply.from_user and reply.from_user.id != BOT_ID and not reply.from_user.is_bot:
+        return display_name_of(reply.from_user)
+
+    import re
+
+    match = re.search(r"@([A-Za-z0-9_]{3,32})", message.text or "")
+    if not match:
+        return None
+    try:
+        from database.repository import get_user_by_username
+
+        user = await get_user_by_username(match.group(1))
+        if user is not None and user.first_name:
+            return user.first_name
+    except Exception:
+        pass
+    return "@" + match.group(1)
+
+
+def _has_target(message: Message) -> bool:
+    from botcontext import BOT_ID
+
+    reply = message.reply_to_message
+    if reply and reply.from_user and reply.from_user.id != BOT_ID and not reply.from_user.is_bot:
+        return True
+    return "@" in (message.text or "")
+
+
+def is_show_other_request(message: Message) -> bool:
+    if not is_enabled(message.chat.id, "cats"):
+        return False
+
+    if not message.text or message.text.startswith("/"):
+        return False
+
+    if not is_show_other(message.text, _has_target(message)):
+        return False
+
+    # Обращение к Маре обязательно: «покажи @vasya» без имени — разговор людей
+    from botcontext import TRIGGER_RE
+
+    return bool(TRIGGER_RE.search(message.text)) or message.chat.type == "private"
+
+
+@router.message(is_show_other_request)
+async def show_other_handler(message: Message):
+    name = await other_name(message)
+    if not name:
+        return
+    await send_cat(message, pick_caption(escape(name)))

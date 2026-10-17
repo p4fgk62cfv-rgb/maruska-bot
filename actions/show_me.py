@@ -6,6 +6,7 @@
 """
 
 import random
+import re
 
 from actions.catalog_data import Action
 
@@ -120,6 +121,19 @@ def is_show_me(text: str | None) -> bool:
         trigger.replace("ё", "е") in lowered
         for trigger in TRIGGERS
     )
+
+
+# «Мара, покажи @vasya» или ответом: «Мара, покажи его»
+OTHER_RE = re.compile(r"\bпокажи\b", re.IGNORECASE)
+OTHER_WORDS = ("его", "ее", "её", "этого", "эту", "этого человека", "кто это")
+
+
+def is_show_other(text: str | None, has_target: bool) -> bool:
+    """«покажи» + адресат (ответ на сообщение или @ник), но не «покажи меня»."""
+    if not text or is_show_me(text) or not OTHER_RE.search(text):
+        return False
+    lowered = text.lower()
+    return has_target and ("@" in text or any(w in lowered.split() for w in OTHER_WORDS) or len(lowered.split()) <= 3)
 
 
 def pick_mood() -> Action:
