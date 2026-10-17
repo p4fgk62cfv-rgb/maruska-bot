@@ -145,6 +145,8 @@ enum TransactionType {
   STARS_PURCHASE
   /// Coins taken back when a Stars payment is refunded.
   STARS_REFUND
+  /// Prize for a place in the top of a finished season.
+  SEASON_REWARD
 
   @@schema("arena")
 }

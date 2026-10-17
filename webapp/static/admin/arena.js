@@ -554,7 +554,15 @@
         + '<div class="kv"><span class="k">На «Готов» в турнире</span><span>' + s.readySeconds + " с</span></div>"
         + '<div class="kv"><span class="k">Бот / приложение</span><span>@' + esc(s.botUsername) + " / " + esc(s.miniApp || "—") + "</span></div>"
         + "</div>"
-        + '<div class="dim">Бонус, комиссия и время на «Готов» меняются переменными арены в Railway (SIGNUP_BONUS_CREDITS, RAKE_PERCENT, MATCH_READY_SECONDS).</div>';
+        + (s.autoSeasons ? '<div class="card"><div class="card-title">🏆 Сезоны</div>'
+          + '<div class="kv"><span class="k">Автосезоны</span><span>' + (s.autoSeasons.on ? "Каждый месяц сами" : "Выключены") + "</span></div>"
+          + '<div class="kv"><span class="k">Призы за места</span><span>' + (s.autoSeasons.prizes.length ? s.autoSeasons.prizes.map(short).join(" · ") : "—") + " 🪙</span></div>"
+          + '<div class="kv"><span class="k">VIP за места</span><span>' + (s.autoSeasons.vipDays.length ? s.autoSeasons.vipDays.join(" · ") + " дн." : "—") + "</span></div></div>" : "")
+        + (s.autoTournaments ? '<div class="card"><div class="card-title">🎯 Турниры</div>'
+          + '<div class="kv"><span class="k">Автотурниры</span><span>' + (s.autoTournaments.on ? "Включены" : "Выключены") + "</span></div>"
+          + '<div class="kv"><span class="k">Вечерний (бесплатно)</span><span>каждый день в ' + s.autoTournaments.dailyHour + ":00 МСК · фонд 🪙 " + num(s.autoTournaments.dailyPrize) + "</span></div>"
+          + '<div class="kv"><span class="k">Выходных</span><span>сб 18:00 МСК · взнос 🪙 ' + num(s.autoTournaments.weekendFee) + " · гарантия 🪙 " + num(s.autoTournaments.weekendPrize) + "</span></div></div>" : "")
+        + '<div class="dim">Меняются переменными арены в Railway: SIGNUP_BONUS_CREDITS, RAKE_PERCENT, MATCH_READY_SECONDS, AUTO_SEASONS, SEASON_PRIZES, SEASON_VIP_DAYS, AUTO_TOURNAMENTS, DAILY_TOURNAMENT_HOUR, DAILY_TOURNAMENT_PRIZE, WEEKEND_TOURNAMENT_FEE, WEEKEND_TOURNAMENT_PRIZE.</div>';
       M.bind();
     }).catch(M.fail);
   });
