@@ -86,6 +86,8 @@
 
         // --- слова-триггеры ---
         + '<div class="card"><div class="card-title">Ключевые слова</div>'
+        + (a.builtin_aliases.some(function (x) { return x.hidden; })
+            ? '<div class="alert" style="margin-bottom:8px"><span class="ico">⚠️</span><span class="grow">Часть слов скрыта — на них действие в этой группе не срабатывает. Нажми на зачёркнутое слово, чтобы вернуть.</span></div>' : "")
         + a.builtin_aliases.map(function (x) {
             return '<span class="tag"' + (canEdit ? ' data-hide-alias="' + esc(x.value) + '" data-hidden="' + (x.hidden ? 1 : 0) + '"' : "")
               + ' style="margin:0 4px 6px 0;' + (canEdit ? "cursor:pointer;" : "") + (x.hidden ? "text-decoration:line-through;opacity:.45" : "") + '">'
@@ -302,7 +304,14 @@
     };
 
     each("[data-hide-alias]", function (el) {
-      el.onclick = function () { toggleBuiltin("alias", el.getAttribute("data-hide-alias"), el.getAttribute("data-hidden") !== "1"); };
+      el.onclick = function () {
+        var word = el.getAttribute("data-hide-alias").replace(/^=/, "");
+        var hide = el.getAttribute("data-hidden") !== "1";
+        // Скрыть слово легко случайно — и действие перестаёт работать молча. Спрашиваем
+        if (!hide) { toggleBuiltin("alias", el.getAttribute("data-hide-alias"), false); return; }
+        M.confirm("Скрыть слово «" + word + "»?", "В этой группе действие перестанет срабатывать на «" + word + "». Вернуть — нажать на зачёркнутое слово.", "Скрыть", true)
+          .then(function (ok) { if (ok) toggleBuiltin("alias", el.getAttribute("data-hide-alias"), true); });
+      };
     });
 
     each("[data-hide-phrase]", function (el) {
