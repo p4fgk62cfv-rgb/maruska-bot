@@ -49,11 +49,16 @@ def _allowed_tail(needle: str) -> int:
         else ALIAS_TAIL_SHORT
     )
 
+_MENTION_RE = re.compile(r"@[A-Za-z0-9_]{3,32}")
+
 _WORD_RE = re.compile(r"[А-Яа-яЁёA-Za-z]+(?:-[А-Яа-яЁёA-Za-z]+)?")
 
 # Слова, которые не мешают распознать действие.
 STOP_WORDS = {
     "маруська", "маруся", "маруськa", "бот",
+    # Обращение по имени: «Мара, кофе» — тоже действие
+    "мара", "мару", "маре", "мары", "марой", "марочка",
+    "марусь", "марусю", "марусе", "маруси", "маруську", "маруське", "маруськи", "маня",
     "я", "ты", "он", "она", "мы", "вы", "они",
     "мне", "тебе", "ему", "ей", "нам", "вам", "им",
     "меня", "тебя", "его", "ее", "её", "их", "нас", "вас",
@@ -117,6 +122,9 @@ def find_action(text: str | None, hidden: dict | None = None) -> Action | None:
     # Команды и длинные простыни — точно не действия.
     if stripped.startswith("/"):
         return None
+
+    # @ник — адресат, а не слово фразы: «кофе @vasya» — это действие
+    stripped = _MENTION_RE.sub(" ", stripped)
 
     raw_words = [_normalize(w) for w in _WORD_RE.findall(stripped)]
     if not raw_words:
