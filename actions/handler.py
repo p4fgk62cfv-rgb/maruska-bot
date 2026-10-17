@@ -283,43 +283,51 @@ def is_action_message(message: Message) -> bool:
     Синхронный фильтр. Действие засчитывается только если:
       - это групповой чат,
       - текст распознан как короткое действие,
-      - есть адресат (reply на живого человека или @username).
+      - есть адресат (reply на живого человека или @username)
+        или просили саму Мару («Мара, кофе»).
 
     Всё остальное уходит дальше — в команды и в AI-хендлер.
+    Если слово действия узнали, но не сработали — причина пишется в лог:
+    иначе «кофе молчит» не разобрать.
     """
-    if message.chat.type not in GROUP_CHATS:
-        return False
+    reason = _skip_reason(message)
+    return reason is None
 
-    if not is_enabled(message.chat.id, "actions"):
-        return False
 
-    if is_blocked(message.chat.id, message.from_user.id if message.from_user else None):
-        return False
-
+def _skip_reason(message: Message) -> str | None:
+    if message.chat.type not in GROUP_CHATS or not message.text:
+        return "не группа"
     if not message.from_user or message.from_user.is_bot:
-        return False
-
-    if not message.text:
-        return False
+        return "пишет бот"
 
     found = custom.resolve(message.chat.id, message.text)
-
     if found is None:
-        return False
+        return "не действие"
 
-    if is_action_disabled(message.chat.id, found.key):
-        return False
-
+    reason = None
     reply = message.reply_to_message
 
-    if reply and reply.from_user and not reply.from_user.is_bot:
-        if reply.from_user.id != message.from_user.id:
-            return True
+    if not is_enabled(message.chat.id, "actions"):
+        reason = "действия выключены в группе"
+    elif is_blocked(message.chat.id, message.from_user.id):
+        reason = "автор в игноре у Мары"
+    elif is_action_disabled(message.chat.id, found.key):
+        reason = f"действие {found.key} выключено в группе"
+    elif reply and reply.from_user and not reply.from_user.is_bot and reply.from_user.id != message.from_user.id:
+        return None
+    elif USERNAME_RE.search(message.text):
+        return None
+    elif mara_serves(message):
+        return None
+    elif reply and reply.from_user and reply.from_user.is_bot:
+        reason = "ответ на сообщение другого бота"
+    elif reply and reply.from_user and reply.from_user.id == message.from_user.id:
+        reason = "ответ на своё же сообщение"
+    else:
+        reason = "нет адресата (не ответ на сообщение и без @ника)"
 
-    if USERNAME_RE.search(message.text):
-        return True
-
-    return mara_serves(message)
+    logger.info("ACTION SKIP chat=%s «%s» → %s: %s", message.chat.id, message.text[:30], found.key, reason)
+    return reason
 
 
 def mara_serves(message: Message) -> bool:
@@ -373,6 +381,7 @@ async def action_handler(message: Message):
 
     # Задержка между срабатываниями — молча игнорируем
     if custom.cooling_down(chat_id, action.key):
+        logger.info("ACTION SKIP chat=%s → %s: пауза между срабатываниями", chat_id, action.key)
         return
 
     target = await find_target(message)
