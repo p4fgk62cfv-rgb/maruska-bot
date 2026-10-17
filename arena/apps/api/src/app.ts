@@ -35,6 +35,7 @@ import { ownerRoutes } from './routes/owner.js';
 import { friendRoutes } from './routes/friends.js';
 import { internalRoutes } from './routes/internal.js';
 import { tournamentRoutes } from './routes/tournaments.js';
+import { SeasonService } from './services/seasons.js';
 import { TournamentService } from './services/tournaments.js';
 import { StarsService } from './services/stars.js';
 import { starsRoutes } from './routes/stars.js';
@@ -94,6 +95,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   const outbox = new Outbox(base.db, bot, app.log);
   const friends = new FriendService({ ...base, outbox, presence, realtime });
   const tournaments = new TournamentService({ ...base, outbox, realtime, log: app.log });
+  const seasons = new SeasonService({ ...base, outbox, log: app.log });
   const profiles = new ProfileService({ db: base.db, items: base.items, presence, friends: () => friends });
   const referrals = new ReferralService({ ...base, outbox, realtime, log: app.log });
   realtime.finishedListeners.add((result) => {
@@ -124,6 +126,8 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
     chat.start();
     stars.start();
     void realtime.ready.then(() => tournaments.start());
+    // Only the server that holds the tables starts seasons and pays prizes: two servers during a deploy never race.
+    void realtime.ready.then(() => seasons.start());
     // One server trains: the one that runs the games (it holds the lease).
     // Self-play training has plateaued (exams flat for a week): off unless BOT_TRAINING=on.
     // «Зал ботов» runs either way.

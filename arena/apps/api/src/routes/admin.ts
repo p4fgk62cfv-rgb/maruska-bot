@@ -5,6 +5,7 @@ import type { Context } from '../context.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { AppError } from '../lib/errors.js';
 import { toNumber } from '../lib/money.js';
+import { parsePlaces } from '../services/seasons.js';
 import { avatarUrl, displayName } from '../services/users.js';
 
 const tg = z.object({ telegramId: z.coerce.bigint() });
@@ -395,5 +396,17 @@ export async function adminRoutes(app: FastifyInstance, ctx: Context, check: (r:
     readySeconds: ctx.config.MATCH_READY_SECONDS,
     botUsername: ctx.config.BOT_USERNAME,
     miniApp: ctx.config.MINI_APP_SHORT_NAME,
+    autoSeasons: {
+      on: ctx.config.AUTO_SEASONS === 'on',
+      prizes: parsePlaces(ctx.config.SEASON_PRIZES),
+      vipDays: parsePlaces(ctx.config.SEASON_VIP_DAYS),
+    },
+    autoTournaments: {
+      on: ctx.config.AUTO_TOURNAMENTS === 'on',
+      dailyHour: ctx.config.DAILY_TOURNAMENT_HOUR,
+      dailyPrize: ctx.config.DAILY_TOURNAMENT_PRIZE,
+      weekendFee: ctx.config.WEEKEND_TOURNAMENT_FEE,
+      weekendPrize: ctx.config.WEEKEND_TOURNAMENT_PRIZE,
+    },
   }));
 }

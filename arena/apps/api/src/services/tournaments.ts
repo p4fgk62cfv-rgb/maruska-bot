@@ -44,6 +44,52 @@ export const createTournamentSchema = z.object({
 
 const ACTIVE = ['ANNOUNCED', 'REGISTRATION', 'RUNNING'] as const;
 
+const MOSCOW_MS = 3 * 3600_000;
+const HOUR = 3600_000;
+
+export interface AutoTournamentPlan {
+  title: string;
+  startsAt: Date;
+  entryFee: number;
+  /** Prizes guaranteed by the arena, on top of the entry fees. */
+  guarantee: number;
+  maxPlayers: 16 | 32;
+  settings: TournamentSettings;
+}
+
+/** The next moment that is `hour`:00 Moscow time on a day matching `day` (0 = Sunday), strictly after `now`. */
+function nextMoscow(now: Date, hour: number, day?: number): Date {
+  const msk = new Date(now.getTime() + MOSCOW_MS);
+  for (let add = 0; add <= 7; add++) {
+    const candidate = Date.UTC(msk.getUTCFullYear(), msk.getUTCMonth(), msk.getUTCDate() + add, hour) - MOSCOW_MS;
+    const weekday = new Date(candidate + MOSCOW_MS).getUTCDay();
+    if (candidate > now.getTime() && (day === undefined || weekday === day)) return new Date(candidate);
+  }
+  return new Date(now.getTime() + 7 * 24 * HOUR);
+}
+
+/** Tournaments the arena announces by itself: a free one every evening, a big one on Saturday. */
+export function autoTournamentPlans(now: Date, config: Pick<Config, 'DAILY_TOURNAMENT_HOUR' | 'DAILY_TOURNAMENT_PRIZE' | 'WEEKEND_TOURNAMENT_FEE' | 'WEEKEND_TOURNAMENT_PRIZE'>): AutoTournamentPlan[] {
+  return [
+    {
+      title: 'Вечерний турнир',
+      startsAt: nextMoscow(now, config.DAILY_TOURNAMENT_HOUR),
+      entryFee: 0,
+      guarantee: config.DAILY_TOURNAMENT_PRIZE,
+      maxPlayers: 16,
+      settings: { variant: 'podkidnoy', throwIn: 'all', fairness: 'fair', ending: 'classic', speed: 'normal' },
+    },
+    {
+      title: 'Большой турнир выходных',
+      startsAt: nextMoscow(now, 18, 6),
+      entryFee: config.WEEKEND_TOURNAMENT_FEE,
+      guarantee: config.WEEKEND_TOURNAMENT_PRIZE,
+      maxPlayers: 32,
+      settings: { variant: 'perevodnoy', throwIn: 'all', fairness: 'fair', ending: 'classic', speed: 'normal' },
+    },
+  ];
+}
+
 /**
  * Heads-up single-elimination tournaments.
  *
@@ -216,6 +262,7 @@ export class TournamentService {
 
   tick(now = new Date()): Promise<void> {
     return this.queue.run(async () => {
+      await this.scheduleAuto(now);
       const due = await this.db.tournament.findMany({ where: { status: { in: ['ANNOUNCED', 'REGISTRATION'] }, startsAt: { lte: now } } });
       for (const t of due) await this.begin(t);
       const running = await this.db.tournament.findMany({ where: { status: 'RUNNING' } });
@@ -224,6 +271,30 @@ export class TournamentService {
         await this.openMatches(t.id);
       }
     });
+  }
+
+  /**
+   * Keeps the next evening and Saturday tournaments announced. A plan is matched by title and start,
+   * so a restart or a second server never announces it twice; a cancelled one is not re-created.
+   */
+  private async scheduleAuto(now: Date): Promise<void> {
+    if (this.deps.config.AUTO_TOURNAMENTS !== 'on') return;
+    for (const plan of autoTournamentPlans(now, this.deps.config)) {
+      const exists = await this.db.tournament.findFirst({ where: { title: plan.title, startsAt: plan.startsAt }, select: { id: true } });
+      if (exists) continue;
+      const t = await this.db.tournament.create({
+        data: {
+          title: plan.title,
+          status: 'REGISTRATION',
+          entryFee: BigInt(plan.entryFee),
+          prizePool: BigInt(plan.guarantee),
+          maxPlayers: plan.maxPlayers,
+          startsAt: plan.startsAt,
+          settings: plan.settings,
+        },
+      });
+      this.deps.log.info({ tournamentId: t.id, title: plan.title, startsAt: plan.startsAt }, 'tournament announced');
+    }
   }
 
   private async begin(t: Tournament): Promise<void> {

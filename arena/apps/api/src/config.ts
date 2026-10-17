@@ -36,6 +36,20 @@ const schema = z.object({
   /** Postgres connections per instance; keep instances × size under the server's max_connections. */
   DB_POOL_SIZE: z.coerce.number().int().positive().default(20),
   RAKE_PERCENT: z.coerce.number().min(0).max(50).default(5),
+  /** Monthly seasons start by themselves and pay the top when they end: «on» or «off». */
+  AUTO_SEASONS: z.enum(['on', 'off']).default('on'),
+  /** Season prizes in credits by place: «100000,50000,25000,10000x7» = 1st, 2nd, 3rd, then 7 × 10 000. */
+  SEASON_PRIZES: z.string().default('100000,50000,25000,10000x7'),
+  /** VIP days on top of the credits, by place: «7,3,1». */
+  SEASON_VIP_DAYS: z.string().default('7,3,1'),
+  /** Daily evening and weekend tournaments are announced by themselves: «on» or «off». */
+  AUTO_TOURNAMENTS: z.enum(['on', 'off']).default('on'),
+  /** Moscow hour of the daily free tournament; its prizes are paid by the arena. */
+  DAILY_TOURNAMENT_HOUR: z.coerce.number().int().min(0).max(23).default(20),
+  DAILY_TOURNAMENT_PRIZE: z.coerce.number().int().nonnegative().default(10_000),
+  /** Saturday tournament at 18:00 Moscow time: entry fee plus a prize pool guaranteed by the arena. */
+  WEEKEND_TOURNAMENT_FEE: z.coerce.number().int().nonnegative().default(1_000),
+  WEEKEND_TOURNAMENT_PRIZE: z.coerce.number().int().nonnegative().default(50_000),
   /** Threads where the strong bots think (0: inline, small searches — tests). */
   BRAIN_THREADS: z.coerce.number().int().min(0).max(8).default(3),
   /** Self-play training of the bots in the background: «on» or «off». */
