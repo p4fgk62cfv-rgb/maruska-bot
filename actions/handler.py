@@ -302,6 +302,11 @@ def _skip_reason(message: Message) -> str | None:
 
     found = custom.resolve(message.chat.id, message.text)
     if found is None:
+        # Слово из каталога, но в этой группе его скрыли — иначе «кофе молчит» не понять
+        plain = find_action(message.text)
+        if plain is not None:
+            logger.info("ACTION SKIP chat=%s «%s» → %s: слово скрыто в настройках действий этой группы",
+                        message.chat.id, message.text[:30], plain.key)
         return "не действие"
 
     reason = None
