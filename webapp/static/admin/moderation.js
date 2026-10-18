@@ -146,7 +146,7 @@
       var canRestrict = !!rights.restrict;
       var canDelete = !!rights.delete;
 
-      var TILE_ICONS = { "🌊": "wind", "🔁": "repeat", "🔗": "link", "🚫": "ban", "🔣": "alert", "🎭": "image", "🤬": "alert", "🤖": "lock", "🐣": "user", "⌨️": "settings", "⚖️": "mute" };
+      var TILE_ICONS = { "🌊": "wind", "🔁": "repeat", "🔗": "link", "🚫": "ban", "🔣": "alert", "🎭": "image", "🤬": "alert", "🤖": "lock", "🐣": "user", "⌨️": "settings", "⚖️": "mute", "🎵": "trash" };
 
       var tile = function (icon, title, active, state, section) {
         return '<div class="menu-tile" data-open="settings" data-arg="' + (section || "Модерация") + '">' + M.tile(TILE_ICONS[icon] || "shield", active ? "purple" : "blue", 19)
@@ -156,6 +156,7 @@
 
       var linkState = { allow: "Разрешены", newbies: "Нельзя новичкам", everyone: "Запрещены" };
       var words = (val("stop_words") || "").split(",").filter(function (w) { return w.trim(); }).length;
+      var adBots = String(val("ad_bots") || "").split(/[,\s;]+/).filter(function (w) { return w.trim(); }).length;
       var cmds = String(val("disabled_commands") || "").split(/[,\s;]+/).filter(function (w) { return w.trim(); }).length;
 
       var html = M.header("Порядок", "Правила чата и защита", "shield", "purple") + M.chatPicker(false);
@@ -193,6 +194,7 @@
         + tile("🎭", "Стикеры/медиа", val("sticker_limit") || val("media_limit"),
             (val("sticker_limit") || "∞") + " / " + (val("media_limit") || "∞") + " в мин", "keys:Стикеры и медиа:sticker_limit,media_limit,act_stickers,act_media")
         + tile("⌨️", "Команды", !!cmds, cmds ? cmds + " отключено" : "Все работают", "keys:Отключённые команды:disabled_commands")
+        + tile("🎵", "Реклама ботов", !!adBots, adBots ? "Чищу у " + adBots + " бот." : "Не чищу", "keys:Реклама ботов:ad_bots")
         + "</div>";
 
       // --- последние нарушители с быстрыми кнопками ---
