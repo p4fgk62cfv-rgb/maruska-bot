@@ -1673,23 +1673,17 @@ async def bump_daily_stat(chat_id: int, field: str = "messages", amount: int = 1
 
     day = _day_key()
 
+    # Одним запросом: первые сообщения дня приходят одновременно, и
+    # «прочитать, потом записать» ловило uq_daily_stat и теряло счёт.
+    column = getattr(DailyStat, field)
+
     async with session_scope() as session:
-        result = await session.execute(
-            select(DailyStat).where(
-                DailyStat.chat_id == chat_id,
-                DailyStat.day == day,
-            )
+        stmt = pg_insert(DailyStat).values(chat_id=chat_id, day=day, **{field: amount})
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_daily_stat",
+            set_={field: func.coalesce(column, 0) + amount},
         )
-
-        item = result.scalar_one_or_none()
-
-        if item is None:
-            item = DailyStat(chat_id=chat_id, day=day)
-            setattr(item, field, amount)
-            session.add(item)
-        else:
-            setattr(item, field, (getattr(item, field) or 0) + amount)
-
+        await session.execute(stmt)
         await session.commit()
 
 
