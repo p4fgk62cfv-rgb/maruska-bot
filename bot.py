@@ -27,7 +27,7 @@ import logging_setup
 from botcontext import set_identity
 
 from database.database import close_db, init_db
-from database.repository import backfill_daily_stats
+from database.repository import backfill_daily_stats, backfill_user_daily_from_memory
 
 from actions.handler import router as actions_router
 from features.draw import router as draw_router
@@ -317,6 +317,16 @@ async def main():
             logger.info("История графиков восстановлена: %s дней", filled)
     except Exception as error:
         logger.warning("BACKFILL: %s %s", type(error).__name__, error)
+
+    # Топы слов и сообщений за прошлые дни — по сохранённым сообщениям, в фоне
+    async def _backfill_tops():
+        try:
+            rows = await backfill_user_daily_from_memory()
+            logger.info("Топы досчитаны по истории сообщений: %s записей (человек × день)", rows)
+        except Exception as error:
+            logger.warning("BACKFILL TOPS: %s %s", type(error).__name__, error)
+
+    asyncio.create_task(_backfill_tops())
 
     # Привязки своей коллекции картинок к действиям
     try:
