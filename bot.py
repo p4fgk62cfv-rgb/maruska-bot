@@ -43,6 +43,7 @@ from features.chat import router as chat_router, set_context_size
 from features.digest import digest_loop, router as digest_router
 from features.fortune import router as fortune_router
 from features.greeting import router as greeting_router
+from features.bot_ads import router as bot_ads_router
 from features.automod import router as automod_router
 from features.antimat import router as antimat_router
 from features.captcha import router as captcha_router
@@ -127,6 +128,9 @@ dp.message.outer_middleware(ReactionsMiddleware())
 
 # Оплата звёздами — раньше всех: подтверждение платежа нельзя потерять
 dp.include_router(arena_pay_router)
+
+# Реклама чужих ботов: их сообщения больше никому не нужны
+dp.include_router(bot_ads_router)
 
 # Панель первой: /settings должен работать, даже если всё выключено
 dp.include_router(settings_router)

@@ -1109,6 +1109,16 @@ TEXTS: tuple[Text, ...] = (
         group="Модерация",
     ),
     Text(
+        key="ad_bots",
+        title="Боты с рекламой",
+        emoji="🎵",
+        description="Username ботов через запятую (например @music_bot). Мара удаляет их сообщения, кроме аудио и видео. Нужен режим Bot-to-Bot в @BotFather",
+        default="",
+        max_length=500,
+        group="Модерация",
+        allow_empty=True,
+    ),
+    Text(
         key="stop_words_except",
         title="Исключения из стоп-слов",
         emoji="🟢",
