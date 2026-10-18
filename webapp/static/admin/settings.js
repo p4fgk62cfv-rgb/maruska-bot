@@ -15,6 +15,35 @@
     "Модерация": "moderation", "Антимат": "moderation", "Развлечения": "games"
   };
 
+  // Дни рождения группы: список с правкой даты и удалением
+  function loadBirthdays(canEdit) {
+    var box = M.app.querySelector("[data-bdays]");
+    if (!box) return;
+    M.api("/api/admin/birthdays" + M.chatQuery()).then(function (d) {
+      var rows = d.people.map(function (p) {
+        var when = p.days_left === 0 ? "сегодня 🎉" : p.days_left === 1 ? "завтра" : p.days_left === 2 ? "послезавтра" : "через " + p.days_left + " дн.";
+        return '<div class="list-item"><div class="grow"><b>' + esc(p.name) + '</b><div class="s dim">' + when + "</div></div>"
+          + (canEdit
+            ? '<input data-bd-date="' + p.telegram_id + '" value="' + p.date + '" style="width:72px;text-align:center">'
+              + '<button class="btn" data-bd-save="' + p.telegram_id + '" style="padding:6px 9px">✓</button>'
+              + '<button class="btn danger" data-bd-del="' + p.telegram_id + '" style="padding:6px 9px">×</button>'
+            : '<b>' + p.date + "</b>")
+          + "</div>";
+      }).join("") || '<div class="dim">Пока никто не сказал Маре свой день рождения. Мара будет спрашивать сама, а ещё можно написать в группе «мой др 15.03».</div>';
+      box.innerHTML = '<div class="card-title">🎂 Дни рождения участников <span class="dim">' + d.people.length + "</span></div>" + rows;
+
+      var send = function (uid, date) {
+        M.post("/api/admin/birthdays", { chat_id: M.state.chat, telegram_id: uid, date: date })
+          .then(function () { M.toast(date ? "Дата сохранена" : "Удалено"); loadBirthdays(canEdit); })
+          .catch(function (e) { M.toast(e.message); });
+      };
+      each("[data-bd-save]", function (b) {
+        b.onclick = function () { var uid = +b.getAttribute("data-bd-save"); send(uid, box.querySelector('[data-bd-date="' + uid + '"]').value.trim()); };
+      });
+      each("[data-bd-del]", function (b) { b.onclick = function () { send(+b.getAttribute("data-bd-del"), null); }; });
+    }).catch(function () { box.innerHTML = '<div class="dim">Не удалось загрузить дни рождения</div>'; });
+  }
+
   // Видео к приветствию: файл уходит телом запроса, Мара шлёт превью в личку
   function bindGreetingMedia() {
     var box = M.app.querySelector("[data-gmedia]");
@@ -133,10 +162,14 @@
           + 'Ещё способ: в группе ответь на видео командой <code>/welcomevideo</code>.</div></div>';
       }
 
+      var withBirthdays = picked && picked.indexOf("birthdays") >= 0;
+      if (withBirthdays) html += '<div class="card" data-bdays><div class="card-title">🎂 Дни рождения участников</div><div class="dim">Загружаю…</div></div>';
+
       M.app.innerHTML = html;
       M.bind();
 
       if (withMedia) bindGreetingMedia();
+      if (withBirthdays) loadBirthdays(M.can("settings"));
 
       each(".setting", function (row) {
         var it = index[row.getAttribute("data-key")];
@@ -242,7 +275,9 @@
             R("megaphone", "blue", "Рассылки", "Фото, видео, кнопки, расписание", "broadcasts"),
             R("calendar", "purple", "Итоги недели и топы", has ? on(v("digest"), "Итоги включены", "Итоги выключены") + " · топ " + (v("top_chatters") ? l("top_chatters_size") : "выкл.") : "Итоги, топ болтунов, часовой пояс",
               "settings", "keys:Итоги недели и топы:digest,digest_weekday,digest_hour,top_chatters,top_chatters_size,timezone"),
-            R("heart", "pink", "Пара дня", has ? on(v("pair_of_day")) : "Кто сегодня пара", "settings", "keys:Пара дня и гармония:pair_of_day,pair_active_days,harmony")
+            R("heart", "pink", "Пара дня", has ? on(v("pair_of_day")) : "Кто сегодня пара", "settings", "keys:Пара дня и гармония:pair_of_day,pair_active_days,harmony"),
+            R("gift", "gold", "Дни рождения", has ? on(v("birthdays"), "Подарок " + l("birthday_gift"), "Выключены") : "Напоминания и подарки",
+              "settings", "keys:Дни рождения:birthdays,birthday_remind_days,birthday_hour,birthday_gift,birthday_ask_hours")
           ])
 
         + M.hubSection("Контроль", [
