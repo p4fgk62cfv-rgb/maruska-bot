@@ -156,6 +156,9 @@ class StatsMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict,
     ) -> Any:
+        if isinstance(event, Message) and event.chat.id < 0 and event.chat.title:
+            _check_title(event.chat.id, event.chat.title)
+
         if (
             isinstance(event, Message)
             and event.chat.id < 0
@@ -174,6 +177,30 @@ class StatsMiddleware(BaseMiddleware):
                 asyncio.create_task(_bump(event.chat.id, "commands"))
 
         return await handler(event, data)
+
+
+# Название группы, которое уже видели: группу переименовали — обновляем панель
+_titles: dict[int, str] = {}
+
+
+def _check_title(chat_id: int, title: str) -> None:
+    if _titles.get(chat_id) == title:
+        return
+    _titles[chat_id] = title
+    asyncio.create_task(_save_title(chat_id, title))
+
+
+async def _save_title(chat_id: int, title: str) -> None:
+    try:
+        from database.repository import remember_chat
+        from webapp.admin import drop_all_access
+
+        if await remember_chat(chat_id, title):
+            logger.info("CHAT TITLE: группа %s теперь «%s»", chat_id, title)
+            drop_all_access()
+    except Exception as error:
+        _titles.pop(chat_id, None)
+        logger.warning("CHAT TITLE: %s", error)
 
 
 # Кто уже писал сегодня — чтобы считать активных, а не сообщения.

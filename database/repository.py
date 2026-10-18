@@ -3169,8 +3169,8 @@ async def move_chat(old_id: int, new_id: int) -> None:
     await mark_chat_gone(new_id, False)
 
 
-async def remember_chat(chat_id: int, title: str | None) -> None:
-    """Группа, куда добавили Мару: название — для списка групп в панели."""
+async def remember_chat(chat_id: int, title: str | None) -> bool:
+    """Группа, куда добавили Мару: название — для списка групп в панели. True — название изменилось."""
     await mark_chat_gone(chat_id, False)
     async with session_scope() as session:
         item = (await session.execute(select(GroupSettings).where(GroupSettings.chat_id == chat_id))).scalar_one_or_none()
@@ -3179,11 +3179,13 @@ async def remember_chat(chat_id: int, title: str | None) -> None:
         elif title and item.title != title:
             item.title = title
         else:
-            return
+            return False
         try:
             await session.commit()
         except IntegrityError:
             await session.rollback()
+            return False
+        return True
 
 
 async def ensure_member(chat_id: int, telegram_id: int, display_name: str | None = None) -> bool:

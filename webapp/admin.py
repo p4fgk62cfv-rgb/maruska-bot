@@ -138,6 +138,11 @@ def drop_access_cache(user_id: int) -> None:
     _access_cache.pop(user_id, None)
 
 
+def drop_all_access() -> None:
+    """Группу переименовали — списки групп в панели собираем заново."""
+    _access_cache.clear()
+
+
 async def require_admin(request: web.Request):
     """
     Возвращает (пользователь, доступные группы) или бросает 401/403.
