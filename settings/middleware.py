@@ -164,6 +164,7 @@ class StatsMiddleware(BaseMiddleware):
             and event.chat.id < 0
             and event.from_user is not None
             and not event.from_user.is_bot
+            and not is_service(event)
         ):
             # В фоне: запись в базу не должна тормозить ответ
             asyncio.create_task(_count(event.chat.id))
@@ -177,6 +178,27 @@ class StatsMiddleware(BaseMiddleware):
                 asyncio.create_task(_bump(event.chat.id, "commands"))
 
         return await handler(event, data)
+
+
+# Служебные события — «вошёл», «закрепил», «сменил название» — не сообщения:
+# в топ болтунов и графики их не считаем
+SERVICE_TYPES = frozenset({
+    "new_chat_members", "left_chat_member", "new_chat_title", "new_chat_photo",
+    "delete_chat_photo", "group_chat_created", "supergroup_chat_created",
+    "migrate_to_chat_id", "migrate_from_chat_id", "pinned_message",
+    "message_auto_delete_timer_changed", "video_chat_scheduled", "video_chat_started",
+    "video_chat_ended", "video_chat_participants_invited", "forum_topic_created",
+    "forum_topic_edited", "forum_topic_closed", "forum_topic_reopened",
+    "general_forum_topic_hidden", "general_forum_topic_unhidden", "boost_added",
+    "chat_background_set", "write_access_allowed", "users_shared", "chat_shared",
+    "proximity_alert_triggered",
+})
+
+
+def is_service(message: Message) -> bool:
+    kind = getattr(message, "content_type", None)
+    # ContentType — перечисление: str() дал бы «ContentType.NEW_CHAT_MEMBERS»
+    return getattr(kind, "value", kind) in SERVICE_TYPES
 
 
 # Название группы, которое уже видели: группу переименовали — обновляем панель
