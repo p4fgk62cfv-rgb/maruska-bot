@@ -528,6 +528,74 @@ async def unlock_command(message: Message):
     await message.answer(t(message.chat.id, "cmd.unlock"))
 
 
+async def _drop(message: Message) -> None:
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
+async def _notice(message: Message, text: str, seconds: int = 5) -> None:
+    """Короткое пояснение, которое само исчезает, чтобы не засорять чат."""
+    import asyncio
+
+    try:
+        note = await message.answer(text)
+    except Exception:
+        return
+
+    async def later():
+        await asyncio.sleep(seconds)
+        await _drop(note)
+
+    asyncio.create_task(later())
+
+
+@router.message(Command("delete", "del"))
+async def delete_command(message: Message):
+    """
+    Админ отвечает /delete на сообщение — Мара удаляет его и саму команду.
+    Свои сообщения Мара удаляет всегда, чужие — если у неё есть право удалять.
+    """
+    if message.chat.type not in ("group", "supergroup"):
+        return
+
+    if not await _is_chat_admin(message):
+        await _drop(message)
+        await _notice(message, "🛡 /delete — только для администраторов группы.")
+        return
+
+    target = message.reply_to_message
+
+    if target is None:
+        await _drop(message)
+        await _notice(message, "🗑 Ответь командой /delete на сообщение, которое нужно удалить.")
+        return
+
+    try:
+        await target.delete()
+    except Exception as error:
+        text = str(error).lower()
+        logger.warning("DELETE: %s", error)
+        await _drop(message)
+
+        if "can't be deleted" in text or "not enough rights" in text or "message can't" in text:
+            reason = "Не могу удалить: нужно право «Удаление сообщений» у Мары, а сообщения старше 48 часов Telegram не даёт удалять."
+        elif "not found" in text:
+            reason = "Сообщение уже удалено."
+        else:
+            reason = "Telegram не дал удалить сообщение."
+
+        await _notice(message, f"⚠️ {reason}", seconds=8)
+        return
+
+    await _drop(message)
+
+    author = target.from_user
+    _record(message, "delete", author if author and not author.is_bot else None,
+            "сообщение Мары" if author and author.is_bot else None, "deleted")
+
+
 @router.message(Command("warn"))
 async def warn_command(message: Message):
     if not await _check(message):
