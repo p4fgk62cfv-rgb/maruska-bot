@@ -111,7 +111,7 @@ async def track_join(chat_id: int, users) -> list:
     """
     import audit
     from features.automod import remember_join
-    from database.repository import ensure_member
+    from database.repository import ensure_member, mark_joined
 
     people = [
         user for user in users
@@ -134,6 +134,8 @@ async def track_join(chat_id: int, users) -> list:
             )
             # Сразу в список участников — не дожидаясь первого сообщения
             await ensure_member(chat_id, user.id, user.first_name or user.username)
+            # И запоминаем точную дату входа — для /срок
+            await mark_joined(chat_id, user.id)
         except Exception as error:
             logger.warning("JOIN SAVE: %s", error)
 

@@ -261,6 +261,10 @@ class GroupMember(Base):
         default=utcnow,
     )
 
+    # joined_at — точная дата входа (Мара видела, как человек зашёл),
+    # а не первая встреча с ним уже в группе
+    joined_exact: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=utcnow,

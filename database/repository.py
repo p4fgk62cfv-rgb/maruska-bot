@@ -3217,6 +3217,35 @@ async def ensure_member(chat_id: int, telegram_id: int, display_name: str | None
         return False
 
 
+async def mark_joined(chat_id: int, telegram_id: int) -> None:
+    """Человек только что зашёл в группу: с этого момента и считаем его срок."""
+    async with session_scope() as session:
+        await session.execute(
+            update(GroupMember)
+            .where(GroupMember.chat_id == chat_id, GroupMember.telegram_id == telegram_id)
+            .values(joined_at=utcnow(), joined_exact=True, left_at=None)
+        )
+        await session.commit()
+
+
+async def member_since(chat_id: int, telegram_id: int) -> dict | None:
+    """Когда человек появился в группе: дата, точная ли она, ушёл ли."""
+    async with session_scope() as session:
+        member = (await session.execute(
+            select(GroupMember).where(GroupMember.chat_id == chat_id, GroupMember.telegram_id == telegram_id)
+        )).scalar_one_or_none()
+
+    if member is None:
+        return None
+
+    return {
+        "joined_at": member.joined_at,
+        "exact": bool(member.joined_exact),
+        "left_at": member.left_at,
+        "name": member.display_name,
+    }
+
+
 async def mark_member_left(chat_id: int, telegram_id: int, left: bool) -> None:
     async with session_scope() as session:
         await session.execute(
