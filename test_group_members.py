@@ -75,6 +75,13 @@ async def with_database():
     expect("новая группа известна панели", NEW in known, True)
     expect("название группы", known.get(NEW, {}).get("title"), "Пример теста")
 
+    # Группу переименовали — панель показывает новое название
+    expect("то же название — без изменений", await remember_chat(NEW, "Пример теста"), False)
+    expect("новое название — изменилось", await remember_chat(NEW, "Пример теста 2"), True)
+    known = {c["chat_id"]: c for c in await list_known_chats()}
+    expect("переименованная группа", known.get(NEW, {}).get("title"), "Пример теста 2")
+    await remember_chat(NEW, "Пример теста")
+
     # Мару удалили из группы — группа пропадает из панели; вернули — снова видна.
     await mark_chat_gone(NEW)
     await mark_chat_gone(NEW)
