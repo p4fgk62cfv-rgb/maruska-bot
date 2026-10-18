@@ -349,29 +349,6 @@ async def get_recent_messages(chat_id: int, limit: int = 8) -> list[str]:
         ]
 
 
-async def cleanup_old_messages(chat_id: int, keep: int = 200):
-    """
-    Чтобы message_memory не разрасталась бесконечно.
-    """
-    async with session_scope() as session:
-        subquery = (
-            select(MessageMemory.id)
-            .where(MessageMemory.chat_id == chat_id)
-            .order_by(MessageMemory.created_at.desc())
-            .limit(keep)
-            .scalar_subquery()
-        )
-
-        await session.execute(
-            MessageMemory.__table__.delete().where(
-                MessageMemory.chat_id == chat_id,
-                MessageMemory.id.not_in(subquery),
-            )
-        )
-
-        await session.commit()
-
-
 # =========================================================
 # PROFILES
 # =========================================================
@@ -1685,6 +1662,68 @@ async def bump_daily_stat(chat_id: int, field: str = "messages", amount: int = 1
         )
         await session.execute(stmt)
         await session.commit()
+
+
+async def backfill_user_daily_from_memory(batch: int = 1000) -> int:
+    """
+    Досчитывает топы за прошлые дни по сохранённым сообщениям (message_memory):
+    слова и сообщения каждого человека по дням группы.
+
+    Берёт наибольшее из уже посчитанного и найденного в памяти — живой
+    счёт не уменьшится, а повторный запуск ничего не задвоит. Стикеры и
+    сообщения без текста в памяти не хранятся, поэтому живой счёт сообщений
+    обычно выше — он и останется.
+    """
+    from datetime import timezone as _utc
+
+    from settings import store
+    from settings.middleware import count_words
+
+    totals: dict[tuple[int, str, int], list[int]] = {}
+    zones: dict[int, object] = {}
+
+    async with session_scope() as session:
+        rows = await session.stream(
+            select(MessageMemory.chat_id, MessageMemory.telegram_user_id,
+                   MessageMemory.message, MessageMemory.created_at)
+            .where(MessageMemory.chat_id < 0)
+            .execution_options(yield_per=5000)
+        )
+        async for chat_id, user_id, text, created in rows:
+            if created is None or user_id is None:
+                continue
+            if chat_id not in zones:
+                if not store.is_loaded(chat_id):
+                    store.prime(chat_id, await get_group_settings(chat_id))
+                zones[chat_id] = store.zone(chat_id)
+            day = created.replace(tzinfo=_utc.utc).astimezone(zones[chat_id]).strftime("%Y-%m-%d")
+            item = totals.setdefault((chat_id, day, user_id), [0, 0])
+            item[0] += 1
+            item[1] += count_words(text)
+
+    if not totals:
+        return 0
+
+    keys = list(totals.items())
+
+    for start in range(0, len(keys), batch):
+        part = keys[start:start + batch]
+        async with session_scope() as session:
+            stmt = pg_insert(DailyUserStat).values([
+                {"chat_id": c, "day": d, "telegram_id": u, "messages": m, "words": w}
+                for (c, d, u), (m, w) in part
+            ])
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_daily_user_stat",
+                set_={
+                    "messages": func.greatest(DailyUserStat.messages, stmt.excluded.messages),
+                    "words": func.greatest(func.coalesce(DailyUserStat.words, 0), stmt.excluded.words),
+                },
+            )
+            await session.execute(stmt)
+            await session.commit()
+
+    return len(keys)
 
 
 async def backfill_daily_stats() -> int:
