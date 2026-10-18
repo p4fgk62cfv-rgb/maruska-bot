@@ -650,6 +650,124 @@ async def api_action_image(request):
 
 
 # ---------------------------------------------------------
+# Видео к приветствию новичков
+# ---------------------------------------------------------
+
+GREETING_MEDIA_MAX = 20 * 1024 * 1024
+
+
+async def _greeting_chat(request, chat_id_raw) -> tuple[dict, int]:
+    from webapp.roles import SECTION_PERMISSION
+    try:
+        chat_id = int(chat_id_raw)
+    except (TypeError, ValueError):
+        raise web.HTTPBadRequest(text="bad chat_id")
+
+    admin, chats, _role = await require_perm(request, chat_id, SECTION_PERMISSION.get("Жизнь чата", "settings"))
+
+    if not is_owner(admin["id"]) and chat_id not in {c["chat_id"] for c in chats}:
+        raise web.HTTPForbidden(text="no access to this chat")
+
+    return admin, chat_id
+
+
+def _media_view(media: dict | None) -> dict | None:
+    if not media:
+        return None
+    return {"kind": media.get("kind"), "name": media.get("name") or ""}
+
+
+async def api_greeting_media(request):
+    """GET — что прикреплено; POST — загрузить (тело — сам файл); DELETE-аналог — /delete."""
+    from html import escape
+
+    from database.repository import get_group_settings, set_group_setting
+    from features.greeting import MEDIA_KEY, MEDIA_KINDS, greeting_hint, greeting_line, greeting_media
+
+    admin, chat_id = await _greeting_chat(request, request.query.get("chat_id"))
+
+    if request.method == "GET":
+        return web.json_response({"ok": True, "media": _media_view(await greeting_media(chat_id))})
+
+    kind = request.query.get("kind")
+    if kind not in MEDIA_KINDS:
+        raise web.HTTPBadRequest(text="bad kind")
+
+    raw = await request.read()
+    if not raw:
+        return web.json_response({"ok": False, "error": "Пустой файл"}, status=400)
+    if len(raw) > GREETING_MEDIA_MAX:
+        return web.json_response({"ok": False, "error": "Файл больше 20 МБ"}, status=400)
+
+    from aiogram.types import BufferedInputFile
+
+    name = (request.query.get("name") or "")[:80]
+    extension = {"video": "mp4", "animation": "gif" if name.lower().endswith(".gif") else "mp4", "photo": "jpg"}[kind]
+    upload = BufferedInputFile(raw, filename=f"greeting.{extension}")
+
+    # Telegram выдаёт file_id только после отправки: шлём админу в личку
+    # превью приветствия — заодно видно, как его увидят новички
+    if not store.is_loaded(chat_id):
+        store.prime(chat_id, await get_group_settings(chat_id))
+
+    text = "👀 <b>Так новички увидят приветствие:</b>\n\n" + greeting_line(chat_id, escape(_name(admin))) + "\n\n" + greeting_hint(chat_id)
+
+    try:
+        bot = request.app["bot"]
+        send = {"video": bot.send_video, "animation": bot.send_animation, "photo": bot.send_photo}[kind]
+        sent = await send(admin["id"], upload, caption=text[:1024])
+    except Exception as error:
+        message = str(error).lower()
+        if "chat not found" in message or "bot can't initiate" in message or "forbidden" in message:
+            reason = "Сначала напиши Маре в личку /start — видео загружается через неё"
+        else:
+            reason = "Telegram не принял файл — попробуй другой формат (MP4)"
+        logger.warning("GREETING MEDIA UPLOAD: %s %s", type(error).__name__, error)
+        return web.json_response({"ok": False, "error": reason}, status=400)
+
+    stored = None
+    if sent.animation:
+        stored = {"kind": "animation", "file_id": sent.animation.file_id}
+    elif sent.video:
+        stored = {"kind": "video", "file_id": sent.video.file_id}
+    elif sent.photo:
+        stored = {"kind": "photo", "file_id": sent.photo[-1].file_id}
+    elif sent.document:
+        # Telegram не узнал в файле видео — так в приветствии не покажешь
+        return web.json_response({"ok": False, "error": "Telegram не узнал видео — сохрани его как MP4"}, status=400)
+
+    if stored is None:
+        return web.json_response({"ok": False, "error": "Не получилось загрузить"}, status=400)
+
+    stored["name"] = name or {"video": "видео", "animation": "GIF", "photo": "фото"}[stored["kind"]]
+    await set_group_setting(chat_id=chat_id, key=MEDIA_KEY, value=stored)
+
+    audit.log(
+        "settings", "change", chat_id=chat_id, actor_kind="admin", actor_id=admin["id"],
+        actor_name=_name(admin), details=f"Видео к приветствию: {stored['name']}",
+    )
+
+    return web.json_response({"ok": True, "media": _media_view(stored)})
+
+
+async def api_greeting_media_delete(request):
+    from database.repository import set_group_setting
+    from features.greeting import MEDIA_KEY
+
+    body = await request.json()
+    admin, chat_id = await _greeting_chat(request, body.get("chat_id"))
+
+    await set_group_setting(chat_id=chat_id, key=MEDIA_KEY, value=None)
+
+    audit.log(
+        "settings", "change", chat_id=chat_id, actor_kind="admin", actor_id=admin["id"],
+        actor_name=_name(admin), details="Видео к приветствию убрано",
+    )
+
+    return web.json_response({"ok": True})
+
+
+# ---------------------------------------------------------
 # Рассылки
 # ---------------------------------------------------------
 
@@ -2518,6 +2636,9 @@ def setup_v2_routes(app: web.Application) -> None:
     app.router.add_get("/api/admin/actions", api_actions)
     app.router.add_post("/api/admin/actions/toggle", api_action_toggle)
     app.router.add_get("/api/admin/action_image", api_action_image)
+    app.router.add_get("/api/admin/greeting_media", api_greeting_media)
+    app.router.add_post("/api/admin/greeting_media", api_greeting_media)
+    app.router.add_post("/api/admin/greeting_media/delete", api_greeting_media_delete)
     app.router.add_get("/api/admin/broadcasts", api_broadcasts)
     app.router.add_post("/api/admin/broadcasts", api_broadcasts)
     app.router.add_post("/api/admin/broadcasts/cancel", api_broadcast_cancel)

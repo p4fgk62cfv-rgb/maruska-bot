@@ -15,6 +15,38 @@
     "Модерация": "moderation", "Антимат": "moderation", "Развлечения": "games"
   };
 
+  // Видео к приветствию: файл уходит телом запроса, Мара шлёт превью в личку
+  function bindGreetingMedia() {
+    var box = M.app.querySelector("[data-gmedia]");
+    if (!box) return;
+    var state = box.querySelector("[data-gmedia-state]"), del = box.querySelector("[data-gmedia-del]");
+    var KIND = { video: "🎬 видео", animation: "🎞 GIF", photo: "🖼 фото" };
+
+    var show = function (media) {
+      state.textContent = media ? "Прикреплено: " + (KIND[media.kind] || "") + (media.name ? " — " + media.name : "") : "Не прикреплено — новичков встречает только текст.";
+      del.classList.toggle("hidden", !media);
+    };
+
+    M.api("/api/admin/greeting_media" + M.chatQuery()).then(function (d) { show(d.media); }).catch(function () { state.textContent = "Не удалось проверить"; });
+
+    box.querySelector("[data-gmedia-file]").onchange = function () {
+      var file = this.files[0];
+      if (!file) return;
+      if (file.size > 20 * 1024 * 1024) { M.toast("Файл больше 20 МБ"); return; }
+      var kind = /gif$/i.test(file.type) ? "animation" : /^image\//.test(file.type) ? "photo" : "video";
+      state.textContent = "Загружаю… (" + Math.round(file.size / 1024 / 1024 * 10) / 10 + " МБ)";
+      M.api("/api/admin/greeting_media" + M.chatQuery() + "&kind=" + kind + "&name=" + encodeURIComponent(file.name || ""), {
+        method: "POST", body: file, headers: { "Content-Type": file.type || "application/octet-stream" }
+      }).then(function (d) { M.haptic(); M.toast("Видео прикреплено, превью — в личке"); show(d.media); })
+        .catch(function (e) { M.toast(e.message); state.textContent = "Не загрузилось: " + e.message; });
+    };
+
+    del.onclick = function () {
+      M.post("/api/admin/greeting_media/delete", { chat_id: M.state.chat })
+        .then(function () { M.toast("Видео убрано"); show(null); }).catch(function (e) { M.toast(e.message); });
+    };
+  }
+
   M.screen("settings", function (only) {
     if (!M.state.chat) {
       M.app.innerHTML = M.backButton() + M.chatPicker(false) + '<div class="center muted">Настройки задаются для каждой группы отдельно — выбери группу.</div>';
@@ -90,8 +122,21 @@
         html += "</div>";
       });
 
+      var withMedia = picked && picked.indexOf("greeting_text") >= 0 && M.can("settings");
+      if (withMedia) {
+        html += '<div class="card" data-gmedia><div class="card-title">🎬 Видео к приветствию</div>'
+          + '<div class="dim" data-gmedia-state>Проверяю…</div>'
+          + '<div class="btns" style="margin-top:8px">'
+          + '<label class="btn primary" style="margin:0">Загрузить видео или GIF<input type="file" accept="video/*,image/gif" data-gmedia-file class="hidden"></label>'
+          + '<button class="btn danger hidden" data-gmedia-del>Убрать</button></div>'
+          + '<div class="dim" style="margin-top:8px">До 20 МБ, лучше MP4. Превью придёт тебе в личку от Мары. '
+          + 'Ещё способ: в группе ответь на видео командой <code>/welcomevideo</code>.</div></div>';
+      }
+
       M.app.innerHTML = html;
       M.bind();
+
+      if (withMedia) bindGreetingMedia();
 
       each(".setting", function (row) {
         var it = index[row.getAttribute("data-key")];
