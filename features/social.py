@@ -1,9 +1,9 @@
 """
 Пара дня и браки.
 
-Пара дня: «пара дня» или /pair. Раз в сутки (по часовому поясу
-группы) Мара выбирает двоих из тех, кто писал за последние N дней.
-Повторный запрос в тот же день показывает ту же пару.
+Пара дня: «пара дня» или /pair. Мара выбирает двоих из тех, кто писал
+за последние N дней. Спрашивать можно сколько угодно раз — каждый раз
+новая пара, подряд одна и та же не выпадает.
 
 Браки: /marry (или «выходи за меня») в ответ на сообщение — предложение
 с кнопками. Отвечать может только тот, кому предложили. /marriage —
@@ -29,7 +29,7 @@ import audit
 
 from botcontext import display_name_of
 
-from settings.store import get_number, is_enabled, local_now
+from settings.store import get_number, is_enabled
 
 
 logger = logging.getLogger("maruska.social")
@@ -53,6 +53,9 @@ PAIR_PHRASES = (
 
 # (чат, кто, кому) -> время предложения
 _proposals: dict[tuple[int, int, int], float] = {}
+
+# Последняя пара в чате — чтобы два запроса подряд не дали одну и ту же
+_last_pair: dict[int, frozenset[int]] = {}
 
 
 # ---------------------------------------------------------
@@ -110,39 +113,32 @@ async def pair_of_day(message: Message) -> None:
         await message.reply("💞 Пара дня в этой группе выключена (/settings).")
         return
 
-    from database.repository import get_daily_pick, member_name, pick_candidates, save_daily_pick
+    from database.repository import member_name, pick_candidates
 
-    day = local_now(chat_id).strftime("%Y-%m-%d")
-    pick = await get_daily_pick(chat_id, day, "pair")
-    again = pick is not None
+    candidates = await pick_candidates(chat_id, get_number(chat_id, "pair_active_days") or 7)
+    me = await message.bot.me()
+    chosen = None
 
-    if pick is None:
-        candidates = await pick_candidates(chat_id, get_number(chat_id, "pair_active_days") or 7)
-        me = await message.bot.me()
+    # Несколько попыток, чтобы не повторить прошлую пару (если людей больше двух)
+    for _ in range(6):
         chosen = choose_pair(candidates, {me.id})
+        if chosen is None or frozenset((chosen[0]["telegram_id"], chosen[1]["telegram_id"])) != _last_pair.get(chat_id):
+            break
 
-        if chosen is None:
-            await message.reply("💞 Для пары дня нужно хотя бы двое активных участников. Пишите больше!")
-            return
+    if chosen is None:
+        await message.reply("💞 Для пары дня нужно хотя бы двое активных участников. Пишите больше!")
+        return
 
-        phrase = random.choice(PAIR_PHRASES)
-        saved = await save_daily_pick(chat_id, day, "pair", chosen[0]["telegram_id"], chosen[1]["telegram_id"], phrase)
+    a, b = chosen
+    _last_pair[chat_id] = frozenset((a["telegram_id"], b["telegram_id"]))
 
-        # Двое одновременно запросили — показываем ту пару, что успела сохраниться
-        pick = await get_daily_pick(chat_id, day, "pair")
-        again = not saved
+    audit.log("member", "pair_of_day", chat_id=chat_id, actor_kind="bot",
+              details=f"{a['name']} + {b['name']}")
 
-        if saved:
-            audit.log("member", "pair_of_day", chat_id=chat_id, actor_kind="bot",
-                      details=f"{chosen[0]['name']} + {chosen[1]['name']}")
+    name_a = await member_name(chat_id, a["telegram_id"])
+    name_b = await member_name(chat_id, b["telegram_id"])
 
-    name_a = await member_name(chat_id, pick.user1)
-    name_b = await member_name(chat_id, pick.user2)
-
-    text = (pick.phrase or PAIR_PHRASES[0]).format(a=mention(pick.user1, name_a), b=mention(pick.user2, name_b))
-
-    if again:
-        text = "Пара дня уже выбрана 😉\n\n" + text + "\n\nСледующая — завтра."
+    text = random.choice(PAIR_PHRASES).format(a=mention(a["telegram_id"], name_a), b=mention(b["telegram_id"], name_b))
 
     # Своя картинка из коллекции, привязанной к «паре дня», если есть
     import library_core
