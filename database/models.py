@@ -1396,3 +1396,51 @@ class AiUsage(Base):
     tokens: Mapped[int] = mapped_column(BigInteger, default=0)
 
     last_limit_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class Birthday(Base):
+    """День рождения человека: один на всех, без года (год — по желанию)."""
+
+    __tablename__ = "birthdays"
+
+    telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+
+    day: Mapped[int] = mapped_column()
+
+    month: Mapped[int] = mapped_column()
+
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class BirthdayAsk(Base):
+    """Мара уже спрашивала дату: когда и не отказался ли человек отвечать."""
+
+    __tablename__ = "birthday_asks"
+
+    telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+
+    asked_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    declined: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class BirthdaySent(Base):
+    """Что уже отправлено: напоминание в группу или подарок. Чтобы не повторяться."""
+
+    __tablename__ = "birthday_sent"
+
+    __table_args__ = (
+        UniqueConstraint("chat_id", "telegram_id", "year", "kind", name="uq_birthday_sent"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    year: Mapped[int] = mapped_column()
+
+    kind: Mapped[str] = mapped_column(String(8))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

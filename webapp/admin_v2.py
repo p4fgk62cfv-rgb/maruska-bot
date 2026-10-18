@@ -650,6 +650,64 @@ async def api_action_image(request):
 
 
 # ---------------------------------------------------------
+# Дни рождения участников
+# ---------------------------------------------------------
+
+async def api_birthdays(request):
+    """GET — дни рождения группы; POST {chat_id, telegram_id, date: «15.03» | null} — поправить или стереть."""
+    from database.repository import chat_birthdays, delete_birthday, set_birthday
+    from features.birthdays import days_until, parse_date
+    from settings.store import local_now
+
+    body = await request.json() if request.method == "POST" else {}
+    raw = body.get("chat_id") if request.method == "POST" else request.query.get("chat_id")
+
+    try:
+        chat_id = int(raw)
+    except (TypeError, ValueError):
+        raise web.HTTPBadRequest(text="bad chat_id")
+
+    admin, chats, _role = await require_perm(request, chat_id, "view" if request.method == "GET" else "settings")
+    if not is_owner(admin["id"]) and chat_id not in {c["chat_id"] for c in chats}:
+        raise web.HTTPForbidden(text="no access to this chat")
+
+    people = await chat_birthdays(chat_id)
+
+    if request.method == "GET":
+        today = local_now(chat_id).date()
+        rows = sorted(({
+            "telegram_id": p["telegram_id"], "name": p["name"],
+            "date": f"{p['day']:02d}.{p['month']:02d}",
+            "days_left": days_until(p["day"], p["month"], today),
+        } for p in people), key=lambda r: r["days_left"])
+        return web.json_response({"people": rows})
+
+    try:
+        user_id = int(body.get("telegram_id"))
+    except (TypeError, ValueError):
+        raise web.HTTPBadRequest(text="bad telegram_id")
+
+    # Править можно только участников этой группы
+    if user_id not in {p["telegram_id"] for p in people}:
+        return web.json_response({"ok": False, "error": "Этого человека нет в списке группы"}, status=400)
+
+    if body.get("date") in (None, ""):
+        await delete_birthday(user_id)
+        details = "удалён"
+    else:
+        parsed = parse_date(str(body.get("date")))
+        if parsed is None:
+            return web.json_response({"ok": False, "error": "Дата в формате 15.03"}, status=400)
+        await set_birthday(user_id, *parsed)
+        details = f"{parsed[0]:02d}.{parsed[1]:02d}"
+
+    audit.log("settings", "change", chat_id=chat_id, actor_kind="admin", actor_id=admin["id"],
+              actor_name=_name(admin), target_id=user_id, details=f"День рождения: {details}")
+
+    return web.json_response({"ok": True})
+
+
+# ---------------------------------------------------------
 # Видео к приветствию новичков
 # ---------------------------------------------------------
 
@@ -2636,6 +2694,8 @@ def setup_v2_routes(app: web.Application) -> None:
     app.router.add_get("/api/admin/actions", api_actions)
     app.router.add_post("/api/admin/actions/toggle", api_action_toggle)
     app.router.add_get("/api/admin/action_image", api_action_image)
+    app.router.add_get("/api/admin/birthdays", api_birthdays)
+    app.router.add_post("/api/admin/birthdays", api_birthdays)
     app.router.add_get("/api/admin/greeting_media", api_greeting_media)
     app.router.add_post("/api/admin/greeting_media", api_greeting_media)
     app.router.add_post("/api/admin/greeting_media/delete", api_greeting_media_delete)

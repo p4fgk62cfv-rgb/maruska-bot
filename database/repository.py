@@ -24,6 +24,9 @@ from database.models import (
     ShopOverride,
     ActionCustom,
     AiUsage,
+    Birthday,
+    BirthdayAsk,
+    BirthdaySent,
     ActionToggle,
     ActionUsage,
     AdminRole,
@@ -4648,3 +4651,76 @@ async def ai_usage(since: str, until: str) -> list[dict]:
         "limits": r.limits, "errors": r.errors, "tokens": int(r.tokens or 0),
         "last_limit_at": r.last_limit_at.isoformat() if r.last_limit_at else None,
     } for r in rows]
+
+
+# =========================================================
+# ДНИ РОЖДЕНИЯ
+# =========================================================
+
+async def set_birthday(telegram_id: int, day: int, month: int) -> None:
+    async with session_scope() as session:
+        stmt = pg_insert(Birthday).values(telegram_id=telegram_id, day=day, month=month, updated_at=utcnow())
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[Birthday.telegram_id],
+            set_={"day": day, "month": month, "updated_at": utcnow()},
+        )
+        await session.execute(stmt)
+        await session.commit()
+
+
+async def get_birthday(telegram_id: int) -> tuple[int, int] | None:
+    async with session_scope() as session:
+        row = (await session.execute(
+            select(Birthday.day, Birthday.month).where(Birthday.telegram_id == telegram_id)
+        )).first()
+    return (row[0], row[1]) if row else None
+
+
+async def delete_birthday(telegram_id: int) -> bool:
+    async with session_scope() as session:
+        result = await session.execute(delete(Birthday).where(Birthday.telegram_id == telegram_id))
+        await session.commit()
+        return bool(result.rowcount)
+
+
+async def birthday_ask_state(telegram_id: int) -> dict | None:
+    """Спрашивали ли уже: {asked_at, declined} или None."""
+    async with session_scope() as session:
+        row = (await session.execute(
+            select(BirthdayAsk.asked_at, BirthdayAsk.declined).where(BirthdayAsk.telegram_id == telegram_id)
+        )).first()
+    return {"asked_at": row[0], "declined": bool(row[1])} if row else None
+
+
+async def mark_birthday_asked(telegram_id: int, declined: bool = False) -> None:
+    async with session_scope() as session:
+        stmt = pg_insert(BirthdayAsk).values(telegram_id=telegram_id, asked_at=utcnow(), declined=declined)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[BirthdayAsk.telegram_id],
+            set_={"asked_at": utcnow(), "declined": declined},
+        )
+        await session.execute(stmt)
+        await session.commit()
+
+
+async def chat_birthdays(chat_id: int) -> list[dict]:
+    """Дни рождения участников группы (кто не вышел)."""
+    async with session_scope() as session:
+        rows = (await session.execute(
+            select(Birthday.telegram_id, Birthday.day, Birthday.month, GroupMember.display_name)
+            .join(GroupMember, GroupMember.telegram_id == Birthday.telegram_id)
+            .where(GroupMember.chat_id == chat_id, GroupMember.left_at.is_(None))
+        )).all()
+    return [{"telegram_id": uid, "day": d, "month": m, "name": name or "Участник"} for uid, d, m, name in rows]
+
+
+async def mark_birthday_sent(chat_id: int, telegram_id: int, year: int, kind: str) -> bool:
+    """True — отмечено впервые (можно отправлять); False — уже было."""
+    async with session_scope() as session:
+        result = await session.execute(
+            pg_insert(BirthdaySent)
+            .values(chat_id=chat_id, telegram_id=telegram_id, year=year, kind=kind)
+            .on_conflict_do_nothing(constraint="uq_birthday_sent")
+        )
+        await session.commit()
+        return bool(result.rowcount)

@@ -53,6 +53,7 @@ from features.moderation import router as moderation_router
 from features.chatters import router as chatters_router
 from features.member_since import router as member_since_router
 from features.harmony import router as harmony_router
+from features.birthdays import BirthdayAskMiddleware, birthday_loop, router as birthdays_router
 from features.social import router as social_router
 from features.rating import router as rating_router
 from features.weather import router as weather_router
@@ -128,6 +129,9 @@ dp.message.outer_middleware(StatsMiddleware())
 # Реакции Мары — после обработки: видят и действия, и обычные сообщения
 dp.message.outer_middleware(ReactionsMiddleware())
 
+# Дни рождения — после обработки: иногда спрашивает дату
+dp.message.outer_middleware(BirthdayAskMiddleware())
+
 # Оплата звёздами — раньше всех: подтверждение платежа нельзя потерять
 dp.include_router(arena_pay_router)
 
@@ -156,6 +160,7 @@ dp.include_router(basic_router)
 dp.include_router(chatters_router)
 dp.include_router(member_since_router)
 dp.include_router(harmony_router)
+dp.include_router(birthdays_router)
 dp.include_router(social_router)
 dp.include_router(moderation_router)
 dp.include_router(economy_router)
@@ -402,6 +407,7 @@ async def main():
 
     broadcast_task = asyncio.create_task(broadcast_loop(bot))
     memory_task = asyncio.create_task(memory_loop())
+    birthday_task = asyncio.create_task(birthday_loop(bot))
 
     logger.info("МАРА ЗАПУЩЕНА!")
 
@@ -415,6 +421,7 @@ async def main():
         digest_task.cancel()
         broadcast_task.cancel()
         memory_task.cancel()
+        birthday_task.cancel()
 
         if web_runner is not None:
             await web_runner.cleanup()
