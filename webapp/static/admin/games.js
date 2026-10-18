@@ -58,7 +58,7 @@
 
         + (M.state.chat ? '<div class="card" data-social><div class="card-title">💞 Пара дня и браки</div><div class="dim">Загружаю…</div></div>' : "")
         + '<button class="btn primary" data-open="settings" data-arg="Развлечения">⚙️ Награды, паузы и лимиты</button>'
-        + '<button class="btn block" data-open="settings" data-arg="keys:Пара дня и браки:pair_of_day,pair_active_days,marriages,marry_ring,marry_cost" style="margin-top:8px">💍 Настройки пары дня и браков</button>';
+        + '<button class="btn block" data-open="settings" data-arg="keys:Пара дня и браки:pair_of_day,pair_active_days,harmony,marriages,marry_ring,marry_cost" style="margin-top:8px">💍 Настройки пары дня и браков</button>';
 
       M.app.innerHTML = html;
       M.bind();

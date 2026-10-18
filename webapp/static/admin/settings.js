@@ -242,7 +242,7 @@
             R("megaphone", "blue", "Рассылки", "Фото, видео, кнопки, расписание", "broadcasts"),
             R("calendar", "purple", "Итоги недели и топы", has ? on(v("digest"), "Итоги включены", "Итоги выключены") + " · топ " + (v("top_chatters") ? l("top_chatters_size") : "выкл.") : "Итоги, топ болтунов, часовой пояс",
               "settings", "keys:Итоги недели и топы:digest,digest_weekday,digest_hour,top_chatters,top_chatters_size,timezone"),
-            R("heart", "pink", "Пара дня", has ? on(v("pair_of_day")) : "Кто сегодня пара", "settings", "keys:Пара дня:pair_of_day,pair_active_days")
+            R("heart", "pink", "Пара дня", has ? on(v("pair_of_day")) : "Кто сегодня пара", "settings", "keys:Пара дня и гармония:pair_of_day,pair_active_days,harmony")
           ])
 
         + M.hubSection("Контроль", [
