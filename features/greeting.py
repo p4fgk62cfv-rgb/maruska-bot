@@ -53,11 +53,12 @@ def greeting_line(chat_id: int, name: str) -> str:
     else:
         template = random.choice(GREETINGS)
 
-    try:
-        return template.format(name=name)
-    except (KeyError, IndexError, ValueError):
-        # Админ мог вписать что-то непонятное — не падаем
-        return template
+    # Новичка отмечаем всегда: свой текст без {name} — тег первой строкой
+    if "{name}" not in template:
+        return f"👋 {name}!\n{template}"
+
+    # Простая замена, а не format: лишние {скобки} в тексте админа не ломают тег
+    return template.replace("{name}", name)
 
 
 def greeting_hint(chat_id: int) -> str:
@@ -73,6 +74,11 @@ def greeting_hint(chat_id: int) -> str:
 
 def _name(user) -> str:
     return escape(user.first_name or user.username or "Новенький")
+
+
+def mention(user) -> str:
+    """Имя-ссылка на человека: Telegram подсвечивает его и присылает уведомление."""
+    return f'<a href="tg://user?id={user.id}">{_name(user)}</a>'
 
 
 # О входе Telegram может сообщить дважды: служебным сообщением и
@@ -202,9 +208,9 @@ async def welcome(bot, chat_id: int, users) -> None:
         return
 
     if len(people) == 1:
-        head = greeting_line(chat_id, _name(people[0]))
+        head = greeting_line(chat_id, mention(people[0]))
     else:
-        names = ", ".join(f"<b>{_name(user)}</b>" for user in people)
+        names = ", ".join(f"<b>{mention(user)}</b>" for user in people)
         head = f"👋 Пополнение: {names}"
 
     try:
