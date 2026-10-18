@@ -246,6 +246,7 @@ async def init_db():
             "ALTER TABLE fishing_profiles ADD COLUMN IF NOT EXISTS refills_day VARCHAR(10) DEFAULT ''",
             "ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS mode VARCHAR(8) DEFAULT 'groups'",
             "ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS segment JSON",
+            "ALTER TABLE daily_user_stats ADD COLUMN IF NOT EXISTS words INTEGER DEFAULT 0",
 
             "CREATE INDEX IF NOT EXISTS ix_audit_chat_created "
             "ON audit_events (chat_id, created_at DESC)",

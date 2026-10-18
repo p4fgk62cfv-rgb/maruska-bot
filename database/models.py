@@ -1171,6 +1171,9 @@ class DailyUserStat(Base):
 
     messages: Mapped[int] = mapped_column(default=0)
 
+    # Слов в этих сообщениях — для «топа слов»
+    words: Mapped[int] = mapped_column(default=0, server_default="0")
+
 
 class Marriage(Base):
     """Брак в группе. active=False — развелись (история остаётся)."""
