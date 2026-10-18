@@ -72,6 +72,49 @@ LIBRARY_PHRASES = (
 )
 
 
+# Готовые подписи для коллекций, которые появились в группах сами.
+# Ключ — основа названия коллекции: ловит «электрический стул»,
+# «электрический_стул», «электростул». Своя фраза коллекции важнее.
+SPECIAL_PHRASES = {
+    ("электрическ", "электростул"): (
+        "{emoji} {actor} <усадил|усадила> {target_acc} на электрический стул. Говорят, бодрит лучше кофе ☕",
+        "{emoji} {target}, присаживайся! {actor} <оплатил|оплатила> тебе сеанс экспресс-завивки ⚡",
+        "{emoji} {actor} <подключил|подключила> {target_acc} к сети. Теперь {target} заряжает телефоны прикосновением 🔌",
+        "{emoji} Приговор от {actor_gen}: {target} — 220 вольт без права на розетку ⚡",
+        "{emoji} {actor} <решил|решила>, что {target_dat} не хватает искры в жизни. Искра доставлена ⚡",
+        "{emoji} {target}, это не кресло-массажёр. Но {actor} <сказал|сказала>, что тебе понравится 🪑",
+        "{emoji} {actor} <нажал|нажала> рубильник. {target} теперь светится в темноте 💡",
+        "{emoji} Электрик {actor} <проверил|проверила> проводку на {target_instr}. Проводка рабочая ⚡",
+        "{emoji} Отдых у {target_gen} отменяется: {actor} <включил|включила> режим «турбо» 🔋",
+        "{emoji} {actor} <отправил|отправила> {target_acc} на перезагрузку. Выключить и включить — классика 🔄",
+        "{emoji} Счёт за электричество {target_gen} в этом месяце оплачивает {actor} ⚡🧾",
+        "{emoji} {actor} <прописал|прописала> {target_dat} электрошоковую терапию от лени. Минус лень, плюс причёска 🦔",
+        "{emoji} {target}, улыбнись! {actor} <сделал|сделала> тебе фото со вспышкой. Очень яркой вспышкой ⚡📸",
+        "{emoji} {actor} <подарил|подарила> {target_dat} стул. С подогревом. Сильным подогревом 🔥",
+        "{emoji} Тесла бы гордился: {actor} <провёл|провела> на {target_instr} опыт с переменным током ⚡",
+        "{emoji} {target} теперь официально энергетик. Спасибо {actor_dat} за подключение 🔋",
+        "{emoji} {actor} <зарядил|зарядила> {target_acc} на 100%. Хватит на неделю без сна ⚡",
+        "{emoji} {target}, хватит спорить в чате. {actor} <выписал|выписала> 380 вольт аргументов ⚡",
+        "{emoji} «Садись, в ногах правды нет», — <сказал|сказала> {actor} и <щёлкнул|щёлкнула> выключателем 🪑⚡",
+        "{emoji} {actor} <устроил|устроила> {target_dat} ускоренный курс физики. Тема урока: закон Ома ⚡📚",
+        "{emoji} У {target_gen} волосы дыбом, а у {actor_gen} — довольная улыбка ⚡😏",
+        "{emoji} {target} больше не тормозит: {actor} <разогнал|разогнала> до скорости тока ⚡",
+        "{emoji} {actor} <проверил|проверила>, работает ли у {target_gen} мозг. Искрит — значит, работает 🧠⚡",
+        "{emoji} Сеанс шоковой терапии от {actor_gen}. {target}, это для твоего же блага 💆⚡",
+        "{emoji} {actor} <нашёл|нашла> у {target_gen} кнопку «вкл». Пользуйтесь, пока горячо ⚡",
+        "{emoji} {target}, поздравляем! Ты — самый заряженный участник чата. Номинация от {actor_gen} 🏆⚡",
+    ),
+}
+
+
+def special_phrases(tag: str) -> tuple | None:
+    clean = (normalize_tag(tag) or "").replace(" ", "")
+    for bases, phrases in SPECIAL_PHRASES.items():
+        if any(clean.startswith(base) for base in bases):
+            return phrases
+    return None
+
+
 def stem(word: str) -> str:
     """«булочка» → «булочк»: ловит «булочку», «булочки», «булочкой»."""
     word = normalize_tag(word) or ""
@@ -187,7 +230,9 @@ def find_collection_action(text: str):
 def phrases_for(action) -> tuple:
     tag = action.key[4:] if action.key.startswith("lib:") else action.key
     own = (_collections.get(tag) or {}).get("phrase")
-    return (own,) if own else LIBRARY_PHRASES
+    if own:
+        return (own,)
+    return special_phrases(tag) or LIBRARY_PHRASES
 
 
 async def pick(chat_id: int | None, target: str) -> dict | None:
