@@ -1368,3 +1368,31 @@ class GoneChat(Base):
     chat_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
 
     gone_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class AiUsage(Base):
+    """Расход нейросетей по дням (московским): ответы, упоры в лимит, ошибки, токены."""
+
+    __tablename__ = "ai_usage"
+
+    __table_args__ = (
+        UniqueConstraint("day", "provider", "model", name="uq_ai_usage"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    day: Mapped[str] = mapped_column(String(10), index=True)
+
+    provider: Mapped[str] = mapped_column(String(20))
+
+    model: Mapped[str] = mapped_column(String(80))
+
+    answers: Mapped[int] = mapped_column(default=0)
+
+    limits: Mapped[int] = mapped_column(default=0)
+
+    errors: Mapped[int] = mapped_column(default=0)
+
+    tokens: Mapped[int] = mapped_column(BigInteger, default=0)
+
+    last_limit_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

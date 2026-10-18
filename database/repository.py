@@ -23,6 +23,7 @@ from database.models import (
     AutoReply,
     ShopOverride,
     ActionCustom,
+    AiUsage,
     ActionToggle,
     ActionUsage,
     AdminRole,
@@ -4608,3 +4609,42 @@ async def member_name(chat_id: int, telegram_id: int) -> str:
                 GroupMember.chat_id == chat_id, GroupMember.telegram_id == telegram_id)
         )).scalar_one_or_none()
     return name or "Игрок"
+
+
+# =========================================================
+# РАСХОД НЕЙРОСЕТЕЙ
+# =========================================================
+
+async def bump_ai_usage(day: str, provider: str, model: str, outcome: str, tokens: int = 0) -> None:
+    field = {"ok": "answers", "limit": "limits"}.get(outcome, "errors")
+    values = {"day": day, "provider": provider, "model": model[:80],
+              "answers": 0, "limits": 0, "errors": 0, "tokens": tokens}
+    values[field] = 1
+    if outcome == "limit":
+        values["last_limit_at"] = utcnow()
+
+    async with session_scope() as session:
+        stmt = pg_insert(AiUsage).values(**values)
+        update_set = {
+            field: getattr(AiUsage, field) + 1,
+            "tokens": AiUsage.tokens + tokens,
+        }
+        if outcome == "limit":
+            update_set["last_limit_at"] = stmt.excluded.last_limit_at
+        stmt = stmt.on_conflict_do_update(constraint="uq_ai_usage", set_=update_set)
+        await session.execute(stmt)
+        await session.commit()
+
+
+async def ai_usage(since: str, until: str) -> list[dict]:
+    async with session_scope() as session:
+        rows = (await session.execute(
+            select(AiUsage).where(AiUsage.day >= since, AiUsage.day <= until)
+            .order_by(AiUsage.day.desc(), AiUsage.provider, desc(AiUsage.answers))
+        )).scalars().all()
+
+    return [{
+        "day": r.day, "provider": r.provider, "model": r.model, "answers": r.answers,
+        "limits": r.limits, "errors": r.errors, "tokens": int(r.tokens or 0),
+        "last_limit_at": r.last_limit_at.isoformat() if r.last_limit_at else None,
+    } for r in rows]
