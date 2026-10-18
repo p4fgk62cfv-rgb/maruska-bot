@@ -81,6 +81,18 @@ def main() -> int:
     expect("своя фраза коллекции", templates_for(lib.action_for("пончик")), ("{emoji} {actor} и {target}: {item}",))
     expect("стандартные фразы", templates_for(found), lib.LIBRARY_PHRASES)
 
+    # Готовые подписи для «электрического стула»; своя фраза коллекции важнее
+    lib.prime_collections([
+        SimpleNamespace(tag="электрический стул", emoji="⚡", as_action=True, triggers=[], phrase=None),
+        SimpleNamespace(tag="электростул", emoji="⚡", as_action=True, triggers=[], phrase="{emoji} {actor} и {target}: {item}"),
+    ])
+    chair = lib.SPECIAL_PHRASES[("электрическ", "электростул")]
+    expect("подписи электрического стула", templates_for(lib.action_for("электрический стул")), chair)
+    expect("своя фраза важнее готовых", templates_for(lib.action_for("электростул")), ("{emoji} {actor} и {target}: {item}",))
+    expect("хэштег с подчёркиванием", lib.special_phrases("Электрический_стул"), chair)
+    for phrase in chair:
+        expect(f"подпись стула проходит проверку: {phrase[:30]}", ac.validate_phrase(phrase), None)
+
     for phrase in lib.LIBRARY_PHRASES:
         expect(f"стандартная фраза проходит проверку: {phrase[:30]}", ac.validate_phrase(phrase), None)
 
