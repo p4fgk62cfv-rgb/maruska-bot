@@ -92,7 +92,9 @@ def main() -> int:
     expect("хэштег с подчёркиванием", lib.special_phrases("Электрический_стул"), chair)
     lover = lib.special_phrases("ловелас и бабник")
     expect("подписи ловеласа", lib.special_phrases("бабник"), lover)
-    for phrase in chair + lover:
+    pool = lib.special_phrases("бильярд")
+    expect("бильярд с опечаткой «бильрд»", lib.special_phrases("бильрд"), pool)
+    for phrase in chair + lover + pool:
         expect(f"подпись стула проходит проверку: {phrase[:30]}", ac.validate_phrase(phrase), None)
 
     for phrase in lib.LIBRARY_PHRASES:
