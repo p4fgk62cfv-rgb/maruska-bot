@@ -52,6 +52,21 @@ async def database():
     info = await member_since(chat, old)
     check(info and not info["exact"], f"был до Мары — неточная дата: {info}")
 
+    # Вход есть в журнале Мары — дата точная, даже без joined_exact
+    from datetime import datetime as _dt
+
+    from database.database import session_scope
+    from database.models import AuditEvent
+
+    logged_user = 13
+    await ensure_member(chat, logged_user, "Из журнала")
+    async with session_scope() as session:
+        session.add(AuditEvent(chat_id=chat, category="member", action="join", actor_kind="system",
+                               target_id=logged_user, created_at=_dt(2026, 9, 1, 12)))
+        await session.commit()
+    info = await member_since(chat, logged_user)
+    check(info and info["exact"] and info["joined_at"] == _dt(2026, 9, 1, 12), f"дата из журнала: {info}")
+
     await ensure_member(chat, new, "Новичок")
     await mark_member_left(chat, new, True)
     await mark_joined(chat, new)

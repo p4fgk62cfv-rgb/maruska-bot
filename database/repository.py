@@ -3235,12 +3235,26 @@ async def member_since(chat_id: int, telegram_id: int) -> dict | None:
             select(GroupMember).where(GroupMember.chat_id == chat_id, GroupMember.telegram_id == telegram_id)
         )).scalar_one_or_none()
 
+        # В журнале Мары каждый вход записан с датой — даже до появления
+        # joined_exact. Последний вход и есть начало нынешнего срока.
+        logged = (await session.execute(
+            select(func.max(AuditEvent.created_at)).where(
+                AuditEvent.chat_id == chat_id, AuditEvent.target_id == telegram_id,
+                AuditEvent.category == "member", AuditEvent.action == "join",
+            )
+        )).scalar()
+
     if member is None:
         return None
 
+    joined, exact = member.joined_at, bool(member.joined_exact)
+
+    if logged is not None and (not exact or logged > joined):
+        joined, exact = logged, True
+
     return {
-        "joined_at": member.joined_at,
-        "exact": bool(member.joined_exact),
+        "joined_at": joined,
+        "exact": exact,
         "left_at": member.left_at,
         "name": member.display_name,
     }
