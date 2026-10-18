@@ -51,6 +51,7 @@ from images_library import router as library_router
 from features.autoreplies import router as autoreplies_router
 from features.moderation import router as moderation_router
 from features.chatters import router as chatters_router
+from features.member_since import router as member_since_router
 from features.social import router as social_router
 from features.rating import router as rating_router
 from features.weather import router as weather_router
@@ -152,6 +153,7 @@ dp.include_router(library_router)
 dp.include_router(arena_login_router)
 dp.include_router(basic_router)
 dp.include_router(chatters_router)
+dp.include_router(member_since_router)
 dp.include_router(social_router)
 dp.include_router(moderation_router)
 dp.include_router(economy_router)

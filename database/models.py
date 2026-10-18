@@ -261,6 +261,10 @@ class GroupMember(Base):
         default=utcnow,
     )
 
+    # joined_at — точная дата входа (Мара видела, как человек зашёл),
+    # а не первая встреча с ним уже в группе
+    joined_exact: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=utcnow,
@@ -1170,6 +1174,9 @@ class DailyUserStat(Base):
     telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
 
     messages: Mapped[int] = mapped_column(default=0)
+
+    # Слов в этих сообщениях — для «топа слов»
+    words: Mapped[int] = mapped_column(default=0, server_default="0")
 
 
 class Marriage(Base):

@@ -127,7 +127,7 @@ FEATURES: tuple[Feature, ...] = (
         key="top_chatters",
         title="Топ болтунов",
         emoji="🗣",
-        description="«топ болтунов» или /chatters — кто больше всех написал сегодня",
+        description="«топ болтунов», «топ сообщений / слов за день, неделю, месяц» — кто больше всех пишет",
         group="Жизнь чата",
     ),
     Feature(

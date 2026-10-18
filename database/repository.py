@@ -3157,6 +3157,8 @@ async def move_chat(old_id: int, new_id: int) -> None:
             await session.execute(delete(GroupMember).where(GroupMember.chat_id == old_id, GroupMember.telegram_id.in_(have)))
         await session.execute(update(GroupMember).where(GroupMember.chat_id == old_id).values(chat_id=new_id))
         await session.execute(update(ChatWarning).where(ChatWarning.chat_id == old_id).values(chat_id=new_id))
+        # Журнал — тоже: в нём даты входа участников для /срок
+        await session.execute(update(AuditEvent).where(AuditEvent.chat_id == old_id).values(chat_id=new_id))
         await session.commit()
 
     await mark_chat_gone(old_id)
@@ -3215,6 +3217,49 @@ async def ensure_member(chat_id: int, telegram_id: int, display_name: str | None
         if changed:
             await session.commit()
         return False
+
+
+async def mark_joined(chat_id: int, telegram_id: int) -> None:
+    """Человек только что зашёл в группу: с этого момента и считаем его срок."""
+    async with session_scope() as session:
+        await session.execute(
+            update(GroupMember)
+            .where(GroupMember.chat_id == chat_id, GroupMember.telegram_id == telegram_id)
+            .values(joined_at=utcnow(), joined_exact=True, left_at=None)
+        )
+        await session.commit()
+
+
+async def member_since(chat_id: int, telegram_id: int) -> dict | None:
+    """Когда человек появился в группе: дата, точная ли она, ушёл ли."""
+    async with session_scope() as session:
+        member = (await session.execute(
+            select(GroupMember).where(GroupMember.chat_id == chat_id, GroupMember.telegram_id == telegram_id)
+        )).scalar_one_or_none()
+
+        # В журнале Мары каждый вход записан с датой — даже до появления
+        # joined_exact. Последний вход и есть начало нынешнего срока.
+        logged = (await session.execute(
+            select(func.max(AuditEvent.created_at)).where(
+                AuditEvent.chat_id == chat_id, AuditEvent.target_id == telegram_id,
+                AuditEvent.category == "member", AuditEvent.action == "join",
+            )
+        )).scalar()
+
+    if member is None:
+        return None
+
+    joined, exact = member.joined_at, bool(member.joined_exact)
+
+    if logged is not None and (not exact or logged > joined):
+        joined, exact = logged, True
+
+    return {
+        "joined_at": joined,
+        "exact": exact,
+        "left_at": member.left_at,
+        "name": member.display_name,
+    }
 
 
 async def mark_member_left(chat_id: int, telegram_id: int, left: bool) -> None:
@@ -4306,13 +4351,18 @@ async def update_library_collection(tag: str, data: dict) -> bool:
 # ТОП БОЛТУНОВ
 # =========================================================
 
-async def bump_user_daily(chat_id: int, day: str, telegram_id: int) -> None:
-    """Атомарно +1 сообщение человеку за день (без гонок при одновременных сообщениях)."""
+async def bump_user_daily(chat_id: int, day: str, telegram_id: int, words: int = 0) -> None:
+    """Атомарно +1 сообщение и +слова человеку за день (без гонок при одновременных сообщениях)."""
     async with session_scope() as session:
-        stmt = pg_insert(DailyUserStat).values(chat_id=chat_id, day=day, telegram_id=telegram_id, messages=1)
+        stmt = pg_insert(DailyUserStat).values(
+            chat_id=chat_id, day=day, telegram_id=telegram_id, messages=1, words=words,
+        )
         stmt = stmt.on_conflict_do_update(
             constraint="uq_daily_user_stat",
-            set_={"messages": DailyUserStat.messages + 1},
+            set_={
+                "messages": DailyUserStat.messages + 1,
+                "words": func.coalesce(DailyUserStat.words, 0) + words,
+            },
         )
         await session.execute(stmt)
         await session.commit()
@@ -4347,6 +4397,48 @@ async def top_chatters(chat_id: int, day: str, limit: int = 10) -> dict:
         "people": [{"telegram_id": uid, "name": names.get(uid) or "Игрок", "messages": int(n)} for uid, n in rows],
         "total": int(total[0] or 0),
         "speakers": int(total[1] or 0),
+    }
+
+
+async def top_period(chat_id: int, since: str, until: str, metric: str = "messages", limit: int = 10) -> dict:
+    """
+    Топ за несколько дней (since…until включительно, «YYYY-MM-DD»):
+    по сообщениям или по словам. Дни — строки, поэтому сравниваются как даты.
+    """
+    column = DailyUserStat.words if metric == "words" else DailyUserStat.messages
+    amount = func.coalesce(func.sum(column), 0)
+    period = (DailyUserStat.chat_id == chat_id, DailyUserStat.day >= since, DailyUserStat.day <= until)
+
+    async with session_scope() as session:
+        rows = (await session.execute(
+            select(DailyUserStat.telegram_id, amount.label("amount"))
+            .where(*period)
+            .group_by(DailyUserStat.telegram_id)
+            .having(amount > 0)
+            .order_by(desc("amount"), DailyUserStat.telegram_id)
+            .limit(limit)
+        )).all()
+
+        total = (await session.execute(select(amount).where(*period))).scalar() or 0
+
+        speakers = (await session.execute(
+            select(func.count(func.distinct(DailyUserStat.telegram_id))).where(*period, column > 0)
+        )).scalar() or 0
+
+        names = {}
+
+        if rows:
+            names = dict((await session.execute(
+                select(GroupMember.telegram_id, GroupMember.display_name).where(
+                    GroupMember.chat_id == chat_id,
+                    GroupMember.telegram_id.in_([r[0] for r in rows]),
+                )
+            )).all())
+
+    return {
+        "people": [{"telegram_id": uid, "name": names.get(uid) or "Игрок", "amount": int(n)} for uid, n in rows],
+        "total": int(total),
+        "speakers": int(speakers),
     }
 
 

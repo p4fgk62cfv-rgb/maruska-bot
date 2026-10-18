@@ -12,6 +12,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
 import asyncio
+import re
 
 from database.repository import (
     list_action_custom,
@@ -169,7 +170,7 @@ class StatsMiddleware(BaseMiddleware):
             # В фоне: запись в базу не должна тормозить ответ
             asyncio.create_task(_count(event.chat.id))
 
-            asyncio.create_task(_bump_user(event.chat.id, event.from_user.id))
+            asyncio.create_task(_bump_user(event.chat.id, event.from_user.id, count_words(event.text or event.caption)))
 
             if _first_today(event.chat.id, event.from_user.id):
                 asyncio.create_task(_bump(event.chat.id, "active_users"))
@@ -249,12 +250,20 @@ def _first_today(chat_id: int, user_id: int) -> bool:
     return True
 
 
-async def _bump_user(chat_id: int, user_id: int) -> None:
-    """Сообщения человека за сегодня — для «топа болтунов». День — местный."""
+_WORD_RE = re.compile(r"[^\W_]+(?:[-'’][^\W_]+)*")
+
+
+def count_words(text: str | None) -> int:
+    """Слова в сообщении: «Привет, как дела?» — 3. Ссылки и @ники — тоже по словам, эмодзи — нет."""
+    return len(_WORD_RE.findall(text or ""))
+
+
+async def _bump_user(chat_id: int, user_id: int, words: int = 0) -> None:
+    """Сообщения и слова человека за сегодня — для топов. День — местный."""
     try:
         from database.repository import bump_user_daily
 
-        await bump_user_daily(chat_id, store.local_now(chat_id).strftime("%Y-%m-%d"), user_id)
+        await bump_user_daily(chat_id, store.local_now(chat_id).strftime("%Y-%m-%d"), user_id, words)
     except Exception as error:
         logger.warning("STATS USER: %s", error)
 
