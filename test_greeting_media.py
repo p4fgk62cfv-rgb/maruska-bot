@@ -141,7 +141,22 @@ async def admin_upload():
         check(removed.status == 200 and await greeting_media(chat) is None, "убрано")
 
 
+def tagging():
+    """Новичок отмечен в приветствии всегда — и в своём тексте группы без {name}."""
+    from settings import store
+    from features.greeting import greeting_line, mention
+
+    tag = mention(SimpleNamespace(id=42, first_name="Вася <3", username=None))
+    check(tag == '<a href="tg://user?id=42">Вася &lt;3</a>', f"тег-ссылка: {tag}")
+
+    for chat, text in [(-1, None), (-2, "Добро пожаловать в Блеф 🃏"), (-3, "Привет, {name}! {oops}"), (-4, "Привет, {name}!")]:
+        store.prime(chat, {"greeting_text": text} if text else {})
+        line = greeting_line(chat, tag)
+        check(tag in line and "{name}" not in line, f"тег в приветствии ({text}): {line}")
+
+
 async def main():
+    tagging()
     await sending()
     if DB_URL:
         await admin_upload()
