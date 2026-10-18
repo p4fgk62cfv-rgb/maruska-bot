@@ -37,6 +37,12 @@ check(harmony_percent(-1, 5, 9, "d") != harmony_percent(-1, 5, 9, "e"), "на д
 for floor, phrases in TIERS:
     check(comment_for(floor + 0.1, random.Random(0)) in phrases, f"уровень {floor}%")
 check(comment_for(100, random.Random(0)) in TIERS[0][1], "100% — самая тёплая фраза")
+phrases = [p for _, group in TIERS for p in group]
+check(len(phrases) >= 150 and len(set(phrases)) == len(phrases), f"много фраз и без дублей: {len(phrases)}")
+check(all(len(group) >= 20 for _, group in TIERS), "в каждом уровне не меньше 20 фраз")
+said = [comment_for(97, chat_id=-777) for _ in range(len(TIERS[0][1]))]
+check(len(set(said)) == len(said), "в одном чате фразы не повторяются, пока не переберутся все")
+
 check(hearts(65.7) == "❤️" * 7 + "🤍" * 3, "сердечки")
 
 text = format_harmony("Аня", "<b>Вася</b>", 65.7, random.Random(1))
