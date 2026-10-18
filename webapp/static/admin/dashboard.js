@@ -53,6 +53,7 @@
         + sys("Картинки", st.images, "без ошибок")
         + sys("Действия", st.actions, st.actions && st.actions.count + " действий")
         + "</div></div>"
+        + '<div data-ai-usage></div>'
 
         + '<div class="metrics">'
         + M.metric("users", num(d.totals.people), "Участников", t.new_users ? "+" + t.new_users + " сегодня" : "", tile.people)
@@ -103,8 +104,32 @@
       M.bind();
       bindGo();
       bindQuick();
+      loadAiUsage();
     }).catch(M.fail);
   });
+
+  // ---------- расход нейросетей (только владельцу) ----------
+
+  function loadAiUsage() {
+    var box = M.app.querySelector("[data-ai-usage]");
+    if (!box) return;
+    var fmt = function (n) { return n >= 1000 ? (Math.round(n / 100) / 10) + "k" : String(n); };
+    var hhmm = function (iso) { var d = new Date(iso + (iso.endsWith("Z") ? "" : "Z")); return d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" }); };
+
+    M.api("/api/admin/ai_usage").then(function (d) {
+      var rows = d.today.map(function (r) {
+        return '<div class="list-item"><div class="grow"><b>' + esc(r.provider) + '</b> <span class="dim">' + esc(r.model) + "</span>"
+          + (r.limits ? '<div class="s" style="color:var(--red)">лимит ×' + r.limits + (r.last_limit_at ? " · последний в " + hhmm(r.last_limit_at) + " МСК" : "") + "</div>" : "")
+          + (r.errors ? '<div class="s dim">ошибок: ' + r.errors + "</div>" : "")
+          + '</div><div style="text-align:right"><b>' + r.answers + '</b><div class="s dim">' + fmt(r.tokens) + " ток.</div></div></div>";
+      }).join("") || '<div class="dim">Сегодня к нейросетям ещё не обращались</div>';
+
+      var week = d.week.map(function (w) { return esc(w.provider) + " " + w.answers + (w.limits ? " (лимит ×" + w.limits + ")" : ""); }).join(" · ");
+
+      box.innerHTML = '<div class="card"><div class="card-title">🤖 Нейросети сегодня <span class="dim">ответов · токенов, день по МСК</span></div>'
+        + rows + (week ? '<div class="dim" style="margin-top:8px">За 7 дней: ' + week + "</div>" : "") + "</div>";
+    }).catch(function () { box.innerHTML = ""; });
+  }
 
   // ---------- быстрые действия: действие → человек → подтверждение ----------
 

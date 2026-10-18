@@ -137,9 +137,19 @@ async def ask_gemini(
             types.Tool(google_search=types.GoogleSearch())
         )
 
-    response = await _generate(prompt, tools, persona)
+    from ai import usage
+
+    try:
+        response = await _generate(prompt, tools, persona)
+    except Exception as error:
+        usage.record("Gemini", MODEL_NAME, "limit" if usage.is_limit(error) else "error")
+        raise
 
     answer = (response.text or "").strip()
+
+    meta = getattr(response, "usage_metadata", None)
+    usage.record("Gemini", MODEL_NAME, "ok" if answer else "error",
+                 getattr(meta, "total_token_count", 0) or 0)
 
     # Если модель упёрлась в лимит токенов, обрываем по последнему
     # законченному предложению — лучше короче, чем на полуслове.

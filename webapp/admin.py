@@ -991,6 +991,33 @@ async def api_system(request: web.Request):
     })
 
 
+async def api_ai_usage(request: web.Request):
+    """Расход нейросетей: сегодня по моделям и итоги за 7 дней. Только владельцу."""
+    await require_owner(request)
+
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    from ai import usage
+    from database.repository import ai_usage
+
+    today = datetime.now(ZoneInfo(usage.DAY_ZONE)).date()
+    rows = await ai_usage((today - timedelta(days=6)).isoformat(), today.isoformat())
+
+    week: dict[str, dict] = {}
+    for row in rows:
+        item = week.setdefault(row["provider"], {"provider": row["provider"], "answers": 0, "limits": 0, "tokens": 0})
+        item["answers"] += row["answers"]
+        item["limits"] += row["limits"]
+        item["tokens"] += row["tokens"]
+
+    return web.json_response({
+        "today": [r for r in rows if r["day"] == today.isoformat()],
+        "week": sorted(week.values(), key=lambda x: -x["answers"]),
+        "day": today.isoformat(),
+    })
+
+
 # ---------------------------------------------------------
 # Рассылка
 # ---------------------------------------------------------
@@ -1403,6 +1430,7 @@ def setup_admin_routes(app: web.Application) -> None:
     app.router.add_get("/api/admin/media", api_media)
     app.router.add_get("/api/admin/logs", api_logs)
     app.router.add_get("/api/admin/system", api_system)
+    app.router.add_get("/api/admin/ai_usage", api_ai_usage)
     app.router.add_post("/api/admin/restart", api_restart)
     app.router.add_post("/api/admin/broadcast", api_broadcast)
     app.router.add_get("/api/admin/avatar", api_avatar)

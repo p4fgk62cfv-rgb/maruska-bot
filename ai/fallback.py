@@ -140,7 +140,10 @@ async def _ask_one(provider: Provider, system: str, prompt: str, temperature: fl
                 provider.url, json=_payload(model, system, prompt, temperature, max_tokens), headers=headers,
             )
 
+        from ai import usage
+
         if response.status_code != 200:
+            usage.record(provider.name, model, "limit" if response.status_code == 429 else "error")
             last = f"{provider.name} {model} HTTP {response.status_code}: {response.text[:200]}"
             if _try_next(response.status_code, response.text):
                 logger.warning("AI FALLBACK: %s у %s сейчас недоступна (HTTP %s), беру следующую",
@@ -152,7 +155,10 @@ async def _ask_one(provider: Provider, system: str, prompt: str, temperature: fl
         choice = (data.get("choices") or [{}])[0]
         answer = clean((choice.get("message") or {}).get("content") or "")
 
+        spent = (data.get("usage") or {}).get("total_tokens") or 0
+
         if not answer:
+            usage.record(provider.name, model, "error", spent)
             last = f"{provider.name} {model}: пустой ответ ({choice.get('finish_reason')})"
             logger.warning("AI FALLBACK: %s", last)
             continue
@@ -162,6 +168,7 @@ async def _ask_one(provider: Provider, system: str, prompt: str, temperature: fl
 
             answer = trim_to_sentence(answer)
 
+        usage.record(provider.name, model, "ok", spent)
         _working[provider.name] = model
         return answer
 
