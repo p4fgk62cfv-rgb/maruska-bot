@@ -135,17 +135,25 @@ def set_context_size(size: int) -> None:
     CONTEXT_MESSAGES = max(1, size)
 
 
+def _skip(message: Message, reason: str) -> bool:
+    """К Маре обратились, а она промолчит — пишем в лог почему."""
+    if is_addressed(message):
+        logger.info("CHAT SKIP chat=%s user=%s: %s", message.chat.id,
+                    message.from_user.id if message.from_user else None, reason)
+    return False
+
+
 def should_answer(message: Message) -> bool:
     if not is_enabled(message.chat.id, "ai"):
-        return False
+        return _skip(message, "ИИ-ответы выключены в группе")
 
     if is_blocked(message.chat.id, message.from_user.id if message.from_user else None):
-        return False
+        return _skip(message, "человек в игноре")
 
     mode = get_value(message.chat.id, "chattiness") or "normal"
 
     if not within_limits(message.chat.id, message.from_user.id if message.from_user else None):
-        return False
+        return _skip(message, "лимит ответов в сутки или пауза между ответами человеку")
 
     addressed = is_addressed(message)
 
@@ -157,7 +165,7 @@ def should_answer(message: Message) -> bool:
         last = _last_reply.get(message.chat.id, 0)
 
         if time.monotonic() - last < QUIET_COOLDOWN:
-            return False
+            return _skip(message, "тихий режим: недавно уже отвечала")
 
         return True
 
@@ -197,6 +205,9 @@ async def ai_handler(message: Message):
 
     if not should_answer(message):
         return
+
+    # Обратились, а этой строки в логе нет — сообщение перехватила другая функция
+    logger.info("CHAT: отвечаю chat=%s user=%s", message.chat.id, message.from_user.id)
 
     _last_reply[message.chat.id] = time.monotonic()
     note_reply(message.chat.id, message.from_user.id if message.from_user else None)
