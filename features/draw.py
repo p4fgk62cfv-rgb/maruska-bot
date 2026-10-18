@@ -150,15 +150,23 @@ async def make_picture(message: Message, prompt: str) -> None:
         stop.set()
         typing.cancel()
 
-    try:
-        await message.reply_photo(
-            BufferedInputFile(data, filename="mara.png"),
-            caption=f"🎨 {escape(prompt[:900])}",
-        )
-    except Exception as error:
-        logger.error("DRAW SEND: %s %s", type(error).__name__, error)
-        await _edit(wait, "Нарисовала, но Telegram не принял картинку 😔 Попробуй ещё раз")
-        return
+    # Telegram изредка сбрасывает отправку («canceled by new edit message
+    # request») — вторая попытка через секунду обычно проходит
+    for attempt in (1, 2):
+        try:
+            await message.reply_photo(
+                BufferedInputFile(data, filename="mara.png"),
+                caption=f"🎨 {escape(prompt[:900])}",
+            )
+            break
+        except Exception as error:
+            if attempt == 1:
+                logger.warning("DRAW SEND (повторяю): %s %s", type(error).__name__, error)
+                await asyncio.sleep(1)
+                continue
+            logger.error("DRAW SEND: %s %s", type(error).__name__, error)
+            await _edit(wait, "Нарисовала, но Telegram не принял картинку 😔 Попробуй ещё раз")
+            return
 
     try:
         await wait.delete()

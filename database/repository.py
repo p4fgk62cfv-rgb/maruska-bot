@@ -202,27 +202,18 @@ async def save_user(
 ):
     gender = infer_gender(first_name or username)
 
+    # Одним запросом: два сообщения нового человека подряд создавали его
+    # дважды, второе падало на ix_users_telegram_id — и терялось из статистики
+    update_set = {"username": username, "first_name": first_name}
+    if gender != "unknown":
+        update_set["gender"] = gender
+
     async with session_scope() as session:
-        result = await session.execute(
-            select(User).where(User.telegram_id == telegram_id)
+        stmt = pg_insert(User).values(
+            telegram_id=telegram_id, username=username, first_name=first_name, gender=gender,
         )
-
-        user = result.scalar_one_or_none()
-
-        if user is None:
-            user = User(
-                telegram_id=telegram_id,
-                username=username,
-                first_name=first_name,
-                gender=gender,
-            )
-            session.add(user)
-        else:
-            user.username = username
-            user.first_name = first_name
-            if gender != "unknown":
-                user.gender = gender
-
+        stmt = stmt.on_conflict_do_update(index_elements=[User.telegram_id], set_=update_set)
+        await session.execute(stmt)
         await session.commit()
 
 
@@ -1434,27 +1425,16 @@ async def unlock_achievement(telegram_id: int, key: str) -> bool:
     """
     Отмечает достижение открытым. False — уже было открыто.
     """
+    # Одним запросом: при двух сообщениях подряд достижение открывалось
+    # дважды, второе падало на uq_user_achievement и обрывало награду
     async with session_scope() as session:
-        existing = await session.execute(
-            select(UserAchievement.id).where(
-                UserAchievement.telegram_id == telegram_id,
-                UserAchievement.achievement_key == key,
-            )
+        result = await session.execute(
+            pg_insert(UserAchievement)
+            .values(telegram_id=telegram_id, achievement_key=key)
+            .on_conflict_do_nothing(constraint="uq_user_achievement")
         )
-
-        if existing.scalar_one_or_none() is not None:
-            return False
-
-        session.add(
-            UserAchievement(
-                telegram_id=telegram_id,
-                achievement_key=key,
-            )
-        )
-
         await session.commit()
-
-        return True
+        return bool(result.rowcount)
 
 
 async def get_xp_top(limit: int = 10):

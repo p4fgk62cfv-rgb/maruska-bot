@@ -6,7 +6,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).parent
 sys.path.insert(0, str(ROOT))
-os.environ.setdefault("DATABASE_URL", "postgresql://unused@localhost/unused")
+os.environ.setdefault("DATABASE_URL", os.getenv("TEST_DATABASE_URL") or "postgresql://unused@localhost/unused")
 
 from features.antimat import DEFAULT_WORDS, find_swear, parse_words  # noqa: E402
 
