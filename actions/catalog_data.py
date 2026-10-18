@@ -71,7 +71,7 @@ ACTIONS = [
       "водку", "водкой", "vodka"),
     A("moonshine", "🥃", "moonshine alcohol homemade", "брага|брагу|самогон|первач", "alcohol",
       "самогон", "самогоном", "moonshine|distill"),
-    A("rum", "🥃", "rum alcohol", "=ром|=рома|=рому|=ромом", "alcohol",
+    A("rum", "🥃", "rum alcohol", "=ром|=ромом|налей рому|стакан рома|бутылку рома", "alcohol",
       "ром", "ромом", "rum"),
     A("gin", "🍸", "gin tonic", "=джин|=джина|=джину|=джином|джин тоник", "alcohol",
       "джин-тоник", "джин-тоником", "gin|tonic"),
