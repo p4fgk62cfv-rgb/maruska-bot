@@ -171,4 +171,26 @@ describe.skipIf(!url)('tournaments', () => {
     expect((await call(solo, 'GET', `/tournaments/${id}`)).json().status).toBe('CANCELLED');
     expect(await credits(solo)).toBe(1000);
   });
+  it('a tournament with an arena guarantee needs four players: two accounts cannot split it', async () => {
+    const guarantee = 10_000;
+    const lonely = await create(16, 100, 60_000);
+    await db.tournament.update({ where: { id: lonely }, data: { prizePool: BigInt(guarantee) } });
+    const [a, b] = await Promise.all(['Свой', 'Твинк'].map(player)) as [Player, Player];
+    for (const p of [a, b]) expect((await call(p, 'POST', `/tournaments/${lonely}/register`)).statusCode).toBe(200);
+    expect(await credits(a)).toBe(900);
+
+    await handle.ctx.tournaments.tick(new Date(Date.now() + 120_000));
+    await settle();
+    expect((await call(a, 'GET', `/tournaments/${lonely}`)).json().status).toBe('CANCELLED');
+    expect(await credits(a)).toBe(1000);
+    expect(await credits(b)).toBe(1000);
+
+    const full = await create(16, 0, 60_000);
+    await db.tournament.update({ where: { id: full }, data: { prizePool: BigInt(guarantee) } });
+    const four = await Promise.all(['Ира', 'Кая', 'Лёша', 'Мила'].map(player));
+    for (const p of four) expect((await call(p, 'POST', `/tournaments/${full}/register`)).statusCode).toBe(200);
+    await handle.ctx.tournaments.tick(new Date(Date.now() + 120_000));
+    await settle();
+    expect((await call(four[0]!, 'GET', `/tournaments/${full}`)).json().status).toBe('RUNNING');
+  });
 });

@@ -121,7 +121,7 @@ describe('the strong bot', () => {
     expect(sanitizeParams(next)).toEqual(next);
   });
 
-  it('the exact endgame never runs round for ever when cards are taken back and forth («Переводной»)', () => {
+  it('the exact endgame never runs round for ever when cards are taken back and forth («Переводной»)', async () => {
     const decide: Decider = (s, id) => {
       if (s.deck.length === 0) {
         const m = solveEndgame(s, id);
@@ -133,6 +133,9 @@ describe('the strong bot', () => {
       const rnd = mulberry(900 + g);
       const end = runGame(newGame({ ...base, variant: 'perevodnoy' }, ['a', 'b'], rnd), decide, rnd);
       expect(end.status).toBe('finished');
+      // A minute of solid solving starves the test worker: vitest then fails the run with
+      // «Timeout calling onTaskUpdate» even though every game finished. Breathe between games.
+      await new Promise((resolve) => setImmediate(resolve));
     }
   }, 120_000);
 

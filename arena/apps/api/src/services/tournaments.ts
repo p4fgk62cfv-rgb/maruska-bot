@@ -94,6 +94,7 @@ export function autoTournamentPlans(now: Date, config: Pick<Config, 'DAILY_TOURN
  * Heads-up single-elimination tournaments.
  *
  * REGISTRATION → (startsAt) RUNNING → FINISHED, or CANCELLED with refunds when fewer
+ * than four joined a tournament with an arena guarantee (see GUARANTEED_TOURNAMENT_MIN_PLAYERS), or fewer
  * than two joined. Everything that changes a tournament runs through one queue, and
  * `tick()` (every few seconds) is idempotent: it creates missing match rooms, recovers
  * after a restart and moves the bracket forward.
@@ -299,7 +300,10 @@ export class TournamentService {
 
   private async begin(t: Tournament): Promise<void> {
     const players = await this.db.tournamentPlayer.findMany({ where: { tournamentId: t.id } });
-    if (players.length < 2) {
+    // Part of the pool is the arena's own guarantee (not entry fees): it needs a real field
+    const guaranteed = t.prizePool > t.entryFee * BigInt(players.length);
+    const needed = guaranteed ? Math.max(2, this.deps.config.GUARANTEED_TOURNAMENT_MIN_PLAYERS) : 2;
+    if (players.length < needed) {
       await this.cancel(t);
       return;
     }
