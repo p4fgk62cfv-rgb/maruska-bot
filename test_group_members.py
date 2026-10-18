@@ -94,12 +94,15 @@ async def with_database():
     SUPER = -1009000000001
     await set_group_setting(chat_id=NEW, key="antimat", value=True)
     await add_warning(NEW, 601, "Мат")
+    from database.repository import add_audit, member_since
+    await add_audit(category="member", action="join", chat_id=NEW, actor_kind="system", target_id=601)
     await move_chat(NEW, SUPER)
     known = {c["chat_id"] for c in await list_known_chats()}
     expect("старая группа скрыта", NEW in known, False)
     expect("новая видна", SUPER in known, True)
     expect("настройки переехали", (await get_group_settings(SUPER)).get("antimat"), True)
     expect("предупреждения переехали", await count_warnings(SUPER, 601), 1)
+    expect("дата входа из журнала переехала", ((await member_since(SUPER, 601)) or {}).get("exact"), True)
     await move_chat(NEW, SUPER)
     expect("повторный переезд безопасен", SUPER in {c["chat_id"] for c in await list_known_chats()}, True)
 

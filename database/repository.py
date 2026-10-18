@@ -3157,6 +3157,8 @@ async def move_chat(old_id: int, new_id: int) -> None:
             await session.execute(delete(GroupMember).where(GroupMember.chat_id == old_id, GroupMember.telegram_id.in_(have)))
         await session.execute(update(GroupMember).where(GroupMember.chat_id == old_id).values(chat_id=new_id))
         await session.execute(update(ChatWarning).where(ChatWarning.chat_id == old_id).values(chat_id=new_id))
+        # Журнал — тоже: в нём даты входа участников для /срок
+        await session.execute(update(AuditEvent).where(AuditEvent.chat_id == old_id).values(chat_id=new_id))
         await session.commit()
 
     await mark_chat_gone(old_id)
