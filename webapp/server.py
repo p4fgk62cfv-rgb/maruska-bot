@@ -418,7 +418,8 @@ async def radio_stations(request: web.Request):
 
 def create_app(bot, bot_token: str) -> web.Application:
     app = web.Application(
-        client_max_size=MAX_IMAGE_BYTES + 1024 * 1024,
+        # Видео к приветствию — до 20 МБ (webapp/admin_v2.py)
+        client_max_size=max(MAX_IMAGE_BYTES, 20 * 1024 * 1024) + 1024 * 1024,
         middlewares=[security_headers],
     )
 
