@@ -15,6 +15,7 @@
 import logging
 import os
 import re
+import time
 from dataclasses import dataclass
 
 import httpx
@@ -42,11 +43,19 @@ class Provider:
         if own:
             return [own]
         good = _working.get(self.name)
-        return ([good] if good else []) + [m for m in self.default_models if m != good]
+        now = time.monotonic()
+        alive = [m for m in self.default_models if now - _gone.get((self.name, m), -1e12) > GONE_FOR]
+        ordered = ([good] if good in alive else []) + [m for m in alive if m != good]
+        # Все модели «пропали» — всё равно пробуем: вдруг вернулись
+        return ordered or list(self.default_models)
 
 
 # Какая модель у провайдера ответила последней — с неё и начинаем
 _working: dict[str, str] = {}
+
+# Модели, которых у провайдера больше нет (404) — сутки их не трогаем
+_gone: dict[tuple[str, str], float] = {}
+GONE_FOR = 24 * 3600
 
 
 PROVIDERS = (
@@ -55,7 +64,9 @@ PROVIDERS = (
         url="https://api.groq.com/openai/v1/chat/completions",
         key_env="GROQ_API_KEY",
         model_env="GROQ_MODEL",
-        default_models=("openai/gpt-oss-120b", "llama-3.3-70b-versatile", "qwen/qwen3-32b", "llama-3.1-8b-instant"),
+        # Llama и Qwen3-32B Groq убрал из бесплатного тарифа (август 2026) —
+        # у каждой из оставшихся свой суточный лимит
+        default_models=("openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"),
     ),
     Provider(
         name="OpenRouter",
@@ -145,6 +156,8 @@ async def _ask_one(provider: Provider, system: str, prompt: str, temperature: fl
         if response.status_code != 200:
             usage.record(provider.name, model, "limit" if response.status_code == 429 else "error")
             last = f"{provider.name} {model} HTTP {response.status_code}: {response.text[:200]}"
+            if _model_gone(response.status_code, response.text):
+                _gone[(provider.name, model)] = time.monotonic()
             if _try_next(response.status_code, response.text):
                 logger.warning("AI FALLBACK: %s у %s сейчас недоступна (HTTP %s), беру следующую",
                                model, provider.name, response.status_code)
