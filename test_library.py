@@ -90,7 +90,9 @@ def main() -> int:
     expect("подписи электрического стула", templates_for(lib.action_for("электрический стул")), chair)
     expect("своя фраза важнее готовых", templates_for(lib.action_for("электростул")), ("{emoji} {actor} и {target}: {item}",))
     expect("хэштег с подчёркиванием", lib.special_phrases("Электрический_стул"), chair)
-    for phrase in chair:
+    lover = lib.special_phrases("ловелас и бабник")
+    expect("подписи ловеласа", lib.special_phrases("бабник"), lover)
+    for phrase in chair + lover:
         expect(f"подпись стула проходит проверку: {phrase[:30]}", ac.validate_phrase(phrase), None)
 
     for phrase in lib.LIBRARY_PHRASES:
