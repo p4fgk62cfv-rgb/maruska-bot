@@ -11,6 +11,7 @@ Railway понимает ANSI-коды, поэтому строки можно �
 
 import logging
 import os
+import re
 import sys
 
 
@@ -143,6 +144,34 @@ class RestartConflictFilter(logging.Filter):
         return True
 
 
+# Ключи в адресах запросов: «?key=…», «&api_key=…», «token=…», «/bot123:AA…/»
+_SECRET_PARAM = re.compile(r"([?&](?:key|api_key|apikey|access_token|token|secret)=)[^&\s\"']+", re.IGNORECASE)
+_BOT_TOKEN = re.compile(r"/bot\d+:[A-Za-z0-9_-]+")
+
+
+def redact(text: str) -> str:
+    text = _SECRET_PARAM.sub(r"\1***", text)
+    return _BOT_TOKEN.sub("/bot***", text)
+
+
+class SecretsFilter(logging.Filter):
+    """
+    Прячет ключи из адресов запросов: httpx пишет в лог полный адрес, а у
+    Pixabay и некоторых других сервисов ключ передаётся прямо в нём.
+    Стоит на обработчиках — действует на все логгеры, и в Railway, и в панели.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            text = record.getMessage()
+        except Exception:
+            return True
+        clean = redact(text)
+        if clean != text:
+            record.msg, record.args = clean, None
+        return True
+
+
 def setup(level: int = logging.INFO) -> None:
     handler = logging.StreamHandler(sys.stdout)
 
@@ -158,6 +187,10 @@ def setup(level: int = logging.INFO) -> None:
     # Убираем возможные прежние обработчики, иначе строки задвоятся
     for existing in root.handlers[:]:
         root.removeHandler(existing)
+
+    secrets = SecretsFilter()
+    handler.addFilter(secrets)
+    ring.addFilter(secrets)
 
     root.addHandler(handler)
     root.addHandler(ring)
