@@ -8,7 +8,7 @@ import re
 
 from aiogram import Router
 from aiogram.filters import Command, CommandStart
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import InlineKeyboardMarkup, Message
 
 from botcontext import display_name_of, is_addressed
 
@@ -123,7 +123,7 @@ ABILITIES_TEXT = (
     "• /8ball вопрос — шар предсказаний, /random чай, кофе — выбрать за тебя\n\n"
 
     "🃏 <b>Арена</b> — наш Дурак онлайн: подкидной и переводной, от 2 до 6 человек, "
-    "турниры и призы. Кнопка внизу или /game.\n\n"
+    "турниры и призы. Кнопка внизу, /arena или просто «арена».\n\n"
 
     "🎮 <b>Игры</b>\n"
     "• «крокодил» — рисуй и отгадывай слово\n"
@@ -175,30 +175,14 @@ def asks_abilities(message: Message) -> bool:
 
 async def _abilities_keyboard(message: Message) -> InlineKeyboardMarkup | None:
     """Кнопки «Арена» и «Рыбалка» — те, что сейчас доступны в этом чате."""
-    group = message.chat.type in ("group", "supergroup")
-    buttons = []
+    from features.arena_promo import games_buttons
+
     try:
-        me = await message.bot.me()
-        username = me.username or ""
-
-        from games.arena import play_button
-
-        arena = play_button(username, group)
-        if arena is not None:
-            buttons.append(arena.model_copy(update={"text": "🃏 Арена — дурак онлайн"}))
-
-        from fishing import service as fs
-        from games.fishing import fishing_button
-        from settings.store import is_enabled
-        from webapp.server import public_url
-
-        base = public_url()
-        if base and fs.settings()["enabled"] and not (group and not is_enabled(message.chat.id, "fishing")):
-            fishing = fishing_button(username, message.chat.id, group, base, text="🎣 Рыбалка")
-            buttons.append(fishing)
+        buttons = await games_buttons(message.bot, message.chat.id, message.chat.type in ("group", "supergroup"))
     except Exception:
         # Кнопки — приятное дополнение: без них рассказ всё равно уйдёт
         logger.warning("ABILITIES: не удалось собрать кнопки", exc_info=True)
+        buttons = []
 
     return InlineKeyboardMarkup(inline_keyboard=[[b] for b in buttons]) if buttons else None
 

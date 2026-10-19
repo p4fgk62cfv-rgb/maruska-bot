@@ -1444,3 +1444,21 @@ class BirthdaySent(Base):
     kind: Mapped[str] = mapped_column(String(8))
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ChatOnce(Base):
+    """Разовые события в группе по ключу: «уже отправлено — второй раз не шлём», даже после перезапуска."""
+
+    __tablename__ = "chat_once"
+
+    __table_args__ = (
+        UniqueConstraint("chat_id", "key", name="uq_chat_once"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    key: Mapped[str] = mapped_column(String(64))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

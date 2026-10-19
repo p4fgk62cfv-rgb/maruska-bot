@@ -27,6 +27,7 @@ from database.models import (
     Birthday,
     BirthdayAsk,
     BirthdaySent,
+    ChatOnce,
     ActionToggle,
     ActionUsage,
     AdminRole,
@@ -4701,6 +4702,18 @@ async def mark_birthday_sent(chat_id: int, telegram_id: int, year: int, kind: st
             pg_insert(BirthdaySent)
             .values(chat_id=chat_id, telegram_id=telegram_id, year=year, kind=kind)
             .on_conflict_do_nothing(constraint="uq_birthday_sent")
+        )
+        await session.commit()
+        return bool(result.rowcount)
+
+
+async def mark_chat_once(chat_id: int, key: str) -> bool:
+    """True — событие отмечено впервые (можно делать); False — уже было."""
+    async with session_scope() as session:
+        result = await session.execute(
+            pg_insert(ChatOnce)
+            .values(chat_id=chat_id, key=key)
+            .on_conflict_do_nothing(constraint="uq_chat_once")
         )
         await session.commit()
         return bool(result.rowcount)

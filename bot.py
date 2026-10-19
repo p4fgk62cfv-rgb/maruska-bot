@@ -53,6 +53,7 @@ from features.moderation import router as moderation_router
 from features.chatters import router as chatters_router
 from features.member_since import router as member_since_router
 from features.harmony import router as harmony_router
+from features.arena_promo import arena_promo_loop, router as arena_promo_router
 from features.birthdays import BirthdayAskMiddleware, birthday_loop, router as birthdays_router
 from features.social import router as social_router
 from features.rating import router as rating_router
@@ -173,6 +174,7 @@ dp.include_router(table_router)
 dp.include_router(draw_router)
 dp.include_router(fishing_router)
 dp.include_router(arena_router)
+dp.include_router(arena_promo_router)
 dp.include_router(rating_router)
 dp.include_router(weather_router)
 dp.include_router(radio_router)
@@ -408,6 +410,7 @@ async def main():
     broadcast_task = asyncio.create_task(broadcast_loop(bot))
     memory_task = asyncio.create_task(memory_loop())
     birthday_task = asyncio.create_task(birthday_loop(bot))
+    arena_promo_task = asyncio.create_task(arena_promo_loop(bot))
 
     logger.info("МАРА ЗАПУЩЕНА!")
 
@@ -422,6 +425,7 @@ async def main():
         broadcast_task.cancel()
         memory_task.cancel()
         birthday_task.cancel()
+        arena_promo_task.cancel()
 
         if web_runner is not None:
             await web_runner.cleanup()
