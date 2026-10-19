@@ -94,7 +94,14 @@ def main() -> int:
     expect("подписи ловеласа", lib.special_phrases("бабник"), lover)
     pool = lib.special_phrases("бильярд")
     expect("бильярд с опечаткой «бильрд»", lib.special_phrases("бильрд"), pool)
-    for phrase in chair + lover + pool:
+    for tag, base in (("доброеутро", "доброеутро"), ("Доброе_утро", "доброеутро"), ("обезьянка", "обезьян"),
+                      ("сладких снов", "сладкихснов"), ("сднемрождения", "сднемрожд"), ("С днём рождения", "сднемрожд")):
+        found_phrases = lib.special_phrases(tag)
+        expect(f"подписи для #{tag}", bool(found_phrases) and found_phrases is next(
+            v for k, v in lib.SPECIAL_PHRASES.items() if base in k), True)
+    for bases, phrases in lib.SPECIAL_PHRASES.items():
+        expect(f"подписи {bases[0]} без повторов и не меньше 25", len(set(phrases)) == len(phrases) >= 25, True)
+    for phrase in [p for v in lib.SPECIAL_PHRASES.values() for p in v]:
         expect(f"подпись стула проходит проверку: {phrase[:30]}", ac.validate_phrase(phrase), None)
 
     for phrase in lib.LIBRARY_PHRASES:
