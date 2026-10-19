@@ -184,6 +184,23 @@ async def verdicts():
 
 asyncio.run(verdicts())
 
+
+# Рисунки на паузе: Мара отвечает «на перерыве» и не идёт к художникам
+async def paused():
+    said = []
+
+    async def reply(text):
+        said.append(text)
+
+    m = types.SimpleNamespace(chat=types.SimpleNamespace(id=-1), from_user=types.SimpleNamespace(id=1), reply=reply)
+    d.PAUSED = True
+    await d.make_picture(m, "кот в шляпе")
+    if said != [d.PAUSED_TEXT]:
+        errors.append(f"пауза рисунков: {said}")
+
+
+asyncio.run(paused())
+
 if errors:
     print("❌ " + "\n❌ ".join(errors))
     sys.exit(1)
