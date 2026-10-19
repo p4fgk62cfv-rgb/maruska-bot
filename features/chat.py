@@ -19,7 +19,7 @@ import context_cache
 
 from ai.router import ask_ai
 
-from botcontext import display_name_of, is_addressed
+from botcontext import display_name_of, is_addressed, is_wordless_reply_to_bot
 
 from database.repository import (
     get_recent_messages,
@@ -156,6 +156,10 @@ def should_answer(message: Message) -> bool:
         return _skip(message, "лимит ответов в сутки или пауза между ответами человеку")
 
     addressed = is_addressed(message)
+
+    # Ответили Маре одними смайлами — это не вопрос, молчим
+    if is_wordless_reply_to_bot(message):
+        return _skip(message, "ответ смайлами без слов")
 
     if addressed:
         if mode != "quiet":

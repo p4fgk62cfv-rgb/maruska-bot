@@ -4,7 +4,8 @@
 Мара сама ставит реакцию: 🤣 — на ржач, ❤ — на милое, 🍾 — когда
 кто-то кого-то угощает водкой, 🥰 — на цветы и котиков. Не на каждое
 сообщение: по шансу из настроек и не чаще раза в несколько секунд,
-чтобы не выглядело как спам.
+чтобы не выглядело как спам. На ответ самой Маре стикером, гифкой или
+смайлом без слов реакцию не ставит.
 
 Стоит внешней мидлварью: действия, игры и команды перехватывают
 сообщение раньше общего обработчика, а реакция нужна и на них.
@@ -20,6 +21,7 @@ from typing import Any, Awaitable, Callable
 from aiogram import BaseMiddleware
 from aiogram.types import Message, ReactionTypeEmoji, TelegramObject
 
+from botcontext import is_wordless_reply_to_bot
 from settings.store import get_number, is_enabled
 
 
@@ -153,6 +155,10 @@ def has_target(message: Message) -> bool:
 
 def decide(message: Message) -> tuple[str, int] | None:
     """(реакция, шанс в процентах) или None, если реагировать не на что."""
+    # Ответ Маре стикером, гифкой или смайлом — не отвечаем реакцией на реакцию
+    if is_wordless_reply_to_bot(message):
+        return None
+
     chance = get_number(message.chat.id, "reaction_chance")
     text = message.text or message.caption or ""
 

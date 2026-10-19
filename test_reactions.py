@@ -94,6 +94,21 @@ async def main():
         check(await mw(handler, m, {}) == "ok", "мидлварь вернула результат")
         await asyncio.sleep(0.01)
         check(bool(m.reactions) == want, f"реакция на {m.text!r} ({chat}): {m.reactions}")
+    # Ответ самой Маре гифкой, стикером или смайлом — без реакции
+    import botcontext
+    botcontext.BOT_ID = 777
+    mara = Msg("Я Мара")
+    mara.from_user = types.SimpleNamespace(id=777, is_bot=True)
+    gif = Msg(None, reply=mara)
+    gif.animation = object()
+    for m, chat in ((gif, -105), (Msg("😂😂", reply=mara), -106), (Msg("ахахах 😂", reply=mara), -107)):
+        m.chat.id = chat
+        await mw(handler, m, {})
+        await asyncio.sleep(0.01)
+    check(not gif.reactions, "реакция на гифку в ответ Маре")
+    check(r.decide(Msg("😂😂", reply=mara)) is None, "реакция на смайл в ответ Маре")
+    check(r.decide(Msg("ахахах 😂", reply=mara)) is not None, "ответ Маре словами — реакция возможна")
+
     # Пауза между реакциями в одном чате
     a, b = Msg("ахах"), Msg("хахаха")
     a.chat.id = b.chat.id = -200

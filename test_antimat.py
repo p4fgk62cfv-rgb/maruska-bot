@@ -82,7 +82,7 @@ async def scenario():
     bot = Bot()
     said, deleted = [], []
 
-    def message(text):
+    def message(text, via_bot=None):
         async def answer(t):
             said.append(t)
 
@@ -90,7 +90,7 @@ async def scenario():
             deleted.append(text)
 
         return types.SimpleNamespace(
-            text=text, caption=None, bot=bot, message_id=len(said) + 1,
+            text=text, caption=None, bot=bot, message_id=len(said) + 1, via_bot=via_bot,
             chat=types.SimpleNamespace(id=CHAT, type="supergroup"),
             from_user=types.SimpleNamespace(id=USER, is_bot=False, first_name="Вася", username=None),
             answer=answer, delete=delete_,
@@ -119,6 +119,9 @@ async def scenario():
     expect("сообщения с матом удалены", len(deleted), 4)
     await swear("обычный текст")
     expect("обычный текст не трогает", len(said), 4)
+    # Предсказание через инлайн-бота: мат написал бот, человека не трогаем
+    inline = message("Предсказание для @olesya: твой день пойдёт по пизде", via_bot=types.SimpleNamespace(id=99, is_bot=True))
+    expect("инлайн-бот не считается", antimat.is_swearing(inline), False)
 
     # Админ указал 30 минут — на третьем предупреждении мут, счёт заново
     said.clear()

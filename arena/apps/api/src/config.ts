@@ -50,6 +50,11 @@ const schema = z.object({
   /** Saturday tournament at 18:00 Moscow time: entry fee plus a prize pool guaranteed by the arena. */
   WEEKEND_TOURNAMENT_FEE: z.coerce.number().int().nonnegative().default(1_000),
   WEEKEND_TOURNAMENT_PRIZE: z.coerce.number().int().nonnegative().default(50_000),
+  /**
+   * A tournament with prizes guaranteed by the arena starts only with this many players,
+   * otherwise it is cancelled with refunds: two accounts must not split the guarantee in one game.
+   */
+  GUARANTEED_TOURNAMENT_MIN_PLAYERS: z.coerce.number().int().min(2).max(64).default(4),
   /** Threads where the strong bots think (0: inline, small searches — tests). */
   BRAIN_THREADS: z.coerce.number().int().min(0).max(8).default(3),
   /** Self-play training of the bots in the background: «on» or «off». */
