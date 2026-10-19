@@ -99,6 +99,16 @@ def main() -> int:
         found_phrases = lib.special_phrases(tag)
         expect(f"подписи для #{tag}", bool(found_phrases) and found_phrases is next(
             v for k, v in lib.SPECIAL_PHRASES.items() if base in k), True)
+    # Баня — встроенное действие: картинки коллекции идут с его подписями
+    from actions import phrases as builtin
+    from actions.catalog import find_action as find_builtin
+
+    banya = builtin.templates_for(find_builtin("баня"))
+    expect("у бани не меньше 35 подписей без повторов", len(set(banya)) == len(banya) >= 35, True)
+    for phrase in banya:
+        expect(f"подпись бани проходит проверку: {phrase[:30]}", ac.validate_phrase(phrase), None)
+    expect("коллекция «баня» привязана к действию бани", lib.guess_target("баня"), "banya")
+
     for bases, phrases in lib.SPECIAL_PHRASES.items():
         expect(f"подписи {bases[0]} без повторов и не меньше 25", len(set(phrases)) == len(phrases) >= 25, True)
     for phrase in [p for v in lib.SPECIAL_PHRASES.values() for p in v]:
