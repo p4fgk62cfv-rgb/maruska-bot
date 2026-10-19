@@ -4,6 +4,9 @@
 Срабатывает, когда к ней обращаются (по имени, @, ответом на её
 сообщение или в личке) со словом «нарисуй» в начале, и по командам
 /нарисуй и /draw. Лимит картинок в сутки на группу — в настройках.
+
+Сейчас рисунки на паузе во всех группах (PAUSED): Мара отвечает, что
+рисует позже. Вернуть — PAUSED = False и строчки в /help и «что ты умеешь».
 """
 
 import asyncio
@@ -27,6 +30,10 @@ router = Router(name="draw")
 
 VERBS = r"(?:нарисуй(?:-ка)?|нарисуешь|нарисовать|порисуй|рисуй|изобрази|сгенерируй|сгенери|сделай\s+(?:картинку|рисунок|арт)|картинку)"
 DRAW_RE = re.compile(r"^[\s,.!:—-]*" + VERBS + r"\b[\s,:—-]*(.*)$", re.IGNORECASE | re.DOTALL)
+
+# Рисунки временно убраны по просьбе владельца — во всех группах сразу
+PAUSED = True
+PAUSED_TEXT = "🎨 Рисунки сейчас на перерыве — скоро вернутся."
 
 USER_PAUSE = 30          # секунд между рисунками одного человека
 _daily: dict[int, tuple[str, int]] = {}
@@ -90,6 +97,9 @@ async def make_picture(message: Message, prompt: str) -> None:
     chat_id = message.chat.id
     user_id = message.from_user.id
 
+    if PAUSED:
+        await message.reply(PAUSED_TEXT)
+        return
     if not is_enabled(chat_id, "ai_draw"):
         await message.reply("Рисунки в этой группе выключены 🎨")
         return

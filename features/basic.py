@@ -3,8 +3,10 @@
 И ответ на «Мара, что ты умеешь» — рассказ о возможностях для обычного человека.
 """
 
+import asyncio
 import logging
 import re
+from html import escape
 
 from aiogram import Router
 from aiogram.filters import Command, CommandStart
@@ -54,7 +56,6 @@ HELP_TEXT = (
     "🎮 <b>Игры</b>\n"
     "«крокодил» — рисуй и отгадывай\n"
     "/dice 2d6 — кубики, /coin — монетка\n"
-    "Мара, нарисуй кота в шляпе — картинка от Мары (или /нарисуй …)\n"
     "♟ <b>Игры в чате</b> — /игры: крестики-нолики, шашки, морской бой, камень-ножницы-бумага, орёл или решка\n"
     "/random чай, кофе — выбрать за тебя\n"
     "/8ball вопрос — шар предсказаний\n"
@@ -84,20 +85,10 @@ HELP_TEXT = (
     "💞 «гармония» ответом на сообщение или «гармония @ник» — совместимость в процентах\n"
     "🎂 «мой др 15.03» или /др — день рождения; «дни рождения» — ближайшие в группе\n\n"
 
-    "🛡 <b>Автомодерация</b> — включается в /settings → Модерация:\n"
-    "антифлуд, ссылки, стоп-слова, предупреждения\n\n"
+    "🃏 <b>Арена</b> — /arena или /game: Дурак онлайн, турниры и призы\n\n"
 
-    "🛡 <b>Модерация</b> (для админов, реплаем)\n"
-    "/warn причина — предупредить\n"
-    "/mute 30 — замутить, /unmute — размутить\n"
-    "/tban 1д — бан на время\n"
-    "/ban, /unban, /kick — бан, разбан, выкинуть\n"
-    "/delete — удалить сообщение (и Мары тоже)\n"
-    "/lock, /unlock — закрыть и открыть чат\n\n"
-
-    "⚙️ <b>Настройки</b>\n"
-    "/settings — что включить (для админов)\n"
-    "/features — что сейчас включено\n"
+    "⚙️ <b>Ещё</b>\n"
+    "/features — что включено в группе\n"
     "/myid — узнать свой ID"
 )
 
@@ -115,7 +106,6 @@ ABILITIES_TEXT = (
 
     "🔮 <b>Развлечения</b>\n"
     "• Мара, предскажи — предсказание\n"
-    "• Мара, нарисуй кота в шляпе — картинка\n"
     "• Мара, покажи меня — твой портрет в виде котика\n"
     "• Мара, мяу — просто котик\n"
     "• Мара, погода и город — прогноз в любом городе (Мара, погода Казань)\n"
@@ -230,6 +220,77 @@ async def start_handler(message: Message):
 @router.message(Command("help"))
 async def help_handler(message: Message):
     await message.answer(HELP_TEXT)
+
+
+ADMIN_HELP_TEXT = (
+    "🛡 <b>Команды для админов</b>\n\n"
+
+    "<b>Модерация</b> — ответом на сообщение нарушителя:\n"
+    "/warn причина — предупреждение\n"
+    "/mute 30 — мут на 30 минут, /unmute — снять\n"
+    "/tban 1д — бан на время (ч, д)\n"
+    "/ban — бан навсегда, /unban — разбан\n"
+    "/kick — выкинуть (вернуться можно)\n"
+    "/delete — удалить сообщение (и Мары тоже)\n\n"
+
+    "<b>Чат</b>\n"
+    "/lock — закрыть чат (пишут только админы), /unlock — открыть\n"
+    "/welcomevideo — ответом на видео: приветствие новичков с видео\n\n"
+
+    "<b>Настройки</b>\n"
+    "/settings — админка: что включить в группе\n"
+    "Автомодерация (антифлуд, ссылки, стоп-слова, антимат) — /settings → Модерация\n\n"
+
+    "Команды для всех — /help"
+)
+
+# Ответ в группе про личку — убираем через минуту, чтобы не висел
+NOTICE_TTL = 60
+
+
+async def _delete_later(message: Message, delay: int) -> None:
+    await asyncio.sleep(delay)
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
+@router.message(Command("helpadmin", "adminhelp"))
+async def admin_help_handler(message: Message):
+    """Команды модерации видят только админы: в группе Мара шлёт их в личку."""
+    from settings.handler import GROUP_CHATS, is_admin, is_owner
+
+    user = message.from_user
+    if user is None or user.is_bot:
+        return
+
+    if message.chat.type not in GROUP_CHATS:
+        # В личке — только главным админам: админ группы зовёт /helpadmin в своей группе
+        if is_owner(user.id):
+            await message.answer(ADMIN_HELP_TEXT)
+        else:
+            await message.answer("🛡 Напиши /helpadmin в группе, где ты админ, — пришлю список сюда.")
+        return
+
+    # Саму команду из чата убираем: остальным незачем видеть, что её звали
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    if not await is_admin(message, message.bot):
+        return
+
+    try:
+        await message.bot.send_message(user.id, ADMIN_HELP_TEXT)
+        text = f"📬 {escape(display_name_of(user))}, отправила команды для админов тебе в личку."
+    except Exception:
+        text = (f"📬 {escape(display_name_of(user))}, не могу написать тебе в личку: "
+                "открой меня, нажми «Старт» и повтори /helpadmin.")
+
+    notice = await message.answer(text)
+    asyncio.create_task(_delete_later(notice, NOTICE_TTL))
 
 
 @router.message(Command("ping"))
