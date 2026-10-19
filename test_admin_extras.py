@@ -34,8 +34,8 @@ def main() -> int:
     expect("пустой список", ns["parse_commands"](""), set())
 
     checks += 1
-    if '("settings", "help", "start")' not in mw:
-        failures.append("  [команды] /settings, /help и /start не должны отключаться — иначе админка недоступна")
+    if '("settings", "help", "гайд", "start")' not in mw:
+        failures.append("  [команды] /settings, /гайд (/help) и /start не должны отключаться — иначе админка недоступна")
 
     # --- ошибки по источникам ---
     v2 = (ROOT / "webapp" / "admin_v2.py").read_text(encoding="utf-8")
