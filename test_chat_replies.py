@@ -49,6 +49,22 @@ for text, reply, want in cases:
     if got != want:
         errors.append(f"{text!r} в ответ {'Маре' if reply is mara else 'другому'}: {got}, ждали {want}")
 
+# Сдержанный режим: по имени — всегда, ответом на её сообщение — не чаще раза в 2 минуты
+chat.get_value = lambda chat_id, key: "quiet"
+chat._last_reply[-100] = chat.time.monotonic()
+for text, reply, want in [
+    ("Мара кто я?", None, True),
+    ("Мара, кто Вася?", None, True),
+    ("Маруся, привет", mara, True),
+    ("а ты кто такая", mara, False),
+]:
+    got = chat.should_answer(msg(text, reply))
+    if got != want:
+        errors.append(f"сдержанный режим, {text!r}: {got}, ждали {want}")
+chat._last_reply.clear()
+if not chat.should_answer(msg("а ты кто такая", mara)):
+    errors.append("сдержанный режим: после паузы ответ на её сообщение")
+
 if errors:
     print("❌ " + "\n❌ ".join(errors))
     sys.exit(1)
