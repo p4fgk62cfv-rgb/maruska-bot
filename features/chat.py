@@ -180,7 +180,7 @@ def should_answer(message: Message) -> bool:
             return True
 
         # Тихий режим: на ответы её сообщениям — не чаще раза в пару минут
-        last = _last_reply.get(message.chat.id, 0)
+        last = _last_reply.get(message.chat.id, float("-inf"))
 
         if time.monotonic() - last < QUIET_COOLDOWN:
             return _skip(message, "тихий режим: недавно уже отвечала")

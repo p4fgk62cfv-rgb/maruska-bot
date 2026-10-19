@@ -125,7 +125,7 @@ def is_open_request(message: Message) -> bool:
 @router.message(is_open_request)
 async def arena_promo_command(message: Message):
     now = time.monotonic()
-    if now - _last_command.get(message.chat.id, 0) < COMMAND_COOLDOWN:
+    if now - _last_command.get(message.chat.id, float("-inf")) < COMMAND_COOLDOWN:
         return
     _last_command[message.chat.id] = now
     if not await send_promo(message.bot, message.chat.id, group=message.chat.type != "private"):
