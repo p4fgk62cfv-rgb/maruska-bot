@@ -35,11 +35,18 @@ check(len(usage.today()) == 10, "день в формате ГГГГ-ММ-ДД")
 async def database():
     import random
 
-    from database.database import init_db
+    from sqlalchemy import delete
+
+    from database.database import init_db, session_scope
+    from database.models import AiUsage
     from database.repository import ai_usage, bump_ai_usage
 
     await init_db()
     day = f"2099-01-{random.randint(10, 28)}"
+    # День выбран наугад и мог попасться в прошлом прогоне — начинаем с чистого
+    async with session_scope() as session:
+        await session.execute(delete(AiUsage).where(AiUsage.day == day))
+        await session.commit()
     for outcome, tokens in [("ok", 1000), ("ok", 500), ("limit", 0), ("error", 0)]:
         await bump_ai_usage(day, "Groq", "gpt-oss-120b", outcome, tokens)
     await asyncio.gather(*[bump_ai_usage(day, "Gemini", "flash", "ok", 10) for _ in range(20)])

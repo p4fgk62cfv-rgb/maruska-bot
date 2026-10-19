@@ -6,18 +6,30 @@
 времени группы: от часа «первый раз в» каждые N часов, ночью (с 0 до 9)
 не пишет. Каждый слот отправляется один раз: отметка в базе (chat_once),
 поэтому перезапуск бота посреди часа не даёт повтора.
+
+То же сообщение по команде: /arena, /арена или «арена» отдельным сообщением.
 """
 
 import asyncio
 import logging
 import random
+import time
 
-from aiogram.types import InlineKeyboardMarkup
+from aiogram import Router
+from aiogram.filters import Command
+from aiogram.types import InlineKeyboardMarkup, Message
 
 from settings.store import get_number, is_enabled, local_now
 
 
 logger = logging.getLogger("maruska.arena_promo")
+
+router = Router(name="arena_promo")
+
+OPEN_WORDS = {"арена", "мара арена", "мара, арена", "🃏 арена"}
+# По команде — не чаще раза в минуту в группе, чтобы не заспамили
+COMMAND_COOLDOWN = 60
+_last_command: dict[int, float] = {}
 
 CHECK_INTERVAL = 300
 NIGHT = range(0, 9)
@@ -56,11 +68,11 @@ def slot_now(hour: int, start: int, every: int) -> bool:
     return (hour - start) % every == 0
 
 
-async def send_promo(bot, chat_id: int) -> bool:
+async def send_promo(bot, chat_id: int, group: bool = True) -> bool:
     from games.arena import play_button
 
     me = await bot.me()
-    button = play_button(me.username or "", group=True)
+    button = play_button(me.username or "", group=group)
     if button is None:
         return False
     button = button.model_copy(update={"text": "🎮 Войти в игру"})
@@ -70,6 +82,22 @@ async def send_promo(bot, chat_id: int) -> bool:
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[button]]),
     )
     return True
+
+
+def is_open_request(message: Message) -> bool:
+    return message.reply_to_message is None and (message.text or "").strip().lower() in OPEN_WORDS
+
+
+@router.message(Command("arena", "арена", ignore_case=True))
+@router.message(is_open_request)
+async def arena_promo_command(message: Message):
+    now = time.monotonic()
+    if now - _last_command.get(message.chat.id, 0) < COMMAND_COOLDOWN:
+        return
+    _last_command[message.chat.id] = now
+    if not await send_promo(message.bot, message.chat.id, group=message.chat.type != "private"):
+        _last_command.pop(message.chat.id, None)
+        await message.reply("🃏 Арена скоро откроется — игровой сервер ещё не подключён.")
 
 
 async def check_chat(bot, chat_id: int) -> bool:

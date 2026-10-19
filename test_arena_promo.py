@@ -75,6 +75,41 @@ async def database():
     check(not await ap.check_chat(bot, chat), "без мини-приложения не шлёт пустое")
 
 
+# Команда /arena и «арена»: в группе — ссылка, в личке — web_app; не чаще раза в минуту
+async def command():
+    os.environ["ARENA_APP_NAME"] = "play"
+    os.environ["ARENA_URL"] = "https://arena.example"
+    sent, replies = [], []
+
+    async def send_message(chat_id, text, reply_markup=None):
+        sent.append(reply_markup.inline_keyboard[0][0])
+
+    async def me():
+        return SimpleNamespace(username="BotMaruska_bot")
+
+    bot = SimpleNamespace(send_message=send_message, me=me)
+
+    async def reply(text):
+        replies.append(text)
+
+    def msg(text, chat_id=-100123, kind="supergroup"):
+        return SimpleNamespace(text=text, reply_to_message=None, bot=bot, reply=reply,
+                               chat=SimpleNamespace(id=chat_id, type=kind))
+
+    check(ap.is_open_request(msg("Арена")) and ap.is_open_request(msg("мара, арена")), "«арена» открывает")
+    check(not ap.is_open_request(msg("пошли на арену вечером")), "в середине фразы — нет")
+    await ap.arena_promo_command(msg("/arena"))
+    await ap.arena_promo_command(msg("/arena"))
+    check(len(sent) == 1 and sent[0].url == "https://t.me/BotMaruska_bot/play", f"группа: одна ссылка за минуту: {sent}")
+    await ap.arena_promo_command(msg("/arena", chat_id=5, kind="private"))
+    check(len(sent) == 2 and sent[1].web_app is not None, "в личке — кнопка web_app")
+    os.environ["ARENA_APP_NAME"] = ""
+    await ap.arena_promo_command(msg("/arena", chat_id=-100999))
+    check(replies and "скоро откроется" in replies[0], "без приложения — объяснение")
+
+
+asyncio.run(command())
+
 if DB_URL:
     asyncio.run(database())
 else:
