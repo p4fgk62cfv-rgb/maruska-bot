@@ -277,7 +277,9 @@
               "settings", "keys:Итоги недели и топы:digest,digest_weekday,digest_hour,top_chatters,top_chatters_size,timezone"),
             R("heart", "pink", "Пара дня", has ? on(v("pair_of_day")) : "Кто сегодня пара", "settings", "keys:Пара дня и гармония:pair_of_day,pair_active_days,harmony"),
             R("gift", "gold", "Дни рождения", has ? on(v("birthdays"), "Подарок " + l("birthday_gift"), "Выключены") : "Напоминания и подарки",
-              "settings", "keys:Дни рождения:birthdays,birthday_remind_days,birthday_hour,birthday_gift,birthday_ask_hours")
+              "settings", "keys:Дни рождения:birthdays,birthday_remind_days,birthday_hour,birthday_gift,birthday_ask_hours"),
+            R("game", "green", "Арена в группе", has ? on(v("arena_promo"), "Каждые " + l("arena_promo_hours") + " с " + v("arena_promo_hour") + ":00", "Выключено") : "Рассказ про Дурак онлайн с кнопкой",
+              "settings", "keys:Арена в группе:arena_promo,arena_promo_hours,arena_promo_hour")
           ])
 
         + M.hubSection("Контроль", [
