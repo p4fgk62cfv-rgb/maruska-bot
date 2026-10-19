@@ -15,6 +15,7 @@
 цифры («3»→з, «0»→о), растянутые буквы («хууууй»), буквы через точку,
 пробел или звёздочку («х.у.й», «х у й»). Админов — по настройке «Наказывать
 и админов» (мут админу Telegram не позволяет: им только предупреждения).
+Сообщения через инлайн-бота (подпись «via @бот») не трогаем: текст выбрал бот.
 """
 
 import logging
@@ -119,6 +120,9 @@ def is_swearing(message: Message) -> bool:
     if message.chat.type not in ("group", "supergroup"):
         return False
     if message.from_user is None or message.from_user.is_bot:
+        return False
+    # Текст через инлайн-бота («@бот предсказание») пишет бот, а не человек
+    if message.via_bot is not None:
         return False
     if not is_enabled(message.chat.id, "antimat"):
         return False

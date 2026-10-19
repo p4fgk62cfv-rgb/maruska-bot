@@ -73,6 +73,19 @@ def is_addressed(message: Message) -> bool:
     return False
 
 
+_WORD_CHAR = re.compile(r"[^\W_]")
+
+
+def is_wordless_reply_to_bot(message) -> bool:
+    """Ответ Маре стикером, гифкой или одними смайлами — без единого слова.
+    На такое Мара не отвечает и реакцию не ставит."""
+    reply = message.reply_to_message
+    if not (reply and reply.from_user and reply.from_user.id == BOT_ID):
+        return False
+    text = getattr(message, "text", None) or getattr(message, "caption", None) or ""
+    return _WORD_CHAR.search(text) is None
+
+
 def get_rank_info(karma: int) -> str:
     if karma >= 500:
         return "Легенда"
