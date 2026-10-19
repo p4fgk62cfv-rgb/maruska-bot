@@ -768,7 +768,7 @@ NUMBERS: tuple[Number, ...] = (
         title="Дни рождения: напоминать заранее",
         emoji="⏰",
         description="За сколько дней предупредить группу: 0 — только поздравление в сам день",
-        default=2, minimum=0, maximum=3, step=1,
+        default=2, minimum=0, maximum=5, step=1,
         unit="дн",
         group="Жизнь чата",
     ),
