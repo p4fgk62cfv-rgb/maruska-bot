@@ -44,7 +44,7 @@ CONTEXT_MESSAGES = 8
 # Болтливость
 # ---------------------------------------------------------
 #
-# quiet  — отвечает по имени, но не чаще раза в пару минут
+# quiet  — по имени отвечает всегда, на ответы её сообщениям — не чаще раза в пару минут
 # normal — отвечает всегда, когда обращаются
 # active — плюс изредка вмешивается сама
 #
@@ -143,6 +143,16 @@ def _skip(message: Message, reason: str) -> bool:
     return False
 
 
+def called_by_name(message: Message) -> bool:
+    """«Мара, …» или @ник бота в тексте — к ней обратились напрямую, а не просто ответили."""
+    from botcontext import BOT_USERNAME, TRIGGER_RE
+
+    text = message.text or ""
+    if TRIGGER_RE.search(text):
+        return True
+    return bool(BOT_USERNAME) and f"@{BOT_USERNAME.lower()}" in text.lower()
+
+
 def should_answer(message: Message) -> bool:
     if not is_enabled(message.chat.id, "ai"):
         return _skip(message, "ИИ-ответы выключены в группе")
@@ -165,7 +175,11 @@ def should_answer(message: Message) -> bool:
         if mode != "quiet":
             return True
 
-        # Тихий режим: не частим
+        # Позвали по имени или @ником — это прямой вопрос, отвечаем всегда
+        if called_by_name(message):
+            return True
+
+        # Тихий режим: на ответы её сообщениям — не чаще раза в пару минут
         last = _last_reply.get(message.chat.id, 0)
 
         if time.monotonic() - last < QUIET_COOLDOWN:
