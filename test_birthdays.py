@@ -42,6 +42,10 @@ check(bd.days_until(29, 2, date(2027, 2, 27)) == 1, "29 февраля в нев
 
 check(bd.due_kinds(0, 2) == ["d0"] and bd.due_kinds(2, 2) == ["d2"] and bd.due_kinds(1, 2) == ["d1"], "что пора отправить")
 check(bd.due_kinds(2, 1) == [] and bd.due_kinds(1, 0) == [] and bd.due_kinds(3, 3) == ["d3"], "напоминать заранее — по настройке")
+check(bd.due_kinds(5, 5) == ["d5"] and bd.due_kinds(4, 5) == ["d4"] and bd.due_kinds(6, 5) == [] and bd.due_kinds(5, 9) == ["d5"],
+      "потолок напоминаний — 5 дней")
+for k in ("d1", "d2", "d3", "d4", "d5"):
+    check("Сегодня" not in bd.reminder_text(k, "Катя", 0), f"текст напоминания {k}")
 
 listing = bd.format_list([{"name": "Катя", "day": 21, "month": 10}, {"name": "<b>", "day": 19, "month": 10}], today)
 check("Катя</b> — послезавтра" in listing and "&lt;b&gt;" in listing and listing.index("&lt;b&gt;") < listing.index("Катя"),

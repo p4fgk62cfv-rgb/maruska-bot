@@ -155,17 +155,24 @@ def reminder_text(kind: str, mention: str, gift: int) -> str:
         return f"⏰ Завтра у {mention} день рождения! Готовим поздравления 🥳"
     if kind == "d3":
         return f"📅 Через 3 дня день рождения у {mention}. Мара напоминает заранее 😉"
+    if kind == "d4":
+        return f"🗓 Через 4 дня день рождения у {mention}. Самое время подумать о сюрпризе 🤫"
+    if kind == "d5":
+        return f"🔔 Через 5 дней день рождения у {mention}! Записываем в календарь 📌"
     text = f"🎂 Сегодня день рождения у {mention}! 🎉\nПоздравляем всем чатом! "
     if gift:
         text += f"Мара дарит {gift} 💎 и желает: "
     return text + random.choice(CONGRATS)
 
 
+MAX_REMIND_DAYS = 5
+
+
 def due_kinds(days_left: int, remind_days: int) -> list[str]:
     """Что пора отправить: напоминание за N дней (если N ≤ настройки) или поздравление."""
     if days_left == 0:
         return ["d0"]
-    if 1 <= days_left <= min(remind_days, 3):
+    if 1 <= days_left <= min(remind_days, MAX_REMIND_DAYS):
         return [f"d{days_left}"]
     return []
 
