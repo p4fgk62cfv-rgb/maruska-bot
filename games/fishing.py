@@ -48,17 +48,6 @@ def format_top(people: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def fishing_button(bot_username: str, chat_id: int, group: bool, base: str,
-                   text: str = "🎣 Открыть рыбалку") -> InlineKeyboardButton:
-    """В группе Telegram не даёт кнопки web_app — только ссылку на мини-приложение."""
-    if group:
-        return InlineKeyboardButton(
-            text=text,
-            url=f"https://t.me/{bot_username}/fishing?startapp={start_param(chat_id)}",
-        )
-    return InlineKeyboardButton(text=text, web_app=WebAppInfo(url=f"{base}/fishing"))
-
-
 async def open_fishing(message: Message):
     from fishing import service as fs
     from webapp.server import public_url
@@ -88,6 +77,17 @@ async def open_fishing(message: Message):
         "Алмазы и опыт — общие с Марой.",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[button]]),
     )
+
+
+def fishing_button(bot_username: str, chat_id: int, group: bool, base: str,
+                   text: str = "🎣 Открыть рыбалку") -> InlineKeyboardButton:
+    """В группе Telegram не даёт кнопки web_app — только ссылку на мини-приложение."""
+    if group:
+        return InlineKeyboardButton(
+            text=text,
+            url=f"https://t.me/{bot_username}/fishing?startapp={start_param(chat_id)}",
+        )
+    return InlineKeyboardButton(text=text, web_app=WebAppInfo(url=f"{base}/fishing"))
 
 
 @router.message(Command("fishing", "fish"))
