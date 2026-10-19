@@ -1,23 +1,26 @@
 """
-Арена в группе: Мара по расписанию рассказывает про игру «Арена»
-(Дурак онлайн) и даёт кнопку «Войти в игру».
+Игры в группе: Мара по расписанию рассказывает, во что можно играть, —
+Арена (Дурак онлайн), Рыбалка и игры прямо в чате — с кнопками
+«Арена» и «Рыбалка».
 
-Включается в настройках группы («Арена в группе»). Расписание — по
-времени группы: от часа «первый раз в» каждые N часов, ночью (с 0 до 9)
-не пишет. Каждый слот отправляется один раз: отметка в базе (chat_once),
-поэтому перезапуск бота посреди часа не даёт повтора.
+Включается в настройках группы («Игры в группе»). Расписание — по
+времени группы: от часа «первый раз в» каждые N часов (по умолчанию
+каждые 4), в случайную минуту часа; ночью (с 0 до 9) не пишет. Каждый
+слот отправляется один раз: отметка в базе (chat_once), поэтому
+перезапуск бота посреди часа не даёт повтора.
 
 То же сообщение по команде: /arena, /арена или «арена» отдельным сообщением.
 """
 
 import asyncio
+import hashlib
 import logging
 import random
 import time
 
 from aiogram import Router
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardMarkup, Message
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from settings.store import get_number, is_enabled, local_now
 
@@ -33,30 +36,35 @@ _last_command: dict[int, float] = {}
 
 CHECK_INTERVAL = 300
 NIGHT = range(0, 9)
+DEFAULT_EVERY = 4
+DEFAULT_START = 10
 
 TEXTS = (
-    "🃏 <b>Маруська Арена — Дурак онлайн</b>\n\n"
-    "Подкидной и переводной, от 2 до 6 игроков. Играй с людьми из чата или с ботами, "
-    "если никого нет.\n\n"
-    "🏆 Турниры каждый день с призами\n"
-    "🎯 Задания и бонус за каждый день входа\n"
-    "🎖 Сезоны с наградами лучшим\n\n"
-    "Колоду тасует сервер — карты соперников не видит никто. Заходи 👇",
+    "🎮 <b>Во что поиграть в чате</b>\n\n"
+    "🃏 <b>Арена — Дурак онлайн</b>\n"
+    "Подкидной и переводной, от 2 до 6 игроков. Соперники из чата или боты, "
+    "турниры каждый день с призами, задания и бонус за вход.\n\n"
+    "🎣 <b>Рыбалка</b>\n"
+    "Выбирай водоём, забрасывай, вываживай и собирай коллекцию. "
+    "Алмазы и опыт — общие с Марой, крупный улов я объявлю в чате.\n\n"
+    "🎨 А ещё прямо здесь: «крокодил», /игры — крестики-нолики, морской бой, "
+    "камень-ножницы-бумага, /dice — кубики.\n\n"
+    "Выбирай 👇",
 
-    "🃏 <b>Кто в дурака?</b>\n\n"
-    "В <b>Маруська Арене</b> всегда есть с кем сыграть: подкидной или переводной, "
-    "вдвоём или компанией до шести.\n\n"
-    "Каждый день — турниры с призовым фондом, задания и подарки за вход. "
-    "Собери рамки, рубашки карт и столы в магазине.\n\n"
-    "Одна кнопка — и ты за столом 👇",
+    "🎲 <b>Скучно? Поиграем!</b>\n\n"
+    "🃏 <b>Арена</b> — дурак онлайн прямо в Telegram: садись за стол с ребятами из чата "
+    "или против ботов. Сезоны, рейтинг, призы в турнирах.\n\n"
+    "🎣 <b>Рыбалка</b> — спокойная игра на удачу и сноровку: редкие рыбы, рекорды "
+    "и топ рыбаков группы (/fishtop).\n\n"
+    "В чате ещё есть «крокодил» и /игры.\n\n"
+    "Жми кнопку 👇",
 
-    "🃏 <b>Арена ждёт!</b>\n\n"
-    "Дурак онлайн прямо в Telegram — без скачивания.\n"
-    "• живые соперники и боты\n"
-    "• ежедневные и субботние турниры\n"
-    "• сезонный рейтинг и награды\n"
-    "• позови друга — бонус вам обоим\n\n"
-    "Жми и садись за стол 👇",
+    "🃏🎣 <b>Игры Мары</b>\n\n"
+    "• <b>Арена</b> — дурак: подкидной и переводной, ежедневные и субботние турниры, "
+    "позови друга — бонус вам обоим\n"
+    "• <b>Рыбалка</b> — водоёмы, снасти, коллекция рыб и рекорды группы\n"
+    "• <b>В чате</b> — «крокодил», /игры, /dice, /coin\n\n"
+    "Всё без скачивания — открывается в Telegram 👇",
 )
 
 
@@ -68,18 +76,43 @@ def slot_now(hour: int, start: int, every: int) -> bool:
     return (hour - start) % every == 0
 
 
-async def send_promo(bot, chat_id: int, group: bool = True) -> bool:
+def slot_minute(chat_id: int, day: str, hour: int) -> int:
+    """Случайная, но постоянная для слота минута (0–49): после перезапуска та же."""
+    digest = hashlib.sha256(f"{chat_id}:{day}:{hour}".encode()).digest()
+    return digest[0] % 50
+
+
+async def games_buttons(bot, chat_id: int, group: bool) -> list[InlineKeyboardButton]:
+    """Кнопки «Арена» и «Рыбалка» — те, что сейчас доступны в этом чате."""
+    from fishing import service as fs
     from games.arena import play_button
+    from games.fishing import fishing_button
+    from settings import store
+    from webapp.server import public_url
 
     me = await bot.me()
-    button = play_button(me.username or "", group=group)
-    if button is None:
+    username = me.username or ""
+    buttons = []
+
+    arena = play_button(username, group)
+    if arena is not None:
+        buttons.append(arena.model_copy(update={"text": "🃏 Арена — дурак онлайн"}))
+
+    base = public_url()
+    if base and fs.settings()["enabled"] and not (group and not store.is_enabled(chat_id, "fishing")):
+        buttons.append(fishing_button(username, chat_id, group, base, text="🎣 Рыбалка"))
+
+    return buttons
+
+
+async def send_promo(bot, chat_id: int, group: bool = True) -> bool:
+    buttons = await games_buttons(bot, chat_id, group)
+    if not buttons:
         return False
-    button = button.model_copy(update={"text": "🎮 Войти в игру"})
     await bot.send_message(
         chat_id,
         random.choice(TEXTS),
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[button]]),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[b] for b in buttons]),
     )
     return True
 
@@ -97,7 +130,7 @@ async def arena_promo_command(message: Message):
     _last_command[message.chat.id] = now
     if not await send_promo(message.bot, message.chat.id, group=message.chat.type != "private"):
         _last_command.pop(message.chat.id, None)
-        await message.reply("🃏 Арена скоро откроется — игровой сервер ещё не подключён.")
+        await message.reply("🎮 Игры скоро откроются — игровой сервер ещё не подключён.")
 
 
 async def check_chat(bot, chat_id: int) -> bool:
@@ -108,14 +141,18 @@ async def check_chat(bot, chat_id: int) -> bool:
         return False
 
     here = local_now(chat_id)
-    every = get_number(chat_id, "arena_promo_hours") or 12
+    every = get_number(chat_id, "arena_promo_hours") or DEFAULT_EVERY
     start = get_number(chat_id, "arena_promo_hour")
-    start = 10 if start is None else start
+    start = DEFAULT_START if start is None else start
+    day = f"{here:%Y-%m-%d}"
 
     if not slot_now(here.hour, start, every):
         return False
 
-    if not await mark_chat_once(chat_id, f"arena_promo:{here:%Y-%m-%d}:{here.hour}"):
+    if here.minute < slot_minute(chat_id, day, here.hour):
+        return False
+
+    if not await mark_chat_once(chat_id, f"arena_promo:{day}:{here.hour}"):
         return False
 
     try:
@@ -126,7 +163,7 @@ async def check_chat(bot, chat_id: int) -> bool:
 
 
 async def arena_promo_loop(bot):
-    """Раз в пять минут проверяет живые группы: не пора ли рассказать про Арену."""
+    """Раз в пять минут проверяет живые группы: не пора ли рассказать про игры."""
     from database.repository import get_active_chats, get_group_settings
     from settings.store import is_loaded, prime
 
