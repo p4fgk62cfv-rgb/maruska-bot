@@ -109,6 +109,12 @@ def main() -> int:
         expect(f"подпись бани проходит проверку: {phrase[:30]}", ac.validate_phrase(phrase), None)
     expect("коллекция «баня» привязана к действию бани", lib.guess_target("баня"), "banya")
 
+    flowers = builtin.templates_for(find_builtin("цветы"))
+    expect("у цветов не меньше 40 подписей без повторов", len(set(flowers)) == len(flowers) >= 40, True)
+    for phrase in flowers:
+        expect(f"подпись цветов проходит проверку: {phrase[:30]}", ac.validate_phrase(phrase), None)
+    expect("коллекция «цветы» привязана к действию цветов", lib.guess_target("цветы"), "flowers")
+
     for bases, phrases in lib.SPECIAL_PHRASES.items():
         expect(f"подписи {bases[0]} без повторов и не меньше 25", len(set(phrases)) == len(phrases) >= 25, True)
     for phrase in [p for v in lib.SPECIAL_PHRASES.values() for p in v]:

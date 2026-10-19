@@ -183,7 +183,7 @@ def decide(message: Message) -> tuple[str, int] | None:
 
 
 def _ready(chat_id: int, now: float) -> bool:
-    return now - _last.get(chat_id, 0.0) >= COOLDOWN
+    return now - _last.get(chat_id, float("-inf")) >= COOLDOWN
 
 
 async def _react(message: Message, emoji: str) -> None:
