@@ -72,7 +72,7 @@ TEXTS = {
                       "en": "👋 <b>{name}</b>, come in and make yourself at home."},
     "greet.hint": {
         "ru": "Я Мара, живу в этом чате.\n\n💬 Позови по имени — поболтаем\n"
-              "🎁 /bonus — забрать ежедневные алмазы\n❔ /help — что я ещё умею",
+              "🎁 /bonus — забрать ежедневные алмазы\n❔ /гайд — что я ещё умею",
         "en": "I'm Mara, I live in this chat.\n\n💬 Call me by name to chat\n"
               "🎁 /bonus — claim your daily diamonds\n❔ /help — what else I can do",
     },

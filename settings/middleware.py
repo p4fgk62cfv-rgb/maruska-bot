@@ -129,8 +129,8 @@ async def command_blocked(message: Message) -> bool:
     if name is None:
         return False
 
-    # /settings и /help не отключаются — иначе админка станет недоступна
-    if name in ("settings", "help", "start"):
+    # /settings и /гайд не отключаются — иначе админка станет недоступна
+    if name in ("settings", "help", "гайд", "start"):
         return False
 
     if name not in parse_commands(store.get_text(chat.id, "disabled_commands")):

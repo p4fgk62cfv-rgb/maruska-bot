@@ -625,12 +625,21 @@ async def table_command(message: Message):
 
 async def menu(message: Message) -> None:
     rows = [
+        [InlineKeyboardButton(text="🐊 Крокодил", callback_data="tm:croc")],
         [InlineKeyboardButton(text="❌⭕ Крестики-нолики", callback_data="tm:ttt"),
          InlineKeyboardButton(text="⚫ Шашки", callback_data="tm:checkers")],
         [InlineKeyboardButton(text="🚢 Морской бой", callback_data="tm:sea"),
          InlineKeyboardButton(text="✊ Камень-ножницы", callback_data="tm:rps")],
         [InlineKeyboardButton(text="🦅 Орёл или решка", callback_data="tm:coin")],
     ]
+    # Арена и Рыбалка — мини-приложения; кнопка только если игра сейчас доступна
+    try:
+        from features.arena_promo import games_buttons
+
+        group = message.chat.type in ("group", "supergroup")
+        rows += [[b] for b in await games_buttons(message.bot, message.chat.id, group)]
+    except Exception:
+        pass
     await message.answer(
         "🎲 <b>Игры Маруськи</b>\n\nВыбери игру — Маруська откроет стол прямо здесь.\n\n"
         "• Вызвать человека — ответь на его сообщение командой: /шашки, /морской, /кнб, /орел, /крестики\n"
@@ -646,7 +655,11 @@ async def menu_pick(callback: CallbackQuery):
     await callback.answer()
     if callback.message is None:
         return
-    if kind == "coin":
+    if kind == "croc":
+        from games.crocodile import start_round
+
+        await start_round(callback.message)
+    elif kind == "coin":
         await coin_start(callback.message, opener=callback.from_user)
     elif kind in TITLES:
         await create(callback.message, kind, opener=callback.from_user)
