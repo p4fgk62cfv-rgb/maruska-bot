@@ -143,7 +143,7 @@ async def scenario():
                 Marriage(chat_id=chat_b, user1=c, user2=d, since=now - timedelta(days=1)),
             ])
             await session.commit()
-        chat_c, chat_d = -base - 2, -base - 3
+        chat_d = -base - 3
         async with session_scope() as session:
             session.add_all([
                 # Та же пара зарегистрирована и в группе B — это не второй брак
