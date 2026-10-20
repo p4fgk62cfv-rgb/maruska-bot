@@ -1482,4 +1482,7 @@ class MiniSignup(Base):
     # [{"id": 123, "name": "Стас", "username": "stas"}, …] — в порядке записи
     players: Mapped[list] = mapped_column(JSON, default=list)
 
+    # Настройки турнира на момент открытия записи (места, правила, картинка)
+    settings: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

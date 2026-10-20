@@ -182,6 +182,30 @@ describe.skipIf(!url)('mini-tournaments (one knockout table)', () => {
     expect((await db.miniTournament.findFirstOrThrow({ where: { chatId: again.chatId } })).status).toBe('CANCELLED');
   }, 30_000);
 
+  it('rules come from the bot; the admin panel lists and cancels', async () => {
+    const people = await Promise.all(['Нина', 'Олег'].map(player));
+    const chatId = BigInt(chatBase - chatSeq++);
+    const res = await internal('POST', '/internal/mini-tournaments', {
+      chatId: chatId.toString(), prize: 300, organizer: { telegramId: nextTg++, name: 'Админ' },
+      players: people.map((p) => ({ telegramId: p.tg, name: p.name })),
+      rules: { variant: 'podkidnoy', throwIn: 'neighbors', speed: 'normal', readySeconds: 90 },
+    });
+    expect(res.statusCode).toBe(200);
+    await until(() => lastTable(chatId).roomId !== '');
+    expect(said(chatId).at(-1)).toContain('Заходите за стол — 90 с');
+    const room = await db.room.findUniqueOrThrow({ where: { id: lastTable(chatId).roomId } });
+    expect(room).toMatchObject({ variant: 'podkidnoy', throwIn: 'neighbors', speed: 'normal', ending: 'nodraw', maxPlayers: 2 });
+    expect(handle.ctx.realtime.rooms.get(room.id)?.readyDeadline).toBeGreaterThan(Date.now() + 80_000);
+
+    const list = (await internal('GET', '/internal/admin/mini-tournaments')).json();
+    const mine = list.find((m: { chatId: string }) => m.chatId === chatId.toString());
+    expect(mine).toMatchObject({ status: 'RUNNING', prize: 300, rules: { variant: 'podkidnoy', readySeconds: 90 } });
+    expect(mine.players.map((p: { name: string }) => p.name)).toEqual(['Нина', 'Олег']);
+    expect((await internal('POST', `/internal/admin/mini-tournaments/${mine.id}/cancel`)).statusCode).toBe(200);
+    expect(said(chatId).at(-1)).toContain('отменён организатором');
+    expect((await internal('POST', `/internal/admin/mini-tournaments/${mine.id}/cancel`)).statusCode).toBe(404);
+  });
+
   it('somebody who never opened the Arena gets an account and can sit down', async () => {
     const known = await player('Миша');
     const stranger = { tg: nextTg++, name: 'Новичок' };

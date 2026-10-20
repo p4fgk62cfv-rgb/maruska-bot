@@ -12,6 +12,10 @@
 в группе, а организатору пишет в личку, кому выдать приз.
 
 Запись хранится в базе (mini_signups): перезапуск бота её не теряет.
+
+Настройки (места, ожидание у стола, правила, текст объявления и картинка) —
+общие для всех групп, меняются в админке: Арена → Мини-турниры. Запись
+запоминает их на момент открытия, так что правка в админке её не ломает.
 """
 
 import asyncio
@@ -33,6 +37,35 @@ router = Router(name="mini_tournament")
 
 SEATS = 6
 MAX_PRIZE = 1_000_000_000
+SETTINGS_KEY = "mini_tournament_settings"
+# Подпись к фото в Telegram — до 1024 видимых символов: текст плюс список участников
+MAX_TEXT = 450
+MAX_NAME = 40
+
+DEFAULT_TEXT = (
+    "🏆 **Мини-турнир по дураку!**\n"
+    "{rules}\n\n"
+    "🎁 Призовой фонд: **{prize} кредитов в игре «Дурак Онлайн»** — всё забирает победитель.\n"
+    "🃏 Играем в Маруська Арене: один стол, после каждой партии дурак выбывает, пока не останется один. "
+    "Не зашёл за стол за {seconds} с — техническое поражение."
+)
+
+DEFAULTS = {
+    "seats": SEATS,
+    "ready_seconds": 60,
+    "variant": "perevodnoy",
+    "throw_in": "all",
+    "speed": "fast",
+    "text": DEFAULT_TEXT,
+    "photo": None,
+}
+LIMITS = {"seats": (2, 6), "ready_seconds": (15, 300)}
+CHOICES = {"variant": ("perevodnoy", "podkidnoy"), "throw_in": ("all", "neighbors"), "speed": ("fast", "normal")}
+RULE_NAMES = {
+    "perevodnoy": "Переводной", "podkidnoy": "Подкидной",
+    "all": "подкидывают все", "neighbors": "подкидывают соседи",
+    "fast": "быстрая игра", "normal": "обычная скорость",
+}
 GROUP_CHATS = ("group", "supergroup")
 
 _locks: dict[int, asyncio.Lock] = {}
@@ -64,22 +97,66 @@ def mention(player: dict) -> str:
     return f'<a href="tg://user?id={player["id"]}">{escape(player["name"])}</a>'
 
 
-def signup_text(prize: int, players: list[dict], closed: bool = False) -> str:
+# ---------------------------------------------------------
+# Настройки (админка: Арена → Мини-турниры)
+# ---------------------------------------------------------
+
+def clean_settings(raw: dict | None) -> dict:
+    result = dict(DEFAULTS)
+    for key, value in (raw or {}).items():
+        if key in LIMITS:
+            low, high = LIMITS[key]
+            try:
+                result[key] = max(low, min(high, int(value)))
+            except (TypeError, ValueError):
+                pass
+        elif key in CHOICES and value in CHOICES[key]:
+            result[key] = value
+        elif key == "text" and isinstance(value, str) and value.strip():
+            result["text"] = value.strip()[:MAX_TEXT]
+        elif key == "photo":
+            result["photo"] = value if isinstance(value, dict) and value.get("file_id") else None
+    return result
+
+
+async def load_settings() -> dict:
+    from database.repository import get_group_settings
+
+    return clean_settings((await get_group_settings(0)).get(SETTINGS_KEY))
+
+
+async def save_settings(data: dict) -> dict:
+    from database.repository import set_group_setting
+
+    cleaned = clean_settings({**(await load_settings()), **(data or {})})
+    await set_group_setting(chat_id=0, key=SETTINGS_KEY, value=cleaned)
+    return cleaned
+
+
+def rules_line(settings: dict) -> str:
+    return " · ".join(RULE_NAMES[settings[k]] for k in ("variant", "throw_in", "speed")) + " · без ничьей"
+
+
+def render_intro(settings: dict, prize: int) -> str:
+    """Текст из админки: HTML экранируется, **жирный** — жирным, {prize} {seats} {seconds} {rules} подставляются (по разу)."""
+    text = escape(settings["text"])
+    text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text, flags=re.DOTALL)
+    for name, value in (("prize", credits(prize)), ("seats", str(settings["seats"])),
+                        ("seconds", str(settings["ready_seconds"])), ("rules", rules_line(settings))):
+        # Каждая подстановка — один раз: иначе длинный текст разрастётся и не влезет в подпись к картинке
+        text = text.replace("{" + name + "}", value, 1)
+    return text
+
+
+def signup_text(prize: int, players: list[dict], closed: bool = False, settings: dict | None = None) -> str:
+    settings = settings or DEFAULTS
+    seats = settings["seats"]
     lines = [f"{i}. {mention(p)}" for i, p in enumerate(players, start=1)]
-    lines += [f"{i}. —" for i in range(len(players) + 1, SEATS + 1)]
-    head = (
-        "🏆 <b>Мини-турнир по дураку!</b>\n"
-        "Переводной · подкидывают все · быстрая игра · без ничьей\n\n"
-        f"🎁 Призовой фонд: <b>{credits(prize)} кредитов в игре «Дурак Онлайн»</b> — всё забирает победитель.\n"
-        "🃏 Играем в Маруська Арене: один стол, после каждой партии дурак выбывает, "
-        "пока не останется один. Не зашёл за стол за минуту — техническое поражение.\n\n"
-    )
-    status = "✅ <b>Стол набран — запись закрыта.</b> Сейчас пришлю ссылку на стол." if closed else (
-        f"Участники ({len(players)}/{SEATS}):"
-    )
+    lines += [f"{i}. —" for i in range(len(players) + 1, seats + 1)]
+    body = render_intro(settings, prize) + f"\n\nУчастники ({len(players)}/{seats}):\n" + "\n".join(lines)
     if closed:
-        return head + f"Участники ({len(players)}/{SEATS}):\n" + "\n".join(lines) + "\n\n" + status
-    return head + status + "\n" + "\n".join(lines)
+        body += "\n\n✅ <b>Стол набран — запись закрыта.</b> Сейчас пришлю ссылку на стол."
+    return body
 
 
 def signup_keyboard() -> InlineKeyboardMarkup:
@@ -169,10 +246,21 @@ async def open_signup(message: Message, prize: int | None) -> None:
             await message.reply("🏆 В группе уже идёт мини-турнир. Отменить: /стоп турнир")
             return
 
-        sent = await message.answer(signup_text(prize, []), reply_markup=signup_keyboard())
+        settings = await load_settings()
+        text = signup_text(prize, [], settings=settings)
+        sent = None
+        if settings["photo"]:
+            try:
+                sent = await message.answer_photo(settings["photo"]["file_id"], caption=text, reply_markup=signup_keyboard())
+            except Exception as error:
+                # Картинка пропала или подпись не влезла — объявление уйдёт текстом
+                logger.warning("MINI SIGNUP PHOTO: %s %s", type(error).__name__, error)
+                settings = {**settings, "photo": None}
+        if sent is None:
+            sent = await message.answer(text, reply_markup=signup_keyboard())
         await save_mini_signup(
             chat_id, message_id=sent.message_id, prize=prize,
-            organizer_id=organizer[0], organizer_name=organizer[1][:128], players=[],
+            organizer_id=organizer[0], organizer_name=organizer[1][:128], players=[], settings=settings,
         )
     logger.info("MINI TOURNAMENT: запись открыта в %s, приз %s", chat_id, prize)
 
@@ -188,10 +276,12 @@ async def stop_tournament(message: Message) -> None:
         signup = await get_mini_signup(chat_id)
         if signup is not None:
             await delete_mini_signup(chat_id)
+            cancelled = "🛑 <b>Мини-турнир отменён.</b> Запись закрыта."
             try:
-                await message.bot.edit_message_text(
-                    "🛑 <b>Мини-турнир отменён.</b> Запись закрыта.", chat_id=chat_id, message_id=signup.message_id,
-                )
+                if (signup.settings or {}).get("photo"):
+                    await message.bot.edit_message_caption(caption=cancelled, chat_id=chat_id, message_id=signup.message_id)
+                else:
+                    await message.bot.edit_message_text(cancelled, chat_id=chat_id, message_id=signup.message_id)
             except Exception:
                 pass
             await message.reply("🛑 Запись на турнир отменена.")
@@ -222,6 +312,8 @@ async def signup_button(callback: CallbackQuery):
             await callback.answer("Запись уже закрыта.", show_alert=True)
             return
         players = list(signup.players or [])
+        settings = clean_settings(signup.settings)
+        seats = settings["seats"]
         inside = any(p["id"] == user.id for p in players)
 
         if callback.data == "mt:leave":
@@ -231,40 +323,42 @@ async def signup_button(callback: CallbackQuery):
             players = [p for p in players if p["id"] != user.id]
             await save_mini_signup(chat_id, players=players)
             await callback.answer("Ты вышел из списка.")
-            await _refresh(callback, signup.prize, players)
+            await _refresh(callback, signup.prize, players, settings)
             return
 
         if inside:
             await callback.answer("Ты уже записан ✅")
             return
-        if len(players) >= SEATS:
+        if len(players) >= seats:
             await callback.answer("Мест нет — стол набран.", show_alert=True)
             return
-        players.append({"id": user.id, "name": display_name_of(user)[:64], "username": user.username})
+        players.append({"id": user.id, "name": display_name_of(user)[:MAX_NAME], "username": user.username})
         await save_mini_signup(chat_id, players=players)
-        await callback.answer(f"Ты в турнире! Место {len(players)} из {SEATS} 🎉")
+        await callback.answer(f"Ты в турнире! Место {len(players)} из {seats} 🎉")
 
-        if len(players) < SEATS:
-            await _refresh(callback, signup.prize, players)
+        if len(players) < seats:
+            await _refresh(callback, signup.prize, players, settings)
             return
 
         # Стол набран: кнопки убираем и передаём состав Арене
-        await _refresh(callback, signup.prize, players, closed=True)
-        await launch(callback.message, signup, players)
+        await _refresh(callback, signup.prize, players, settings, closed=True)
+        await launch(callback.message, signup, players, settings)
 
 
-async def _refresh(callback: CallbackQuery, prize: int, players: list[dict], closed: bool = False) -> None:
+async def _refresh(callback: CallbackQuery, prize: int, players: list[dict], settings: dict, closed: bool = False) -> None:
+    text = signup_text(prize, players, closed=closed, settings=settings)
+    markup = None if closed else signup_keyboard()
     try:
-        await callback.message.edit_text(
-            signup_text(prize, players, closed=closed),
-            reply_markup=None if closed else signup_keyboard(),
-        )
+        if settings.get("photo"):
+            await callback.message.edit_caption(caption=text, reply_markup=markup)
+        else:
+            await callback.message.edit_text(text, reply_markup=markup)
     except Exception as error:
         # «message is not modified» и прочее — список уже актуален
         logger.info("MINI SIGNUP EDIT: %s", error)
 
 
-async def launch(message: Message, signup, players: list[dict]) -> None:
+async def launch(message: Message, signup, players: list[dict], settings: dict) -> None:
     from database.repository import delete_mini_signup
 
     chat_id = message.chat.id
@@ -274,6 +368,10 @@ async def launch(message: Message, signup, players: list[dict]) -> None:
         "prize": int(signup.prize),
         "organizer": {"telegramId": str(signup.organizer_id), "name": signup.organizer_name},
         "players": [{"telegramId": str(p["id"]), "name": p["name"], "username": p.get("username")} for p in players],
+        "rules": {
+            "variant": settings["variant"], "throwIn": settings["throw_in"],
+            "speed": settings["speed"], "readySeconds": settings["ready_seconds"],
+        },
     }
     status, answer = await _arena("POST", "mini-tournaments", body=body)
     await delete_mini_signup(chat_id)

@@ -35,6 +35,23 @@ text = mt.signup_text(5000, [{"id": 1, "name": "<Стас>"}])
 check("5 000 кредитов в игре «Дурак Онлайн»" in text and "&lt;Стас&gt;" in text and "(1/6)" in text and "6. —" in text, f"текст записи: {text}")
 check("запись закрыта" in mt.signup_text(5000, [{"id": i, "name": str(i)} for i in range(6)], closed=True), "закрыто")
 
+# Настройки из админки: границы, выбор, текст с подстановками и **жирным**
+cleaned = mt.clean_settings({"seats": 9, "ready_seconds": 5, "variant": "podkidnoy", "speed": "чепуха", "text": "  ", "photo": {"x": 1}})
+check(cleaned["seats"] == 6 and cleaned["ready_seconds"] == 15 and cleaned["variant"] == "podkidnoy"
+      and cleaned["speed"] == "fast" and cleaned["text"] == mt.DEFAULT_TEXT and cleaned["photo"] is None, f"очистка: {cleaned}")
+custom = mt.clean_settings({"seats": 4, "ready_seconds": 90, "text": "**Турнир!** <script> Приз {prize}, мест {seats}, ждём {seconds} с. {rules}"})
+intro = mt.render_intro(custom, 12000)
+check(intro.startswith("<b>Турнир!</b> &lt;script&gt;") and "Приз 12 000, мест 4, ждём 90 с." in intro
+      and "Переводной · подкидывают все · быстрая игра · без ничьей" in intro, f"текст: {intro}")
+four = mt.signup_text(100, [{"id": 1, "name": "А"}], settings=custom)
+check("(1/4)" in four and "4. —" in four and "5. —" not in four, "мест — из настроек")
+import html as _html  # noqa: E402
+import re as _re  # noqa: E402
+longest = mt.signup_text(10**9, [{"id": 10**12, "name": "Я" * mt.MAX_NAME}] * 6, closed=True,
+                         settings=mt.clean_settings({"text": "x{rules}" * 400}))
+visible = _html.unescape(_re.sub(r"<[^>]+>", "", longest))
+check(len(visible) <= 1024, f"подпись к картинке влезает в 1024 видимых символа: {len(visible)}")
+
 
 class FakeBot:
     def __init__(self):
@@ -142,10 +159,43 @@ async def scenario():
     body = start[0][2]
     check(body["chatId"] == str(chat) and body["prize"] == 5000 and body["organizer"]["telegramId"] == "1", f"тело: {body}")
     check([p["name"] for p in body["players"]] == ["Боря", "Вика", "Гоша", "Даня", "Ева", "Женя"], "состав по порядку записи")
+    check(body["rules"] == {"variant": "perevodnoy", "throwIn": "all", "speed": "fast", "readySeconds": 60}, f"правила: {body['rules']}")
     check(await get_mini_signup(chat) is None, "запись закрыта в базе")
 
     await press("mt:join", 17, "Опоздавший")
     check(alerts[-1] == "Запись уже закрыта.", "после закрытия кнопки не работают")
+
+    # Настройки из админки: 3 места, подкидной, 2 минуты, своя картинка
+    await mt.save_settings({"seats": 3, "variant": "podkidnoy", "ready_seconds": 120, "photo": {"file_id": "PHOTO1", "name": "кубок"}})
+    photos, captions = [], []
+    m = message(chat, 1, [], bot)
+
+    async def answer_photo(file_id, caption=None, reply_markup=None):
+        photos.append((file_id, caption))
+        return types.SimpleNamespace(message_id=900)
+
+    m.answer_photo = answer_photo
+    await mt.open_signup(m, 1000)
+    check(photos and photos[0][0] == "PHOTO1" and "(0/3)" in photos[0][1], f"объявление с картинкой: {photos}")
+    mid = 900
+    calls.clear()
+
+    def photo_button(uid, name):
+        cb = button(chat, mid, "mt:join", uid, name, edits, alerts, bot)
+
+        async def edit_caption(caption=None, reply_markup=None):
+            captions.append((caption, reply_markup))
+
+        cb.message.edit_caption = edit_caption
+        return cb
+
+    for uid, name in [(31, "Ира"), (32, "Кеша"), (33, "Лена")]:
+        await mt.signup_button(photo_button(uid, name))
+    check(captions and "(2/3)" in captions[1][0] and captions[-1][1] is None and "запись закрыта" in captions[-1][0], "картинка: подпись правится, на 3-м закрыто")
+    start3 = [c for c in calls if c[1] == "mini-tournaments"]
+    check(start3 and len(start3[0][2]["players"]) == 3 and start3[0][2]["rules"]["variant"] == "podkidnoy"
+          and start3[0][2]["rules"]["readySeconds"] == 120, f"3 места и правила: {start3}")
+    await mt.save_settings({"seats": 6, "variant": "perevodnoy", "ready_seconds": 60, "photo": None})
 
     # Отмена записи
     said = []

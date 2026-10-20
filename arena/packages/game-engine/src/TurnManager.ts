@@ -216,8 +216,9 @@ function finishIfOver(
   if (last) {
     finishGame(state, { kind: 'loser', loser: last.id, reason: 'cards' }, now, events);
   } else if (state.rules.ending === 'nodraw') {
-    // Турнирный стол: ничьей нет. Все вышли разом — дурак тот, кто отбивался последним.
-    finishGame(state, { kind: 'loser', loser: state.defender, reason: 'last_defense' }, now, events);
+    // Турнирный стол: ничьей нет. Все вышли разом — как в «Дураке Онлайн»: последнюю карту
+    // отбили, значит, подкинувший её не смог завалить — он и дурак.
+    finishGame(state, { kind: 'loser', loser: lastAttacker, reason: 'last_attack' }, now, events);
   } else if (state.rules.ending === 'draw' || !retiredNow.includes(lastAttacker)) {
     // Everyone emptied their hand in the same bout.
     finishGame(state, { kind: 'draw' }, now, events);

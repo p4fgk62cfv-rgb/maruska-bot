@@ -90,6 +90,7 @@
     ["arena_live", "game", "Столы сейчас", "Ожидающие и идущие партии"],
     ["arena_moderation", "shield", "Модерация", "Жалобы и подозрительные пары"],
     ["arena_tournaments", "trophy", "Турниры", "Создать, отменить"],
+    ["arena_mini", "trophy", "Мини-турниры групп", "/старт турнир: места, правила, текст, картинка"],
     ["arena_seasons", "calendar", "Сезоны", "Рейтинг по сезонам"],
     ["arena_shop", "bag", "Магазин", "Рубашки, рамки, цены"],
     ["arena_broadcast", "megaphone", "Рассылка игрокам", "Сообщение от бота в личку"],
@@ -539,6 +540,119 @@
   // =========================================================
   // Правила экономики (только чтение)
   // =========================================================
+
+  // =========================================================
+  // Мини-турниры групп («/старт турнир 5000» в группе)
+  // =========================================================
+
+  var MINI_STATUS = { RUNNING: "идёт", FINISHED: "завершён", CANCELLED: "отменён" };
+  var MINI_OUT = { game: "дурак", no_show: "не пришёл", left: "ушёл" };
+
+  function chips(name, options, value) {
+    return '<div class="chips" data-mini="' + name + '">' + options.map(function (o) {
+      return '<span class="chip' + (o[0] === value ? " on" : "") + '" data-v="' + o[0] + '">' + o[1] + "</span>";
+    }).join("") + "</div>";
+  }
+
+  M.screen("arena_mini", function () {
+    Promise.all([M.api("/api/admin/mini/settings"), A("mini-tournaments").catch(function () { return []; })]).then(function (res) {
+      var s = res[0].settings, rows = res[1] || [];
+      var html = M.backButton()
+        + '<div class="card"><div class="card-title">⚙️ Настройки</div>'
+        + '<div class="dim" style="margin-bottom:8px">Для всех групп. Запускают админы группы командой <code>/старт турнир 5000</code>, где 5000 — приз в кредитах «Дурак Онлайн». Отмена — <code>/стоп турнир</code>.</div>'
+        + '<label class="field-label">Мест за столом</label>' + chips("seats", [["2", "2"], ["3", "3"], ["4", "4"], ["5", "5"], ["6", "6"]], String(s.seats))
+        + '<label class="field-label">Ждать у стола (не пришёл — техническое поражение)</label>'
+        + chips("ready_seconds", [["30", "30 с"], ["45", "45 с"], ["60", "1 мин"], ["90", "1,5 мин"], ["120", "2 мин"], ["180", "3 мин"]], String(s.ready_seconds))
+        + '<label class="field-label">Режим</label>' + chips("variant", [["perevodnoy", "Переводной"], ["podkidnoy", "Подкидной"]], s.variant)
+        + '<label class="field-label">Подкидывать</label>' + chips("throw_in", [["all", "Все"], ["neighbors", "Соседи"]], s.throw_in)
+        + '<label class="field-label">Скорость</label>' + chips("speed", [["fast", "Быстрая"], ["normal", "Обычная"]], s.speed)
+        + '<div class="dim" style="margin:6px 0">Ничьей нет: если все вышли разом, дурак — тот, кто подкинул последнюю карту.</div>'
+        + "</div>"
+        + '<div class="card"><div class="card-title">📝 Текст объявления</div>'
+        + '<div class="dim" style="margin-bottom:6px">Подставляется: <code>{prize}</code> — приз, <code>{seats}</code> — мест, <code>{seconds}</code> — секунд у стола, <code>{rules}</code> — правила. <code>**так**</code> — жирным. Под текстом Мара сама выводит список участников и кнопки.</div>'
+        + '<textarea data-mini-text rows="8" maxlength="450" style="width:100%">' + esc(s.text) + "</textarea>"
+        + '<div class="row" style="gap:8px;margin-top:8px"><button class="btn primary" data-mini-save>Сохранить</button><button class="btn" data-mini-default>Вернуть стандартный текст</button></div>'
+        + '<div class="card-title" style="margin-top:12px">Как увидят в группе (приз 5 000)</div><div class="preview" data-mini-preview style="white-space:pre-wrap">' + s.preview + "</div>"
+        + "</div>"
+        + '<div class="card"><div class="card-title">🖼 Картинка к объявлению</div>'
+        + '<div data-mini-photo class="dim">' + (s.photo ? "Прикреплена: " + esc(s.photo.name) : "Не прикреплена — объявление уходит текстом.") + "</div>"
+        + '<div class="row" style="gap:8px;margin-top:8px"><label class="btn primary" style="margin:0">Загрузить картинку<input type="file" accept="image/*" data-mini-file class="hidden"></label>'
+        + '<button class="btn danger' + (s.photo ? "" : " hidden") + '" data-mini-photo-del>Убрать</button></div>'
+        + '<div class="dim" style="margin-top:6px">Превью придёт тебе в личку от Мары.</div></div>'
+        + '<div class="card"><div class="card-title">🏆 Последние мини-турниры</div>' + (rows.length ? rows.map(function (m) {
+            var winner = m.players.filter(function (p) { return p.place === 1; })[0];
+            return '<div class="list-item"><div class="grow"><div class="t">' + (MINI_STATUS[m.status] || m.status) + " · стол " + m.round + " · приз " + num(m.prize) + "</div>"
+              + '<div class="s">' + when(m.createdAt) + " · группа " + esc(m.chatId) + " · " + esc(m.organizer) + (winner ? " · 🥇 " + esc(winner.name) : "") + "</div>"
+              + '<div class="s">' + m.players.map(function (p) { return esc(p.name) + (p.place ? " (" + p.place + (p.out ? ", " + (MINI_OUT[p.out] || p.out) : "") + ")" : ""); }).join(", ") + "</div></div>"
+              + (m.status === "RUNNING" ? '<button class="btn danger" data-mini-cancel="' + m.id + '">Отменить</button>' : "") + "</div>";
+          }).join("") : '<div class="dim">Мини-турниров ещё не было</div>') + "</div>";
+      M.app.innerHTML = html;
+      M.bind();
+
+      M.each("[data-mini] .chip", function (chip) {
+        chip.onclick = function () {
+          var group = chip.parentNode;
+          M.each('[data-mini="' + group.getAttribute("data-mini") + '"] .chip', function (c) { c.classList.toggle("on", c === chip); });
+          save({});
+        };
+      });
+
+      function collect() {
+        var out = {};
+        M.each("[data-mini]", function (g) {
+          var on = g.querySelector(".chip.on");
+          if (on) out[g.getAttribute("data-mini")] = /^\d+$/.test(on.getAttribute("data-v")) ? parseInt(on.getAttribute("data-v"), 10) : on.getAttribute("data-v");
+        });
+        return out;
+      }
+
+      function save(extra) {
+        var body = collect();
+        for (var k in extra) body[k] = extra[k];
+        return M.post("/api/admin/mini/settings", body).then(function (d) {
+          M.haptic();
+          M.app.querySelector("[data-mini-preview]").innerHTML = d.settings.preview;
+          return d.settings;
+        }).catch(fail);
+      }
+
+      M.app.querySelector("[data-mini-save]").onclick = function () {
+        save({ text: M.app.querySelector("[data-mini-text]").value }).then(function () { M.toast("Сохранено"); });
+      };
+      M.app.querySelector("[data-mini-default]").onclick = function () {
+        M.app.querySelector("[data-mini-text]").value = s.default_text;
+        save({ text: s.default_text }).then(function () { M.toast("Стандартный текст"); });
+      };
+
+      var photoState = M.app.querySelector("[data-mini-photo]"), photoDel = M.app.querySelector("[data-mini-photo-del]");
+      M.app.querySelector("[data-mini-file]").onchange = function () {
+        var file = this.files[0];
+        if (!file) return;
+        if (file.size > 10 * 1024 * 1024) { M.toast("Картинка больше 10 МБ"); return; }
+        photoState.textContent = "Загружаю…";
+        M.api("/api/admin/mini/photo?name=" + encodeURIComponent(file.name || ""), {
+          method: "POST", body: file, headers: { "Content-Type": file.type || "application/octet-stream" }
+        }).then(function (d) {
+          M.haptic(); M.toast("Картинка прикреплена, превью — в личке");
+          photoState.textContent = "Прикреплена: " + d.settings.photo.name;
+          photoDel.classList.remove("hidden");
+        }).catch(function (e) { M.toast(e.message); photoState.textContent = "Не загрузилось: " + e.message; });
+      };
+      photoDel.onclick = function () {
+        M.post("/api/admin/mini/photo/delete", {}).then(function () {
+          M.toast("Картинка убрана"); photoState.textContent = "Не прикреплена — объявление уходит текстом."; photoDel.classList.add("hidden");
+        }).catch(fail);
+      };
+
+      M.each("[data-mini-cancel]", function (b) {
+        b.onclick = function () {
+          M.confirm("Отменить мини-турнир?", "Стол закроется, Мара напишет в группу.", "Отменить", true).then(function (yes) {
+            if (yes) AP("mini-tournaments/" + b.getAttribute("data-mini-cancel") + "/cancel").then(function () { M.toast("Отменён"); M.render(); }).catch(fail);
+          });
+        };
+      });
+    }).catch(M.fail);
+  });
 
   M.screen("arena_settings", function () {
     A("settings").then(function (s) {
