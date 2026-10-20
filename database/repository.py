@@ -4717,3 +4717,15 @@ async def mark_chat_once(chat_id: int, key: str) -> bool:
         )
         await session.commit()
         return bool(result.rowcount)
+
+
+async def user_messages(chat_id: int, telegram_id: int, limit: int = 60) -> list[str]:
+    """Последние сообщения человека в группе — от старых к новым (для «Мара, кто я?»)."""
+    async with session_scope() as session:
+        rows = (await session.execute(
+            select(MessageMemory.message)
+            .where(MessageMemory.chat_id == chat_id, MessageMemory.telegram_user_id == telegram_id)
+            .order_by(MessageMemory.created_at.desc())
+            .limit(limit)
+        )).scalars().all()
+    return list(reversed(rows))
