@@ -297,10 +297,6 @@ async def main():
         ended = await dedupe_marriages()
         if ended:
             logger.info("БРАКИ: расторгнуты повторные браки %s", ended)
-
-        # Разовый перенос по просьбе владельца: Станислав и Олеся — пара группы DIAMOND
-        from database.repository import move_marriage
-        logger.info("БРАКИ: %s", await move_marriage(("uastas", "olesya_fx1"), "DIAMOND"))
     except Exception as error:
         logger.warning("БРАКИ: %s %s", type(error).__name__, error)
 

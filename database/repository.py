@@ -1,4 +1,3 @@
-import logging
 import unicodedata
 from datetime import datetime, timedelta
 
@@ -4544,10 +4543,6 @@ async def dedupe_marriages() -> list[tuple[int, int, int]]:
     остальные расторгаются. Если это та же пара, зарегистрированная в
     нескольких группах, — группа просто добавляется к её браку.
 
-    Ещё чинит первый запуск, когда такие повторы одной пары расторгались:
-    брак той же пары, закрытый, пока действовал основной, — это не развод,
-    а повтор; его группа возвращается к браку.
-
     Возвращает расторгнутые браки разных пар (номер, супруг, супруг).
     """
     async with session_scope() as session:
@@ -4570,19 +4565,6 @@ async def dedupe_marriages() -> list[tuple[int, int, int]]:
                 _add_chat(first, row.chat_id)
             else:
                 ended.append((row.id, row.user1, row.user2))
-
-        # Повторы той же пары, расторгнутые раньше, пока основной брак уже шёл
-        alive = {_pair(row): row for row in rows if row.active}
-        if alive:
-            closed = (await session.execute(
-                select(Marriage).where(Marriage.active.is_(False), Marriage.ended_at.is_not(None))
-            )).scalars().all()
-            for row in closed:
-                main = alive.get(_pair(row))
-                if main is not None and row.id != main.id and row.ended_at > main.since and _add_chat(main, row.chat_id):
-                    changed = True
-                    logging.getLogger("maruska.marriages").info(
-                        "БРАКИ: брак №%s снова виден в группе %s (повтор №%s)", main.id, row.chat_id, row.id)
 
         if changed:
             await session.commit()
