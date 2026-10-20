@@ -116,6 +116,20 @@ async def collect_facts(chat_id: int, telegram_id: int) -> list[str]:
         facts.append(f"Сыграно игр: {profile.games_played}, побед: {profile.games_won or 0}")
     if profile is not None and profile.karma:
         facts.append(f"Карма (рейтинг от других): {profile.karma}")
+    if getattr(profile, "xp", 0) and is_enabled(chat_id, "progress"):
+        from progress.xp import level_from_xp
+
+        facts.append(f"Уровень: {level_from_xp(profile.xp)}")
+    if is_enabled(chat_id, "economy"):
+        try:
+            from database.repository import get_balance
+            from economy.service import money
+
+            balance = await get_balance(telegram_id)
+            if balance:
+                facts.append(f"Алмазов: {money(balance)}")
+        except Exception:
+            pass
     birthday = await get_birthday(telegram_id)
     if birthday:
         facts.append(f"День рождения: {birthday[0]:02d}.{birthday[1]:02d}")
@@ -149,10 +163,15 @@ async def _resolve(message: Message, kind: str, username: str | None):
 
 @router.message(is_who_am_i)
 async def who_am_i(message: Message):
+    kind, username = parse(message)
+    await describe(message, kind, username)
+
+
+async def describe(message: Message, kind: str, username: str | None = None, question: str | None = None):
+    """Рассказ о человеке: «Мара, кто я?», «Мара, кто это?» ответом, «Мара, кто @ник?» и /profile."""
     from ai.router import ask_ai
     from database.repository import user_messages, user_messages_elsewhere
 
-    kind, username = parse(message)
     target = await _resolve(message, kind, username)
     if target is None:
         await message.reply(f"🤷 Не знаю такого: @{escape(username or '')}. Пусть сначала напишет в чат.")
@@ -186,7 +205,7 @@ async def who_am_i(message: Message):
         pass
 
     prompt = PROMPT.format(
-        question=(message.text or "")[:100],
+        question=(question or message.text or "")[:100],
         name=name,
         address="к нему на «ты»" if about_self else "к спросившему, говоря о человеке в третьем лице",
         facts="\n".join(f"- {f}" for f in facts) or "- ничего особенного",

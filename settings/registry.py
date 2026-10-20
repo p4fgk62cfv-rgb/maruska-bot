@@ -300,7 +300,7 @@ FEATURES: tuple[Feature, ...] = (
         key="rating",
         title="Рейтинг",
         emoji="⭐",
-        description="Плюсы и минусы реплаем, /top и /profile",
+        description="Плюсы и минусы реплаем и /top",
         group="Экономика",
     ),
     Feature(

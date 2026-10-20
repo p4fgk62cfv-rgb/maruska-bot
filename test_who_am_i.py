@@ -157,6 +157,14 @@ async def main():
     if not said or "душа чата" not in said[0] or "рыбалка" not in p or "Состоит в группах с Марой: 3" not in p:
         errors.append(f"новичок — память из других групп: {said} / {p[-300:]}")
 
+    # /profile — то же, что «Мара, кто я?»
+    from features import rating
+
+    m, said = msg("/profile")
+    await rating.profile_handler(m)
+    if not said or "душа чата" not in said[0] or "Мара, кто я?" not in prompts[-1]:
+        errors.append(f"/profile = «кто я»: {said}")
+
     m, said = msg("Мара кто @nobody?")
     await w.who_am_i(m)
     if not said or "Не знаю такого" not in said[0]:
