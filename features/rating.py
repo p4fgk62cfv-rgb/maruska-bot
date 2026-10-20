@@ -14,19 +14,9 @@ from botcontext import display_name_of, get_rank_info
 from database.repository import (
     add_rating_vote,
     can_vote_rating,
-    count_inventory,
-    get_balance,
     get_global_rating,
-    get_profile,
-    get_rating_position,
-    get_rating_stats,
     save_user,
-    create_profile_if_needed,
 )
-
-from economy.service import CURRENCY, money, wealth_title
-
-from progress.service import profile_block
 
 from settings.store import get_number, is_enabled
 
@@ -146,70 +136,14 @@ async def top_handler(message: Message):
 
 @router.message(Command("profile"))
 async def profile_handler(message: Message):
+    """/profile — то же, что «Мара, кто я?» (ответом на сообщение — «кто это?»)."""
     if not message.from_user:
         return
 
-    profile = await get_profile(message.from_user.id)
+    from features.who_am_i import describe
 
-    if profile is None:
-        await create_profile_if_needed(
-            telegram_id=message.from_user.id,
-            display_name=display_name_of(message.from_user),
-        )
-        profile = await get_profile(message.from_user.id)
-
-    if profile is None:
-        return
-
-    position = await get_rating_position(message.from_user.id)
-    stats = await get_rating_stats(message.from_user.id)
-
-    name = escape(profile.display_name or "Пользователь")
-
-    levels = ""
-
-    if is_enabled(message.chat.id, "progress"):
-        levels = profile_block(profile.xp or 0) + "\n"
-
-    wallet = ""
-
-    if is_enabled(message.chat.id, "economy"):
-        balance = await get_balance(message.from_user.id)
-        wallet = (
-            f"{CURRENCY} Алмазы: <b>{money(balance)}</b> "
-            f"({wealth_title(balance)})\n"
-        )
-
-        if profile.bonus_streak:
-            wallet += f"🔥 Серия бонусов: <b>{profile.bonus_streak}</b>\n"
-
-        collection = await count_inventory(message.from_user.id)
-
-        if collection:
-            wallet += f"🎒 Вещей в инвентаре: <b>{collection}</b>\n"
-
-        wallet += "\n"
-
-    marriage = ""
-
-    if is_enabled(message.chat.id, "marriages"):
-        from features.social import marriage_line
-
-        line = await marriage_line(message.chat.id, message.from_user.id)
-        if line:
-            marriage = line + "\n\n"
-
-    await message.answer(
-        f"👤 <b>{name}</b>\n\n"
-        f"{marriage}"
-        f"{levels}"
-        f"🎖 Ранг: <b>{get_rank_info(profile.karma)}</b>\n"
-        f"⭐ Рейтинг: <b>{profile.karma}</b>\n"
-        f"🏆 Место: <b>#{position or '-'}</b>\n\n"
-        f"{wallet}"
-        f"💬 Сообщений: <b>{profile.messages_count}</b>\n"
-        f"🎮 Игр: <b>{profile.games_played}</b>\n"
-        f"🏅 Побед: <b>{profile.games_won}</b>\n\n"
-        f"❤️ Положительных оценок: <b>{stats['positive']}</b>\n"
-        f"💔 Отрицательных оценок: <b>{stats['negative']}</b>"
-    )
+    reply = message.reply_to_message
+    if reply and reply.from_user and not reply.from_user.is_bot:
+        await describe(message, "reply", question="Мара, кто это?")
+    else:
+        await describe(message, "me", question="Мара, кто я?")
