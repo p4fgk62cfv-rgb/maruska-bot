@@ -31,6 +31,7 @@ READ = [
     r"players/\d{3,20}",
     r"live",
     r"tournaments",
+    r"mini-tournaments",
     r"seasons",
     r"items",
     r"settings",
@@ -45,6 +46,7 @@ WRITE = {
     r"games/[0-9a-f-]{36}/abort": "Отмена партии",
     r"rooms/[A-Z0-9]{8}/close": "Закрытие стола",
     r"tournaments/[0-9a-f-]{36}/cancel": "Отмена турнира",
+    r"mini-tournaments/[0-9a-f-]{36}/cancel": "Отмена мини-турнира",
     r"tournaments": "Новый турнир",
     r"seasons": "Новый сезон",
     r"seasons/[0-9a-f-]{36}/end": "Завершение сезона",
@@ -183,6 +185,89 @@ def _arena_error(status: int, text: str) -> str:
     return f"Арена ответила ошибкой ({status})"
 
 
+# ---------------------------------------------------------
+# Мини-турниры групп: настройки, текст объявления и картинка (хранит Мара)
+# ---------------------------------------------------------
+
+MINI_PHOTO_MAX = 10 * 1024 * 1024
+
+
+def _mini_view(settings: dict) -> dict:
+    from features.mini_tournament import DEFAULT_TEXT, render_intro
+
+    view = {k: v for k, v in settings.items() if k != "photo"}
+    view["photo"] = {"name": settings["photo"].get("name") or "картинка"} if settings.get("photo") else None
+    view["default_text"] = DEFAULT_TEXT
+    view["preview"] = render_intro(settings, 5000)
+    return view
+
+
+async def api_mini_settings(request: web.Request):
+    """GET — настройки мини-турниров; POST — сохранить (места, ожидание, правила, текст)."""
+    from features import mini_tournament as mt
+
+    admin, admin_name = await _owner(request)
+    if request.method == "GET":
+        return web.json_response({"ok": True, "settings": _mini_view(await mt.load_settings())})
+
+    body = await request.json()
+    allowed = {k: body[k] for k in ("seats", "ready_seconds", "variant", "throw_in", "speed", "text") if k in body}
+    if "text" in allowed and not str(allowed["text"]).strip():
+        allowed["text"] = mt.DEFAULT_TEXT
+    saved = await mt.save_settings(allowed)
+    audit.log("arena", "mini_settings", actor_kind="admin", actor_id=admin["id"], actor_name=admin_name,
+              details=f"Мини-турниры: {saved['seats']} мест, {saved['ready_seconds']} с, {mt.rules_line(saved)}")
+    return web.json_response({"ok": True, "settings": _mini_view(saved)})
+
+
+async def api_mini_photo(request: web.Request):
+    """Картинка к объявлению о турнире: тело — сам файл. Telegram даёт file_id после отправки."""
+    from aiogram.types import BufferedInputFile
+
+    from features import mini_tournament as mt
+
+    admin, admin_name = await _owner(request)
+    raw = await request.read()
+    if not raw:
+        return web.json_response({"ok": False, "error": "Пустой файл"}, status=400)
+    if len(raw) > MINI_PHOTO_MAX:
+        return web.json_response({"ok": False, "error": "Картинка больше 10 МБ"}, status=400)
+
+    settings = await mt.load_settings()
+    caption = "👀 <b>Так будет выглядеть объявление о турнире:</b>\n\n" + mt.signup_text(5000, [], settings=settings)
+    try:
+        sent = await request.app["bot"].send_photo(admin["id"], BufferedInputFile(raw, filename="tournament.jpg"), caption=caption[:1024])
+    except Exception as error:
+        text = str(error).lower()
+        reason = ("Сначала напиши Маре в личку /start — картинка загружается через неё"
+                  if "chat not found" in text or "bot can't initiate" in text or "forbidden" in text
+                  else "Telegram не принял картинку — попробуй JPG или PNG")
+        logger.warning("MINI PHOTO UPLOAD: %s %s", type(error).__name__, error)
+        return web.json_response({"ok": False, "error": reason}, status=400)
+    if not sent.photo:
+        return web.json_response({"ok": False, "error": "Telegram не узнал картинку"}, status=400)
+
+    name = (request.query.get("name") or "картинка")[:80]
+    saved = await mt.save_settings({"photo": {"file_id": sent.photo[-1].file_id, "name": name}})
+    audit.log("arena", "mini_settings", actor_kind="admin", actor_id=admin["id"], actor_name=admin_name,
+              details=f"Мини-турниры: картинка «{name}»")
+    return web.json_response({"ok": True, "settings": _mini_view(saved)})
+
+
+async def api_mini_photo_delete(request: web.Request):
+    from features import mini_tournament as mt
+
+    admin, admin_name = await _owner(request)
+    saved = await mt.save_settings({"photo": None})
+    audit.log("arena", "mini_settings", actor_kind="admin", actor_id=admin["id"], actor_name=admin_name,
+              details="Мини-турниры: картинка убрана")
+    return web.json_response({"ok": True, "settings": _mini_view(saved)})
+
+
 def setup_arena_admin_routes(app: web.Application) -> None:
+    app.router.add_get("/api/admin/mini/settings", api_mini_settings)
+    app.router.add_post("/api/admin/mini/settings", api_mini_settings)
+    app.router.add_post("/api/admin/mini/photo", api_mini_photo)
+    app.router.add_post("/api/admin/mini/photo/delete", api_mini_photo_delete)
     app.router.add_get("/api/admin/arena/{path:.+}", api_arena)
     app.router.add_post("/api/admin/arena/{path:.+}", api_arena)

@@ -127,13 +127,14 @@ def main() -> int:
     expect("бан — вне /admin", bridge._target("POST", "moderation/ban"), "https://arena.test/api/internal/moderation/ban")
     expect("новый турнир — вне /admin", bridge._target("POST", "tournaments"), "https://arena.test/api/internal/tournaments")
     expect("список турниров — в /admin", bridge._target("GET", "tournaments"), "https://arena.test/api/internal/admin/tournaments")
+    expect("мини-турниры — в /admin", bridge._target("GET", "mini-tournaments"), "https://arena.test/api/internal/admin/mini-tournaments")
 
     # --- белый список: всё, что зовёт панель, разрешено; лишнее — нет ---
-    reads = ["overview", "players", "players/123456789", "live", "tournaments", "seasons", "items", "settings", "moderation/reports", "integrity/suspicious"]
+    reads = ["overview", "players", "players/123456789", "live", "tournaments", "mini-tournaments", "seasons", "items", "settings", "moderation/reports", "integrity/suspicious"]
     writes = [
         "players/123456789/wallet", "players/123456789/premium", "players/123456789/reset", "players/123456789/items",
         "games/0192a5b0-1234-7abc-8def-0123456789ab/abort", "rooms/ABCD1234/close", "tournaments",
-        "tournaments/0192a5b0-1234-7abc-8def-0123456789ab/cancel", "seasons", "seasons/0192a5b0-1234-7abc-8def-0123456789ab/end",
+        "tournaments/0192a5b0-1234-7abc-8def-0123456789ab/cancel", "mini-tournaments/0192a5b0-1234-7abc-8def-0123456789ab/cancel", "seasons", "seasons/0192a5b0-1234-7abc-8def-0123456789ab/end",
         "items/back_wolf", "broadcast", "moderation/ban", "moderation/unban", "moderation/clawback",
     ]
     for path in reads:
