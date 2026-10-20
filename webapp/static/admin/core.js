@@ -188,8 +188,34 @@
         + ">" + Mara.esc(c.title) + "</option>");
     });
 
+    // ID выбранной группы — скопировать одним нажатием
+    var copy = Mara.state.chat
+      ? '<button class="chat-id" type="button" data-chat-copy="' + Mara.esc(String(Mara.state.chat))
+        + '" title="Скопировать ID группы">ID ⧉</button>'
+      : "";
+
     return '<div class="chat-pick"><span>💬</span><select data-chat-pick>'
-      + options.join("") + "</select></div>";
+      + options.join("") + "</select>" + copy + "</div>";
+  };
+
+  Mara.copy = function (text) {
+    function fallback() {
+      var area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      var ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      area.remove();
+      return ok ? Promise.resolve() : Promise.reject();
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(fallback);
+    }
+    return fallback();
   };
 
   function bindChatPick() {
@@ -199,6 +225,19 @@
     pick.onchange = function () {
       Mara.setChat(pick.value || null);
     };
+
+    var copy = app.querySelector("[data-chat-copy]");
+    if (copy) {
+      copy.onclick = function () {
+        var id = copy.getAttribute("data-chat-copy");
+        Mara.copy(id).then(function () {
+          Mara.haptic("light");
+          Mara.toast("ID группы скопирован: " + id);
+        }, function () {
+          Mara.toast("ID группы: " + id);
+        });
+      };
+    }
   }
 
   Mara.setChat = function (chatId) {
