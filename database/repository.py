@@ -4471,42 +4471,46 @@ async def top_period(chat_id: int, since: str, until: str, metric: str = "messag
 # БРАКИ
 # =========================================================
 
-async def active_marriage(chat_id: int, telegram_id: int):
+# Брак один на все группы с Марой: chat_id — только где его заключили.
+
+async def active_marriage(chat_id: int | None, telegram_id: int):
+    """Действующий брак человека — в какой бы группе его ни заключили."""
     async with session_scope() as session:
         return (await session.execute(
             select(Marriage).where(
-                Marriage.chat_id == chat_id, Marriage.active.is_(True),
+                Marriage.active.is_(True),
                 (Marriage.user1 == telegram_id) | (Marriage.user2 == telegram_id),
-            )
+            ).order_by(Marriage.since).limit(1)
         )).scalar_one_or_none()
 
 
-async def create_marriage(chat_id: int, user1: int, user2: int) -> bool:
-    """Заключает брак, если оба свободны. Проверка и запись — в одной сессии."""
+async def create_marriage(chat_id: int, user1: int, user2: int) -> int | None:
+    """Заключает брак, если оба свободны во всех группах. Номер брака или None."""
     async with session_scope() as session:
         busy = (await session.execute(
             select(func.count(Marriage.id)).where(
-                Marriage.chat_id == chat_id, Marriage.active.is_(True),
+                Marriage.active.is_(True),
                 Marriage.user1.in_([user1, user2]) | Marriage.user2.in_([user1, user2]),
             )
         )).scalar() or 0
 
         if busy:
-            return False
+            return None
 
-        session.add(Marriage(chat_id=chat_id, user1=user1, user2=user2))
+        marriage = Marriage(chat_id=chat_id, user1=user1, user2=user2)
+        session.add(marriage)
         await session.commit()
-        return True
+        return marriage.id
 
 
-async def end_marriage(chat_id: int, telegram_id: int) -> tuple[int, int] | None:
-    """Развод. Возвращает пару или None, если брака не было."""
+async def end_marriage(chat_id: int | None, telegram_id: int) -> tuple[int, int] | None:
+    """Развод — из любой группы. Возвращает пару или None, если брака не было."""
     async with session_scope() as session:
         item = (await session.execute(
             select(Marriage).where(
-                Marriage.chat_id == chat_id, Marriage.active.is_(True),
+                Marriage.active.is_(True),
                 (Marriage.user1 == telegram_id) | (Marriage.user2 == telegram_id),
-            )
+            ).order_by(Marriage.since).limit(1)
         )).scalar_one_or_none()
 
         if item is None:
@@ -4519,22 +4523,101 @@ async def end_marriage(chat_id: int, telegram_id: int) -> tuple[int, int] | None
         return pair
 
 
-async def list_marriages(chat_id: int) -> list[dict]:
+async def dedupe_marriages() -> list[tuple[int, int, int]]:
+    """
+    Раньше браки были отдельными в каждой группе. Теперь брак один:
+    у кого действующих браков несколько, остаётся самый ранний,
+    остальные расторгаются. Возвращает расторгнутые (номер, супруг, супруг).
+    """
     async with session_scope() as session:
         rows = (await session.execute(
-            select(Marriage).where(Marriage.chat_id == chat_id, Marriage.active.is_(True))
-            .order_by(Marriage.since)
+            select(Marriage).where(Marriage.active.is_(True)).order_by(Marriage.since, Marriage.id)
         )).scalars().all()
 
-        ids = {r.user1 for r in rows} | {r.user2 for r in rows}
-        names = dict((await session.execute(
+        busy: set[int] = set()
+        ended = []
+        for row in rows:
+            if row.user1 in busy or row.user2 in busy:
+                row.active = False
+                row.ended_at = utcnow()
+                ended.append((row.id, row.user1, row.user2))
+            else:
+                busy.update((row.user1, row.user2))
+
+        if ended:
+            await session.commit()
+    return ended
+
+
+async def get_marriage(marriage_id: int):
+    async with session_scope() as session:
+        return await session.get(Marriage, marriage_id)
+
+
+async def save_marriage_certificate(marriage_id: int, certificate: dict | None = None,
+                                    file_id: str | None = None) -> None:
+    async with session_scope() as session:
+        row = await session.get(Marriage, marriage_id)
+        if row is None:
+            return
+        if certificate is not None:
+            row.certificate = certificate
+        if file_id is not None:
+            row.certificate_file_id = file_id
+        await session.commit()
+
+
+async def people(chat_id: int | None, ids) -> dict[int, dict]:
+    """Имя и @ник по id: сначала имя из этой группы, потом из любой другой, потом из профиля."""
+    ids = set(ids)
+    if not ids:
+        return {}
+
+    async with session_scope() as session:
+        here = dict((await session.execute(
             select(GroupMember.telegram_id, GroupMember.display_name).where(
                 GroupMember.chat_id == chat_id, GroupMember.telegram_id.in_(ids))
-        )).all()) if ids else {}
+        )).all()) if chat_id is not None else {}
+
+        anywhere = dict((await session.execute(
+            select(GroupMember.telegram_id, func.max(GroupMember.display_name)).where(
+                GroupMember.telegram_id.in_(ids), GroupMember.display_name.is_not(None))
+            .group_by(GroupMember.telegram_id)
+        )).all())
+
+        profiles = dict((await session.execute(
+            select(UserProfile.telegram_id, UserProfile.display_name).where(UserProfile.telegram_id.in_(ids))
+        )).all())
+
+        users = {row[0]: (row[1], row[2]) for row in (await session.execute(
+            select(User.telegram_id, User.username, User.first_name).where(User.telegram_id.in_(ids))
+        )).all()}
+
+    result = {}
+    for user_id in ids:
+        username, first_name = users.get(user_id, (None, None))
+        name = here.get(user_id) or anywhere.get(user_id) or profiles.get(user_id) or first_name or "Игрок"
+        result[user_id] = {"name": name, "username": username}
+    return result
+
+
+async def list_marriages(chat_id: int) -> list[dict]:
+    """Пары, где хотя бы один из супругов есть в этой группе — даже если второй в другой."""
+    async with session_scope() as session:
+        members = select(GroupMember.telegram_id).where(GroupMember.chat_id == chat_id)
+        rows = (await session.execute(
+            select(Marriage).where(
+                Marriage.active.is_(True),
+                Marriage.user1.in_(members) | Marriage.user2.in_(members),
+            ).order_by(Marriage.since)
+        )).scalars().all()
+
+    info = await people(chat_id, {r.user1 for r in rows} | {r.user2 for r in rows})
 
     return [
         {"id": r.id, "user1": r.user1, "user2": r.user2,
-         "name1": names.get(r.user1) or "Игрок", "name2": names.get(r.user2) or "Игрок",
+         "name1": info[r.user1]["name"], "name2": info[r.user2]["name"],
+         "username1": info[r.user1]["username"], "username2": info[r.user2]["username"],
          "since": r.since.isoformat()}
         for r in rows
     ]
@@ -4588,12 +4671,8 @@ async def pick_candidates(chat_id: int, days: int) -> list[dict]:
 
 
 async def member_name(chat_id: int, telegram_id: int) -> str:
-    async with session_scope() as session:
-        name = (await session.execute(
-            select(GroupMember.display_name).where(
-                GroupMember.chat_id == chat_id, GroupMember.telegram_id == telegram_id)
-        )).scalar_one_or_none()
-    return name or "Игрок"
+    """Имя участника: из этой группы, а если его тут нет — из другой группы или профиля."""
+    return (await people(chat_id, [telegram_id]))[telegram_id]["name"]
 
 
 # =========================================================

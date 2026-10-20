@@ -1198,6 +1198,11 @@ class Marriage(Base):
 
     active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
 
+    # Свидетельство: имена, @ники и группа на день свадьбы — и PDF в Telegram
+    certificate: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    certificate_file_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
 
 class DailyPick(Base):
     """Выбор дня (пара дня): один раз в сутки по местному времени группы."""

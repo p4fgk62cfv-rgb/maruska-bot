@@ -249,6 +249,8 @@ async def init_db():
             "ALTER TABLE daily_user_stats ADD COLUMN IF NOT EXISTS words INTEGER DEFAULT 0",
             "ALTER TABLE group_members ADD COLUMN IF NOT EXISTS joined_exact BOOLEAN DEFAULT FALSE",
             "ALTER TABLE mini_signups ADD COLUMN IF NOT EXISTS settings JSON",
+            "ALTER TABLE marriages ADD COLUMN IF NOT EXISTS certificate JSON",
+            "ALTER TABLE marriages ADD COLUMN IF NOT EXISTS certificate_file_id VARCHAR(255)",
 
             "CREATE INDEX IF NOT EXISTS ix_audit_chat_created "
             "ON audit_events (chat_id, created_at DESC)",

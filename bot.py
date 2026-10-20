@@ -291,6 +291,15 @@ async def main():
 
     await init_db()
 
+    # Брак теперь один на все группы: лишние браки из разных групп расторгаем
+    try:
+        from database.repository import dedupe_marriages
+        ended = await dedupe_marriages()
+        if ended:
+            logger.info("БРАКИ: расторгнуты повторные браки %s", ended)
+    except Exception as error:
+        logger.warning("БРАКИ: %s %s", type(error).__name__, error)
+
     # Главные админы, назначенные в панели, — с теми же правами, что OWNER_IDS
     try:
         from settings import owners
