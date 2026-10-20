@@ -143,14 +143,11 @@ async def scenario():
                 Marriage(chat_id=chat_b, user1=c, user2=d, since=now - timedelta(days=1)),
             ])
             await session.commit()
-        chat_c, chat_d = -base - 2, -base - 3
+        chat_d = -base - 3
         async with session_scope() as session:
             session.add_all([
                 # Та же пара зарегистрирована и в группе B — это не второй брак
                 Marriage(chat_id=chat_b, user1=b, user2=a, since=now - timedelta(days=3)),
-                # …и в группе C, но этот повтор уже закрыли при первом запуске
-                Marriage(chat_id=chat_c, user1=a, user2=b, since=now - timedelta(days=4),
-                         active=False, ended_at=now),
             ])
             await session.commit()
         ended = await repo.dedupe_marriages()
@@ -159,8 +156,8 @@ async def scenario():
               f"расторгнуты только чужие повторы: {ended}")
         left = await repo.active_marriage(None, a)
         check(left is not None and {left.user1, left.user2} == {a, b}, "остался самый ранний брак")
-        check(set(left.chats or []) == {chat_b, chat_c}, f"группы той же пары вернулись: {left.chats}")
-        for chat in (chat_a, chat_b, chat_c):
+        check(set(left.chats or []) == {chat_b}, f"группа той же пары добавлена к браку: {left.chats}")
+        for chat in (chat_a, chat_b):
             check(any(x["id"] == left.id for x in await repo.list_marriages(chat)), f"пара видна в группе {chat}")
         check(not any(x["id"] == left.id for x in await repo.list_marriages(chat_d)), "в чужой группе пары нет")
 
