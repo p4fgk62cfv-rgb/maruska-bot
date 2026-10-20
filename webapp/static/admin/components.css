@@ -79,7 +79,12 @@ textarea { resize: vertical; min-height: 90px; }
   background: var(--card); border: 1px solid var(--line);
   border-radius: var(--radius-sm); padding: 8px 10px; margin-bottom: 14px;
 }
-.chat-pick select { background: transparent; border: 0; padding: 4px 0; }
+.chat-pick select { background: transparent; border: 0; padding: 4px 0; flex: 1; min-width: 0; }
+.chat-pick .chat-id {
+  flex: none; border: 1px solid var(--line); background: var(--bg-2); color: var(--muted);
+  border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.chat-pick .chat-id:active { transform: scale(.96); }
 
 /* ---------- карточки ---------- */
 .card {
