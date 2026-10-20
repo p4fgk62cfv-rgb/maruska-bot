@@ -33,7 +33,16 @@ export interface Room {
   createdAt: number;
   readyDeadline: number | null;
   /** Tournament match rooms: pre-seated, no stake, leaving or not showing up loses the match. */
-  tournament?: { id: string; title: string; round: number; matchId: string } | null;
+  tournament?: {
+    id: string;
+    title: string;
+    round: number;
+    matchId: string;
+    /** «mini» — мини-турнир группы: один стол на вылет, зашёл за стол — значит готов. */
+    kind?: 'mini';
+    /** Сколько ждать игроков у стола (мс); по умолчанию MATCH_READY_SECONDS. */
+    readyMs?: number;
+  } | null;
 }
 
 export interface Features {

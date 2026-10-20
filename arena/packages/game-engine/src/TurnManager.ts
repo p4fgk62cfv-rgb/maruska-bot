@@ -215,6 +215,9 @@ function finishIfOver(
   const [last] = remaining;
   if (last) {
     finishGame(state, { kind: 'loser', loser: last.id, reason: 'cards' }, now, events);
+  } else if (state.rules.ending === 'nodraw') {
+    // Турнирный стол: ничьей нет. Все вышли разом — дурак тот, кто отбивался последним.
+    finishGame(state, { kind: 'loser', loser: state.defender, reason: 'last_defense' }, now, events);
   } else if (state.rules.ending === 'draw' || !retiredNow.includes(lastAttacker)) {
     // Everyone emptied their hand in the same bout.
     finishGame(state, { kind: 'draw' }, now, events);

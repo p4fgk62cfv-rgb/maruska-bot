@@ -13,7 +13,8 @@ import type { DeckSize } from './Deck.js';
 export type Variant = 'podkidnoy' | 'perevodnoy';
 export type ThrowInPolicy = 'all' | 'neighbors';
 export type Fairness = 'fair' | 'cheaters';
-export type Ending = 'classic' | 'draw';
+/** «nodraw» — турнирный стол: ничьей не бывает, при общем выходе дурак — тот, кто отбивался последним. */
+export type Ending = 'classic' | 'draw' | 'nodraw';
 export type Speed = 'normal' | 'fast';
 
 export interface GameSettings {

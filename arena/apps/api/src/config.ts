@@ -31,6 +31,8 @@ const schema = z.object({
   SIGNUP_BONUS_COINS: z.coerce.number().int().nonnegative().default(0),
   /** Seconds tournament players have to press «Готов» before a no-show loss. */
   MATCH_READY_SECONDS: z.coerce.number().int().positive().default(90),
+  /** Мини-турнир группы: сколько ждать игроков у стола, потом техническое поражение. */
+  MINI_TOURNAMENT_READY_SECONDS: z.coerce.number().int().min(1).max(600).default(60),
   /** Logins per minute from one IP (raise only for load tests from a single machine). */
   AUTH_RATE_LIMIT: z.coerce.number().int().positive().default(20),
   /** Postgres connections per instance; keep instances × size under the server's max_connections. */

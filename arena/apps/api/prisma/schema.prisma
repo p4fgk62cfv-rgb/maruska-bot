@@ -35,52 +35,53 @@ model User {
   createdAt    DateTime  @default(now()) @map("created_at")
   lastSeenAt   DateTime  @default(now()) @map("last_seen_at")
 
-  profile            Profile?
-  wallets            Wallet[]
-  transactions       Transaction[]
-  ownedRooms         Room[]            @relation("RoomOwner")
-  gamePlayers        GamePlayer[]
-  gameMoves          GameMove[]
-  friends            Friend[]          @relation("FriendOwner")
-  friendOf           Friend[]          @relation("FriendTarget")
-  sentRequests       FriendRequest[]   @relation("RequestFrom")
-  receivedRequests   FriendRequest[]   @relation("RequestTo")
-  items              UserItem[]
-  achievements       UserAchievement[]
-  tournamentEntries  TournamentPlayer[]
-  notifications      Notification[]
-  seasonRatings      SeasonRating[]
-  notesWritten       PlayerNote[]      @relation("NoteOwner")
-  notesAbout         PlayerNote[]      @relation("NoteTarget")
-  favorites          Favorite[]        @relation("FavoriteOwner")
-  favoredBy          Favorite[]        @relation("FavoriteTarget")
-  reportsSent        PlayerReport[]    @relation("ReportFrom")
-  reportsReceived    PlayerReport[]    @relation("ReportAbout")
-  avatar             UserAvatar?
-  invitedBy          Referral?         @relation("ReferralInvitee")
-  invited            Referral[]        @relation("ReferralReferrer")
-  dailyQuests        DailyQuest[]
-  chatMessages       ChatMessage[]
-  chatReports        ChatReport[]
-  starOrders         StarOrder[]
+  profile           Profile?
+  wallets           Wallet[]
+  transactions      Transaction[]
+  ownedRooms        Room[]                 @relation("RoomOwner")
+  gamePlayers       GamePlayer[]
+  gameMoves         GameMove[]
+  friends           Friend[]               @relation("FriendOwner")
+  friendOf          Friend[]               @relation("FriendTarget")
+  sentRequests      FriendRequest[]        @relation("RequestFrom")
+  receivedRequests  FriendRequest[]        @relation("RequestTo")
+  items             UserItem[]
+  achievements      UserAchievement[]
+  tournamentEntries TournamentPlayer[]
+  miniTournaments   MiniTournamentPlayer[]
+  notifications     Notification[]
+  seasonRatings     SeasonRating[]
+  notesWritten      PlayerNote[]           @relation("NoteOwner")
+  notesAbout        PlayerNote[]           @relation("NoteTarget")
+  favorites         Favorite[]             @relation("FavoriteOwner")
+  favoredBy         Favorite[]             @relation("FavoriteTarget")
+  reportsSent       PlayerReport[]         @relation("ReportFrom")
+  reportsReceived   PlayerReport[]         @relation("ReportAbout")
+  avatar            UserAvatar?
+  invitedBy         Referral?              @relation("ReferralInvitee")
+  invited           Referral[]             @relation("ReferralReferrer")
+  dailyQuests       DailyQuest[]
+  chatMessages      ChatMessage[]
+  chatReports       ChatReport[]
+  starOrders        StarOrder[]
 
   @@map("users")
   @@schema("arena")
 }
 
 model Profile {
-  userId        String    @id @map("user_id") @db.Uuid
+  userId          String    @id @map("user_id") @db.Uuid
   /// Total rating; league and level are derived from it (@arena/shared ratingBadge).
-  rating        Int       @default(0)
+  rating          Int       @default(0)
   /// Credits won over all time — second key of the leaderboard.
-  totalWinnings BigInt    @default(0) @map("total_winnings")
-  gamesPlayed   Int       @default(0) @map("games_played")
-  gamesWon      Int       @default(0) @map("games_won")
-  gamesLost     Int       @default(0) @map("games_lost")
-  gamesDraw     Int       @default(0) @map("games_draw")
-  winStreak     Int       @default(0) @map("win_streak")
-  bestStreak    Int       @default(0) @map("best_streak")
-  premiumUntil  DateTime? @map("premium_until")
+  totalWinnings   BigInt    @default(0) @map("total_winnings")
+  gamesPlayed     Int       @default(0) @map("games_played")
+  gamesWon        Int       @default(0) @map("games_won")
+  gamesLost       Int       @default(0) @map("games_lost")
+  gamesDraw       Int       @default(0) @map("games_draw")
+  winStreak       Int       @default(0) @map("win_streak")
+  bestStreak      Int       @default(0) @map("best_streak")
+  premiumUntil    DateTime? @map("premium_until")
   /// Regular-player bonus (@arena/shared settleBonus).
   bonusMultiplier Int       @default(2) @map("bonus_multiplier")
   bonusLastAt     DateTime? @map("bonus_last_at")
@@ -97,7 +98,7 @@ model Profile {
   loginStep       Int       @default(0) @map("login_step")
   /// A moderator took away the right to write in the common chat until then.
   chatMutedUntil  DateTime? @map("chat_muted_until")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -275,14 +276,14 @@ enum GameOutcome {
 }
 
 model GamePlayer {
-  gameId  String       @map("game_id") @db.Uuid
-  userId  String       @map("user_id") @db.Uuid
-  seat    Int
-  place   Int?
-  outcome GameOutcome?
-  payout  BigInt?
-  net     BigInt?
-  ratingGain Int? @map("rating_gain")
+  gameId     String       @map("game_id") @db.Uuid
+  userId     String       @map("user_id") @db.Uuid
+  seat       Int
+  place      Int?
+  outcome    GameOutcome?
+  payout     BigInt?
+  net        BigInt?
+  ratingGain Int?         @map("rating_gain")
 
   game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id])
@@ -396,18 +397,18 @@ enum Rarity {
 
 /// Cosmetic only: items never change game rules or odds.
 model Item {
-  id        String   @id @default(uuid(7)) @db.Uuid
-  key       String   @unique @db.VarChar(64)
-  kind      ItemKind
-  name      String   @db.VarChar(128)
-  rarity    Rarity   @default(COMMON)
-  price     BigInt   @default(0)
-  currency  Currency @default(COINS)
-  assetUrl  String?  @map("asset_url")
-  isActive  Boolean  @default(true) @map("is_active")
-  sortOrder Int      @default(0) @map("sort_order")
+  id            String   @id @default(uuid(7)) @db.Uuid
+  key           String   @unique @db.VarChar(64)
+  kind          ItemKind
+  name          String   @db.VarChar(128)
+  rarity        Rarity   @default(COMMON)
+  price         BigInt   @default(0)
+  currency      Currency @default(COINS)
+  assetUrl      String?  @map("asset_url")
+  isActive      Boolean  @default(true) @map("is_active")
+  sortOrder     Int      @default(0) @map("sort_order")
   /// Price, name or availability were changed in the admin panel: boot seeding leaves them alone.
-  adminOverride Boolean @default(false) @map("admin_override")
+  adminOverride Boolean  @default(false) @map("admin_override")
 
   owners UserItem[]
 
@@ -495,13 +496,13 @@ model Tournament {
 }
 
 model TournamentPlayer {
-  tournamentId String   @map("tournament_id") @db.Uuid
-  userId       String   @map("user_id") @db.Uuid
-  place        Int?
-  prize        BigInt?
+  tournamentId    String   @map("tournament_id") @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  place           Int?
+  prize           BigInt?
   /// Round in which the player lost; null while still in.
-  eliminatedRound Int? @map("eliminated_round")
-  joinedAt     DateTime @default(now()) @map("joined_at")
+  eliminatedRound Int?     @map("eliminated_round")
+  joinedAt        DateTime @default(now()) @map("joined_at")
 
   tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   user       User       @relation(fields: [userId], references: [id])
@@ -540,6 +541,62 @@ model TournamentMatch {
   @@unique([tournamentId, round, slot])
   @@index([status])
   @@map("tournament_matches")
+  @@schema("arena")
+}
+
+// ───────────────────────── mini-tournaments ─────────────────────────
+
+enum MiniTournamentStatus {
+  RUNNING
+  FINISHED
+  CANCELLED
+
+  @@schema("arena")
+}
+
+/// Мини-турнир группы: один стол на вылет (6 → 5 → … → 2). Запускает админ группы через Мару.
+/// Приз — кредиты в отдельной игре «Дурак Онлайн»: его выдаёт организатор, Арена только сообщает.
+model MiniTournament {
+  id                  String               @id @default(uuid(7)) @db.Uuid
+  chatId              BigInt               @map("chat_id")
+  title               String               @db.VarChar(128)
+  prize               BigInt               @default(0)
+  organizerTelegramId BigInt               @map("organizer_telegram_id")
+  organizerName       String               @map("organizer_name") @db.VarChar(128)
+  settings            Json
+  status              MiniTournamentStatus @default(RUNNING)
+  /// Номер текущего стола: 1 — первый (на всех), дальше на одного меньше.
+  round               Int                  @default(0)
+  roomId              String?              @map("room_id") @db.VarChar(16)
+  winnerId            String?              @map("winner_id") @db.Uuid
+  createdAt           DateTime             @default(now()) @map("created_at")
+  finishedAt          DateTime?            @map("finished_at")
+
+  players MiniTournamentPlayer[]
+
+  @@index([status])
+  @@index([chatId, status])
+  @@map("mini_tournaments")
+  @@schema("arena")
+}
+
+model MiniTournamentPlayer {
+  miniId     String  @map("mini_id") @db.Uuid
+  userId     String  @map("user_id") @db.Uuid
+  telegramId BigInt  @map("telegram_id")
+  name       String  @db.VarChar(128)
+  /// Порядок записи.
+  seat       Int
+  place      Int?
+  /// На каком столе выбыл и почему: game (остался дураком), no_show (не пришёл), left (ушёл).
+  outRound   Int?    @map("out_round")
+  outReason  String? @map("out_reason") @db.VarChar(16)
+
+  mini MiniTournament @relation(fields: [miniId], references: [id], onDelete: Cascade)
+  user User           @relation(fields: [userId], references: [id])
+
+  @@id([miniId, userId])
+  @@map("mini_tournament_players")
   @@schema("arena")
 }
 

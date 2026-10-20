@@ -10,6 +10,7 @@ import type { FriendService } from './services/friends.js';
 import type { ProfileService } from './services/profiles.js';
 import type { ReferralService } from './services/referrals.js';
 import type { TournamentService } from './services/tournaments.js';
+import type { MiniTournamentService } from './services/miniTournaments.js';
 import type { Outbox } from './services/notifier.js';
 import type { Alerts } from './services/alerts.js';
 import type { ChatService } from './services/chat.js';
@@ -44,6 +45,7 @@ export interface Context extends BaseContext {
   profiles: ProfileService;
   referrals: ReferralService;
   tournaments: TournamentService;
+  minis: MiniTournamentService;
   alerts: Alerts;
   chat: ChatService;
   brain: Brain;
