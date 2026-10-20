@@ -4809,6 +4809,26 @@ async def user_messages(chat_id: int, telegram_id: int, limit: int = 60) -> list
     return list(reversed(rows))
 
 
+async def user_messages_elsewhere(chat_id: int, telegram_id: int, limit: int = 60) -> list[str]:
+    """Последние сообщения человека в других группах с Марой — когда в этой он почти не писал."""
+    async with session_scope() as session:
+        rows = (await session.execute(
+            select(MessageMemory.message)
+            .where(MessageMemory.chat_id != chat_id, MessageMemory.telegram_user_id == telegram_id)
+            .order_by(MessageMemory.created_at.desc())
+            .limit(limit)
+        )).scalars().all()
+    return list(reversed(rows))
+
+
+async def groups_count(telegram_id: int) -> int:
+    """В скольких группах с Марой человек состоит."""
+    async with session_scope() as session:
+        return (await session.execute(
+            select(func.count(func.distinct(GroupMember.chat_id))).where(GroupMember.telegram_id == telegram_id)
+        )).scalar() or 0
+
+
 async def get_mini_signup(chat_id: int):
     async with session_scope() as session:
         return await session.get(MiniSignup, chat_id)
