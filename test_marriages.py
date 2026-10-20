@@ -1,0 +1,158 @@
+"""
+Браки: один на все группы, «Мара, пары», свидетельство о браке (картинка и PDF).
+
+    TEST_DATABASE_URL=postgresql://… python test_marriages.py
+"""
+
+import asyncio
+import os
+import pathlib
+import random
+import sys
+import types
+from datetime import datetime, timedelta
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+DB_URL = os.getenv("TEST_DATABASE_URL", "")
+os.environ.setdefault("DATABASE_URL", DB_URL or "postgresql+asyncpg://x:y@127.0.0.1:1/z")
+
+import botcontext  # noqa: E402
+from features import marriage_certificate as mc  # noqa: E402
+from features import social  # noqa: E402
+
+errors = []
+
+
+def check(ok, what):
+    if not ok:
+        errors.append(what)
+
+
+# «Мара, пары» — только после обращения и только сам запрос
+social.is_enabled = lambda chat_id, key: True
+
+
+def group_msg(text):
+    return types.SimpleNamespace(text=text, chat=types.SimpleNamespace(id=-1, type="supergroup"))
+
+
+for text, want in [("Мара, пары", True), ("мара пары?", True), ("Маруська, список пар", True),
+                   ("Мара, браки", True), ("пары", False), ("Мара, пара дня", False),
+                   ("Мара, какие пары красивые", False), ("/marriages", False)]:
+    check(social.is_couples_request(group_msg(text)) == want, f"«{text}» → {not want}")
+
+# @ник в списке — ссылкой, чтобы список никого не уведомлял
+person = social._person("Вася <3", "vasya")
+check(person == 'Вася &lt;3 (<a href="https://t.me/vasya">@vasya</a>)', f"имя с ником: {person}")
+check(social._person("Юля", None) == "Юля", "имя без ника")
+
+# Свидетельство рисуется: картинка и PDF, длинные имена не ломают
+cert = {"number": 7, "name1": "Александра-Виктория Длинноимённая", "name2": "Юля",
+        "tag1": "@alexandra", "tag2": None, "since": "2026-10-20T12:00:00", "group": "Flash"}
+image = mc.jpeg_bytes(cert)
+pdf = mc.pdf_bytes(cert)
+check(image[:3] == b"\xff\xd8\xff" and 100_000 < len(image) < 2_000_000, f"картинка: {len(image)} байт")
+check(pdf[:5] == b"%PDF-" and len(pdf) < 2_000_000, f"PDF: {len(pdf)} байт")
+check(mc.number_text(7) == "№ МР-000007" and mc.file_name(7) == "svidetelstvo-000007.pdf", "номер")
+check(mc.date_ru(datetime(2026, 3, 8)) == "8 марта 2026 года", "дата")
+
+
+async def scenario():
+    from sqlalchemy import delete
+
+    from database.database import init_db, session_scope
+    from database.models import GroupMember, Marriage, User
+    from database import repository as repo
+
+    await init_db()
+
+    base = random.randint(10**9, 2 * 10**9)
+    a, b, c, d = base + 1, base + 2, base + 3, base + 4
+    chat_a, chat_b = -base, -base - 1
+
+    async with session_scope() as session:
+        session.add_all([
+            GroupMember(chat_id=chat_a, telegram_id=a, display_name="Вася"),
+            GroupMember(chat_id=chat_a, telegram_id=b, display_name="Юля"),
+            GroupMember(chat_id=chat_b, telegram_id=a, display_name="Василий"),
+            GroupMember(chat_id=chat_b, telegram_id=c, display_name="Оля"),
+            User(telegram_id=a, username="vasya_test", first_name="Вася"),
+        ])
+        await session.commit()
+
+    try:
+        # Брак один на все группы
+        marriage_id = await repo.create_marriage(chat_a, a, b)
+        check(isinstance(marriage_id, int), "брак заключён")
+        check(await repo.create_marriage(chat_b, a, c) is None, "второй брак в другой группе запрещён")
+        found = await repo.active_marriage(chat_b, a)
+        check(found is not None and found.id == marriage_id, "в другой группе видно, что женат")
+
+        # В группе B видна пара, хотя Юли в ней нет; имя Юли — из группы A
+        couples = await repo.list_marriages(chat_b)
+        mine = [x for x in couples if x["id"] == marriage_id]
+        check(len(mine) == 1 and mine[0]["name1"] == "Василий" and mine[0]["name2"] == "Юля"
+              and mine[0]["username1"] == "vasya_test", f"пары группы B: {couples}")
+        check(await repo.member_name(chat_b, b) == "Юля", "имя из другой группы")
+
+        # Снимок для свидетельства делается один раз и не меняется
+        snap = await social.certificate_of(marriage_id, "Группа A")
+        check(snap["name1"] == "Вася" and snap["tag1"] == "@vasya_test" and snap["group"] == "Группа A"
+              and snap["number"] == marriage_id, f"снимок: {snap}")
+        again = await social.certificate_of(marriage_id, "Другая группа")
+        check(again == snap, "снимок не меняется")
+
+        # Кнопка «Свидетельство»: первый раз PDF рисуется, дальше — по file_id
+        sent = []
+
+        async def answer_document(document, caption=None):
+            sent.append(document)
+            return types.SimpleNamespace(document=types.SimpleNamespace(file_id="FILE123"))
+
+        async def answer(*args, **kwargs):
+            return None
+
+        callback = types.SimpleNamespace(
+            data=f"mcert:{marriage_id}", answer=answer,
+            message=types.SimpleNamespace(answer_document=answer_document),
+        )
+        await social.certificate_download(callback)
+        await social.certificate_download(callback)
+        check(len(sent) == 2 and not isinstance(sent[0], str) and sent[1] == "FILE123", f"скачивание: {sent}")
+
+        # Развод из любой группы
+        check(await repo.end_marriage(chat_b, b) == (a, b), "развод из другой группы")
+        check(await repo.active_marriage(chat_a, a) is None, "после развода свободен")
+
+        # Старые браки из разных групп: остаётся самый ранний
+        now = datetime.utcnow()
+        async with session_scope() as session:
+            session.add_all([
+                Marriage(chat_id=chat_a, user1=a, user2=b, since=now - timedelta(days=10)),
+                Marriage(chat_id=chat_b, user1=a, user2=c, since=now - timedelta(days=5)),
+                Marriage(chat_id=chat_b, user1=c, user2=d, since=now - timedelta(days=1)),
+            ])
+            await session.commit()
+        ended = await repo.dedupe_marriages()
+        ended_pairs = {(x[1], x[2]) for x in ended}
+        check((a, c) in ended_pairs and (a, b) not in ended_pairs, f"расторгнуты повторные: {ended}")
+        left = await repo.active_marriage(None, a)
+        check(left is not None and {left.user1, left.user2} == {a, b}, "остался самый ранний брак")
+    finally:
+        async with session_scope() as session:
+            await session.execute(delete(Marriage).where(Marriage.user1.in_([a, b, c, d]) | Marriage.user2.in_([a, b, c, d])))
+            await session.execute(delete(GroupMember).where(GroupMember.telegram_id.in_([a, b, c, d])))
+            await session.execute(delete(User).where(User.telegram_id.in_([a, b, c, d])))
+            await session.commit()
+
+
+if DB_URL:
+    botcontext.BOT_ID = 777
+    asyncio.run(scenario())
+else:
+    print("⚠️ Без TEST_DATABASE_URL — только проверки без базы")
+
+if errors:
+    print("❌ " + "\n❌ ".join(errors))
+    sys.exit(1)
+print("✅ Браки и свидетельства: все проверки прошли.")

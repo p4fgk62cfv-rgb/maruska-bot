@@ -6,14 +6,17 @@
 новая пара, подряд одна и та же не выпадает.
 
 Браки: /marry (или «выходи за меня») в ответ на сообщение — предложение
-с кнопками. Отвечать может только тот, кому предложили. /marriage —
-кто с кем и сколько дней вместе, /marriages — все пары группы,
-/divorce — развод с подтверждением.
+с кнопками. Отвечать может только тот, кому предложили. Брак один на все
+группы с Марой. После свадьбы Мара выдаёт свидетельство о браке.
+/marriage — кто с кем и сколько дней вместе, /marriages или «Мара, пары» —
+пары, где хотя бы один из супругов есть в группе, у каждой — кнопка
+со свидетельством (PDF). /divorce — развод с подтверждением.
 
 Telegram считает командой только латиницу, поэтому русские варианты
 ловятся как текст.
 """
 
+import asyncio
 import logging
 import random
 import re
@@ -23,11 +26,18 @@ from html import escape
 
 from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import (
+    BufferedInputFile,
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    LinkPreviewOptions,
+    Message,
+)
 
 import audit
 
-from botcontext import display_name_of
+from botcontext import TRIGGER_RE, display_name_of
 
 from settings.store import get_number, is_enabled
 
@@ -38,6 +48,9 @@ router = Router(name="social")
 
 PROPOSAL_TTL = 600          # секунд на ответ
 RING_ITEM = "diamond_ring"
+
+# «Мара, пары», «Мара, браки», «Мара, список пар» — после обращения к Маре
+COUPLES_RE = re.compile(r"^[\s,.!:—-]*(?:все\s+|список\s+)?(?:пары|пар|браки|супруги)\s*[!?.]*\s*$", re.IGNORECASE)
 
 PAIR_RE = re.compile(r"^\s*/?\s*пара\s+дня\s*[!?.]*\s*$", re.IGNORECASE)
 MARRY_RE = re.compile(r"^\s*/?\s*(брак|пожениться|выходи\s+за\s+меня|будь\s+мо(ей|им)(\s+(женой|мужем))?)\s*[!?.]*\s*$", re.IGNORECASE)
@@ -273,7 +286,7 @@ async def marry_answer(callback: CallbackQuery):
     name_b = display_name_of(callback.from_user)
 
     if answer != "yes":
-        await callback.message.edit_text(f"💔 {escape(name_b)} ответил(а) отказом {escape(name_a)}. Держись!")
+        await callback.message.edit_text(f"💔 {escape(name_b)} отказывает {escape(name_a)}. Держись!")
         await callback.answer()
         return
 
@@ -289,7 +302,8 @@ async def marry_answer(callback: CallbackQuery):
             await callback.answer()
             return
 
-    if not await create_marriage(chat_id, proposer_id, target_id):
+    marriage_id = await create_marriage(chat_id, proposer_id, target_id)
+    if not marriage_id:
         if cost:
             await change_balance(telegram_id=proposer_id, amount=cost, reason="admin",
                                  note="Возврат: свадьба не состоялась", chat_id=chat_id)
@@ -305,6 +319,155 @@ async def marry_answer(callback: CallbackQuery):
         "Горько! 🥂"
     )
     await callback.answer("💍")
+
+    try:
+        await send_certificate(callback.message, marriage_id)
+    except Exception as error:
+        logger.error("CERTIFICATE: %s %s", type(error).__name__, error)
+
+
+# Свидетельство рисуется ~1 с: больше двух сразу не рисуем
+_drawing = asyncio.Semaphore(2)
+
+
+def _tag(username: str | None) -> str | None:
+    return f"@{username}" if username else None
+
+
+async def certificate_of(marriage_id: int, chat_title: str | None = None) -> dict | None:
+    """Снимок для свидетельства: имена и @ники на день свадьбы. Создаётся один раз."""
+    from database.repository import get_marriage, people, save_marriage_certificate
+
+    marriage = await get_marriage(marriage_id)
+    if marriage is None:
+        return None
+    if marriage.certificate:
+        return marriage.certificate
+
+    info = await people(marriage.chat_id, (marriage.user1, marriage.user2))
+    cert = {
+        "number": marriage.id,
+        "name1": info[marriage.user1]["name"], "name2": info[marriage.user2]["name"],
+        "tag1": _tag(info[marriage.user1]["username"]), "tag2": _tag(info[marriage.user2]["username"]),
+        "since": marriage.since.isoformat(),
+        "group": chat_title,
+    }
+    await save_marriage_certificate(marriage_id, certificate=cert)
+    return cert
+
+
+def certificate_button(marriage_id: int, text: str = "📜 Скачать свидетельство (PDF)") -> InlineKeyboardButton:
+    return InlineKeyboardButton(text=text, callback_data=f"mcert:{marriage_id}")
+
+
+async def send_certificate(message: Message, marriage_id: int) -> None:
+    """Сразу после свадьбы: свидетельство картинкой и кнопка скачать PDF."""
+    from features import marriage_certificate as mc
+
+    cert = await certificate_of(marriage_id, message.chat.title)
+    if cert is None:
+        return
+    async with _drawing:
+        image = await asyncio.to_thread(mc.jpeg_bytes, cert)
+    await message.answer_photo(
+        BufferedInputFile(image, filename=f"svidetelstvo-{marriage_id:06d}.jpg"),
+        caption=(f"📜 <b>Свидетельство о браке {mc.number_text(marriage_id)}</b>\n"
+                 f"Дворец бракосочетаний «Марушка» поздравляет "
+                 f"{escape(cert['name1'])} и {escape(cert['name2'])}! 💞"),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[certificate_button(marriage_id)]]),
+    )
+
+
+@router.callback_query(F.data.startswith("mcert:"))
+async def certificate_download(callback: CallbackQuery):
+    """Кнопка «Свидетельство»: присылает PDF. Нарисованный однажды PDF Telegram хранит у себя."""
+    from database.repository import get_marriage, save_marriage_certificate
+    from features import marriage_certificate as mc
+
+    try:
+        marriage_id = int(callback.data.split(":")[1])
+    except (IndexError, ValueError):
+        await callback.answer()
+        return
+
+    marriage = await get_marriage(marriage_id)
+    if marriage is None or not marriage.active:
+        await callback.answer("Этого брака больше нет 💔", show_alert=True)
+        return
+
+    await callback.answer("📜 Готовлю свидетельство…")
+    caption = f"📜 Свидетельство о браке {mc.number_text(marriage_id)}"
+
+    if marriage.certificate_file_id:
+        try:
+            await callback.message.answer_document(marriage.certificate_file_id, caption=caption)
+            return
+        except Exception as error:
+            logger.warning("CERTIFICATE FILE: %s %s", type(error).__name__, error)
+
+    cert = await certificate_of(marriage_id)
+    async with _drawing:
+        pdf = await asyncio.to_thread(mc.pdf_bytes, cert)
+    sent = await callback.message.answer_document(
+        BufferedInputFile(pdf, filename=mc.file_name(marriage_id)), caption=caption)
+    if sent.document:
+        await save_marriage_certificate(marriage_id, file_id=sent.document.file_id)
+
+
+def _person(name: str, username: str | None) -> str:
+    """Имя и @ник ссылкой — без уведомления, чтобы список пар никого не дёргал."""
+    if not username:
+        return escape(name)
+    return f'{escape(name)} (<a href="https://t.me/{escape(username)}">@{escape(username)}</a>)'
+
+
+def _short(text: str, limit: int = 14) -> str:
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+async def show_marriages(message: Message) -> None:
+    problem = _marriages_on(message)
+    if problem:
+        await message.reply(problem)
+        return
+
+    from database.repository import list_marriages
+
+    couples = await list_marriages(message.chat.id)
+
+    if not couples:
+        await message.reply("💍 В группе пока нет пар. /marry — сделать предложение")
+        return
+
+    now = datetime.utcnow()
+    lines = ["💞 <b>Пары группы</b>\n"]
+    buttons = []
+
+    for place, c in enumerate(couples[:20], start=1):
+        days = days_together(datetime.fromisoformat(c["since"]), now)
+        lines.append(f"{place}. {_person(c['name1'], c.get('username1'))} 💞 "
+                     f"{_person(c['name2'], c.get('username2'))} — {days} {plural_days(days)}")
+        buttons.append(certificate_button(c["id"], f"📜 {place}. {_short(c['name1'])} & {_short(c['name2'])}"))
+
+    lines.append("\n📜 Свидетельство пары — кнопкой ниже")
+    await message.reply(
+        "\n".join(lines),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[buttons[i:i + 2] for i in range(0, len(buttons), 2)]),
+        link_preview_options=LinkPreviewOptions(is_disabled=True),
+    )
+
+
+def is_couples_request(message: Message) -> bool:
+    text = message.text or ""
+    if message.chat.type not in ("group", "supergroup") or text.startswith("/"):
+        return False
+    found = TRIGGER_RE.search(text)
+    return found is not None and COUPLES_RE.match(text[found.end():]) is not None
+
+
+@router.message(is_couples_request)
+async def couples_text(message: Message):
+    await show_marriages(message)
 
 
 async def _status_text(chat_id: int, user_id: int, name: str) -> str:
@@ -336,27 +499,7 @@ async def marriage_status(message: Message):
 
 @router.message(Command("marriages"))
 async def marriages_list(message: Message):
-    problem = _marriages_on(message)
-    if problem:
-        await message.reply(problem)
-        return
-
-    from database.repository import list_marriages
-
-    couples = await list_marriages(message.chat.id)
-
-    if not couples:
-        await message.reply("💍 В группе пока нет пар. /marry — сделать предложение")
-        return
-
-    now = datetime.utcnow()
-    lines = ["💞 <b>Пары группы</b>\n"]
-
-    for place, c in enumerate(couples[:20], start=1):
-        days = days_together(datetime.fromisoformat(c["since"]), now)
-        lines.append(f"{place}. {escape(c['name1'])} 💞 {escape(c['name2'])} — {days} {plural_days(days)}")
-
-    await message.reply("\n".join(lines))
+    await show_marriages(message)
 
 
 @router.message(Command("divorce"))
@@ -376,7 +519,7 @@ async def divorce(message: Message):
         "💔 Точно развод?",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="💔 Да, развод", callback_data=f"divorce:yes:{message.from_user.id}"),
-            InlineKeyboardButton(text="Передумал(а)", callback_data=f"divorce:no:{message.from_user.id}"),
+            InlineKeyboardButton(text="Передумать", callback_data=f"divorce:no:{message.from_user.id}"),
         ]]),
     )
 
