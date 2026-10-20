@@ -12,7 +12,7 @@ import types
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:y@127.0.0.1:1/z")
 
-from actions.show_me import CAPTIONS, MONKEY_CAPTIONS, RECENT_CAPTIONS, pick_caption  # noqa: E402
+from actions.show_me import CAPTIONS, MONKEY_CAPTIONS, RECENT_CAPTIONS, is_show_other, pick_caption, shown_name  # noqa: E402
 
 errors = []
 
@@ -31,6 +31,25 @@ check("без «(а)»", not any("(а)" in c for c in CAPTIONS))
 picked = [pick_caption("Вася") for _ in range(RECENT_CAPTIONS + 1)]
 check("подряд без повторов", len(set(picked)) == len(picked))
 check("имя подставлено", all("Вася" in p for p in picked))
+
+# «Мара, покажи Юлю» — без @ника и без ответа
+NAMES = {
+    "Мара, покажи Юлю": "Юля",
+    "мара покажи машу": "Маша",
+    "Мара покажи Ивана": "Иван",
+    "Мара, покажи Андрея!": "Андрей",
+    "Мара покажи Игоря": "Игорь",
+    "Мара покажи Юлю Петрову": "Юля Петрова",
+    "Мара покажи котика": None,
+    "Мара покажи меня": None,
+    "Мара, покажи погоду в Москве": None,
+    "Мара покажи что умеешь": None,
+    "Мара покажи его": None,
+}
+for text, expected in NAMES.items():
+    check(f"{text} → {expected}", shown_name(text) == expected)
+check("«покажи Юлю» без цели — это показ", is_show_other("Мара, покажи Юлю", has_target=False))
+check("«покажи котика» без цели — нет", not is_show_other("Мара, покажи котика", has_target=False))
 
 check("обезьяньих подписей не меньше 30", len(MONKEY_CAPTIONS) >= 30)
 check("обезьяньи с именем и 🐒", all("{name}" in c and c.startswith("🐒") for c in MONKEY_CAPTIONS))
