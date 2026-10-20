@@ -145,11 +145,32 @@ async def scenario():
                 Marriage(chat_id=chat_b, user1=c, user2=d, since=now - timedelta(days=1)),
             ])
             await session.commit()
+        chat_c, chat_d = -base - 2, -base - 3
+        async with session_scope() as session:
+            session.add_all([
+                # Та же пара зарегистрирована и в группе B — это не второй брак
+                Marriage(chat_id=chat_b, user1=b, user2=a, since=now - timedelta(days=3)),
+                # …и в группе C, но этот повтор уже закрыли при первом запуске
+                Marriage(chat_id=chat_c, user1=a, user2=b, since=now - timedelta(days=4),
+                         active=False, ended_at=now),
+            ])
+            await session.commit()
         ended = await repo.dedupe_marriages()
         ended_pairs = {(x[1], x[2]) for x in ended}
-        check((a, c) in ended_pairs and (a, b) not in ended_pairs, f"расторгнуты повторные: {ended}")
+        check((a, c) in ended_pairs and (a, b) not in ended_pairs and (b, a) not in ended_pairs,
+              f"расторгнуты только чужие повторы: {ended}")
         left = await repo.active_marriage(None, a)
         check(left is not None and {left.user1, left.user2} == {a, b}, "остался самый ранний брак")
+        check(set(left.chats or []) == {chat_b, chat_c}, f"группы той же пары вернулись: {left.chats}")
+        for chat in (chat_a, chat_b, chat_c):
+            check(any(x["id"] == left.id for x in await repo.list_marriages(chat)), f"пара видна в группе {chat}")
+        check(not any(x["id"] == left.id for x in await repo.list_marriages(chat_d)), "в чужой группе пары нет")
+
+        # Супруги делают предложение друг другу в новой группе — брак виден и там
+        check(await repo.register_marriage_here(chat_d, b, a) == left.id, "регистрация в новой группе")
+        check(any(x["id"] == left.id for x in await repo.list_marriages(chat_d)), "теперь видна и в новой группе")
+        check(await repo.register_marriage_here(chat_d, a, c) is None, "чужая пара не регистрируется")
+        check(await repo.dedupe_marriages() == [], "повторный запуск ничего не меняет")
     finally:
         async with session_scope() as session:
             await session.execute(delete(Marriage).where(Marriage.user1.in_([a, b, c, d]) | Marriage.user2.in_([a, b, c, d])))

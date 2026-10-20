@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta
 
 from sqlalchemy import (
@@ -4523,30 +4524,85 @@ async def end_marriage(chat_id: int | None, telegram_id: int) -> tuple[int, int]
         return pair
 
 
+def _pair(row) -> frozenset[int]:
+    return frozenset((row.user1, row.user2))
+
+
+def _add_chat(row, chat_id: int) -> bool:
+    """Добавляет группу к браку. True — если её там ещё не было."""
+    if chat_id == row.chat_id or chat_id in (row.chats or []):
+        return False
+    row.chats = [*(row.chats or []), chat_id]
+    return True
+
+
 async def dedupe_marriages() -> list[tuple[int, int, int]]:
     """
     Раньше браки были отдельными в каждой группе. Теперь брак один:
     у кого действующих браков несколько, остаётся самый ранний,
-    остальные расторгаются. Возвращает расторгнутые (номер, супруг, супруг).
+    остальные расторгаются. Если это та же пара, зарегистрированная в
+    нескольких группах, — группа просто добавляется к её браку.
+
+    Ещё чинит первый запуск, когда такие повторы одной пары расторгались:
+    брак той же пары, закрытый, пока действовал основной, — это не развод,
+    а повтор; его группа возвращается к браку.
+
+    Возвращает расторгнутые браки разных пар (номер, супруг, супруг).
     """
     async with session_scope() as session:
         rows = (await session.execute(
             select(Marriage).where(Marriage.active.is_(True)).order_by(Marriage.since, Marriage.id)
         )).scalars().all()
 
-        busy: set[int] = set()
+        kept: dict[int, Marriage] = {}
         ended = []
+        changed = False
         for row in rows:
-            if row.user1 in busy or row.user2 in busy:
-                row.active = False
-                row.ended_at = utcnow()
-                ended.append((row.id, row.user1, row.user2))
+            first = kept.get(row.user1) or kept.get(row.user2)
+            if first is None:
+                kept[row.user1] = kept[row.user2] = row
+                continue
+            row.active = False
+            row.ended_at = utcnow()
+            changed = True
+            if _pair(first) == _pair(row):
+                _add_chat(first, row.chat_id)
             else:
-                busy.update((row.user1, row.user2))
+                ended.append((row.id, row.user1, row.user2))
 
-        if ended:
+        # Повторы той же пары, расторгнутые раньше, пока основной брак уже шёл
+        alive = {_pair(row): row for row in rows if row.active}
+        if alive:
+            closed = (await session.execute(
+                select(Marriage).where(Marriage.active.is_(False), Marriage.ended_at.is_not(None))
+            )).scalars().all()
+            for row in closed:
+                main = alive.get(_pair(row))
+                if main is not None and row.id != main.id and row.ended_at > main.since and _add_chat(main, row.chat_id):
+                    changed = True
+                    logging.getLogger("maruska.marriages").info(
+                        "БРАКИ: брак №%s снова виден в группе %s (повтор №%s)", main.id, row.chat_id, row.id)
+
+        if changed:
             await session.commit()
     return ended
+
+
+async def register_marriage_here(chat_id: int, user1: int, user2: int) -> int | None:
+    """Пара уже в браке друг с другом — брак становится виден и в этой группе. Номер брака или None."""
+    async with session_scope() as session:
+        row = (await session.execute(
+            select(Marriage).where(
+                Marriage.active.is_(True),
+                ((Marriage.user1 == user1) & (Marriage.user2 == user2))
+                | ((Marriage.user1 == user2) & (Marriage.user2 == user1)),
+            ).limit(1)
+        )).scalar_one_or_none()
+        if row is None:
+            return None
+        if _add_chat(row, chat_id):
+            await session.commit()
+        return row.id
 
 
 async def get_marriage(marriage_id: int):
@@ -4602,13 +4658,12 @@ async def people(chat_id: int | None, ids) -> dict[int, dict]:
 
 
 async def list_marriages(chat_id: int) -> list[dict]:
-    """Пары группы — те, кто поженился именно здесь. Брак один на все группы,
-    но список пар у каждой группы свой."""
+    """Пары группы — те, кто поженился (или зарегистрировал брак) именно здесь.
+    Брак один на все группы, но список пар у каждой группы свой."""
     async with session_scope() as session:
-        rows = (await session.execute(
-            select(Marriage).where(Marriage.chat_id == chat_id, Marriage.active.is_(True))
-            .order_by(Marriage.since)
-        )).scalars().all()
+        rows = [r for r in (await session.execute(
+            select(Marriage).where(Marriage.active.is_(True)).order_by(Marriage.since)
+        )).scalars().all() if r.chat_id == chat_id or chat_id in (r.chats or [])]
 
     info = await people(chat_id, {r.user1 for r in rows} | {r.user2 for r in rows})
 
