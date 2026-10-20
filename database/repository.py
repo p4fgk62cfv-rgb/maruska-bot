@@ -4588,6 +4588,46 @@ async def dedupe_marriages() -> list[tuple[int, int, int]]:
     return ended
 
 
+async def move_marriage(usernames: tuple[str, str], title_part: str) -> str:
+    """
+    Разовый перенос брака пары (по @никам) в группу (по части названия):
+    группа становится основной, другие убираются. Повторный запуск ничего не меняет.
+    Возвращает, что сделано, — для лога.
+    """
+    async with session_scope() as session:
+        groups = (await session.execute(
+            select(GroupSettings.chat_id, GroupSettings.title).where(GroupSettings.title.ilike(f"%{title_part}%"))
+        )).all()
+        if len(groups) != 1:
+            return f"группа «{title_part}» не найдена однозначно: {[(g[0], g[1]) for g in groups]}"
+        chat_id, title = groups[0]
+
+        users = (await session.execute(
+            select(User.telegram_id, User.username).where(
+                func.lower(User.username).in_([u.lower() for u in usernames]))
+        )).all()
+        if len(users) != 2:
+            return f"не найдены оба супруга {usernames}: {users}"
+        a, b = users[0][0], users[1][0]
+
+        row = (await session.execute(
+            select(Marriage).where(
+                Marriage.active.is_(True),
+                ((Marriage.user1 == a) & (Marriage.user2 == b)) | ((Marriage.user1 == b) & (Marriage.user2 == a)),
+            ).limit(1)
+        )).scalar_one_or_none()
+        if row is None:
+            return f"у {usernames} нет действующего брака"
+        if row.chat_id == chat_id and not row.chats:
+            return f"брак №{row.id} уже в группе {chat_id} «{title}»"
+
+        before = (row.chat_id, list(row.chats or []))
+        row.chat_id = chat_id
+        row.chats = None
+        await session.commit()
+        return f"брак №{row.id} перенесён в группу {chat_id} «{title}» (было: {before[0]}, ещё {before[1]})"
+
+
 async def register_marriage_here(chat_id: int, user1: int, user2: int) -> int | None:
     """Пара уже в браке друг с другом — брак становится виден и в этой группе. Номер брака или None."""
     async with session_scope() as session:
