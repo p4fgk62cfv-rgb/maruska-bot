@@ -23,7 +23,8 @@ export function modeLabels(s: RoomDto['settings']): string[] {
 
 /** Speed, deck and the four modes of a table as a row of small glyphs. */
 export function ModeStrip({ settings }: { settings: RoomDto['settings'] }) {
-  const modes: GameMode[] = [settings.variant, settings.throwIn, settings.fairness, settings.ending];
+  // Турнирный стол «без ничьей» рисуем как классику
+  const modes: GameMode[] = [settings.variant, settings.throwIn, settings.fairness, settings.ending === 'nodraw' ? 'classic' : settings.ending];
   const title = [SPEED_LABEL_RU[settings.speed], `${settings.deckSize} карт`, ...modeLabels(settings)].join(' · ');
   return (
     <span className="mode-strip" title={title} aria-label={title}>

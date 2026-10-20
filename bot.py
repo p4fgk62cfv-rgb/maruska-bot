@@ -53,6 +53,9 @@ from features.moderation import router as moderation_router
 from features.chatters import router as chatters_router
 from features.member_since import router as member_since_router
 from features.harmony import router as harmony_router
+from features.info_chance import router as info_chance_router
+from features.who_am_i import router as who_am_i_router
+from features.who_today import router as who_today_router
 from features.arena_promo import arena_promo_loop, router as arena_promo_router
 from features.birthdays import BirthdayAskMiddleware, birthday_loop, router as birthdays_router
 from features.social import router as social_router
@@ -71,6 +74,7 @@ from games.dice import router as dice_router
 from games.table import router as table_router
 from games.fishing import router as fishing_router
 from games.arena import router as arena_router
+from features.mini_tournament import router as mini_tournament_router
 
 from progress.handler import router as progress_router
 
@@ -161,6 +165,9 @@ dp.include_router(basic_router)
 dp.include_router(chatters_router)
 dp.include_router(member_since_router)
 dp.include_router(harmony_router)
+dp.include_router(info_chance_router)
+dp.include_router(who_am_i_router)
+dp.include_router(who_today_router)
 dp.include_router(birthdays_router)
 dp.include_router(social_router)
 dp.include_router(moderation_router)
@@ -174,6 +181,7 @@ dp.include_router(table_router)
 dp.include_router(draw_router)
 dp.include_router(fishing_router)
 dp.include_router(arena_router)
+dp.include_router(mini_tournament_router)
 dp.include_router(arena_promo_router)
 dp.include_router(rating_router)
 dp.include_router(weather_router)

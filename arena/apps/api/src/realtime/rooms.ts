@@ -111,7 +111,9 @@ export class RoomManager {
       createdAt: room.createdAt,
       premium: room.seats.some((s) => s.premium),
       readyDeadline: room.readyDeadline,
-      tournament: room.tournament ? { id: room.tournament.id, title: room.tournament.title, round: room.tournament.round } : null,
+      tournament: room.tournament
+        ? { id: room.tournament.id, title: room.tournament.title, round: room.tournament.round, ...(room.tournament.kind ? { kind: room.tournament.kind } : {}) }
+        : null,
     };
   }
 
@@ -223,7 +225,11 @@ export class RoomManager {
   private async joinRoom(userId: string, roomId: string, access: { password?: string; invite?: string }): Promise<MyRoomDto> {
     const room = this.rooms.get(roomId);
     if (!room) throw new AppError('ROOM_CLOSED');
-    if (room.seats.some((s) => s.userId === userId)) return this.mine(room);
+    if (room.seats.some((s) => s.userId === userId)) {
+      // Мини-турнир: зашёл за стол — значит готов; когда пришли все, партия начинается сама.
+      if (room.tournament?.kind === 'mini' && room.status === 'waiting') await this.setReady(userId, roomId, true);
+      return this.mine(room);
+    }
 
     await this.leaveWaitingRoomOf(userId);
     return this.queue(roomId).run(async () => {
@@ -311,8 +317,8 @@ export class RoomManager {
    * table is moved out of it; a player still in a running game makes this throw (retry later).
    */
   async createMatchRoom(
-    tournament: { id: string; title: string; round: number; matchId: string },
-    userIds: [string, string],
+    tournament: NonNullable<Room['tournament']>,
+    userIds: string[],
     settings: Omit<RoomConfig, 'stake' | 'players'>,
   ): Promise<Room> {
     for (const userId of userIds) {
@@ -325,10 +331,10 @@ export class RoomManager {
     const room: Room = {
       id: newRoomId(),
       server: 'almaz',
-      ownerId: userIds[0],
+      ownerId: userIds[0]!,
       isPrivate: true,
       passwordHash: null,
-      settings: { ...settings, stake: 0, players: 2 },
+      settings: { ...settings, stake: 0, players: userIds.length },
       status: 'waiting',
       seats,
       gameId: null,
@@ -343,7 +349,7 @@ export class RoomManager {
         ownerId: room.ownerId,
         isPrivate: true,
         stake: 0n,
-        maxPlayers: 2,
+        maxPlayers: userIds.length,
         deckSize: settings.deckSize,
         speed: settings.speed,
         variant: settings.variant,
@@ -353,7 +359,7 @@ export class RoomManager {
       },
     });
     this.rooms.set(room.id, room);
-    this.armReadyTimer(room, this.deps.config.MATCH_READY_SECONDS * 1000);
+    this.armReadyTimer(room, this.matchReadyMs(room));
     await this.changed(room);
     return room;
   }
@@ -364,6 +370,14 @@ export class RoomManager {
     if (!room || room.status !== 'waiting' || room.tournament) return false;
     await this.queue(roomId).run(() => this.closeRoom(room));
     return true;
+  }
+
+  /** Мини-турнир отменён: закрыть его стол, пока партия не началась. */
+  async closeMatchRoom(room: Room): Promise<void> {
+    if (!room.tournament) return;
+    await this.queue(room.id).run(async () => {
+      if (room.status === 'waiting') await this.closeRoom(room);
+    });
   }
 
   /** Removes a room and everyone in it (used for tournament matches that end without a game). */
@@ -597,7 +611,7 @@ export class RoomManager {
     });
     this.rooms.set(room.id, room);
     if (room.tournament && room.status === 'waiting') {
-      this.armReadyTimer(room, this.deps.config.MATCH_READY_SECONDS * 1000);
+      this.armReadyTimer(room, this.matchReadyMs(room));
       return;
     }
     if (room.status === 'waiting') {
@@ -670,6 +684,10 @@ export class RoomManager {
     this.botArmed.delete(roomId);
     this.clearTimer(`ready:${roomId}`);
     this.clearTimer(`bots:${roomId}`);
+  }
+
+  private matchReadyMs(room: Room): number {
+    return room.tournament?.readyMs ?? this.deps.config.MATCH_READY_SECONDS * 1000;
   }
 
   private armReadyTimer(room: Room, ms = READY_TIMEOUT_MS): void {

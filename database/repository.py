@@ -47,6 +47,7 @@ from database.models import (
     UserProfile,
     UserFact,
     MessageMemory,
+    MiniSignup,
     GroupMember,
     RatingVote,
     ActionImage,
@@ -4717,3 +4718,40 @@ async def mark_chat_once(chat_id: int, key: str) -> bool:
         )
         await session.commit()
         return bool(result.rowcount)
+
+
+async def user_messages(chat_id: int, telegram_id: int, limit: int = 60) -> list[str]:
+    """Последние сообщения человека в группе — от старых к новым (для «Мара, кто я?»)."""
+    async with session_scope() as session:
+        rows = (await session.execute(
+            select(MessageMemory.message)
+            .where(MessageMemory.chat_id == chat_id, MessageMemory.telegram_user_id == telegram_id)
+            .order_by(MessageMemory.created_at.desc())
+            .limit(limit)
+        )).scalars().all()
+    return list(reversed(rows))
+
+
+async def get_mini_signup(chat_id: int):
+    async with session_scope() as session:
+        return await session.get(MiniSignup, chat_id)
+
+
+async def save_mini_signup(chat_id: int, **fields) -> None:
+    """Создаёт или обновляет запись на мини-турнир группы."""
+    async with session_scope() as session:
+        row = await session.get(MiniSignup, chat_id)
+        if row is None:
+            session.add(MiniSignup(chat_id=chat_id, **fields))
+        else:
+            for key, value in fields.items():
+                setattr(row, key, value)
+        await session.commit()
+
+
+async def delete_mini_signup(chat_id: int) -> None:
+    async with session_scope() as session:
+        row = await session.get(MiniSignup, chat_id)
+        if row is not None:
+            await session.delete(row)
+            await session.commit()

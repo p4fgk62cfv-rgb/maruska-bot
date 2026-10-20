@@ -3,6 +3,7 @@ import { ratingBadge } from '@arena/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Context } from '../context.js';
+import { startMiniSchema } from '../services/miniTournaments.js';
 import { createTournamentSchema } from '../services/tournaments.js';
 import { adminRoutes } from './admin.js';
 import { AppError } from '../lib/errors.js';
@@ -45,6 +46,19 @@ export async function internalRoutes(app: FastifyInstance, ctx: Context): Promis
   app.post('/internal/tournaments', { preHandler: check }, async (request) => {
     const id = await ctx.tournaments.create(createTournamentSchema.parse(request.body));
     return { id };
+  });
+
+  // ── мини-турниры групп (Мара набирает стол, дальше ведёт Арена) ──
+  app.post('/internal/mini-tournaments', { preHandler: check }, async (request) => ctx.minis.create(startMiniSchema.parse(request.body)));
+
+  app.post('/internal/mini-tournaments/cancel', { preHandler: check }, async (request) => {
+    const { chatId } = z.object({ chatId: z.coerce.bigint() }).parse(request.body);
+    return { cancelled: await ctx.minis.cancel(chatId) };
+  });
+
+  app.get('/internal/mini-tournaments/active', { preHandler: check }, async (request) => {
+    const { chatId } = z.object({ chatId: z.coerce.bigint() }).parse(request.query);
+    return { tournament: await ctx.minis.active(chatId) };
   });
 
   // ── moderation ──

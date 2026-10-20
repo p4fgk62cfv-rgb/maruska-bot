@@ -15,7 +15,7 @@ export const roomSettingsSchema = z.object({
   variant: z.enum(['podkidnoy', 'perevodnoy']),
   throwIn: z.enum(['all', 'neighbors']),
   fairness: z.enum(['fair', 'cheaters']),
-  ending: z.enum(['classic', 'draw']),
+  ending: z.enum(['classic', 'draw', 'nodraw']),
   server: z.string().min(1).max(32),
   isPrivate: z.boolean(),
   password: z.string().min(1).max(32).optional(),

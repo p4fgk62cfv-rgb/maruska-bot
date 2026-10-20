@@ -160,6 +160,20 @@ FEATURES: tuple[Feature, ...] = (
         default=False,
     ),
     Feature(
+        key="who_today",
+        title="Кто сегодня",
+        emoji="🎯",
+        description="«Мара, кто сегодня улитка?», «Мара, кто меня сегодня любит?» — Мара выбирает случайного участника",
+        group="Жизнь чата",
+    ),
+    Feature(
+        key="info_chance",
+        title="Инфа",
+        emoji="🔮",
+        description="«Мара, инфа что Стас сегодня чокнулся» — вероятность случайным процентом",
+        group="Жизнь чата",
+    ),
+    Feature(
         key="harmony",
         title="Гармония",
         emoji="💞",

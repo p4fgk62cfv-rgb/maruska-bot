@@ -36,6 +36,7 @@ import { friendRoutes } from './routes/friends.js';
 import { internalRoutes } from './routes/internal.js';
 import { tournamentRoutes } from './routes/tournaments.js';
 import { SeasonService } from './services/seasons.js';
+import { MiniTournamentService } from './services/miniTournaments.js';
 import { TournamentService } from './services/tournaments.js';
 import { StarsService } from './services/stars.js';
 import { starsRoutes } from './routes/stars.js';
@@ -95,6 +96,15 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   const outbox = new Outbox(base.db, bot, app.log);
   const friends = new FriendService({ ...base, outbox, presence, realtime });
   const tournaments = new TournamentService({ ...base, outbox, realtime, log: app.log });
+  const minis = new MiniTournamentService({ ...base, realtime, bot: bot ?? { send: async () => 'blocked' as const }, log: app.log });
+  // Столы мини-турниров группы решает свой сервис, остальные матчи — турнирная сетка.
+  const bracket = realtime.rooms.matchHooks;
+  const failed = (error: unknown) => app.log.error({ err: error }, 'mini-tournament hook failed');
+  realtime.rooms.matchHooks = {
+    finished: (room, result) => (room.tournament?.kind === 'mini' ? void minis.onFinished(room, result).catch(failed) : bracket?.finished(room, result)),
+    noShow: (room, ready) => (room.tournament?.kind === 'mini' ? void minis.onNoShow(room, ready).catch(failed) : bracket?.noShow(room, ready)),
+    forfeit: (room, userId) => (room.tournament?.kind === 'mini' ? void minis.onForfeit(room, userId).catch(failed) : bracket?.forfeit(room, userId)),
+  };
   const seasons = new SeasonService({ ...base, outbox, log: app.log });
   const profiles = new ProfileService({ db: base.db, items: base.items, presence, friends: () => friends });
   const referrals = new ReferralService({ ...base, outbox, realtime, log: app.log });
@@ -111,7 +121,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   });
   base.users.useChat(chat);
   const stars = new StarsService({ db: base.db, ledger: base.ledger, bot, outbox, log: app.log });
-  const ctx: Context = { ...base, realtime, presence, outbox, friends, profiles, tournaments, referrals, alerts, chat, brain, trainer, stars };
+  const ctx: Context = { ...base, realtime, presence, outbox, friends, profiles, tournaments, minis, referrals, alerts, chat, brain, trainer, stars };
   await base.moderation.loadBans();
   useBanList(base.moderation);
   await base.bots.ensurePool();
@@ -126,6 +136,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
     chat.start();
     stars.start();
     void realtime.ready.then(() => tournaments.start());
+    void realtime.ready.then(() => minis.start());
     // Only the server that holds the tables starts seasons and pays prizes: two servers during a deploy never race.
     void realtime.ready.then(() => seasons.start());
     // One server trains: the one that runs the games (it holds the lease).
@@ -147,6 +158,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
     chat.stop();
     stars.stop();
     tournaments.stop();
+    minis.stop();
     showcase.stop();
     await trainer.stop();
     await realtime.shutdown();

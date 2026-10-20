@@ -122,7 +122,11 @@ export function RoomScreen({ room }: { room: RoomDto }) {
               : `Свободно мест: ${room.settings.players - room.seats.length}`}
           </p>
           {room.tournament ? (
-            <p className="room-center__sub">Не нажмёте «Готов» вовремя или выйдете — матч засчитается сопернику.</p>
+            <p className="room-center__sub">
+              {room.tournament.kind === 'mini'
+                ? 'Мини-турнир: кто не зайдёт за стол вовремя или выйдет — техническое поражение.'
+                : 'Не нажмёте «Готов» вовремя или выйдете — матч засчитается сопернику.'}
+            </p>
           ) : (
             <>
               {!full && (

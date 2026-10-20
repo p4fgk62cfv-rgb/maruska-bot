@@ -275,7 +275,7 @@
             R("megaphone", "blue", "Рассылки", "Фото, видео, кнопки, расписание", "broadcasts"),
             R("calendar", "purple", "Итоги недели и топы", has ? on(v("digest"), "Итоги включены", "Итоги выключены") + " · топ " + (v("top_chatters") ? l("top_chatters_size") : "выкл.") : "Итоги, топ болтунов, часовой пояс",
               "settings", "keys:Итоги недели и топы:digest,digest_weekday,digest_hour,top_chatters,top_chatters_size,timezone"),
-            R("heart", "pink", "Пара дня", has ? on(v("pair_of_day")) : "Кто сегодня пара", "settings", "keys:Пара дня и гармония:pair_of_day,pair_active_days,harmony"),
+            R("heart", "pink", "Пара дня", has ? on(v("pair_of_day")) : "Кто сегодня пара", "settings", "keys:Пара дня, гармония, «кто сегодня» и «инфа»:pair_of_day,pair_active_days,harmony,who_today,info_chance"),
             R("gift", "gold", "Дни рождения", has ? on(v("birthdays"), "Подарок " + l("birthday_gift"), "Выключены") : "Напоминания и подарки",
               "settings", "keys:Дни рождения:birthdays,birthday_remind_days,birthday_hour,birthday_gift,birthday_ask_hours"),
             R("game", "green", "Игры в группе", has ? on(v("arena_promo"), "Каждые " + l("arena_promo_hours") + " с " + v("arena_promo_hour") + ":00", "Выключено") : "Арена и Рыбалка с кнопками по расписанию",
