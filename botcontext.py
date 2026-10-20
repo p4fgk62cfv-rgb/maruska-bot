@@ -86,6 +86,14 @@ def is_wordless_reply_to_bot(message) -> bool:
     return _WORD_CHAR.search(text) is None
 
 
+def is_reply_to_bot_media(message) -> bool:
+    """Ответ на картинку, гифку или видео от Мары — люди комментируют снимок, а не говорят с ней."""
+    reply = message.reply_to_message
+    if not (reply and reply.from_user and reply.from_user.id == BOT_ID):
+        return False
+    return any(getattr(reply, kind, None) for kind in ("photo", "animation", "video", "sticker", "document"))
+
+
 def get_rank_info(karma: int) -> str:
     if karma >= 500:
         return "Легенда"
