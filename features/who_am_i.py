@@ -105,7 +105,8 @@ async def collect_facts(chat_id: int, telegram_id: int) -> list[str]:
     marriage = await active_marriage(chat_id, telegram_id)
     if marriage is not None:
         partner = marriage.user2 if marriage.user1 == telegram_id else marriage.user1
-        facts.append(f"В браке в этом чате с: {await member_name(chat_id, partner)}")
+        days = max((datetime.utcnow() - marriage.since).days, 0) + 1
+        facts.append(f"В браке с: {await member_name(chat_id, partner)} (вместе {days} дн.)")
     return facts
 
 

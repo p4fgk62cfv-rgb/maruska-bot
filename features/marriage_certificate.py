@@ -10,6 +10,7 @@
 
 import io
 import random
+import unicodedata
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -21,12 +22,17 @@ ASSETS = Path(__file__).resolve().parent.parent / "assets" / "marriage"
 WIDTH, HEIGHT = 2480, 1754          # A4 альбомная, ~210 dpi
 DPI = 210
 
-BG_TOP = (16, 10, 28)
-BG_BOTTOM = (6, 4, 12)
-SILVER = (222, 222, 232)
-SILVER_DIM = (150, 146, 170)
-VIOLET = (170, 120, 255)
-VIOLET_DIM = (96, 60, 160)
+# Белая бумага, тёмно-сливовые чернила и фиолетовые акценты под печать
+BG_TOP = (255, 255, 255)
+BG_BOTTOM = (246, 242, 252)
+GLOW = (236, 226, 252)
+SILVER = (46, 28, 78)               # основной текст и рамка
+SILVER_DIM = (118, 102, 150)        # второстепенный текст
+VIOLET = (124, 72, 214)
+VIOLET_DIM = (186, 160, 230)
+
+# Меняется при каждой смене оформления: старые PDF из Telegram больше не годятся
+VERSION = 2
 
 MONTHS = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля",
           "августа", "сентября", "октября", "ноября", "декабря")
@@ -59,13 +65,33 @@ def number_text(number: int) -> str:
     return f"№ МР-{number:06d}"
 
 
+def clean_name(text: str | None, fallback: str = "Супруг") -> str:
+    """
+    Имя для шрифта: «жирные» и прочие стилизованные буквы Telegram (𝐋𝐞𝐬𝐲𝐚)
+    превращаются в обычные, эмодзи и знаки, которых нет в шрифте, убираются.
+    """
+    text = unicodedata.normalize("NFKC", text or "")
+    kept = []
+    for ch in text:
+        code = ord(ch)
+        if ch.isspace():
+            kept.append(" ")
+        elif (ch.isalnum() and (code < 0x0250 or 0x0400 <= code <= 0x04FF)) or ch in "-'.&_":
+            kept.append(ch)
+    cleaned = " ".join("".join(kept).split()).strip(" -'._")
+    # «STANISLAV» каллиграфией не читается — пишем как обычное имя
+    if len(cleaned) > 3 and cleaned.isupper():
+        cleaned = cleaned.title()
+    return cleaned or fallback
+
+
 def _short(text: str, limit: int) -> str:
     text = " ".join((text or "").split())
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
 def _background() -> Image.Image:
-    """Тёмный фон с фиолетовым свечением в центре и звёздной пылью."""
+    """Белая бумага с лёгким сиреневым свечением в центре и звёздной пылью."""
     image = Image.new("RGB", (WIDTH, HEIGHT), BG_BOTTOM)
     draw = ImageDraw.Draw(image)
     for y in range(HEIGHT):
@@ -75,7 +101,7 @@ def _background() -> Image.Image:
     glow = Image.new("L", (WIDTH, HEIGHT), 0)
     ImageDraw.Draw(glow).ellipse((WIDTH * 0.18, HEIGHT * 0.12, WIDTH * 0.82, HEIGHT * 0.92), fill=120)
     glow = glow.filter(ImageFilter.GaussianBlur(260))
-    image.paste(Image.new("RGB", (WIDTH, HEIGHT), (58, 26, 104)), (0, 0), glow)
+    image.paste(Image.new("RGB", (WIDTH, HEIGHT), GLOW), (0, 0), glow)
 
     # Звёздная пыль — одна и та же на всех свидетельствах
     rng = random.Random(7)
@@ -83,8 +109,8 @@ def _background() -> Image.Image:
     for _ in range(420):
         x, y = rng.randrange(WIDTH), rng.randrange(HEIGHT)
         r = rng.choice((1, 1, 1, 2))
-        level = rng.randrange(60, 150)
-        dust.ellipse((x - r, y - r, x + r, y + r), fill=(level, level - 10, level + 40))
+        level = rng.randrange(200, 235)
+        dust.ellipse((x - r, y - r, x + r, y + r), fill=(level, level - 14, 250))
     return image
 
 
@@ -194,7 +220,8 @@ def render(number: int, name1: str, name2: str, tag1: str | None, tag2: str | No
     y = _centered(draw, y + 66, "Настоящим удостоверяется, что", _font("CormorantGaramond.ttf", 46, 500), SILVER_DIM)
 
     # Имена супругов каллиграфией
-    name1, name2 = _short(name1, MAX_NAME), _short(name2, MAX_NAME)
+    name1 = _short(clean_name(name1, (tag1 or "").lstrip("@") or "Супруг"), MAX_NAME)
+    name2 = _short(clean_name(name2, (tag2 or "").lstrip("@") or "Супруг"), MAX_NAME)
     names = f"{name1}  &  {name2}"
     font = _fit(draw, names, "MarckScript-Regular.ttf", 136, WIDTH - 560)
     y = _centered(draw, y + 10, names, font, SILVER)

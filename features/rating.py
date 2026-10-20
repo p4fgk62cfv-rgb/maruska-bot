@@ -190,8 +190,18 @@ async def profile_handler(message: Message):
 
         wallet += "\n"
 
+    marriage = ""
+
+    if is_enabled(message.chat.id, "marriages"):
+        from features.social import marriage_line
+
+        line = await marriage_line(message.chat.id, message.from_user.id)
+        if line:
+            marriage = line + "\n\n"
+
     await message.answer(
         f"👤 <b>{name}</b>\n\n"
+        f"{marriage}"
         f"{levels}"
         f"🎖 Ранг: <b>{get_rank_info(profile.karma)}</b>\n"
         f"⭐ Рейтинг: <b>{profile.karma}</b>\n"

@@ -56,6 +56,11 @@ check(pdf[:5] == b"%PDF-" and len(pdf) < 2_000_000, f"PDF: {len(pdf)} байт")
 check(mc.number_text(7) == "№ МР-000007" and mc.file_name(7) == "svidetelstvo-000007.pdf", "номер")
 check(mc.date_ru(datetime(2026, 3, 8)) == "8 марта 2026 года", "дата")
 
+# Стилизованные ники Telegram — в обычные буквы, эмодзи прочь
+for raw, want in [("🦋𝐋𝐞𝐬𝐲𝐚🦋", "Lesya"), ("STANISLAV", "Stanislav"), ("Юля 💕", "Юля"),
+                  ("✨✨", "Супруг"), ("Ａｎｎａ", "Anna"), ("Анна-Мария", "Анна-Мария")]:
+    check(mc.clean_name(raw) == want, f"имя «{raw}» → {mc.clean_name(raw)!r}, ждали {want!r}")
+
 
 async def scenario():
     from sqlalchemy import delete
@@ -88,11 +93,12 @@ async def scenario():
         found = await repo.active_marriage(chat_b, a)
         check(found is not None and found.id == marriage_id, "в другой группе видно, что женат")
 
-        # В группе B видна пара, хотя Юли в ней нет; имя Юли — из группы A
-        couples = await repo.list_marriages(chat_b)
+        # Список пар у каждой группы свой: пара из A есть в A и нет в B
+        couples = await repo.list_marriages(chat_a)
         mine = [x for x in couples if x["id"] == marriage_id]
-        check(len(mine) == 1 and mine[0]["name1"] == "Василий" and mine[0]["name2"] == "Юля"
-              and mine[0]["username1"] == "vasya_test", f"пары группы B: {couples}")
+        check(len(mine) == 1 and mine[0]["name1"] == "Вася" and mine[0]["name2"] == "Юля"
+              and mine[0]["username1"] == "vasya_test", f"пары группы A: {couples}")
+        check(not [x for x in await repo.list_marriages(chat_b) if x["id"] == marriage_id], "в группе B пары из A нет")
         check(await repo.member_name(chat_b, b) == "Юля", "имя из другой группы")
 
         # Снимок для свидетельства делается один раз и не меняется
@@ -119,6 +125,12 @@ async def scenario():
         await social.certificate_download(callback)
         await social.certificate_download(callback)
         check(len(sent) == 2 and not isinstance(sent[0], str) and sent[1] == "FILE123", f"скачивание: {sent}")
+
+        # После смены оформления старый PDF не отдаём — рисуем заново
+        await repo.save_marriage_certificate(marriage_id, file_id="v0:OLD")
+        sent.clear()
+        await social.certificate_download(callback)
+        check(len(sent) == 1 and not isinstance(sent[0], str), f"старый PDF перерисован: {sent}")
 
         # Развод из любой группы
         check(await repo.end_marriage(chat_b, b) == (a, b), "развод из другой группы")
