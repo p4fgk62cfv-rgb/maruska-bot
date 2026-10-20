@@ -21,6 +21,7 @@ from actions.show_me import (
     pick_caption,
     pick_meow_caption,
     pick_mood,
+    shown_name,
 )
 
 from botcontext import display_name_of, is_addressed
@@ -213,7 +214,7 @@ def is_show_other_request(message: Message) -> bool:
     if not is_show_other(message.text, _has_target(message)):
         return False
 
-    # Обращение к Маре обязательно: «покажи @vasya» без имени — разговор людей
+    # Обращение к Маре обязательно: «покажи Юлю» без её имени — разговор людей
     from botcontext import TRIGGER_RE
 
     return bool(TRIGGER_RE.search(message.text)) or message.chat.type == "private"
@@ -221,7 +222,8 @@ def is_show_other_request(message: Message) -> bool:
 
 @router.message(is_show_other_request)
 async def show_other_handler(message: Message):
-    name = await other_name(message)
+    # «Мара, покажи Юлю» — имя из текста; иначе ответ на сообщение или @ник
+    name = shown_name(message.text) or await other_name(message)
     if not name:
         return
     await send_portrait(message, escape(name))
