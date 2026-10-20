@@ -121,9 +121,9 @@ def main() -> int:
 
     for user_id in range(300):
         body = fortune.predict(user_id, "X").split("\n\n")[1]
-        if body in fortune.FUNNY:
+        if body in fortune.JOKES:
             seen_funny = True
-        elif body in fortune.SERIOUS:
+        elif body in fortune.CALM:
             seen_serious = True
         else:
             failures.append("  [предсказание] текст не из списков")
@@ -131,6 +131,17 @@ def main() -> int:
 
     if not (seen_funny and seen_serious):
         failures.append("  [предсказание] встречается только один вид")
+
+    # Любовь, деньги и подколы теперь тоже выпадают
+    checks += 1
+    if not (set(fortune.LOVE) <= set(fortune.CALM) and set(fortune.MONEY) <= set(fortune.CALM)
+            and set(fortune.ROAST) <= set(fortune.JOKES)):
+        failures.append("  [предсказание] любовь, деньги или подколы не попадают в выборку")
+    checks += 1
+    for pool in fortune.POOLS.values():
+        if len(set(pool)) != len(pool) or len(pool) < 10:
+            failures.append("  [предсказание] повторы или мало вариантов в режиме")
+            break
 
     # =====================================================
     # Магазин
