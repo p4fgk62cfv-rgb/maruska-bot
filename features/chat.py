@@ -19,7 +19,7 @@ import context_cache
 
 from ai.router import ask_ai
 
-from botcontext import display_name_of, is_addressed, is_wordless_reply_to_bot
+from botcontext import display_name_of, is_addressed, is_reply_to_bot_media, is_wordless_reply_to_bot
 
 from database.repository import (
     get_recent_messages,
@@ -170,6 +170,10 @@ def should_answer(message: Message) -> bool:
     # Ответили Маре одними смайлами — это не вопрос, молчим
     if is_wordless_reply_to_bot(message):
         return _skip(message, "ответ смайлами без слов")
+
+    # Комментарий к её картинке — молчим, если только не позвали по имени
+    if is_reply_to_bot_media(message) and not called_by_name(message):
+        return _skip(message, "комментарий к картинке Мары")
 
     if addressed:
         if mode != "quiet":
