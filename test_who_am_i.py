@@ -1,5 +1,5 @@
 """
-«Мара, кто я?» — характеристика по памяти Мары.
+«Мара, кто я?» — карточка человека (как /profile), у каждого своя.
 Запуск:  python test_who_am_i.py
 """
 
@@ -8,21 +8,16 @@ import os
 import pathlib
 import sys
 import types
-from datetime import datetime, timedelta
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:y@127.0.0.1:1/z")
 
-import ai.router  # noqa: E402
 import botcontext  # noqa: E402
-import database.repository as repo  # noqa: E402
 from features import who_am_i as w  # noqa: E402
 from features import who_today  # noqa: E402
 
 errors = []
 botcontext.BOT_ID = 777
-w.is_enabled = lambda chat_id, key: True
-w.get_value = lambda chat_id, key: None
 
 vasya = types.SimpleNamespace(id=2, is_bot=False, first_name="Вася", username="vasya")
 
@@ -69,115 +64,108 @@ m, _ = msg("Мара, кто я сегодня?")
 if w.is_who_am_i(m) or who_today.parse(m.text) is None:
     errors.append("«кто я сегодня» — это «кто сегодня», не характеристика")
 
-prompts = []
+from features import rating  # noqa: E402
+from features import social  # noqa: E402
+import database.repository as repo  # noqa: E402
+
+PROFILES = {
+    1: dict(display_name="STANISLAV", karma=26, xp=2125, bonus_streak=1, messages_count=1042, games_played=26, games_won=10),
+    2: dict(display_name="Вася", karma=3, xp=10, bonus_streak=0, messages_count=7, games_played=0, games_won=0),
+}
 
 
-async def fake_ai(prompt, persona=None):
-    prompts.append(prompt)
-    return "Ты душа чата <и> любитель пива."
+async def get_profile(uid):
+    data = PROFILES.get(uid)
+    return types.SimpleNamespace(**data) if data else None
 
 
-async def messages_of(chat_id, uid, limit):
-    return {1: ["привет всем", "кто на пиво?", "/bonus", "пиво лучше вина", "люблю футбол"], 2: ["ок"]}.get(uid, [])
+async def created(telegram_id, display_name=None):
+    PROFILES[telegram_id] = dict(display_name=display_name, karma=0, xp=0, bonus_streak=0,
+                                 messages_count=0, games_played=0, games_won=0)
 
 
-async def messages_elsewhere(chat_id, uid, limit):
-    # Новичок в этой группе (id 3) — зато много писал в другой
-    return {3: ["играю в арену каждый вечер", "рыбалка — моё всё", "кто в дурака?"]}.get(uid, [])[:limit]
+async def position(uid):
+    return 1 if uid == 1 else 5
 
 
-async def groups(uid):
-    return 3
+async def stats(uid):
+    return {"positive": 16 if uid == 1 else 0, "negative": 0}
 
 
-async def member(chat_id, uid):
-    return types.SimpleNamespace(messages_count=120)
+async def balance(uid):
+    return 1287 if uid == 1 else 0
 
 
-async def since(chat_id, uid):
-    return {"joined_at": datetime.utcnow() - timedelta(days=40), "exact": True, "left_at": None, "name": "Стас"}
-
-
-async def profile(uid):
-    return types.SimpleNamespace(karma=7)
-
-
-async def birthday(uid):
-    return (15, 3)
+async def inventory(uid):
+    return 0
 
 
 async def marriage(chat_id, uid):
-    return None
-
-
-async def name_of(chat_id, uid):
-    return {1: "Стас", 2: "Вася"}.get(uid, "Игрок")
+    return "💍 В браке с <b>Lesya</b> — 25 дней" if uid == 1 else None
 
 
 async def by_username(username):
     return types.SimpleNamespace(telegram_id=2) if username.lower() == "vasya" else None
 
 
-ai.router.ask_ai = fake_ai
-repo.user_messages = messages_of
-repo.user_messages_elsewhere = messages_elsewhere
-repo.groups_count = groups
-repo.get_member = member
-repo.member_since = since
-repo.get_profile = profile
-repo.get_birthday = birthday
-repo.active_marriage = marriage
-repo.member_name = name_of
+async def name_of(chat_id, uid):
+    return {1: "Стас", 2: "Вася"}.get(uid, "Игрок")
+
+
+rating.is_enabled = lambda chat_id, key: True
+rating.get_profile = get_profile
+rating.create_profile_if_needed = created
+rating.get_rating_position = position
+rating.get_rating_stats = stats
+rating.get_balance = balance
+rating.count_inventory = inventory
+social.marriage_line = marriage
 repo.get_user_by_username = by_username
+repo.member_name = name_of
 
 
 async def main():
     m, said = msg("Мара, кто я?")
     await w.who_am_i(m)
-    if not said or "душа чата" not in said[0] or "&lt;и&gt;" not in said[0]:
-        errors.append(f"ответ нейросети (и экранирован): {said}")
-    p = prompts[-1]
-    for fact in ("пиво лучше вина", "120", "В группе дней: 40", "Карма", "15.03", "на «ты»"):
-        if fact not in p:
-            errors.append(f"в подсказке нет «{fact}»")
-    if "/bonus" in p:
-        errors.append("команды не попадают в память для характеристики")
+    card = said[0] if said else ""
+    for part in ("👤 <b>STANISLAV</b>", "💍 В браке с <b>Lesya</b> — 25 дней", "Рейтинг: <b>26</b>", "Место: <b>#1</b>",
+                 "1 287", "Серия бонусов: <b>1</b>", "Сообщений: <b>1042</b>", "Игр: <b>26</b>", "Побед: <b>10</b>",
+                 "Положительных оценок: <b>16</b>"):
+        if part not in card:
+            errors.append(f"«кто я» — в карточке нет {part!r}")
 
     m, said = msg("Мара, кто это?", vasya)
     await w.who_am_i(m)
-    if not said or "мало знаю" not in said[0] or "Вася" not in said[0]:
-        errors.append(f"мало сообщений — честно говорит: {said}")
+    if not said or "👤 <b>Вася</b>" not in said[0] or "В браке" in said[0]:
+        errors.append(f"«кто это» ответом — карточка Васи: {said}")
 
-    # Новичок в группе: характеристика по сообщениям из других групп
-    newbie = types.SimpleNamespace(id=3, is_bot=False, first_name="Оля", last_name=None, username="olya")
-    m, said = msg("Мара, кто я?")
-    m.from_user = newbie
+    m, said = msg("Мара кто @vasya?")
     await w.who_am_i(m)
-    p = prompts[-1]
-    if not said or "душа чата" not in said[0] or "рыбалка" not in p or "Состоит в группах с Марой: 3" not in p:
-        errors.append(f"новичок — память из других групп: {said} / {p[-300:]}")
-
-    # /profile — то же, что «Мара, кто я?»
-    from features import rating
-
-    m, said = msg("/profile")
-    await rating.profile_handler(m)
-    if not said or "душа чата" not in said[0] or "Мара, кто я?" not in prompts[-1]:
-        errors.append(f"/profile = «кто я»: {said}")
+    if not said or "👤 <b>Вася</b>" not in said[0]:
+        errors.append(f"«кто @vasya» — карточка Васи: {said}")
 
     m, said = msg("Мара кто @nobody?")
     await w.who_am_i(m)
     if not said or "Не знаю такого" not in said[0]:
         errors.append(f"неизвестный ник: {said}")
 
-    async def broken_ai(prompt, persona=None):
-        raise RuntimeError("все нейросети молчат")
-
-    ai.router.ask_ai = broken_ai
-    m, said = msg("Мара, кто я?")
+    # Новичок без профиля — карточка создаётся
+    m, said = msg("Мара, кто я?", uid=3)
     await w.who_am_i(m)
-    if not said or "Маруська знает" not in said[0] or "120" not in said[0]:
-        errors.append(f"без нейросети — факты: {said}")
+    if not said or "👤 <b>Стас</b>" not in said[0]:
+        errors.append(f"новичок — своя карточка: {said}")
+
+    # /profile — та же карточка
+    answered = []
+
+    async def answer(t):
+        answered.append(t)
+
+    m, _ = msg("/profile")
+    m.answer = answer
+    await rating.profile_handler(m)
+    if not answered or "👤 <b>STANISLAV</b>" not in answered[0]:
+        errors.append(f"/profile: {answered}")
 
 
 asyncio.run(main())
