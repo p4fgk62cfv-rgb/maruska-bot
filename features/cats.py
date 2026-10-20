@@ -4,6 +4,8 @@
 
 import asyncio
 import logging
+import random
+import time
 from html import escape
 
 from aiogram import Router
@@ -15,6 +17,7 @@ from actions.show_me import (
     is_meow,
     is_show_me,
     is_show_other,
+    MONKEY_STEMS,
     pick_caption,
     pick_meow_caption,
     pick_mood,
@@ -92,6 +95,45 @@ async def send_cat(message: Message, caption: str):
         await message.reply("Котик не отправился 🐾")
 
 
+# Каждый второй портрет — обезьянка, если есть своя коллекция #обезьяна
+MONKEY_CHANCE = 0.5
+MONKEY_TAGS_TTL = 300
+_monkey_tags: tuple[float, list[str]] = (0.0, [])
+
+
+async def monkey_tags() -> list[str]:
+    global _monkey_tags
+    loaded, tags = _monkey_tags
+    if loaded and time.monotonic() - loaded < MONKEY_TAGS_TTL:
+        return tags
+    try:
+        from database.repository import library_summary
+
+        tags = [row["tag"] for row in await library_summary() if row["tag"].startswith(MONKEY_STEMS)]
+    except Exception as error:
+        logger.error("MONKEY TAGS: %s %s", type(error).__name__, error)
+        tags = []
+    _monkey_tags = (time.monotonic(), tags)
+    return tags
+
+
+async def send_portrait(message: Message, name: str):
+    """«Покажи меня»: котик или обезьянка — и подпись под того, кто выпал."""
+    tags = await monkey_tags()
+    if tags and random.random() < MONKEY_CHANCE:
+        import images_library
+
+        library = await images_library.pick(message.chat.id, "lib:" + random.choice(tags))
+        if library is not None:
+            try:
+                await message.answer_photo(photo=library["file_id"], caption=pick_caption(name, monkey=True))
+                return
+            except Exception as error:
+                logger.error("LIBRARY MONKEY: %s %s", type(error).__name__, error)
+
+    await send_cat(message, pick_caption(name))
+
+
 def is_show_me_request(message: Message) -> bool:
     if not is_enabled(message.chat.id, "cats"):
         return False
@@ -107,10 +149,7 @@ def is_show_me_request(message: Message) -> bool:
 
 @router.message(is_show_me_request)
 async def show_me_handler(message: Message):
-    await send_cat(
-        message,
-        pick_caption(escape(display_name_of(message.from_user))),
-    )
+    await send_portrait(message, escape(display_name_of(message.from_user)))
 
 
 def is_meow_request(message: Message) -> bool:
@@ -185,4 +224,4 @@ async def show_other_handler(message: Message):
     name = await other_name(message)
     if not name:
         return
-    await send_cat(message, pick_caption(escape(name)))
+    await send_portrait(message, escape(name))
