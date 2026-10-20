@@ -216,7 +216,17 @@ async def propose(message: Message) -> None:
 
     chat_id = message.chat.id
 
-    if await active_marriage(chat_id, user.id):
+    mine = await active_marriage(chat_id, user.id)
+    if mine is not None and {mine.user1, mine.user2} == {user.id, target.id}:
+        # Уже супруги — просто показываем брак и в этой группе
+        from database.repository import register_marriage_here
+
+        await register_marriage_here(chat_id, user.id, target.id)
+        await message.reply(f"💞 {escape(display_name_of(user))} и {escape(display_name_of(target))} уже супруги! "
+                            "Теперь ваш брак виден и в этой группе — «Мара, пары»")
+        return
+
+    if mine is not None:
         await message.reply("💍 Ты уже в браке. Сначала /divorce 😉")
         return
 

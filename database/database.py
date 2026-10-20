@@ -251,6 +251,7 @@ async def init_db():
             "ALTER TABLE mini_signups ADD COLUMN IF NOT EXISTS settings JSON",
             "ALTER TABLE marriages ADD COLUMN IF NOT EXISTS certificate JSON",
             "ALTER TABLE marriages ADD COLUMN IF NOT EXISTS certificate_file_id VARCHAR(255)",
+            "ALTER TABLE marriages ADD COLUMN IF NOT EXISTS chats JSON",
 
             "CREATE INDEX IF NOT EXISTS ix_audit_chat_created "
             "ON audit_events (chat_id, created_at DESC)",

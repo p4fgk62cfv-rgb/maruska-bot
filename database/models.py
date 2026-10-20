@@ -1203,6 +1203,9 @@ class Marriage(Base):
 
     certificate_file_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # Другие группы, где эта же пара тоже зарегистрирована, — там она тоже в «парах группы»
+    chats: Mapped[list | None] = mapped_column(JSON, nullable=True)
+
 
 class DailyPick(Base):
     """Выбор дня (пара дня): один раз в сутки по местному времени группы."""
