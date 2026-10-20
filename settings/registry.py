@@ -167,6 +167,13 @@ FEATURES: tuple[Feature, ...] = (
         group="Жизнь чата",
     ),
     Feature(
+        key="info_chance",
+        title="Инфа",
+        emoji="🔮",
+        description="«Мара, инфа что Стас сегодня чокнулся» — вероятность случайным процентом",
+        group="Жизнь чата",
+    ),
+    Feature(
         key="harmony",
         title="Гармония",
         emoji="💞",
