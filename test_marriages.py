@@ -171,11 +171,29 @@ async def scenario():
         check(any(x["id"] == left.id for x in await repo.list_marriages(chat_d)), "теперь видна и в новой группе")
         check(await repo.register_marriage_here(chat_d, a, c) is None, "чужая пара не регистрируется")
         check(await repo.dedupe_marriages() == [], "повторный запуск ничего не меняет")
+
+        # Разовый перенос пары в группу по названию и @никам
+        from database.models import GroupSettings
+
+        title = f"꧁ DIAMOND{base} ꧂"
+        async with session_scope() as session:
+            session.add(GroupSettings(chat_id=chat_d, title=title, values={}))
+            session.add(User(telegram_id=b, username="Yulia_Test", first_name="Юля"))
+            await session.commit()
+        note = await repo.move_marriage(("vasya_test", "yulia_test"), f"diamond{base}")
+        moved = await repo.active_marriage(None, a)
+        check(moved.chat_id == chat_d and not moved.chats and "перенесён" in note, f"перенос: {note}")
+        check([x["id"] for x in await repo.list_marriages(chat_d)] == [moved.id], "пара в новой группе")
+        check(not any(x["id"] == moved.id for x in await repo.list_marriages(chat_b)), "из других групп убрана")
+        check("уже в группе" in await repo.move_marriage(("vasya_test", "yulia_test"), f"diamond{base}"), "повтор — без изменений")
+        check("не найдена" in await repo.move_marriage(("vasya_test", "yulia_test"), "нет-такой-группы"), "нет группы")
     finally:
         async with session_scope() as session:
             await session.execute(delete(Marriage).where(Marriage.user1.in_([a, b, c, d]) | Marriage.user2.in_([a, b, c, d])))
             await session.execute(delete(GroupMember).where(GroupMember.telegram_id.in_([a, b, c, d])))
             await session.execute(delete(User).where(User.telegram_id.in_([a, b, c, d])))
+            from database.models import GroupSettings
+            await session.execute(delete(GroupSettings).where(GroupSettings.chat_id.in_([chat_a, chat_b, -base - 2, -base - 3])))
             await session.commit()
 
 
