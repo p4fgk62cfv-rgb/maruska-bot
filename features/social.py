@@ -8,9 +8,9 @@
 Браки: /marry (или «выходи за меня») в ответ на сообщение — предложение
 с кнопками. Отвечать может только тот, кому предложили. Брак один на все
 группы с Марой. После свадьбы Мара выдаёт свидетельство о браке.
-/marriage — кто с кем и сколько дней вместе, /marriages или «Мара, пары» —
-пары, где хотя бы один из супругов есть в группе, у каждой — кнопка
-со свидетельством (PDF). /divorce — развод с подтверждением.
+/marriage — кто с кем и сколько дней вместе (брак виден в любой группе),
+/marriages или «Мара, пары» — пары, поженившиеся в этой группе, у каждой —
+кнопка со свидетельством (PDF). /divorce — развод с подтверждением.
 
 Telegram считает командой только латиницу, поэтому русские варианты
 ловятся как текст.
@@ -398,9 +398,11 @@ async def certificate_download(callback: CallbackQuery):
     await callback.answer("📜 Готовлю свидетельство…")
     caption = f"📜 Свидетельство о браке {mc.number_text(marriage_id)}"
 
-    if marriage.certificate_file_id:
+    # PDF в Telegram подписан версией оформления: после смены дизайна рисуем заново
+    prefix = f"v{mc.VERSION}:"
+    if (marriage.certificate_file_id or "").startswith(prefix):
         try:
-            await callback.message.answer_document(marriage.certificate_file_id, caption=caption)
+            await callback.message.answer_document(marriage.certificate_file_id[len(prefix):], caption=caption)
             return
         except Exception as error:
             logger.warning("CERTIFICATE FILE: %s %s", type(error).__name__, error)
@@ -411,7 +413,7 @@ async def certificate_download(callback: CallbackQuery):
     sent = await callback.message.answer_document(
         BufferedInputFile(pdf, filename=mc.file_name(marriage_id)), caption=caption)
     if sent.document:
-        await save_marriage_certificate(marriage_id, file_id=sent.document.file_id)
+        await save_marriage_certificate(marriage_id, file_id=prefix + sent.document.file_id)
 
 
 def _person(name: str, username: str | None) -> str:
@@ -468,6 +470,18 @@ def is_couples_request(message: Message) -> bool:
 @router.message(is_couples_request)
 async def couples_text(message: Message):
     await show_marriages(message)
+
+
+async def marriage_line(chat_id: int, user_id: int) -> str | None:
+    """«💍 В браке с Юлей — 25 дней» для профиля. Брак виден в любой группе."""
+    from database.repository import active_marriage, member_name
+
+    marriage = await active_marriage(chat_id, user_id)
+    if marriage is None:
+        return None
+    partner = marriage.user2 if marriage.user1 == user_id else marriage.user1
+    days = days_together(marriage.since, datetime.utcnow())
+    return f"💍 В браке с <b>{escape(await member_name(chat_id, partner))}</b> — {days} {plural_days(days)}"
 
 
 async def _status_text(chat_id: int, user_id: int, name: str) -> str:

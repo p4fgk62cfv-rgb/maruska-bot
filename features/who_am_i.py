@@ -86,7 +86,15 @@ def _days(moment: datetime | None) -> int | None:
 
 
 async def collect_facts(chat_id: int, telegram_id: int) -> list[str]:
-    from database.repository import active_marriage, get_birthday, get_member, get_profile, member_name, member_since
+    from database.repository import (
+        active_marriage,
+        get_birthday,
+        get_member,
+        get_profile,
+        groups_count,
+        member_name,
+        member_since,
+    )
 
     facts = []
     member = await get_member(chat_id, telegram_id)
@@ -97,6 +105,15 @@ async def collect_facts(chat_id: int, telegram_id: int) -> list[str]:
     if days is not None:
         facts.append(f"В группе дней: {days}")
     profile = await get_profile(telegram_id)
+    # Дальше — про человека целиком, из всех групп с Марой
+    groups = await groups_count(telegram_id)
+    if groups > 1:
+        facts.append(f"Состоит в группах с Марой: {groups}")
+    total = getattr(profile, "messages_count", 0) or 0
+    if total and groups > 1:
+        facts.append(f"Всего сообщений во всех группах: {total}")
+    if getattr(profile, "games_played", 0):
+        facts.append(f"Сыграно игр: {profile.games_played}, побед: {profile.games_won or 0}")
     if profile is not None and profile.karma:
         facts.append(f"Карма (рейтинг от других): {profile.karma}")
     birthday = await get_birthday(telegram_id)
@@ -105,7 +122,8 @@ async def collect_facts(chat_id: int, telegram_id: int) -> list[str]:
     marriage = await active_marriage(chat_id, telegram_id)
     if marriage is not None:
         partner = marriage.user2 if marriage.user1 == telegram_id else marriage.user1
-        facts.append(f"В браке в этом чате с: {await member_name(chat_id, partner)}")
+        days = max((datetime.utcnow() - marriage.since).days, 0) + 1
+        facts.append(f"В браке с: {await member_name(chat_id, partner)} (вместе {days} дн.)")
     return facts
 
 
@@ -132,7 +150,7 @@ async def _resolve(message: Message, kind: str, username: str | None):
 @router.message(is_who_am_i)
 async def who_am_i(message: Message):
     from ai.router import ask_ai
-    from database.repository import user_messages
+    from database.repository import user_messages, user_messages_elsewhere
 
     kind, username = parse(message)
     target = await _resolve(message, kind, username)
@@ -145,7 +163,11 @@ async def who_am_i(message: Message):
         return
 
     chat_id = message.chat.id
-    messages = [m for m in await user_messages(chat_id, telegram_id, MESSAGES) if m and not m.startswith("/")]
+    messages = await user_messages(chat_id, telegram_id, MESSAGES)
+    # В новой группе человек почти не писал — добираем из других групп с Марой
+    if len(messages) < MESSAGES:
+        messages = await user_messages_elsewhere(chat_id, telegram_id, MESSAGES - len(messages)) + messages
+    messages = [m for m in messages if m and not m.startswith("/")]
     facts = await collect_facts(chat_id, telegram_id)
     about_self = telegram_id == message.from_user.id
 

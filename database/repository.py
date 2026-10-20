@@ -4602,14 +4602,12 @@ async def people(chat_id: int | None, ids) -> dict[int, dict]:
 
 
 async def list_marriages(chat_id: int) -> list[dict]:
-    """Пары, где хотя бы один из супругов есть в этой группе — даже если второй в другой."""
+    """Пары группы — те, кто поженился именно здесь. Брак один на все группы,
+    но список пар у каждой группы свой."""
     async with session_scope() as session:
-        members = select(GroupMember.telegram_id).where(GroupMember.chat_id == chat_id)
         rows = (await session.execute(
-            select(Marriage).where(
-                Marriage.active.is_(True),
-                Marriage.user1.in_(members) | Marriage.user2.in_(members),
-            ).order_by(Marriage.since)
+            select(Marriage).where(Marriage.chat_id == chat_id, Marriage.active.is_(True))
+            .order_by(Marriage.since)
         )).scalars().all()
 
     info = await people(chat_id, {r.user1 for r in rows} | {r.user2 for r in rows})
@@ -4809,6 +4807,26 @@ async def user_messages(chat_id: int, telegram_id: int, limit: int = 60) -> list
             .limit(limit)
         )).scalars().all()
     return list(reversed(rows))
+
+
+async def user_messages_elsewhere(chat_id: int, telegram_id: int, limit: int = 60) -> list[str]:
+    """Последние сообщения человека в других группах с Марой — когда в этой он почти не писал."""
+    async with session_scope() as session:
+        rows = (await session.execute(
+            select(MessageMemory.message)
+            .where(MessageMemory.chat_id != chat_id, MessageMemory.telegram_user_id == telegram_id)
+            .order_by(MessageMemory.created_at.desc())
+            .limit(limit)
+        )).scalars().all()
+    return list(reversed(rows))
+
+
+async def groups_count(telegram_id: int) -> int:
+    """В скольких группах с Марой человек состоит."""
+    async with session_scope() as session:
+        return (await session.execute(
+            select(func.count(func.distinct(GroupMember.chat_id))).where(GroupMember.telegram_id == telegram_id)
+        )).scalar() or 0
 
 
 async def get_mini_signup(chat_id: int):

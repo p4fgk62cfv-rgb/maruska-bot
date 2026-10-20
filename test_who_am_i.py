@@ -81,6 +81,15 @@ async def messages_of(chat_id, uid, limit):
     return {1: ["привет всем", "кто на пиво?", "/bonus", "пиво лучше вина", "люблю футбол"], 2: ["ок"]}.get(uid, [])
 
 
+async def messages_elsewhere(chat_id, uid, limit):
+    # Новичок в этой группе (id 3) — зато много писал в другой
+    return {3: ["играю в арену каждый вечер", "рыбалка — моё всё", "кто в дурака?"]}.get(uid, [])[:limit]
+
+
+async def groups(uid):
+    return 3
+
+
 async def member(chat_id, uid):
     return types.SimpleNamespace(messages_count=120)
 
@@ -111,6 +120,8 @@ async def by_username(username):
 
 ai.router.ask_ai = fake_ai
 repo.user_messages = messages_of
+repo.user_messages_elsewhere = messages_elsewhere
+repo.groups_count = groups
 repo.get_member = member
 repo.member_since = since
 repo.get_profile = profile
@@ -136,6 +147,15 @@ async def main():
     await w.who_am_i(m)
     if not said or "мало знаю" not in said[0] or "Вася" not in said[0]:
         errors.append(f"мало сообщений — честно говорит: {said}")
+
+    # Новичок в группе: характеристика по сообщениям из других групп
+    newbie = types.SimpleNamespace(id=3, is_bot=False, first_name="Оля", last_name=None, username="olya")
+    m, said = msg("Мара, кто я?")
+    m.from_user = newbie
+    await w.who_am_i(m)
+    p = prompts[-1]
+    if not said or "душа чата" not in said[0] or "рыбалка" not in p or "Состоит в группах с Марой: 3" not in p:
+        errors.append(f"новичок — память из других групп: {said} / {p[-300:]}")
 
     m, said = msg("Мара кто @nobody?")
     await w.who_am_i(m)
