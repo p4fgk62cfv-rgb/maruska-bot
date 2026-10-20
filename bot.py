@@ -74,6 +74,7 @@ from games.dice import router as dice_router
 from games.table import router as table_router
 from games.fishing import router as fishing_router
 from games.arena import router as arena_router
+from features.mini_tournament import router as mini_tournament_router
 
 from progress.handler import router as progress_router
 
@@ -180,6 +181,7 @@ dp.include_router(table_router)
 dp.include_router(draw_router)
 dp.include_router(fishing_router)
 dp.include_router(arena_router)
+dp.include_router(mini_tournament_router)
 dp.include_router(arena_promo_router)
 dp.include_router(rating_router)
 dp.include_router(weather_router)

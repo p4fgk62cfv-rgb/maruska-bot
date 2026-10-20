@@ -1462,3 +1462,24 @@ class ChatOnce(Base):
     key: Mapped[str] = mapped_column(String(64))
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class MiniSignup(Base):
+    """Запись на мини-турнир группы: одно сообщение Мары со списком, пока стол не набран."""
+
+    __tablename__ = "mini_signups"
+
+    chat_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+
+    message_id: Mapped[int] = mapped_column(BigInteger)
+
+    prize: Mapped[int] = mapped_column(BigInteger, default=0)
+
+    organizer_id: Mapped[int] = mapped_column(BigInteger)
+
+    organizer_name: Mapped[str] = mapped_column(String(128))
+
+    # [{"id": 123, "name": "Стас", "username": "stas"}, …] — в порядке записи
+    players: Mapped[list] = mapped_column(JSON, default=list)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
