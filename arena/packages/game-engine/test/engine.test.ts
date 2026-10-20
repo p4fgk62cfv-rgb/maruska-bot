@@ -275,12 +275,12 @@ describe('end of game', () => {
     expect(state.winner).toBe('p2');
   });
 
-  it('"без ничьей" (турнир): when everyone empties in the same bout, the last defender is the fool', () => {
+  it('"без ничьей" (турнир): when everyone empties in the same bout, whoever threw the last card is the fool', () => {
     let state = arranged({ trump: '6H', settings: { ending: 'nodraw' }, hands: [['7S'], ['8S']] });
     state = act(state, 'p1', { type: 'PLAY_CARD', card: '7S' });
     state = act(state, 'p2', { type: 'PLAY_CARD', card: '8S', target: 0 });
-    expect(state.result).toEqual({ kind: 'loser', loser: 'p2', reason: 'last_defense' });
-    expect(state.winner).toBe('p1');
+    expect(state.result).toEqual({ kind: 'loser', loser: 'p1', reason: 'last_attack' });
+    expect(state.winner).toBe('p2');
   });
 
   it('"без ничьей": a normal game still ends with whoever holds cards', () => {

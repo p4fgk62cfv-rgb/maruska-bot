@@ -15,14 +15,12 @@ const REASON: Record<string, string> = {
   surrender: 'сдался',
   timeout: 'не успел сходить',
   last_attack: 'подкинул последнюю карту',
-  last_defense: 'отбивался последним',
 };
 const REASON_ME: Record<string, string> = {
   cards: 'Вы остались с картами',
   surrender: 'Вы сдались',
   timeout: 'Вы не успели сходить',
   last_attack: 'Вы подкинули последнюю карту',
-  last_defense: 'Вы отбивались последним',
 };
 
 const COLORS = ['#f5c451', '#a78bfa', '#22d3ee', '#fb7185', '#34d399'];

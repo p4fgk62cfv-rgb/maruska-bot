@@ -27,12 +27,22 @@ export const MINI_MAX_PLAYERS = 6;
 
 const person = z.object({ telegramId: z.coerce.bigint(), name: z.string().min(1).max(128), username: z.string().max(64).nullish() });
 
+/** Правила стола и сколько ждать у стола — их задают в админке Мары. */
+export const miniRulesSchema = z.object({
+  variant: z.enum(['podkidnoy', 'perevodnoy']).default(MINI_SETTINGS.variant),
+  throwIn: z.enum(['all', 'neighbors']).default(MINI_SETTINGS.throwIn),
+  speed: z.enum(['normal', 'fast']).default(MINI_SETTINGS.speed),
+  readySeconds: z.number().int().min(15).max(600).optional(),
+});
+export type MiniRules = z.infer<typeof miniRulesSchema>;
+
 export const startMiniSchema = z.object({
   chatId: z.coerce.bigint(),
   title: z.string().min(3).max(128).default('Мини-турнир'),
   prize: z.number().int().min(0).max(1_000_000_000),
   organizer: person,
   players: z.array(person).min(MINI_MIN_PLAYERS).max(MINI_MAX_PLAYERS),
+  rules: miniRulesSchema.default({ variant: MINI_SETTINGS.variant, throwIn: MINI_SETTINGS.throwIn, speed: MINI_SETTINGS.speed }),
 });
 export type StartMini = z.infer<typeof startMiniSchema>;
 
@@ -112,7 +122,7 @@ export class MiniTournamentService {
         prize: BigInt(input.prize),
         organizerTelegramId: input.organizer.telegramId,
         organizerName: input.organizer.name.slice(0, 128),
-        settings: MINI_SETTINGS,
+        settings: input.rules,
         players: {
           create: input.players.map((p, seat) => ({ userId: users[seat]!, telegramId: p.telegramId, name: p.name.slice(0, 128), seat })),
         },
@@ -180,12 +190,13 @@ export class MiniTournamentService {
       return;
     }
     const round = mini.round + 1;
+    const rules = this.rules(mini);
     let room: Room;
     try {
       room = await this.deps.realtime.rooms.createMatchRoom(
-        { id: mini.id, title: mini.title, round, matchId: mini.id, kind: 'mini', readyMs: this.deps.config.MINI_TOURNAMENT_READY_SECONDS * 1000 },
+        { id: mini.id, title: mini.title, round, matchId: mini.id, kind: 'mini', readyMs: this.seconds(mini) * 1000 },
         left.map((p) => p.userId),
-        MINI_SETTINGS,
+        { ...MINI_SETTINGS, variant: rules.variant, throwIn: rules.throwIn, speed: rules.speed },
       );
     } catch (error) {
       // Кто-то ещё доигрывает другую партию: стол поднимет следующий tick.
@@ -197,7 +208,7 @@ export class MiniTournamentService {
     }
     await this.db.miniTournament.update({ where: { id: mini.id }, data: { round, roomId: room.id } });
     const link = roomDeepLink(this.deps.config.BOT_USERNAME, this.deps.config.MINI_APP_SHORT_NAME || null, room.id, inviteCode(room.id, this.deps.config.SESSION_SECRET));
-    const seconds = this.deps.config.MINI_TOURNAMENT_READY_SECONDS;
+    const seconds = this.seconds(mini);
     await this.say(
       mini,
       `🃏 <b>${escapeHtml(mini.title)}</b> · стол ${round} на ${left.length} ${left.length >= 5 ? 'игроков' : 'игрока'}\n\n` +
@@ -205,6 +216,39 @@ export class MiniTournamentService {
         `Заходите за стол — ${seconds} с. Партия начнётся сама, когда сядут все. Кто не придёт — техническое поражение.`,
       { text: '🎮 За стол', url: link },
     );
+  }
+
+  private rules(mini: Pick<MiniTournament, 'settings'>): MiniRules {
+    const parsed = miniRulesSchema.safeParse(mini.settings ?? {});
+    return parsed.success ? parsed.data : miniRulesSchema.parse({});
+  }
+
+  /** Сколько ждать у стола: из настроек турнира, иначе — переменная арены. */
+  private seconds(mini: Pick<MiniTournament, 'settings'>): number {
+    return this.rules(mini).readySeconds ?? this.deps.config.MINI_TOURNAMENT_READY_SECONDS;
+  }
+
+  /** Админка: последние мини-турниры всех групп. */
+  async list(): Promise<object[]> {
+    const rows = await this.db.miniTournament.findMany({ orderBy: { createdAt: 'desc' }, take: 30, include: { players: { orderBy: { seat: 'asc' } } } });
+    return rows.map((m) => ({
+      id: m.id,
+      chatId: m.chatId.toString(),
+      status: m.status,
+      round: m.round,
+      prize: Number(m.prize),
+      organizer: m.organizerName,
+      rules: this.rules(m),
+      createdAt: m.createdAt.toISOString(),
+      finishedAt: m.finishedAt?.toISOString() ?? null,
+      players: m.players.map((p) => ({ name: p.name, telegramId: p.telegramId.toString(), place: p.place, out: p.outReason })),
+    }));
+  }
+
+  /** Админка: отменить идущий мини-турнир по id. */
+  async cancelById(id: string): Promise<boolean> {
+    const mini = await this.db.miniTournament.findUnique({ where: { id } });
+    return mini && mini.status === 'RUNNING' ? this.cancel(mini.chatId) : false;
   }
 
   private async closeRoom(roomId: string | null): Promise<void> {
@@ -247,7 +291,7 @@ export class MiniTournamentService {
       if (!absent.length) return;
       const place = this.alive(mini.players).length;
       await this.out(mini, absent, 'no_show', place);
-      const seconds = this.deps.config.MINI_TOURNAMENT_READY_SECONDS;
+      const seconds = this.seconds(mini);
       await this.say(
         mini,
         `⏰ Не пришли за стол за ${seconds} с — техническое поражение: ${absent

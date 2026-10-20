@@ -288,6 +288,15 @@ export async function adminRoutes(app: FastifyInstance, ctx: Context, check: (r:
     return { ok: true };
   });
 
+  // ── мини-турниры групп ──
+  app.get('/internal/admin/mini-tournaments', opts, async () => ctx.minis.list());
+
+  app.post('/internal/admin/mini-tournaments/:id/cancel', opts, async (request) => {
+    const { id } = z.object({ id: z.uuid() }).parse(request.params);
+    if (!(await ctx.minis.cancelById(id))) throw new AppError('NOT_FOUND');
+    return { ok: true };
+  });
+
   // ── seasons ──
   app.get('/internal/admin/seasons', opts, async () => {
     const rows = await db.season.findMany({ orderBy: { startsAt: 'desc' }, take: 20, include: { _count: { select: { ratings: true } } } });
