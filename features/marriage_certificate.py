@@ -3,7 +3,7 @@
 
 Рисуется один раз сразу после свадьбы: имена, @ники, дата, группа,
 номер свидетельства (номер брака), подпись регистратора, печать и
-логотип Марушки. На выходе картинка (видна в чате) и PDF (скачать).
+логотип Марушки. На выходе картинка: видна в чате, сохраняется долгим нажатием.
 
 Шрифты лежат в assets/marriage: в контейнере своих шрифтов нет.
 """
@@ -19,8 +19,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets" / "marriage"
 
-WIDTH, HEIGHT = 2480, 1754          # A4 альбомная, ~210 dpi
-DPI = 210
+WIDTH, HEIGHT = 2480, 1754          # пропорции A4, альбомная
 
 # Белая бумага, тёмно-сливовые чернила и фиолетовые акценты под печать
 BG_TOP = (255, 255, 255)
@@ -31,7 +30,7 @@ SILVER_DIM = (118, 102, 150)        # второстепенный текст
 VIOLET = (124, 72, 214)
 VIOLET_DIM = (186, 160, 230)
 
-# Меняется при каждой смене оформления: старые PDF из Telegram больше не годятся
+# Меняется при каждой смене оформления: сохранённые в Telegram картинки больше не годятся
 VERSION = 2
 
 MONTHS = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля",
@@ -263,13 +262,3 @@ def jpeg_bytes(cert: dict) -> bytes:
     return out.getvalue()
 
 
-def pdf_bytes(cert: dict) -> bytes:
-    """Свидетельство в PDF — для кнопки «Скачать»."""
-    out = io.BytesIO()
-    _from(cert).save(out, "PDF", resolution=DPI, title=f"Свидетельство о браке {number_text(int(cert['number']))}",
-                     author="Дворец бракосочетаний «Марушка»")
-    return out.getvalue()
-
-
-def file_name(number: int) -> str:
-    return f"svidetelstvo-{number:06d}.pdf"

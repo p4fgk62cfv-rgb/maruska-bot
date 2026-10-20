@@ -1,5 +1,5 @@
 """
-Браки: один на все группы, «Мара, пары», свидетельство о браке (картинка и PDF).
+Браки: один на все группы, «Мара, пары», свидетельство о браке (картинкой).
 
     TEST_DATABASE_URL=postgresql://… python test_marriages.py
 """
@@ -46,14 +46,12 @@ person = social._person("Вася <3", "vasya")
 check(person == 'Вася &lt;3 (<a href="https://t.me/vasya">@vasya</a>)', f"имя с ником: {person}")
 check(social._person("Юля", None) == "Юля", "имя без ника")
 
-# Свидетельство рисуется: картинка и PDF, длинные имена не ломают
+# Свидетельство рисуется картинкой, длинные имена не ломают
 cert = {"number": 7, "name1": "Александра-Виктория Длинноимённая", "name2": "Юля",
         "tag1": "@alexandra", "tag2": None, "since": "2026-10-20T12:00:00", "group": "Flash"}
 image = mc.jpeg_bytes(cert)
-pdf = mc.pdf_bytes(cert)
 check(image[:3] == b"\xff\xd8\xff" and 100_000 < len(image) < 2_000_000, f"картинка: {len(image)} байт")
-check(pdf[:5] == b"%PDF-" and len(pdf) < 2_000_000, f"PDF: {len(pdf)} байт")
-check(mc.number_text(7) == "№ МР-000007" and mc.file_name(7) == "svidetelstvo-000007.pdf", "номер")
+check(mc.number_text(7) == "№ МР-000007", "номер")
 check(mc.date_ru(datetime(2026, 3, 8)) == "8 марта 2026 года", "дата")
 
 # Стилизованные ники Telegram — в обычные буквы, эмодзи прочь
@@ -108,29 +106,29 @@ async def scenario():
         again = await social.certificate_of(marriage_id, "Другая группа")
         check(again == snap, "снимок не меняется")
 
-        # Кнопка «Свидетельство»: первый раз PDF рисуется, дальше — по file_id
+        # Кнопка «Свидетельство»: первый раз картинка рисуется, дальше — по file_id
         sent = []
 
-        async def answer_document(document, caption=None):
-            sent.append(document)
-            return types.SimpleNamespace(document=types.SimpleNamespace(file_id="FILE123"))
+        async def answer_photo(photo, caption=None):
+            sent.append(photo)
+            return types.SimpleNamespace(photo=[types.SimpleNamespace(file_id="small"), types.SimpleNamespace(file_id="FILE123")])
 
         async def answer(*args, **kwargs):
             return None
 
         callback = types.SimpleNamespace(
             data=f"mcert:{marriage_id}", answer=answer,
-            message=types.SimpleNamespace(answer_document=answer_document),
+            message=types.SimpleNamespace(answer_photo=answer_photo),
         )
         await social.certificate_download(callback)
         await social.certificate_download(callback)
         check(len(sent) == 2 and not isinstance(sent[0], str) and sent[1] == "FILE123", f"скачивание: {sent}")
 
-        # После смены оформления старый PDF не отдаём — рисуем заново
+        # После смены оформления старую картинку не отдаём — рисуем заново
         await repo.save_marriage_certificate(marriage_id, file_id="v0:OLD")
         sent.clear()
         await social.certificate_download(callback)
-        check(len(sent) == 1 and not isinstance(sent[0], str), f"старый PDF перерисован: {sent}")
+        check(len(sent) == 1 and not isinstance(sent[0], str), f"старая картинка перерисована: {sent}")
 
         # Развод из любой группы
         check(await repo.end_marriage(chat_b, b) == (a, b), "развод из другой группы")
@@ -175,7 +173,7 @@ async def scenario():
         # Разовый перенос пары в группу по названию и @никам
         from database.models import GroupSettings
 
-        title = f"꧁ DIAMOND{base} ꧂"
+        title = "꧁ 𝑫𝑰𝑨𝑴𝑶𝑵𝑫" + str(base) + " ꧂"
         async with session_scope() as session:
             session.add(GroupSettings(chat_id=chat_d, title=title, values={}))
             session.add(User(telegram_id=b, username="Yulia_Test", first_name="Юля"))

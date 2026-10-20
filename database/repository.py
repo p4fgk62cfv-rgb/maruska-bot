@@ -1,4 +1,5 @@
 import logging
+import unicodedata
 from datetime import datetime, timedelta
 
 from sqlalchemy import (
@@ -4595,11 +4596,17 @@ async def move_marriage(usernames: tuple[str, str], title_part: str) -> str:
     Возвращает, что сделано, — для лога.
     """
     async with session_scope() as session:
-        groups = (await session.execute(
-            select(GroupSettings.chat_id, GroupSettings.title).where(GroupSettings.title.ilike(f"%{title_part}%"))
+        # Названия бывают стилизованными (𝑫𝑰𝑨𝑴𝑶𝑵𝑫) — сравниваем обычными буквами
+        def plain(text: str | None) -> str:
+            return unicodedata.normalize("NFKC", text or "").casefold()
+
+        titled = (await session.execute(
+            select(GroupSettings.chat_id, GroupSettings.title).where(GroupSettings.chat_id < 0)
         )).all()
+        groups = [g for g in titled if plain(title_part) in plain(g[1])]
         if len(groups) != 1:
-            return f"группа «{title_part}» не найдена однозначно: {[(g[0], g[1]) for g in groups]}"
+            return (f"группа «{title_part}» не найдена однозначно: {[(g[0], g[1]) for g in groups]}; "
+                    f"группы: {[(g[0], g[1]) for g in titled][:30]}")
         chat_id, title = groups[0]
 
         users = (await session.execute(

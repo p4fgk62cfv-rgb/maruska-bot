@@ -10,7 +10,7 @@
 группы с Марой. После свадьбы Мара выдаёт свидетельство о браке.
 /marriage — кто с кем и сколько дней вместе (брак виден в любой группе),
 /marriages или «Мара, пары» — пары, поженившиеся в этой группе, у каждой —
-кнопка со свидетельством (PDF). /divorce — развод с подтверждением.
+кнопка со свидетельством (картинкой). /divorce — развод с подтверждением.
 
 Telegram считает командой только латиницу, поэтому русские варианты
 ловятся как текст.
@@ -366,32 +366,65 @@ async def certificate_of(marriage_id: int, chat_title: str | None = None) -> dic
     return cert
 
 
-def certificate_button(marriage_id: int, text: str = "📜 Скачать свидетельство (PDF)") -> InlineKeyboardButton:
+def certificate_button(marriage_id: int, text: str = "📜 Свидетельство") -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=f"mcert:{marriage_id}")
 
 
+def _photo_prefix() -> str:
+    # Картинка в Telegram подписана версией оформления: после смены дизайна рисуем заново
+    from features import marriage_certificate as mc
+
+    return f"p{mc.VERSION}:"
+
+
+async def _send_certificate_photo(message: Message, marriage_id: int, caption: str, chat_title: str | None = None) -> None:
+    """Свидетельство картинкой: видно сразу, сохранить — долгим нажатием.
+    Нарисованная однажды картинка хранится в Telegram и отправляется повторно без перерисовки."""
+    from database.repository import get_marriage, save_marriage_certificate
+    from features import marriage_certificate as mc
+
+    marriage = await get_marriage(marriage_id)
+    if marriage is None:
+        return
+    prefix = _photo_prefix()
+    if (marriage.certificate_file_id or "").startswith(prefix):
+        try:
+            await message.answer_photo(marriage.certificate_file_id[len(prefix):], caption=caption)
+            return
+        except Exception as error:
+            logger.warning("CERTIFICATE FILE: %s %s", type(error).__name__, error)
+
+    cert = await certificate_of(marriage_id, chat_title)
+    if cert is None:
+        return
+    async with _drawing:
+        image = await asyncio.to_thread(mc.jpeg_bytes, cert)
+    sent = await message.answer_photo(
+        BufferedInputFile(image, filename=f"svidetelstvo-{marriage_id:06d}.jpg"), caption=caption)
+    if sent.photo:
+        await save_marriage_certificate(marriage_id, file_id=prefix + sent.photo[-1].file_id)
+
+
 async def send_certificate(message: Message, marriage_id: int) -> None:
-    """Сразу после свадьбы: свидетельство картинкой и кнопка скачать PDF."""
+    """Сразу после свадьбы — свидетельство картинкой."""
     from features import marriage_certificate as mc
 
     cert = await certificate_of(marriage_id, message.chat.title)
     if cert is None:
         return
-    async with _drawing:
-        image = await asyncio.to_thread(mc.jpeg_bytes, cert)
-    await message.answer_photo(
-        BufferedInputFile(image, filename=f"svidetelstvo-{marriage_id:06d}.jpg"),
+    await _send_certificate_photo(
+        message, marriage_id,
         caption=(f"📜 <b>Свидетельство о браке {mc.number_text(marriage_id)}</b>\n"
                  f"Дворец бракосочетаний «Марушка» поздравляет "
-                 f"{escape(cert['name1'])} и {escape(cert['name2'])}! 💞"),
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[certificate_button(marriage_id)]]),
+                 f"{escape(cert['name1'])} и {escape(cert['name2'])}! 💞\n\n"
+                 "Сохранить — долгое нажатие на картинку."),
     )
 
 
 @router.callback_query(F.data.startswith("mcert:"))
 async def certificate_download(callback: CallbackQuery):
-    """Кнопка «Свидетельство»: присылает PDF. Нарисованный однажды PDF Telegram хранит у себя."""
-    from database.repository import get_marriage, save_marriage_certificate
+    """Кнопка «Свидетельство» в списке пар: присылает свидетельство картинкой."""
+    from database.repository import get_marriage
     from features import marriage_certificate as mc
 
     try:
@@ -406,24 +439,8 @@ async def certificate_download(callback: CallbackQuery):
         return
 
     await callback.answer("📜 Готовлю свидетельство…")
-    caption = f"📜 Свидетельство о браке {mc.number_text(marriage_id)}"
-
-    # PDF в Telegram подписан версией оформления: после смены дизайна рисуем заново
-    prefix = f"v{mc.VERSION}:"
-    if (marriage.certificate_file_id or "").startswith(prefix):
-        try:
-            await callback.message.answer_document(marriage.certificate_file_id[len(prefix):], caption=caption)
-            return
-        except Exception as error:
-            logger.warning("CERTIFICATE FILE: %s %s", type(error).__name__, error)
-
-    cert = await certificate_of(marriage_id)
-    async with _drawing:
-        pdf = await asyncio.to_thread(mc.pdf_bytes, cert)
-    sent = await callback.message.answer_document(
-        BufferedInputFile(pdf, filename=mc.file_name(marriage_id)), caption=caption)
-    if sent.document:
-        await save_marriage_certificate(marriage_id, file_id=prefix + sent.document.file_id)
+    await _send_certificate_photo(callback.message, marriage_id,
+                                  caption=f"📜 Свидетельство о браке {mc.number_text(marriage_id)}")
 
 
 def _person(name: str, username: str | None) -> str:
