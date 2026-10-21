@@ -144,7 +144,9 @@ async def run_backup(bot, reason: str = "ночной") -> dict:
                 caption = (f"🗄 Бэкап базы Маруськи ({reason}) — {now:%d.%m.%Y %H:%M} МСК, {human_size(len(data))}"
                            + (f"\nЧасть {number} из {len(chunks)}" if len(chunks) > 1 else "")
                            + "\nВосстановить: pg_restore --clean --if-exists --no-owner -d <адрес базы> файл")
-                await bot.send_document(to, BufferedInputFile(chunk, filename=file_name), caption=caption)
+                # Простым текстом: в подписи есть «<адрес базы>», HTML принял бы его за тег
+                await bot.send_document(to, BufferedInputFile(chunk, filename=file_name), caption=caption,
+                                        parse_mode=None)
             logger.info("BACKUP: %s, %s частей, отправлен %s", human_size(len(data)), len(chunks), to)
             return await save_state(day=now.date().isoformat(), ok_at=now.isoformat(), size=len(data),
                                     parts=len(chunks), error=None, tried_at=now.isoformat())
@@ -152,7 +154,7 @@ async def run_backup(bot, reason: str = "ночной") -> dict:
             text = hide_secrets(str(error))[:300]
             logger.error("BACKUP: %s %s", type(error).__name__, text)
             try:
-                await bot.send_message(to, f"⚠️ Бэкап базы не получился ({reason}): {text}")
+                await bot.send_message(to, f"⚠️ Бэкап базы не получился ({reason}): {text}", parse_mode=None)
             except Exception:
                 pass
             return await save_state(day=now.date().isoformat(), error=text, tried_at=now.isoformat())
