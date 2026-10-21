@@ -81,12 +81,15 @@
         + '<div class="kv"><span class="k">Холст крокодила</span><span>' + (d.drawing ? "включён" : "словесный режим") + "</span></div></div>"
         + '<div class="card"><div class="card-title">В базе</div>'
         + Object.keys(d.counts).map(function (k) { return '<div class="kv"><span class="k">' + (t[k] || k) + "</span><span>" + num(d.counts[k]) + "</span></div>"; }).join("") + "</div>"
+        + '<div class="card" id="backup-card"><div class="card-title">Бэкап базы</div><div class="muted">Загружаю…</div></div>'
         + '<div class="card"><div class="card-title">Управление</div>'
         + '<button class="btn block danger" id="btn-restart" style="margin-top:4px">'
         + M.icon("zap", 16) + ' Перезапустить бота</button>'
         + '<div class="muted" style="font-size:12px;margin-top:8px">Бот остановится и запустится заново. Займёт ~10–15 секунд.</div></div>';
 
       M.bind();
+
+      drawBackup();
 
       var btn = M.app.querySelector("#btn-restart");
       btn.onclick = function () {
@@ -109,6 +112,51 @@
       };
     }).catch(M.fail);
   });
+
+  // Бэкап базы: последний, кому приходит, кнопка «сейчас»
+  function drawBackup() {
+    var card = M.app.querySelector("#backup-card");
+    if (!card) return;
+
+    var when = function (iso) {
+      if (!iso) return "—";
+      var d = new Date(iso);
+      return d.toLocaleDateString("ru-RU") + " " + d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    };
+    var size = function (n) { return n ? (n / 1024 / 1024).toFixed(1).replace(".", ",") + " МБ" : "—"; };
+
+    var show = function (d) {
+      var s = d.state || {};
+      card.innerHTML = '<div class="card-title">Бэкап базы</div>'
+        + '<div class="kv"><span class="k">Последний</span><span>' + esc(when(s.ok_at)) + "</span></div>"
+        + '<div class="kv"><span class="k">Размер</span><span>' + esc(size(s.size)) + "</span></div>"
+        + '<div class="kv"><span class="k">Кому</span><span>' + esc(d.to) + "</span></div>"
+        + '<div class="kv"><span class="k">Каждую ночь</span><span>в ' + d.hour + ":00 МСК</span></div>"
+        + (s.error ? '<div class="muted" style="color:var(--danger,#f87171);font-size:12px;margin-top:6px">⚠️ ' + esc(s.error) + "</div>" : "")
+        + '<button class="btn block" id="btn-backup" style="margin-top:10px">🗄 Сделать бэкап сейчас</button>'
+        + '<div class="muted" style="font-size:12px;margin-top:8px">Файл придёт в Telegram от Мары. Это вся база — храни его в надёжном месте.</div>';
+
+      var btn = card.querySelector("#btn-backup");
+      btn.onclick = function () {
+        btn.disabled = true;
+        btn.textContent = "Делаю бэкап…";
+        M.post("/api/admin/backup", {})
+          .then(function (r) {
+            M.toast(r.ok ? "Бэкап отправлен в Telegram" : "Не получилось: " + (r.state && r.state.error || ""));
+            show(r);
+          })
+          .catch(function (e) {
+            btn.disabled = false;
+            btn.textContent = "🗄 Сделать бэкап сейчас";
+            M.toast(e.message || "Не удалось сделать бэкап");
+          });
+      };
+    };
+
+    M.api("/api/admin/backup").then(show).catch(function () {
+      card.innerHTML = '<div class="card-title">Бэкап базы</div><div class="muted">Не удалось загрузить</div>';
+    });
+  }
 
   // =========================================================
   // ПОИСК И УВЕДОМЛЕНИЯ

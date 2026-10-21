@@ -429,6 +429,10 @@ async def main():
     birthday_task = asyncio.create_task(birthday_loop(bot))
     arena_promo_task = asyncio.create_task(arena_promo_loop(bot))
 
+    from features.backup import backup_loop
+
+    backup_task = asyncio.create_task(backup_loop(bot))
+
     logger.info("МАРА ЗАПУЩЕНА!")
 
     try:
@@ -443,6 +447,7 @@ async def main():
         memory_task.cancel()
         birthday_task.cancel()
         arena_promo_task.cancel()
+        backup_task.cancel()
 
         if web_runner is not None:
             await web_runner.cleanup()
