@@ -12,7 +12,9 @@ from html import escape
 
 ROOT = pathlib.Path(__file__).parent
 src = (ROOT / "features" / "social.py").read_text(encoding="utf-8")
-ns = {"re": re, "random": random, "time": time, "datetime": datetime, "escape": escape}
+from botcontext import TRIGGER_RE  # noqa: E402
+
+ns = {"re": re, "random": random, "time": time, "datetime": datetime, "escape": escape, "TRIGGER_RE": TRIGGER_RE}
 exec(src[src.index("PROPOSAL_TTL = "):src.index("# ---------------------------------------------------------\n# Пара дня\n")], ns)
 
 
@@ -27,9 +29,9 @@ def main() -> int:
 
     pair, marry = ns["is_pair_request"], ns["is_marry_request"]
 
-    for t in ("пара дня", "/пара дня", "Пара дня!", "пара  дня?"):
+    for t in ("пара дня", "/пара дня", "Пара дня!", "пара  дня?", "Мара пара дня", "Мара, пара дня?", "Маруська пара дня!"):
         expect(f"пара «{t}»", pair(t), True)
-    for t in ("кто пара дня вчера была", "пара", "дня", "", None):
+    for t in ("кто пара дня вчера была", "пара", "дня", "", None, "Мара пара", "Мара, кто пара дня вчера", "у нас пара дня, Мара"):
         expect(f"не пара «{t}»", pair(t), False)
 
     for t in ("брак", "/брак", "Выходи за меня!", "будь моей", "будь моим мужем", "пожениться?"):
