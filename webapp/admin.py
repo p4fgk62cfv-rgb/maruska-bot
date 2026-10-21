@@ -973,6 +973,24 @@ async def api_restart(request: web.Request):
     return web.json_response({"ok": True})
 
 
+async def api_backup(request: web.Request):
+    """GET — когда был последний бэкап базы; POST — сделать бэкап сейчас (файл придёт в Telegram)."""
+    await require_owner(request)
+
+    from features import backup
+
+    if request.method == "POST":
+        state = await backup.run_backup(request.app["bot"], reason="по кнопке")
+    else:
+        state = await backup.load_state()
+    return web.json_response({
+        "ok": not state.get("error"),
+        "state": state,
+        "to": "@" + backup.recipient_setting(),
+        "hour": backup.BACKUP_HOUR,
+    })
+
+
 async def api_system(request: web.Request):
     user, chats = await require_owner(request)
 
@@ -1432,6 +1450,8 @@ def setup_admin_routes(app: web.Application) -> None:
     app.router.add_get("/api/admin/system", api_system)
     app.router.add_get("/api/admin/ai_usage", api_ai_usage)
     app.router.add_post("/api/admin/restart", api_restart)
+    app.router.add_get("/api/admin/backup", api_backup)
+    app.router.add_post("/api/admin/backup", api_backup)
     app.router.add_post("/api/admin/broadcast", api_broadcast)
     app.router.add_get("/api/admin/avatar", api_avatar)
     app.router.add_get("/api/admin/chat_photo", api_chat_photo)
