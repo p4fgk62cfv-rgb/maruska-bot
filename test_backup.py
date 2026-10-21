@@ -43,6 +43,32 @@ check(not backup.due(night.replace(hour=max(backup.BACKUP_HOUR - 1, 0)), {}) or 
 check(backup.recipient_setting() == "uastas", "по умолчанию — @uastas")
 
 
+# Админка: даже после неудачного бэкапа ответ — ok (иначе карточка не рисуется)
+async def api_after_failure():
+    import json
+
+    from webapp import admin
+
+    async def owner(request):
+        return {"id": 1}, []
+
+    async def failed_state():
+        return {"error": "старая ошибка", "day": "2026-10-21"}
+
+    saved = admin.require_owner, backup.load_state
+    admin.require_owner, backup.load_state = owner, failed_state
+    try:
+        response = await admin.api_backup(types.SimpleNamespace(method="GET", app={}))
+    finally:
+        admin.require_owner, backup.load_state = saved
+    return json.loads(response.text)
+
+
+answer = asyncio.run(api_after_failure())
+check(answer["ok"] is True and answer["success"] is False and answer["state"]["error"] == "старая ошибка",
+      f"админка после ошибки: {answer}")
+
+
 class FakeBot:
     def __init__(self):
         self.documents, self.messages = [], []
