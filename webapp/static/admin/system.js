@@ -142,7 +142,7 @@
         btn.textContent = "Делаю бэкап…";
         M.post("/api/admin/backup", {})
           .then(function (r) {
-            M.toast(r.ok ? "Бэкап отправлен в Telegram" : "Не получилось: " + (r.state && r.state.error || ""));
+            M.toast(r.success ? "Бэкап отправлен в Telegram" : "Не получилось: " + (r.state && r.state.error || ""));
             show(r);
           })
           .catch(function (e) {

@@ -983,8 +983,10 @@ async def api_backup(request: web.Request):
         state = await backup.run_backup(request.app["bot"], reason="по кнопке")
     else:
         state = await backup.load_state()
+    # ok — что запрос прошёл; удался ли сам бэкап — в success (иначе админка не покажет карточку)
     return web.json_response({
-        "ok": not state.get("error"),
+        "ok": True,
+        "success": not state.get("error"),
         "state": state,
         "to": "@" + backup.recipient_setting(),
         "hour": backup.BACKUP_HOUR,
