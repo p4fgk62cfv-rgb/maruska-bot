@@ -76,7 +76,13 @@ _last_pair: dict[int, frozenset[int]] = {}
 # ---------------------------------------------------------
 
 def is_pair_request(text: str | None) -> bool:
-    return bool(text) and PAIR_RE.match(text) is not None
+    """«пара дня», «/пара дня» и с обращением: «Мара, пара дня?»."""
+    if not text:
+        return False
+    found = TRIGGER_RE.match(text.strip())
+    if found is not None:
+        text = text.strip()[found.end():].lstrip(" ,.!:—-")
+    return PAIR_RE.match(text) is not None
 
 
 def is_marry_request(text: str | None) -> bool:
