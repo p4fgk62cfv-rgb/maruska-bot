@@ -112,8 +112,25 @@ describe.skipIf(!url)('mini-tournaments (one knockout table)', () => {
     await until(() => sent.slice(before).some((m) => m.chatId === chatId && m.message.text.includes('Дураком остался')));
   }
 
+  const offline = async (p: Player) => {
+    p.ws.close();
+    await until(() => !handle.ctx.realtime.hub.isOnline(p.id));
+  };
+
+  /** Все уже в Арене: стол открывается сам, никто не жмёт ни ссылку, ни «Готов»; `loser` сдаётся. */
+  async function playOpenTable(chatId: bigint, loser: Player): Promise<void> {
+    const before = sent.length;
+    const { roomId } = lastTable(chatId);
+    const started = await loser.ws.waitFor((m) => m.type === 'GAME_STARTED' && m.roomId === roomId);
+    if (started.type !== 'GAME_STARTED') throw new Error('unreachable');
+    await loser.ws.send({ type: 'LEAVE_GAME', gameId: started.gameId });
+    await until(() => sent.slice(before).some((m) => m.chatId === chatId && m.message.text.includes('Дураком остался')));
+  }
+
   it('six players, one does not come, then the fool of every table is out until one is left', async () => {
     const people = await Promise.all(['Аня', 'Боря', 'Вика', 'Гоша', 'Даня', 'Ева'].map(player));
+    // Евы нет в Арене — за стол она не сядет
+    await offline(people[5]!);
     const { chatId, organizer } = await start(people);
 
     // Первый стол — на всех шестерых, ссылка в группу, все упомянуты
@@ -167,6 +184,29 @@ describe.skipIf(!url)('mini-tournaments (one knockout table)', () => {
     expect(rooms[0]).toMatchObject({ variant: 'perevodnoy', throwIn: 'all', speed: 'fast', ending: 'nodraw', maxPlayers: 6 });
   }, 90_000);
 
+  it('players already in the Arena sit down and start on their own: no link, no «Готов»', async () => {
+    const people = await Promise.all(['Жора', 'Зоя', 'Игорь'].map(player));
+    const [zhora, zoya, igor] = people as [Player, Player, Player];
+    // Игорь вышел из Арены: стол ждёт его, а вернулся — сразу готов и партия начинается
+    await offline(igor);
+    const { chatId } = await start(people);
+    await until(() => lastTable(chatId).roomId !== '');
+    const { roomId } = lastTable(chatId);
+    const room = handle.ctx.realtime.rooms.get(roomId)!;
+    expect(room.seats.filter((s) => s.ready).map((s) => s.userId).sort()).toEqual([zhora.id, zoya.id].sort());
+    expect(room.status).toBe('waiting');
+
+    await igor.ws.connect();
+    const started = await zhora.ws.waitFor((m) => m.type === 'GAME_STARTED' && m.roomId === roomId);
+    if (started.type !== 'GAME_STARTED') throw new Error('unreachable');
+    await igor.ws.send({ type: 'LEAVE_GAME', gameId: started.gameId });
+    await until(() => said(chatId).at(-1)!.includes('стол 2 на 2'));
+
+    // Следующий стол: оба в Арене — открывается и начинается сам
+    await playOpenTable(chatId, zoya);
+    await until(() => said(chatId).some((t) => t.includes('окончен!') && t.includes(`id=${zhora.tg}`)));
+  }, 60_000);
+
   it('the organizer can call it off; nobody at the table ends it without a winner', async () => {
     const people = await Promise.all(['Жора', 'Зина', 'Игорь'].map(player));
     const { chatId } = await start(people, 0);
@@ -176,14 +216,18 @@ describe.skipIf(!url)('mini-tournaments (one knockout table)', () => {
     expect(said(chatId).at(-1)).toContain('отменён организатором');
     expect((await internal('GET', `/internal/mini-tournaments/active?chatId=${chatId}`)).json().tournament).toBeNull();
 
-    // Новый турнир: за стол не пришёл никто
-    const again = await start(await Promise.all(['Кира', 'Лёва'].map(player)), 0);
+    // Новый турнир: за стол не пришёл никто (оба не в Арене)
+    const absent = await Promise.all(['Кира', 'Лёва'].map(player));
+    for (const p of absent) await offline(p);
+    const again = await start(absent, 0);
     await until(() => said(again.chatId).some((t) => t.includes('никто не пришёл')));
     expect((await db.miniTournament.findFirstOrThrow({ where: { chatId: again.chatId } })).status).toBe('CANCELLED');
   }, 30_000);
 
   it('rules come from the bot; the admin panel lists and cancels', async () => {
     const people = await Promise.all(['Нина', 'Олег'].map(player));
+    // Не в Арене — стол ждёт их 90 секунд, как задал бот
+    for (const p of people) await offline(p);
     const chatId = BigInt(chatBase - chatSeq++);
     const res = await internal('POST', '/internal/mini-tournaments', {
       chatId: chatId.toString(), prize: 300, organizer: { telegramId: nextTg++, name: 'Админ' },

@@ -34,6 +34,8 @@ export const REMATCH_READY_MS = 180_000;
 const EMOJI_COOLDOWN_MS = 1500;
 /** How long a «поменяемся местами?» waits for the answer. */
 const SWAP_ASK_MS = 30_000;
+/** Мини-турнир: все за столом — партия начинается через пару секунд, чтобы стол успел открыться. */
+const MINI_START_DELAY_MS = 3_000;
 /** Wrong private-table PINs: after this many in the window the table stops accepting guesses. */
 const PIN_TRIES = 8;
 const PIN_WINDOW_MS = 10 * 60_000;
@@ -227,7 +229,7 @@ export class RoomManager {
     if (!room) throw new AppError('ROOM_CLOSED');
     if (room.seats.some((s) => s.userId === userId)) {
       // Мини-турнир: зашёл за стол — значит готов; когда пришли все, партия начинается сама.
-      if (room.tournament?.kind === 'mini' && room.status === 'waiting') await this.setReady(userId, roomId, true);
+      if (room.tournament?.kind === 'mini') await this.queue(roomId).run(() => this.miniArrived(room, userId));
       return this.mine(room);
     }
 
@@ -360,8 +362,42 @@ export class RoomManager {
     });
     this.rooms.set(room.id, room);
     this.armReadyTimer(room, this.matchReadyMs(room));
+    // Мини-турнир: кто сейчас в Арене, тому стол открывается сам — он уже за столом и готов.
+    // Ссылку из группы открывать не нужно (а после первой партии её никто и не открывает).
+    if (room.tournament?.kind === 'mini') {
+      for (const seat of room.seats) {
+        if (this.deps.hub.isOnline(seat.userId)) {
+          seat.connected = true;
+          seat.ready = true;
+        }
+      }
+      this.armMiniStart(room);
+    }
     await this.changed(room);
     return room;
+  }
+
+  /** Мини-турнир: игрок за столом (по ссылке, вернулся в Арену или стол открылся сам) — значит готов. */
+  private async miniArrived(room: Room, userId: string): Promise<void> {
+    const seat = room.seats.find((s) => s.userId === userId);
+    if (!seat || room.status !== 'waiting' || seat.ready) return;
+    seat.ready = true;
+    await this.changed(room);
+    this.armMiniStart(room);
+  }
+
+  /** Все готовы — через пару секунд партия начинается сама, без кнопки «Готов». */
+  private armMiniStart(room: Room): void {
+    if (room.seats.length !== room.settings.players || !room.seats.every((s) => s.ready)) return;
+    // Все на месте — ждать неявившихся больше некого
+    this.clearTimer(`ready:${room.id}`);
+    room.readyDeadline = null;
+    this.setTimer(`start:${room.id}`, MINI_START_DELAY_MS, () =>
+      this.queue(room.id).run(async () => {
+        if (room.status !== 'waiting' || !this.rooms.has(room.id)) return;
+        if (room.seats.length === room.settings.players && room.seats.every((s) => s.ready)) await this.startGame(room);
+      }),
+    );
   }
 
   /** Moderator: close a table that is still waiting for players (no stakes were taken yet). */
@@ -508,7 +544,10 @@ export class RoomManager {
     this.clearTimer(`grace:${userId}`);
     await this.queue(room.id).run(async () => {
       const seat = room.seats.find((s) => s.userId === userId);
-      if (!seat || seat.connected) return;
+      if (!seat) return;
+      // Вернулся в Арену во время мини-турнира — стол открывается сразу, значит готов
+      if (room.tournament?.kind === 'mini') await this.miniArrived(room, userId);
+      if (seat.connected) return;
       seat.connected = true;
       await this.changed(room);
       for (const s of room.seats) {
@@ -683,6 +722,7 @@ export class RoomManager {
     this.pinFails.delete(roomId);
     this.botArmed.delete(roomId);
     this.clearTimer(`ready:${roomId}`);
+    this.clearTimer(`start:${roomId}`);
     this.clearTimer(`bots:${roomId}`);
   }
 
