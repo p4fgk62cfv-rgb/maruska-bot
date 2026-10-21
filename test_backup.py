@@ -47,10 +47,13 @@ class FakeBot:
     def __init__(self):
         self.documents, self.messages = [], []
 
-    async def send_document(self, chat_id, document, caption=None):
+    async def send_document(self, chat_id, document, caption=None, **kwargs):
+        # Как Telegram: в HTML-режиме «<адрес базы>» — ошибка разбора
+        if kwargs.get("parse_mode", "HTML") is not None and "<адрес" in (caption or ""):
+            raise RuntimeError("can't parse entities")
         self.documents.append((chat_id, document.filename, document.data, caption))
 
-    async def send_message(self, chat_id, text):
+    async def send_message(self, chat_id, text, **kwargs):
         self.messages.append((chat_id, text))
 
 
