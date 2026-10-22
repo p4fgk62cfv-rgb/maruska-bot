@@ -172,6 +172,9 @@ export class MotionDirector {
     );
     animation.onfinish = () => node.remove();
     animation.oncancel = () => node.remove();
+    // A WebView that paused animations (app in the background) may never finish one: the
+    // flying copy must not stay over the table.
+    window.setTimeout(() => node.remove(), delay + DURATION + 1500);
   }
 }
 
@@ -202,4 +205,8 @@ export function fly(el: HTMLElement, from: DOMRect, to: DOMRect, delay: number):
   };
   animation.onfinish = clear;
   animation.oncancel = clear;
+  // Same for a card of the table or the hand: it ends up in its place whatever happens.
+  window.setTimeout(() => {
+    if (activeFlights.get(el) === animation) animation.finish();
+  }, delay + DURATION + 1500);
 }
