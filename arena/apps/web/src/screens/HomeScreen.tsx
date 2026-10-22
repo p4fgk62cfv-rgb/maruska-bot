@@ -25,7 +25,6 @@ const TILES: Tile[] = [
   { icon: 'gift', title: 'Задания', page: 'daily' },
   { icon: 'chat', title: 'Чат', page: 'chat' },
   { icon: 'crown', title: 'VIP', page: 'vip' },
-  { icon: 'cards', title: 'Зал ботов', page: 'training' },
   { icon: 'trophy', title: 'Турниры', page: 'tournaments' },
   { icon: 'news', title: 'Новости', page: 'news' },
   { icon: 'users', title: 'Друзья', page: 'friends' },
@@ -120,7 +119,7 @@ export function HomeScreen() {
         </>
       )}
       <div className="tile-grid">
-        {(me.owner ? [...TILES, { icon: 'flame', title: 'Прогресс бота', page: 'botprogress' } as Tile, { icon: 'crown', title: 'Управление', page: 'owner' } as Tile] : TILES).map((tile) => {
+        {(me.owner ? [...TILES, { icon: 'crown', title: 'Управление', page: 'owner' } as Tile] : TILES).map((tile) => {
           const count = counter(tile);
           return (
             <button key={tile.title} type="button" className="grid-tile" data-tile={tile.page} onClick={() => tile.page && push(tile.page)}>

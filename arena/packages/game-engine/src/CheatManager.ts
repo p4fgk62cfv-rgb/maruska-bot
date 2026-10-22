@@ -6,7 +6,8 @@ import { getPlayer, setTurn } from './TurnManager.js';
 /**
  * «С шулерами»: any other player may point at a table card. If it was illegal, that card
  * and every card played after it go back to their owners, and the author is marked as a
- * cheater (no more cheating for the rest of the game). Pointing at a legal card changes nothing.
+ * cheater (no more cheating for the rest of the game). Pointing at a legal card is itself a
+ * violation, as in «Дурак Онлайн» (R-Soft): the accuser is marked and may no longer cheat.
  */
 export function reportCheat(state: GameState, reporter: PlayerId, seq: number, now: number, events: GameEvent[]): void {
   if (state.rules.fairness !== 'cheaters') throw new EngineError('BAD_ACTION');
@@ -15,7 +16,11 @@ export function reportCheat(state: GameState, reporter: PlayerId, seq: number, n
   const author = authorOf(state, seq);
   if (!author) throw new EngineError('INVALID_TARGET');
   if (author === reporter) throw new EngineError('INVALID_TARGET');
-  if (!state.illegal.includes(seq)) throw new EngineError('NOT_ILLEGAL');
+  if (!state.illegal.includes(seq)) {
+    if (!state.cheaters.includes(reporter)) state.cheaters.push(reporter);
+    events.push({ type: 'FALSE_REPORT', reporter, accused: author });
+    return;
+  }
 
   const returned = new Map<PlayerId, CardId[]>();
   const giveBack = (playerId: PlayerId, card: CardId) => {

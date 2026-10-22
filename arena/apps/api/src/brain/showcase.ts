@@ -196,6 +196,7 @@ function describe(events: GameEvent[], names: Record<string, string>): string | 
   const played = events.filter((e) => e.type === 'CARD_PLAYED');
   for (const e of events) {
     if (e.type === 'CHEAT_CAUGHT') return `${who(e.reporter)} ловит на жульничестве: ${who(e.cheater)}`;
+    if (e.type === 'FALSE_REPORT') return `${who(e.reporter)} зря обвиняет ${who(e.accused)} — сам теперь шулер`;
     if (e.type === 'CARD_TRANSFERRED') return `${who(e.playerId)} переводит ${cardText(e.card)}`;
     if (e.type === 'TAKE_DECLARED') return `${who(e.playerId)} берёт`;
     if (e.type === 'PLAYER_OUT') return `${who(e.playerId)} вышел из игры`;

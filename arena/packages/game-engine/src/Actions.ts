@@ -26,6 +26,7 @@ export type GameEvent =
   | { type: 'PLAYER_OUT'; playerId: PlayerId; place: number }
   | { type: 'PLAYER_LEFT'; playerId: PlayerId; reason: 'surrender' | 'timeout' }
   | { type: 'CHEAT_CAUGHT'; reporter: PlayerId; cheater: PlayerId; returned: { playerId: PlayerId; cards: CardId[] }[] }
+  | { type: 'FALSE_REPORT'; reporter: PlayerId; accused: PlayerId }
   | { type: 'MOVE_UNDONE'; playerId: PlayerId }
   | { type: 'PLAYER_TURN'; playerId: PlayerId | null; phase: string; deadline: number | null }
   | { type: 'GAME_FINISHED'; result: GameResult };
