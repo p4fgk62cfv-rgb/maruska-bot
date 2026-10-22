@@ -13,6 +13,7 @@ import { useMe, useSession } from '../../session.js';
 import { useToast } from '../../toast.js';
 import { sameRank, sortHand } from './cards.js';
 import { Hand } from './Hand.js';
+import { NetNotice } from './NetNotice.js';
 import { ResultView } from './ResultView.js';
 import { PlayerSheet } from './PlayerSheet.js';
 import { Payout } from './Payout.js';
@@ -26,7 +27,7 @@ type Sheet = null | 'emoji' | 'surrender' | 'discard' | { report: number };
 
 export function GameScreen({ game }: { game: LiveGame }) {
   const me = useMe();
-  const { socket, result, dismissGame, leaveRoom, onEvents, room } = useRealtime();
+  const { socket, status, result, dismissGame, leaveRoom, onEvents, room } = useRealtime();
   const prefs = useSettings();
   const toast = useToast();
   const view = game.state;
@@ -290,6 +291,14 @@ export function GameScreen({ game }: { game: LiveGame }) {
   };
 
   const myTurn = view.currentPlayer === me.id;
+  // Opponents still in the game whose connection is down: the plug on their portrait and the notice.
+  const lostOpponents = useMemo(
+    () =>
+      game.players
+        .filter((p) => p.userId !== me.id && !p.bot && p.connected === false && view.players.some((v) => v.id === p.userId && v.status === 'active'))
+        .map((p) => ({ id: p.userId, name: p.name })),
+    [game.players, view.players, me.id],
+  );
   const opponents = rotate(view.players, me.id);
   const mine = view.players.find((p) => p.id === me.id);
   const infoOf = (id: string) => game.players.find((p) => p.userId === id);
@@ -392,11 +401,10 @@ export function GameScreen({ game }: { game: LiveGame }) {
             : null
         }
       />
-      {game.waiting && game.waiting.userId !== me.id && waitLeft !== null && (
-        <p className="game__wait">
-          {infoOf(game.waiting.userId)?.name ?? 'Игрок'}: нет связи — ждём ещё {Math.ceil(waitLeft / 1000)} с
-        </p>
-      )}
+      <NetNotice
+        lost={lostOpponents}
+        waiting={game.waiting && waitLeft !== null ? { id: game.waiting.userId, seconds: Math.ceil(waitLeft / 1000) } : null}
+      />
       {isDefender && selected.length === 1 && undefended.length > 1 && !drag && <p className="game__tip">Перетащите карту на ту, которую бьёте, или нажмите на неё</p>}
 
       <Hand
@@ -435,6 +443,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
                 label={mine.status === 'active' ? null : labelOf(mine)}
                 bubble={mine.status === 'active' ? bubbleOf(mine.id) : null}
                 emoji={emojis[me.id] ?? null}
+                offline={status === 'reconnecting' || status === 'offline'}
               />
             )}
           </button>

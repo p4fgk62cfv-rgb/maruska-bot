@@ -100,6 +100,12 @@ export const SeatTile = memo(function SeatTile({ seat, cards = 0, back = 'classi
         <Avatar id={seat.id} name={seat.name} photoUrl={seat.photoUrl} size={size} ring={ringOf(seat.frame)} crown={Boolean(seat.crown)} vip={seat.vip} status={offline ? 'offline' : undefined} />
         <span className="seat-tile__name">{seat.name}</span>
         {bot && <span className="seat-tile__bot">бот</span>}
+        {/* Connection trouble: a small unplugged plug over the portrait; nothing when all is well. */}
+        {offline && (
+          <span className="seat-tile__net" role="img" aria-label="Проблемы со связью" title="Проблемы со связью">
+            <Icon name="unplugged" size={Math.max(14, Math.round(size * 0.3))} />
+          </span>
+        )}
         {cards > 0 && <span className="seat-tile__count">{cards}</span>}
         {emoji && (
           <span className="seat__emoji" key={emoji.n} aria-hidden="true">
