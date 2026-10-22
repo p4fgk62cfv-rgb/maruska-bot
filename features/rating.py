@@ -1,8 +1,13 @@
 """
-Рейтинг: плюсы и минусы реплаем, топ участников.
+Рейтинг: плюсы и минусы реплаем, «спасибо» в ответ — тоже плюс; топ участников.
+
+Одного и того же человека можно оценить раз в rating_cooldown_minutes (5 минут).
+Сообщения Мары об оценке через 10 секунд удаляются, чтобы не засорять чат.
 """
 
+import asyncio
 import logging
+import re
 from html import escape
 
 from aiogram import Router
@@ -34,15 +39,67 @@ logger = logging.getLogger("maruska.rating")
 
 router = Router(name="rating")
 
+# Сообщение Мары об оценке живёт столько секунд, потом удаляется
+NOTICE_TTL = 10
+
+PLUS = {"+", "＋"}
+MINUS = {"-", "−"}
+
+# Короткое «спасибо» в ответ на сообщение: «спасибо!», «спс», «благодарю», «спасибо большое 🙏»
+_THANKS = re.compile(r"(спасиб|спс|сяп|пасиб|благодар|thank|thx)", re.IGNORECASE)
+_WORDS = re.compile(r"[^\W\d_]+")
+
+
+def is_thanks(text: str | None) -> bool:
+    if not text or len(text) > 40:
+        return False
+    words = _WORDS.findall(text)
+    # «Мара, спасибо» — это спасибо Маре, а не человеку из реплая
+    if any(w.lower().startswith(("мар", "maru", "mara")) for w in words):
+        return False
+    return 0 < len(words) <= 4 and bool(_THANKS.search(text))
+
 
 def is_rating_message(message: Message) -> bool:
-    if not is_enabled(message.chat.id, "rating"):
+    if not is_enabled(message.chat.id, "rating") or message.text is None:
         return False
 
+    text = message.text.strip()
+    if text in PLUS or text in MINUS:
+        return True
+    # «Спасибо» считается плюсом, только если это ответ живому человеку
+    reply = message.reply_to_message
     return (
-        message.text is not None
-        and message.text.strip() in {"+", "-", "＋", "−"}
+        is_thanks(text)
+        and reply is not None
+        and reply.from_user is not None
+        and not reply.from_user.is_bot
     )
+
+
+_tasks: set[asyncio.Task] = set()
+
+
+async def _delete_later(message: Message, delay: int) -> None:
+    await asyncio.sleep(delay)
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
+async def notice(message: Message, text: str) -> None:
+    """Ответ Мары про рейтинг: через NOTICE_TTL секунд он исчезает."""
+    sent = await message.reply(text)
+    task = asyncio.create_task(_delete_later(sent, NOTICE_TTL))
+    _tasks.add(task)
+    task.add_done_callback(_tasks.discard)
+
+
+def cooldown_text(minutes: int) -> str:
+    if minutes % 60 == 0:
+        return f"{minutes // 60} ч."
+    return f"{minutes} мин."
 
 
 @router.message(is_rating_message)
@@ -55,11 +112,15 @@ async def rating_handler(message: Message):
     if target is None or target.is_bot:
         return
 
+    text = message.text.strip()
+    thanks = text not in PLUS and text not in MINUS
+
     if target.id == message.from_user.id:
-        await message.reply("😏 Себе рейтинг накручивать нельзя.")
+        if not thanks:
+            await notice(message, "😏 Себе рейтинг накручивать нельзя.")
         return
 
-    amount = 1 if message.text.strip() in {"+", "＋"} else -1
+    amount = -1 if text in MINUS else 1
 
     await save_user(
         telegram_id=message.from_user.id,
@@ -73,16 +134,16 @@ async def rating_handler(message: Message):
         first_name=target.first_name,
     )
 
-    cooldown = get_number(message.chat.id, "rating_cooldown") or 24
+    cooldown = get_number(message.chat.id, "rating_cooldown_minutes") or 5
 
     if not await can_vote_rating(
         giver_telegram_id=message.from_user.id,
         target_telegram_id=target.id,
-        cooldown_hours=cooldown,
+        cooldown_minutes=cooldown,
     ):
-        await message.reply(
-            f"⏳ Этого пользователя можно оценить снова через {cooldown} ч."
-        )
+        # На частое «спасибо» молчим: это обычный разговор, а не накрутка
+        if not thanks:
+            await notice(message, f"⏳ Этого пользователя можно оценить снова через {cooldown_text(cooldown)}")
         return
 
     target_name = display_name_of(target)
@@ -98,14 +159,16 @@ async def rating_handler(message: Message):
     rank = get_rank_info(new_rating)
 
     if amount > 0:
-        await message.reply(
-            f"❤️ <b>Лайк!</b>\n\n"
+        await notice(
+            message,
+            f"{'🙏 <b>Спасибо!</b>' if thanks else '❤️ <b>Лайк!</b>'}\n\n"
             f"Рейтинг пользователя <b>{name}</b> повышен на <b>+1</b>.\n\n"
             f"⭐ Теперь рейтинг: <b>{new_rating}</b>\n"
             f"🎖 Ранг: <b>{rank}</b>"
         )
     else:
-        await message.reply(
+        await notice(
+            message,
             f"💔 <b>Минус!</b>\n\n"
             f"Рейтинг пользователя <b>{name}</b> понижен на <b>-1</b>.\n\n"
             f"⭐ Теперь рейтинг: <b>{new_rating}</b>\n"

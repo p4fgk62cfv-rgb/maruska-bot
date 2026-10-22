@@ -187,8 +187,8 @@
     M.api("/api/admin/karma" + M.chatQuery()).then(function (d) {
       M.app.innerHTML = M.backButton("Экономика") + M.chatPicker()
         + '<div class="card"><div class="card-title">Правила</div>'
-        + '<div class="dim" style="margin-bottom:8px">Карму дают ответом «+» или «−» на сообщение, за игры и вручную из профиля.</div>'
-        + '<div class="btns"><button class="btn" data-open="settings" data-arg="keys:Карма и рейтинг:rating,rating_cooldown">⏱ Пауза между голосами</button>'
+        + '<div class="dim" style="margin-bottom:8px">Карму дают ответом «+», «спасибо» или «−» на сообщение, за игры и вручную из профиля.</div>'
+        + '<div class="btns"><button class="btn" data-open="settings" data-arg="keys:Карма и рейтинг:rating,rating_cooldown_minutes">⏱ Пауза между голосами</button>'
         + '<button class="btn" data-open="settings" data-arg="Развлечения">🎮 Карма за игры</button></div></div>'
 
         + '<div class="card"><div class="card-title">Лидеры по карме</div>' + M.bars(d.top) + "</div>"
