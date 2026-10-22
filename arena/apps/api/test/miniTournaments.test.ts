@@ -199,6 +199,10 @@ describe.skipIf(!url)('mini-tournaments (one knockout table)', () => {
     await igor.ws.connect();
     const started = await zhora.ws.waitFor((m) => m.type === 'GAME_STARTED' && m.roomId === roomId);
     if (started.type !== 'GAME_STARTED') throw new Error('unreachable');
+    // Турнир — честная игра: подсветку карт не купить, и в состоянии её нет
+    expect(await zhora.ws.send({ type: 'USE_FEATURE', gameId: started.gameId, feature: 'hints' })).toMatchObject({ type: 'ERROR', code: 'FORBIDDEN' });
+    await zhora.ws.waitFor((m) => m.type === 'GAME_STATE');
+    expect(zhora.ws.latest('GAME_STATE')!.features).toMatchObject({ hints: false, hintsAllowed: false });
     await igor.ws.send({ type: 'LEAVE_GAME', gameId: started.gameId });
     await until(() => said(chatId).at(-1)!.includes('стол 2 на 2'));
 

@@ -1,6 +1,6 @@
 import type { CardId, Suit } from '@arena/game-engine';
 import { PlayingCard, CARD_RATIO } from '@arena/ui';
-import { useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 
 export interface HandProps {
   cards: CardId[];
@@ -66,8 +66,67 @@ export function Hand({ cards, trump, selected, playable, cardWidth, onTap, onDou
     window.setTimeout(() => el.classList.remove('hand__slot--return'), 260);
   };
 
+  /** Where each card sits in the fan — what React renders; a card left astray is put back here. */
+  const slotTransform = (i: number) => `translateX(${i * step}px) translateY(${arc(i, cards.length)}px) rotate(${tilt(i, cards.length)}deg)`;
+  const slots = useRef<HTMLDivElement>(null);
+  const detach = useRef<(() => void) | null>(null);
+
+  /**
+   * The end of a drag can get lost: an iOS system gesture, a call or a notification, the app
+   * minimised mid-drag. Then nothing ever answers the pointer and the card would hang on the
+   * felt until a reload. So the drag also ends on a release anywhere on the screen, when the
+   * finger loses the card, when the app goes to the background — and after every render any
+   * card that is not being dragged right now goes back to its place in the fan.
+   */
+  const cancel = () => {
+    const d = drag.current;
+    detach.current?.();
+    if (!d) return;
+    drag.current = null;
+    if (!d.active) return;
+    onDragMove(null, 0, 0);
+    window.setTimeout(() => (dragged.current = false), 50);
+    settle(d.el, d.base);
+  };
+
+  const watch = (pointer: number) => {
+    detach.current?.();
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerId !== pointer || !drag.current) return;
+      void finish(e.type === 'pointerup', e.clientX, e.clientY, pointer);
+    };
+    const onLost = () => document.visibilityState === 'hidden' && cancel();
+    window.addEventListener('pointerup', onUp, true);
+    window.addEventListener('pointercancel', onUp, true);
+    window.addEventListener('blur', cancel);
+    document.addEventListener('visibilitychange', onLost);
+    detach.current = () => {
+      window.removeEventListener('pointerup', onUp, true);
+      window.removeEventListener('pointercancel', onUp, true);
+      window.removeEventListener('blur', cancel);
+      document.removeEventListener('visibilitychange', onLost);
+      detach.current = null;
+    };
+  };
+
+  useLayoutEffect(() => {
+    const root = slots.current;
+    if (!root) return;
+    const moving = drag.current?.active ? drag.current.card : null;
+    root.querySelectorAll<HTMLElement>('.hand__slot').forEach((el, i) => {
+      if (el.dataset.card === moving) return;
+      el.classList.remove('hand__slot--drag');
+      const want = slotTransform(i);
+      if (el.style.transform !== want) el.style.transform = want;
+    });
+  });
+
+  // Leaving the table mid-drag: nothing must stay listening.
+  useEffect(() => () => detach.current?.(), []);
+
   const down = (card: CardId, e: React.PointerEvent<HTMLElement>) => {
-    if (e.button !== 0 || drag.current) return;
+    if (e.button !== 0) return;
+    if (drag.current) cancel();
     drag.current = { card, el: e.currentTarget, pointer: e.pointerId, x0: e.clientX, y0: e.clientY, base: e.currentTarget.style.transform, active: false };
     dragged.current = false;
   };
@@ -81,28 +140,38 @@ export function Hand({ cards, trump, selected, playable, cardWidth, onTap, onDou
       if (Math.hypot(dx, dy) < DRAG_START) return;
       d.active = true;
       dragged.current = true;
-      d.el.setPointerCapture(e.pointerId);
+      try {
+        d.el.setPointerCapture(e.pointerId);
+      } catch {
+        // The pointer is already gone: the window listeners below still end the drag.
+      }
       d.el.classList.add('hand__slot--drag');
+      watch(e.pointerId);
     }
     // The card follows the finger upright and a little bigger, above everything else.
     d.el.style.transform = `${d.base.replace(/rotate\([^)]*\)/, '')} translate(${dx}px, ${dy}px) scale(1.1)`;
     onDragMove(d.card, e.clientX, e.clientY);
   };
 
-  const up = async (e: React.PointerEvent<HTMLElement>) => {
+  /** The finger let go (released = a real drop) or the drag was interrupted. Runs once per drag. */
+  const finish = async (released: boolean, x: number, y: number, pointer: number) => {
     const d = drag.current;
-    if (!d || d.pointer !== e.pointerId) return;
+    if (!d || d.pointer !== pointer) return;
     drag.current = null;
+    detach.current?.();
     if (!d.active) return;
     onDragMove(null, 0, 0);
     // The click that follows a drag must not select the card.
     window.setTimeout(() => (dragged.current = false), 50);
-    const ok = e.type === 'pointerup' && (await onDrop(d.card, e.clientX, e.clientY));
+    const ok = released && (await onDrop(d.card, x, y));
     if (!ok) settle(d.el, d.base);
   };
 
+  const up = (e: React.PointerEvent<HTMLElement>) => void finish(e.type === 'pointerup', e.clientX, e.clientY, e.pointerId);
+
   return (
     <div
+      ref={slots}
       className="hand"
       style={{ height: cardWidth * CARD_RATIO + 30, width: step * Math.max(0, cards.length - 1) + cardWidth }}
       onTouchStart={(e) => (touch.current = e.touches[0]?.clientX ?? null)}
@@ -119,11 +188,15 @@ export function Hand({ cards, trump, selected, playable, cardWidth, onTap, onDou
           className="hand__slot"
           data-card={card}
           data-zone="hand"
-          style={{ transform: `translateX(${i * step}px) translateY(${arc(i, cards.length)}px) rotate(${tilt(i, cards.length)}deg)`, zIndex: i }}
+          style={{ transform: slotTransform(i), zIndex: i }}
           onPointerDown={(e) => down(card, e)}
           onPointerMove={move}
           onPointerUp={up}
           onPointerCancel={up}
+          onLostPointerCapture={(e) => {
+            // The browser took the finger away without a release: the card goes back.
+            if (drag.current?.active && drag.current.pointer === e.pointerId) window.setTimeout(() => drag.current?.pointer === e.pointerId && cancel(), 0);
+          }}
         >
           <PlayingCard
             card={card}

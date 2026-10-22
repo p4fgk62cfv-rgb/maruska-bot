@@ -173,6 +173,7 @@ export class GameRunner {
 
   private async useFeature(userId: string, feature: keyof Features): Promise<void> {
     if (!this.hasPlayer(userId)) throw new AppError('FORBIDDEN');
+    if (feature === 'hints' && this.snap.fair) throw new AppError('FORBIDDEN');
     const current = this.features(userId);
     if (current[feature]) return;
     const premium = this.players.find((p) => p.userId === userId)?.premium ?? false;
@@ -400,14 +401,16 @@ export class GameRunner {
     const features = this.features(userId);
     const info = this.playerInfo();
     const premium = info.find((p) => p.userId === userId)?.premium ?? false;
-    const state = toPlayerView(this.snap.state, userId, { hints: features.hints || premium, discard: features.discardReminder });
+    const hints = !this.snap.fair && (features.hints || premium);
+    const state = toPlayerView(this.snap.state, userId, { hints, discard: features.discardReminder });
     const move = this.snap.state.lastMove;
     this.deps.hub.send(userId, {
       type: 'GAME_STATE',
       state,
       players: info,
       features: {
-        hints: features.hints || premium,
+        hints,
+        hintsAllowed: !this.snap.fair,
         discardReminder: features.discardReminder,
         canUndo: Boolean(this.snap.previous && move?.playerId === userId && move.version === this.snap.state.version),
       },
@@ -618,6 +621,7 @@ export class GameManager {
     const snapshot: GameSnapshot = {
       gameId, roomId: room.id, stake: room.settings.stake, state, previous: null, features: {}, transfers: {}, startedAt: now,
       ...(room.settings.botLevel ? { botLevel: room.settings.botLevel } : {}),
+      ...(room.tournament ? { fair: true } : {}),
     };
     const runner = this.add(snapshot, players);
     await this.deps.store.saveGame(snapshot);

@@ -10,7 +10,7 @@ import { useToast } from './toast.js';
 export interface LiveGame {
   state: PlayerView;
   players: PlayerInfo[];
-  features: { hints: boolean; discardReminder: boolean; canUndo: boolean };
+  features: { hints: boolean; hintsAllowed?: boolean; discardReminder: boolean; canUndo: boolean };
   /** The table waits for a player who lost the connection on their turn. */
   waiting: { userId: string; until: number } | null;
 }

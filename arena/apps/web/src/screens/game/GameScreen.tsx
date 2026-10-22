@@ -443,7 +443,10 @@ export function GameScreen({ game }: { game: LiveGame }) {
           <>
             <span className="dock-extras">
             <DockExtra icon="undo" label="Вернуть карту" price={FEATURE_PRICES.undo} disabled={!game.features.canUndo || busy} onClick={() => void send({ type: 'UNDO_MOVE', gameId })} />
-            <DockExtra icon="eye" label="Подсветка карт" price={game.features.hints ? null : FEATURE_PRICES.hints} on={game.features.hints} disabled={game.features.hints || busy} onClick={() => void buy('hints')} />
+            {/* Tournament tables: no hints for anyone — a fair game. */}
+            {game.features.hintsAllowed !== false && (
+              <DockExtra icon="eye" label="Подсветка карт" price={game.features.hints ? null : FEATURE_PRICES.hints} on={game.features.hints} disabled={game.features.hints || busy} onClick={() => void buy('hints')} />
+            )}
             <DockExtra
               icon="cards"
               label={game.features.discardReminder ? 'Показать отбой' : 'Напомнить отбой'}
