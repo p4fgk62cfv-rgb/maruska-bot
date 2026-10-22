@@ -91,7 +91,8 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
     players: () => trainer.current,
     fallback: () => ({ params: brain.params, version: brain.version }),
   });
-  realtime.trainingTables = () => showcase.snapshot();
+  // «Зал ботов» выключен, пока не включат BOT_SHOWCASE=on: столов для показа нет
+  realtime.trainingTables = () => (config.BOT_SHOWCASE === 'on' ? showcase.snapshot() : []);
   const presence = new RealtimePresence(realtime);
   const outbox = new Outbox(base.db, bot, app.log);
   const friends = new FriendService({ ...base, outbox, presence, realtime });
@@ -140,13 +141,12 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
     // Only the server that holds the tables starts seasons and pays prizes: two servers during a deploy never race.
     void realtime.ready.then(() => seasons.start());
     // One server trains: the one that runs the games (it holds the lease).
-    // Self-play training has plateaued (exams flat for a week): off unless BOT_TRAINING=on.
-    // «Зал ботов» runs either way.
+    // Обучение ботов и «Зал ботов» выключены; включаются BOT_TRAINING=on и BOT_SHOWCASE=on.
     void realtime.ready
       .then(() => (config.BOT_TRAINING === 'on' ? trainer.start() : false))
       .then((on) => {
         if (on) app.log.info('bot training started');
-        showcase.start();
+        if (config.BOT_SHOWCASE === 'on') showcase.start();
       })
       .catch((err: unknown) => app.log.error({ err }, 'bot training did not start'));
   }

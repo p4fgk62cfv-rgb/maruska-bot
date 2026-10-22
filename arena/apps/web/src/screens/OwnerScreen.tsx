@@ -21,7 +21,7 @@ export default function OwnerScreen() {
     <div className="app-stack owner">
       <ScreenHeader title="Управление" subtitle="Видно только владельцу" />
       <Tabs<Section> value={section} onChange={setSection} items={[{ value: 'announcement', label: 'Объявление' }, { value: 'gifts', label: 'Подарки' }, { value: 'bonus', label: 'Бонусы' }, { value: 'bots', label: 'Боты' }, { value: 'stars', label: 'Звёзды' }]} />
-      {section === 'announcement' ? <AnnouncementEditor /> : section === 'gifts' ? <Gifts /> : section === 'bots' ? <><Bots /><Training /></> : section === 'stars' ? <StarSales /> : <Bonuses />}
+      {section === 'announcement' ? <AnnouncementEditor /> : section === 'gifts' ? <Gifts /> : section === 'bots' ? <Bots /> : section === 'stars' ? <StarSales /> : <Bonuses />}
     </div>
   );
 }
