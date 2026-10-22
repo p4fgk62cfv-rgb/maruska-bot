@@ -85,7 +85,8 @@ export function Hand({ cards, trump, selected, playable, cardWidth, onTap, onDou
     drag.current = null;
     if (!d.active) return;
     onDragMove(null, 0, 0);
-    window.setTimeout(() => (dragged.current = false), 50);
+    // dragged stays set until the next touch: the end of an interrupted drag must not count as
+    // a tap or as the «swipe right» that re-sorts the hand.
     settle(d.el, d.base);
   };
 
@@ -162,7 +163,7 @@ export function Hand({ cards, trump, selected, playable, cardWidth, onTap, onDou
     if (!d.active) return;
     onDragMove(null, 0, 0);
     // The click that follows a drag must not select the card.
-    window.setTimeout(() => (dragged.current = false), 50);
+    window.setTimeout(() => (dragged.current = false), 300);
     const ok = released && (await onDrop(d.card, x, y));
     if (!ok) settle(d.el, d.base);
   };
@@ -194,7 +195,10 @@ export function Hand({ cards, trump, selected, playable, cardWidth, onTap, onDou
           onPointerUp={up}
           onPointerCancel={up}
           onLostPointerCapture={(e) => {
-            // The browser took the finger away without a release: the card goes back.
+            // The browser took the finger away from this card without a release: it goes back.
+            // Only the slot's own capture counts: when the drag starts, the capture moves from the
+            // card picture inside to the slot, and that «lost» event bubbles up here too.
+            if (e.target !== e.currentTarget) return;
             if (drag.current?.active && drag.current.pointer === e.pointerId) window.setTimeout(() => drag.current?.pointer === e.pointerId && cancel(), 0);
           }}
         >
