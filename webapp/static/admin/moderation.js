@@ -184,7 +184,8 @@
         + tile("🔁", "Повторы", val("automod_repeats"), val("automod_repeats") ? "Удаляются" : "Не проверяются", "keys:Повторы:automod_repeats,act_repeat")
         + tile("🔗", "Ссылки", val("link_policy") !== "allow", linkState[val("link_policy")] || "", "keys:Ссылки:link_policy,link_whitelist,link_blacklist,act_link")
         + tile("🤬", "Антимат", mat.antimat, mat.antimat
-            ? matWords + " слов · " + (mat.antimat_mute_minutes ? "мут " + mat.antimat_mute_minutes + " мин" : "только предупр.")
+            ? (mat.antimat_builtin === false ? matWords + " слов" : "Умный словарь" + (matWords ? " + " + matWords : ""))
+              + " · " + (mat.antimat_mute_minutes ? "мут " + mat.antimat_mute_minutes + " мин" : "только предупр.")
             : "Выключен", "Антимат")
         + tile("🚫", "Стоп-слова", words > 0, words + " слов", "keys:Стоп-слова:stop_words,stop_words_except,act_stop_word")
         + tile("🔣", "Символы", val("automod_symbols"), val("automod_symbols") ? "Проверяются" : "Не проверяются", "keys:Спам символами:automod_symbols,act_symbols")
