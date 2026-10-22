@@ -393,11 +393,15 @@ async def can_vote_rating(
     giver_telegram_id: int,
     target_telegram_id: int,
     cooldown_hours: int | None = None,
+    cooldown_minutes: int | None = None,
 ) -> bool:
-    hours = cooldown_hours or RATING_COOLDOWN_HOURS
+    if cooldown_minutes:
+        pause = timedelta(minutes=cooldown_minutes)
+    else:
+        pause = timedelta(hours=cooldown_hours or RATING_COOLDOWN_HOURS)
 
     async with session_scope() as session:
-        cooldown_time = utcnow() - timedelta(hours=hours)
+        cooldown_time = utcnow() - pause
 
         result = await session.execute(
             select(RatingVote)

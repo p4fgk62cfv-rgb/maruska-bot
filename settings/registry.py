@@ -874,12 +874,12 @@ NUMBERS: tuple[Number, ...] = (
         group="Экономика",
     ),
     Number(
-        key="rating_cooldown",
+        key="rating_cooldown_minutes",
         title="Пауза рейтинга",
         emoji="⏳",
-        description="Как часто можно оценивать одного и того же человека",
-        default=24, minimum=1, maximum=168, step=1,
-        unit="ч",
+        description="Как часто можно оценивать одного и того же человека («+» или «спасибо» в ответ)",
+        default=5, minimum=1, maximum=1440, step=1,
+        unit="мин",
         group="Экономика",
     ),
 
