@@ -42,6 +42,10 @@ const PlayerScreen = lazy(() => import('./screens/player/PlayerScreen.js'));
 // The table is the most important screen: it loads as soon as the app starts, not on first use.
 const gameModule = import('./screens/game/GameScreen.js');
 const GameScreen = lazy(() => gameModule.then((m) => ({ default: m.GameScreen })));
+// Once the chunk is here the table renders straight away. React.lazy would still suspend on
+// its first render and flash the «Маруська Арена» splash between the room and the deal.
+let LoadedGameScreen: typeof import('./screens/game/GameScreen.js').GameScreen | null = null;
+void gameModule.then((m) => (LoadedGameScreen = m.GameScreen)).catch(() => undefined);
 
 const TABS: NavItem<Tab>[] = [
   { key: 'home', label: 'Профиль', icon: 'user' },
@@ -123,6 +127,7 @@ function Shell() {
 
   // During a game (and on its result screen) the table owns the whole screen.
   if (game && (game.state.status === 'playing' || result)) {
+    if (LoadedGameScreen) return <LoadedGameScreen game={game} />;
     return (
       <Suspense fallback={<ScreenFallback fullscreen />}>
         <GameScreen game={game} />
