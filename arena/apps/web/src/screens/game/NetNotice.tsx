@@ -17,16 +17,24 @@ export interface NetNoticeProps {
 export function NetNotice({ lost, waiting }: NetNoticeProps) {
   const [back, setBack] = useState<string | null>(null);
   const before = useRef(new Map<string, string>());
+  // Every game update brings a new list: compare who is lost, not the list itself.
+  const lostKey = lost.map((p) => `${p.id}\u0000${p.name}`).join('\u0001');
 
   useEffect(() => {
     const now = new Map(lost.map((p) => [p.id, p.name]));
     const returned = [...before.current].filter(([id]) => !now.has(id)).map(([, name]) => name);
     before.current = now;
-    if (returned.length === 0 || now.size > 0) return;
-    setBack(returned.join(', '));
+    if (now.size > 0) setBack(null);
+    else if (returned.length > 0) setBack(returned.join(', '));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lostKey]);
+
+  // «Снова на связи» goes away on its own, whatever the table does meanwhile.
+  useEffect(() => {
+    if (!back) return;
     const id = window.setTimeout(() => setBack(null), BACK_MS);
     return () => window.clearTimeout(id);
-  }, [lost]);
+  }, [back]);
 
   if (lost.length > 0) {
     const names = lost.map((p) => p.name).join(', ');
