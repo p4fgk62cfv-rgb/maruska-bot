@@ -44,6 +44,7 @@ const LEASE_RENEW_MS = 3_000;
 /** A new server waits this long at most for the old one to hand over the games. */
 const HANDOVER_MAX_MS = 45_000;
 /** Requests that only read: not worth remembering across a restart. */
+const CARD_MOVES = new Set(['PLAY_CARD', 'PLAY_CARDS', 'TRANSFER', 'PASS', 'TAKE_CARDS']);
 const READ_ONLY = new Set(['PING', 'LOBBY_SUBSCRIBE', 'LOBBY_UNSUBSCRIBE', 'CHAT_SUBSCRIBE', 'CHAT_UNSUBSCRIBE', 'TRAINING_SUBSCRIBE', 'TRAINING_UNSUBSCRIBE', 'ROOM_WATCH', 'RECONNECT']);
 
 export class Realtime {
@@ -276,6 +277,11 @@ export class Realtime {
         const code: AppErrorCode = error instanceof AppError ? error.code : 'SERVER_ERROR';
         metrics.inc('arena_ws_errors_total', 'Rejected WebSocket requests by error code', { code });
         if (!(error instanceof AppError)) this.deps.log.error({ err: error, type: msg.type }, 'ws handler failed');
+        // A card move the server refused: kept in the log, so «my card did not go» can be looked up.
+        else if (CARD_MOVES.has(msg.type)) {
+          const m = msg as { gameId?: string; card?: string; cards?: string[]; target?: number };
+          this.deps.log.info({ userId: client.userId, type: msg.type, code, gameId: m.gameId, card: m.card ?? m.cards, target: m.target }, 'move refused');
+        }
         return code;
       },
     );

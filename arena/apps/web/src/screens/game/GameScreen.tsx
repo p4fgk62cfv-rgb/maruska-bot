@@ -262,7 +262,12 @@ export function GameScreen({ game }: { game: LiveGame }) {
   const dropCard = async (card: CardId, x: number, y: number): Promise<boolean> => {
     unlockAudio();
     const zone = dropAt(x, y);
-    if (!zone || busy) return false;
+    if (!zone) return false;
+    // A card that flies back must say why, never silently.
+    if (busy) {
+      toast('Предыдущий ход ещё отправляется — подождите секунду');
+      return false;
+    }
     const sameRankAsLead = view.table.length > 0 && rankOf(card) === rankOf(view.table[0]!.attack);
 
     if (zone === 'transfer') return a.canTransfer && sameRankAsLead ? transfer(card) : false;
@@ -275,7 +280,10 @@ export function GameScreen({ game }: { game: LiveGame }) {
       return false;
     }
 
-    if (!a.canAttack) return false;
+    if (!a.canAttack) {
+      if (view.table.length > 0 && view.phase !== 'finished') toast('Сейчас подкинуть нельзя');
+      return false;
+    }
     // Leading with several of one rank: the whole selection goes if the dragged card is part of it.
     const cards = selected.includes(card) && selected.length > 1 && sameRank(selected) ? selected : [card];
     return attack(cards);
