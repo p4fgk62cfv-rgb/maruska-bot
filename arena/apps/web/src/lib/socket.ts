@@ -6,9 +6,13 @@ export type Reply = { ok: true } | { ok: false; code: string; message: string };
 
 /** How long a request may wait for an answer, including a resend after a reconnect. */
 const TIMEOUT_MS = 12_000;
-/** Silence after which an «open» socket is considered dead (a phone that slept, a lost network). */
-const SILENCE_MS = 20_000;
-const HEARTBEAT_MS = 8_000;
+/**
+ * Silence after which an «open» socket is considered dead (a phone that slept, a lost network).
+ * Kept well under the 15-second turn of a fast game: the client reconnects and gets the state
+ * back before the turn is lost.
+ */
+const SILENCE_MS = 8_000;
+const HEARTBEAT_MS = 3_000;
 /** After the app comes back to the foreground: this long to hear from the server, or reconnect. */
 const PROBE_MS = 4_000;
 /** A handshake that hangs (half-dead mobile network) is given up after this long. */

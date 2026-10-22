@@ -71,4 +71,6 @@ export interface GameSnapshot {
   voids?: VoidNote[];
   /** The player whose turn ran out while offline and is being waited for. */
   grace?: { userId: string; since: number } | null;
+  /** A tournament table: no card hints for anyone, premium included — everyone plays on equal terms. */
+  fair?: boolean;
 }
