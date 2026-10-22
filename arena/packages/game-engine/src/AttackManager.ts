@@ -23,6 +23,8 @@ export function canAttackNow(state: GameState, playerId: PlayerId): boolean {
   if (player.status !== 'active' || playerId === state.defender || player.hand.length === 0) return false;
   if (state.phase === 'attack') return playerId === state.attacker;
   if (state.phase !== 'defense' && state.phase !== 'taking') return false;
+  // Сказал «бито» — больше не подкидывает, пока защитник не положит новое достоинство
+  if (state.passed.includes(playerId)) return false;
   return throwers(state).includes(playerId) && attackCapacity(state) > 0;
 }
 
@@ -33,7 +35,7 @@ export function playAttack(state: GameState, playerId: PlayerId, card: CardId, e
   if (state.phase === 'attack') {
     if (playerId !== state.attacker) throw new EngineError('NOT_YOUR_TURN');
   } else {
-    if (!throwers(state).includes(playerId)) throw new EngineError('THROW_IN_NOT_ALLOWED');
+    if (!throwers(state).includes(playerId) || state.passed.includes(playerId)) throw new EngineError('THROW_IN_NOT_ALLOWED');
     if (attackCapacity(state) === 0) throw new EngineError('BOUT_LIMIT_REACHED');
     if (!ranksOnTable(state).has(rankOf(card))) {
       if (!mayCheat(state, playerId)) throw new EngineError('RANK_NOT_ON_TABLE');

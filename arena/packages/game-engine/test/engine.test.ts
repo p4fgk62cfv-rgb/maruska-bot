@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { applyTimeout, createDeck, legalActions, rankValue, settle, suitOf, toPlayerView, undoLastMove, validateSettings, type CardId } from '../src/index.js';
+import { applyAction, applyTimeout, createDeck, legalActions, rankValue, settle, suitOf, toPlayerView, undoLastMove, validateSettings, type CardId } from '../src/index.js';
 import { act, arranged, hand, newGame, NOW, reject } from './helpers.js';
+import { pendingThrowers } from '../src/TurnManager.js';
 
 describe('deck and deal', () => {
   it('builds 24/36/52 card decks without duplicates', () => {
@@ -161,11 +162,15 @@ describe('throw-in right', () => {
       ],
     });
 
-  it('the attacker throws in first; others wait for «бито»', () => {
-    const state = act(four('all'), 'p1', { type: 'PLAY_CARD', card: '7S' });
+  it('as in R-Soft, everyone throws in at once — nobody waits for the attacker\'s «бито»', () => {
+    let state = act(four('all'), 'p1', { type: 'PLAY_CARD', card: '7S' });
     expect(legalActions(state, 'p1').canAttack).toBe(true);
-    expect(reject(state, 'p3', { type: 'PLAY_CARD', card: '7D' })).toBe('THROW_IN_NOT_ALLOWED');
-    expect(reject(state, 'p4', { type: 'PASS' })).toBe('CANNOT_PASS');
+    expect(legalActions(state, 'p3').canAttack).toBe(true);
+    state = act(state, 'p3', { type: 'PLAY_CARD', card: '7D' });
+    state = act(state, 'p4', { type: 'PASS' });
+    expect(state.table).toHaveLength(2);
+    // The bout still waits for the attacker and p3 to say «бито»
+    expect(pendingThrowers(state).sort()).toEqual(['p1', 'p3']);
   });
 
   it('"все": after the attacker passes, every other player may throw in', () => {
@@ -185,13 +190,15 @@ describe('throw-in right', () => {
     expect(state.table).toHaveLength(2);
   });
 
-  it('a new rank from the defender gives the right back to the attacker', () => {
+  it('a new rank from the defender lets everybody throw again', () => {
     let state = act(four('all'), 'p1', { type: 'PLAY_CARD', card: '7S' });
     state = act(state, 'p1', { type: 'PASS' });
+    state = act(state, 'p3', { type: 'PASS' });
+    expect(legalActions(state, 'p1').canAttack).toBe(false);
     state = act(state, 'p2', { type: 'PLAY_CARD', card: 'KS', target: 0 });
     expect(state.passed).toEqual([]);
     expect(legalActions(state, 'p1').pass).toBe(true);
-    expect(legalActions(state, 'p3').pass).toBe(false);
+    expect(legalActions(state, 'p3').pass).toBe(true);
   });
 
   it('several cards of one rank can be led in one move', () => {
@@ -347,13 +354,27 @@ describe('«С шулерами»', () => {
     state = act(state, 'p2', { type: 'PLAY_CARD', card: '8C', target: 0 });
     const cheatSeq = state.table[0]!.defenseSeq!;
     state = act(state, 'p1', { type: 'PLAY_CARD', card: 'QD' });
-    expect(reject(state, 'p3', { type: 'REPORT_CHEAT', seq: state.table[0]!.attackSeq })).toBe('NOT_ILLEGAL');
     state = act(state, 'p3', { type: 'REPORT_CHEAT', seq: cheatSeq });
     expect(state.table.map((t) => [t.attack, t.defense])).toEqual([['7S', null]]);
     expect(hand(state, 'p2')).toContain('8C');
     expect(hand(state, 'p1')).toContain('QD');
     expect(state.cheaters).toEqual(['p2']);
     expect(reject(state, 'p2', { type: 'PLAY_CARD', card: '9D', target: 0 })).toBe('CARD_DOES_NOT_BEAT');
+  });
+
+  it('as in R-Soft, accusing an honest card is itself a violation: the accuser may no longer cheat', () => {
+    let state = act(setup(), 'p1', { type: 'PLAY_CARD', card: '7S' });
+    const honest = state.table[0]!.attackSeq;
+    const result = applyAction(state, 'p3', { type: 'REPORT_CHEAT', seq: honest }, NOW);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    state = result.state;
+    expect(result.events).toContainEqual({ type: 'FALSE_REPORT', reporter: 'p3', accused: 'p1' });
+    expect(state.cheaters).toEqual(['p3']);
+    expect(state.table.map((t) => t.attack)).toEqual(['7S']);
+    // Помеченный больше не может класть неправильные карты
+    state = act(state, 'p2', { type: 'PLAY_CARD', card: 'KC', target: 0 });
+    expect(reject(state, 'p3', { type: 'PLAY_CARD', card: 'JC' })).toBe('RANK_NOT_ON_TABLE');
   });
 
   it('is off in fair games', () => {

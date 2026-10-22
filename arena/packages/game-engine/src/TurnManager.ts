@@ -50,16 +50,13 @@ export function throwInPool(state: GameState): PlayerId[] {
 }
 
 /**
- * Who holds the right to throw in right now. The attacker goes first; only after the
- * attacker says «бито» (or runs out of cards) does the right pass to the rest of the pool.
- * A new rank from the defender clears the passes, so the right returns to the attacker.
+ * Who may throw in right now — as in «Дурак Онлайн» (R-Soft): everyone in the pool at once,
+ * whoever is quicker, without waiting for the attacker's «бито». The bout waits until each of
+ * them has said «бито»/«пас» (or ran out of cards); a new rank from the defender clears the
+ * passes, so everybody may throw again.
  */
 export function throwers(state: GameState): PlayerId[] {
-  const pool = throwInPool(state);
-  const attacker = findPlayer(state, state.attacker);
-  const attackerHolds =
-    pool.includes(state.attacker) && !state.passed.includes(state.attacker) && (attacker?.hand.length ?? 0) > 0;
-  return attackerHolds ? [state.attacker] : pool.filter((id) => id !== state.attacker);
+  return throwInPool(state);
 }
 
 export function ranksOnTable(state: GameState): Set<Rank> {
