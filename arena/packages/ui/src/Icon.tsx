@@ -54,6 +54,8 @@ const PATHS = {
   bellOn: 'M6 16V11a6 6 0 1 1 12 0v5l2 2H4l2-2Zm4 4h4M3 6.5A9 9 0 0 1 5.5 3M21 6.5A9 9 0 0 0 18.5 3',
   clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-13v4l3 2',
   crown: 'M4 18h16M5 18 3.5 8l5 4L12 5l3.5 7 5-4L19 18',
+  /** A plug pulled out of its socket: the player's connection is in trouble. */
+  unplugged: 'M1.5 12H3M3 9h5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H3V9Zm6 1.5h3M9 13.5h3M15 7h5a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-5V7Zm2.5 3.5v.01M17.5 13v.01',
   wifiOff: 'M3 3l18 18M8.5 16.5a5 5 0 0 1 7 0M5 13a10 10 0 0 1 4-2.4M12 20h.01M19 13a10 10 0 0 0-2.3-1.6M2 9.5a15 15 0 0 1 4.3-2.8M10.7 5.1A15 15 0 0 1 22 9.5',
   share: 'M16 6l-4-4-4 4m4-4v13M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7',
   /** Paper plane, as on Telegram's own buttons. */

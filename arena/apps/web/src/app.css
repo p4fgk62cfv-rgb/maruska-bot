@@ -1345,7 +1345,30 @@ html[data-home-design="premium"] .friends-play__arrow { color: #d7b6ff; font-siz
 @keyframes conn-in { from { opacity: 0; transform: translateY(-8px); } }
 @keyframes conn-out { to { opacity: 0; transform: translateY(-8px); } }
 @media (prefers-reduced-motion: reduce) { .conn, .conn--ok { animation: none; } .conn__spinner { animation-duration: 2.4s; } }
-.game__wait { position: absolute; left: 16px; right: 16px; top: 42%; z-index: 6; margin: 0; padding: 8px 12px; border-radius: 12px; text-align: center; font-size: 13px; font-weight: 600; color: #fff; background: rgba(10, 16, 48, 0.82); pointer-events: none; }
+/* A player with connection trouble: a small unplugged plug over the portrait. */
+.seat-tile__net {
+  position: absolute; top: -9px; left: 50%; z-index: 4; translate: -50% 0;
+  display: grid; place-items: center; padding: 2px 5px; border-radius: 999px;
+  color: #fff; background: #e5484d; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45), 0 0 0 1.5px rgba(255, 255, 255, 0.9);
+  animation: net-blink 1.4s ease-in-out infinite;
+}
+@keyframes net-blink { 50% { opacity: 0.55; } }
+
+/* Over the felt while somebody's connection is down: a spinning wheel until it comes back. */
+.net-notice {
+  position: absolute; left: 16px; right: 16px; top: 40%; z-index: 6; display: flex; align-items: center; gap: 10px;
+  margin: 0 auto; max-width: 420px; padding: 9px 12px; border-radius: 14px; color: #fff;
+  background: rgba(10, 16, 48, 0.88); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(239, 91, 91, 0.55);
+  pointer-events: none; animation: conn-in 0.22s ease-out;
+}
+.net-notice--ok { justify-content: center; background: rgba(36, 120, 74, 0.95); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
+.net-notice__spinner { flex: none; width: 20px; height: 20px; border-radius: 50%; border: 2.5px solid rgba(255, 255, 255, 0.25); border-top-color: #ef5b5b; animation: conn-spin 0.8s linear infinite; }
+.net-notice__text { display: grid; min-width: 0; line-height: 1.25; }
+.net-notice__title { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.net-notice__sub { font-size: 12px; color: rgba(255, 255, 255, 0.78); }
+.net-notice__icon { font-weight: 800; }
+@media (prefers-reduced-motion: reduce) { .seat-tile__net, .net-notice__spinner { animation-duration: 3s; } }
+
 
 /* ── Player card («Профиль» and anyone's profile) ── */
 .pcard { display: grid; gap: 12px; }
