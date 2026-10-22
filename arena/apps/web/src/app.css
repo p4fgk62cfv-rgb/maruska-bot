@@ -1354,10 +1354,11 @@ html[data-home-design="premium"] .friends-play__arrow { color: #d7b6ff; font-siz
 }
 @keyframes net-blink { 50% { opacity: 0.55; } }
 
-/* Over the felt while somebody's connection is down: a spinning wheel until it comes back. */
+/* While somebody's connection is down: a spinning wheel at the very top of the screen, never
+   over the cards on the felt, and it lets every touch through. */
 .net-notice {
-  position: absolute; left: 16px; right: 16px; top: 40%; z-index: 6; display: flex; align-items: center; gap: 10px;
-  margin: 0 auto; max-width: 420px; padding: 9px 12px; border-radius: 14px; color: #fff;
+  position: fixed; left: 12px; right: 12px; top: calc(var(--safe-top, 0px) + 6px); z-index: 190; display: flex; align-items: center; gap: 10px;
+  margin: 0 auto; max-width: 420px; padding: 7px 12px; border-radius: 14px; color: #fff;
   background: rgba(10, 16, 48, 0.88); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(239, 91, 91, 0.55);
   pointer-events: none; animation: conn-in 0.22s ease-out;
 }
