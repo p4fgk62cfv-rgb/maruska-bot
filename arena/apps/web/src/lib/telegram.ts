@@ -86,6 +86,28 @@ export function confirmClosing(on: boolean): void {
   else tg.disableClosingConfirmation();
 }
 
+/**
+ * Telegram before 7.7 cannot switch off its own «swipe down to minimise»: a finger dragging a card
+ * downwards over the table folded the whole app. While the table is open, a touch that would only
+ * move the page (nothing under the finger scrolls) is kept from Telegram. Lists and chats inside
+ * the table still scroll. Newer Telegram does this itself (disableVerticalSwipes).
+ */
+export function holdSwipes(): () => void {
+  if (!tg || tg.isVersionAtLeast('7.7')) return () => undefined;
+  const scrolls = (el: Element | null): boolean => {
+    for (; el && el !== document.body; el = el.parentElement) {
+      const y = getComputedStyle(el).overflowY;
+      if ((y === 'auto' || y === 'scroll') && el.scrollHeight > el.clientHeight) return true;
+    }
+    return false;
+  };
+  const onMove = (e: TouchEvent) => {
+    if (e.cancelable && !scrolls(e.target as Element | null)) e.preventDefault();
+  };
+  document.addEventListener('touchmove', onMove, { passive: false });
+  return () => document.removeEventListener('touchmove', onMove);
+}
+
 const vibrate = (fn: () => void) => {
   if (tg && settings.get().vibration) fn();
 };

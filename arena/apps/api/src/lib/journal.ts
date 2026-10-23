@@ -21,7 +21,9 @@ export type JournalKind =
   | 'message_lost'
   | 'no_show'
   | 'forfeit'
-  | 'replay';
+  | 'replay'
+  /** The app crashed on a player's phone (message, stack, screen). */
+  | 'client_error';
 
 export interface JournalEvent {
   kind: JournalKind;

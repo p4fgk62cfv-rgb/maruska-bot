@@ -54,8 +54,10 @@ const MOVES_MAX_FAILURES = 70;
 export const RECONNECT_RESERVE_MS = 60_000;
 /** Back from the network loss: at least this long to look at the table before the turn ends. */
 const RETURN_MIN_MS = 10_000;
-/** A tournament table's very first turn: time to see the new deal before the 15-second clock bites. */
+/** A tournament table's very first turn: time to see the new deal before the clock bites. */
 export const TOURNAMENT_FIRST_TURN_MS = 30_000;
+/** Every other tournament turn: the fast 15 seconds proved too short to think on a phone. */
+export const TOURNAMENT_TURN_MS = 20_000;
 
 export interface GameDeps {
   db: Db;
@@ -611,8 +613,11 @@ export class GameManager {
       now,
     });
     const initialDeck = [...state.players.flatMap((p) => p.hand), ...state.deck];
-    // Турнир: на первый ход партии — 30 секунд, чтобы игроки успели увидеть новую раздачу.
-    if (room.tournament && state.turnDeadline !== null) state.turnDeadline = Math.max(state.turnDeadline, now + TOURNAMENT_FIRST_TURN_MS);
+    // Турнир: 20 секунд на ход, а на первый ход партии — 30, чтобы игроки успели увидеть новую раздачу.
+    if (room.tournament) {
+      state.rules = { ...state.rules, turnMs: TOURNAMENT_TURN_MS };
+      if (state.turnDeadline !== null) state.turnDeadline = Math.max(state.turnDeadline, now + TOURNAMENT_FIRST_TURN_MS);
+    }
     await this.deps.settlement.start({ gameId, roomId: room.id, stake: room.settings.stake, state, initialDeck });
 
     const players: PlayerInfo[] = room.seats.map((s) => ({

@@ -199,10 +199,11 @@ describe.skipIf(!url)('mini-tournaments (one knockout table)', () => {
     await igor.ws.connect();
     const started = await zhora.ws.waitFor((m) => m.type === 'GAME_STARTED' && m.roomId === roomId);
     if (started.type !== 'GAME_STARTED') throw new Error('unreachable');
-    // Первый ход турнирной партии — 30 секунд, а не 15
+    // Первый ход турнирной партии — 30 секунд, остальные — по 20
     await zhora.ws.waitFor((m) => m.type === 'GAME_STATE');
     const first = zhora.ws.latest('GAME_STATE')!.state;
     expect(first.turnDeadline! - Date.now()).toBeGreaterThan(25_000);
+    expect(first.rules.turnMs).toBe(20_000);
     // Турнир — честная игра: подсветку карт не купить, и в состоянии её нет
     expect(await zhora.ws.send({ type: 'USE_FEATURE', gameId: started.gameId, feature: 'hints' })).toMatchObject({ type: 'ERROR', code: 'FORBIDDEN' });
     await zhora.ws.waitFor((m) => m.type === 'GAME_STATE');

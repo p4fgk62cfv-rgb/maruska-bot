@@ -12,6 +12,8 @@ export class Bot {
   result: GameResultDto | null = null;
   gameId: string | null = null;
   autoplay = false;
+  /** How long the «player» thinks before a move (ms): [min, max]; the default is a machine. */
+  think: [number, number] = [20, 20];
   closedWith: number | null = null;
   private rid = 0;
   private waiters: { pred: (m: ServerMessage) => boolean; resolve: (m: ServerMessage) => void }[] = [];
@@ -20,24 +22,58 @@ export class Bot {
 
   constructor(readonly name: string, readonly userId: string, private readonly token: string, private readonly base: string) {}
 
+  /** Requests without an answer yet: sent again with the same id after a reconnect, like the app. */
+  private unanswered = new Map<string, string>();
+
+  /** Like the app (lib/socket.ts): a PING every 3 s, and 8 s of silence means the socket is dead. */
+  private heartbeat: NodeJS.Timeout | null = null;
+  private lastHeard = 0;
+  watchdog = false;
+
   async connect(token = this.token): Promise<void> {
-    this.ws = new WebSocket(`${this.base.replace('http', 'ws')}/ws?token=${token}`);
-    this.ws.on('message', (data) => this.receive(JSON.parse(data.toString()) as ServerMessage));
+    const ws = new WebSocket(`${this.base.replace('http', 'ws')}/ws?token=${token}`);
+    this.ws = ws;
+    this.lastHeard = Date.now();
+    ws.on('message', (data) => {
+      if (this.ws !== ws) return;
+      this.lastHeard = Date.now();
+      this.receive(JSON.parse(data.toString()) as ServerMessage);
+    });
+    if (this.watchdog) {
+      if (this.heartbeat) clearInterval(this.heartbeat);
+      this.heartbeat = setInterval(() => {
+        if (this.ws !== ws) return;
+        if (Date.now() - this.lastHeard > 8_000) {
+          ws.terminate();
+          void this.connect(token).catch(() => undefined);
+        } else if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'PING', rid: `${this.name}-ping-${Date.now()}` }));
+      }, 3_000);
+    }
     this.ws.on('close', (code) => (this.closedWith = code));
     await new Promise<void>((resolve, reject) => {
       this.ws.once('open', () => resolve());
       this.ws.once('error', reject);
     });
+    for (const frame of this.unanswered.values()) this.ws.send(frame);
   }
 
   close(): void {
     this.ws.close();
   }
 
+  stop(): void {
+    if (this.heartbeat) clearInterval(this.heartbeat);
+    this.heartbeat = null;
+    this.ws.close();
+  }
+
   send(msg: Outgoing): Promise<ServerMessage> {
-    const rid = `${this.name}-${++this.rid}`;
-    const reply = this.waitFor((m) => (m.type === 'ACK' || m.type === 'ERROR') && m.rid === rid);
-    this.ws.send(JSON.stringify({ ...msg, rid }));
+    const rid = `${this.name}:${++this.rid}`;
+    const frame = JSON.stringify({ ...msg, rid });
+    const reply = this.waitFor((m) => (m.type === 'ACK' || m.type === 'ERROR') && m.rid === rid, 15_000);
+    this.unanswered.set(rid, frame);
+    void reply.finally(() => this.unanswered.delete(rid)).catch(() => undefined);
+    if (this.ws.readyState === WebSocket.OPEN) this.ws.send(frame);
     return reply;
   }
 
@@ -65,10 +101,11 @@ export class Bot {
   /** Like a real client: one move in flight at a time, a short human-ish pause, retry when throttled. */
   private async move(msg: Outgoing, version: number): Promise<void> {
     this.busy = true;
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, this.think[0] + Math.random() * (this.think[1] - this.think[0])));
     const reply = await this.send(msg).catch(() => null);
     this.busy = false;
-    if (reply?.type === 'ERROR' && reply.code === 'RATE_LIMITED') this.actedOn = version - 1;
+    // No answer or refused: the next state may ask for this move again (a person would retry).
+    if (!reply || reply.type === 'ERROR') this.actedOn = version - 1;
     if (this.autoplay) this.play();
   }
 

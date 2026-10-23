@@ -5,6 +5,7 @@ import { requireSession, sessionOf } from '../auth/plugin.js';
 import type { Context } from '../context.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { AppError } from '../lib/errors.js';
+import { journal } from '../lib/journal.js';
 import { displayName } from '../services/users.js';
 
 /** How a game ended, in words. */
@@ -22,8 +23,8 @@ const CODE_TEXT: Record<string, string> = {
   RANK_NOT_ON_TABLE: 'такого достоинства нет на столе',
   NOT_YOUR_TURN: 'не его ход',
   CANNOT_PASS: 'нельзя сказать «бито»',
-  CANNOT_TAKE: 'нельзя взять',
-  TABLE_FULL: 'на столе уже максимум карт',
+  NOTHING_TO_TAKE: 'нечего брать',
+  BOUT_LIMIT_REACHED: 'на столе уже максимум карт',
   CARD_NOT_IN_HAND: 'такой карты нет в руке',
   NOT_IN_GAME: 'игрок уже не в партии',
   GAME_FINISHED: 'партия уже закончилась',
@@ -90,13 +91,19 @@ export function eventText(kind: string, details: Record<string, unknown> | null)
       return `🚪 ${d.name ?? 'игрок'} ушёл из-за стола ${d.round ?? ''}`;
     case 'replay':
       return `♻️ стол ${d.round ?? ''} переигрывается: партия не доиграна`;
+    case 'client_error':
+      return `🐞 ошибка в приложении: ${d.message ?? ''}${d.where ? ` (${d.where})` : ''}`;
     default:
       return kind;
   }
 }
 
 /** What the owner should look at: kinds that point to a problem. */
-const PROBLEM_KINDS = ['offline', 'wait', 'move_refused', 'cancelled', 'settlement_failed', 'message_lost', 'no_show', 'forfeit', 'replay'];
+const PROBLEM_KINDS = ['offline', 'wait', 'move_refused', 'cancelled', 'settlement_failed', 'message_lost', 'no_show', 'forfeit', 'replay', 'client_error'];
+
+/** Crash reports per player: enough to see a problem, never a flood. */
+const CLIENT_ERRORS_PER_HOUR = 20;
+const clientErrors = new Map<string, { hour: number; n: number }>();
 
 /**
  * «Журнал» in «Управление» (owners only): what happened in games and tournaments, so a complaint
@@ -117,6 +124,31 @@ export async function journalRoutes(app: FastifyInstance, ctx: Context): Promise
     const users = await db.user.findMany({ where: { id: { in: list } }, include: { profile: { select: { nickname: true } } } });
     return new Map(users.map((u) => [u.id, u.profile?.nickname || displayName(u)]));
   };
+
+  /** A crash in the app on a player's phone: kept in the journal for the owner. */
+  app.post('/client-error', auth, async (request) => {
+    const userId = sessionOf(request).sub;
+    const body = z
+      .object({
+        kind: z.enum(['error', 'promise', 'render']),
+        message: z.string().max(300),
+        stack: z.string().max(1500).default(''),
+        where: z.string().max(100).default(''),
+        version: z.string().max(60).default(''),
+        agent: z.string().max(200).default(''),
+        component: z.string().max(600).optional(),
+      })
+      .parse(request.body);
+    const hour = Math.floor(Date.now() / 3600_000);
+    const seen = clientErrors.get(userId);
+    const n = seen && seen.hour === hour ? seen.n + 1 : 1;
+    clientErrors.set(userId, { hour, n });
+    if (clientErrors.size > 10_000) clientErrors.clear();
+    if (n > CLIENT_ERRORS_PER_HOUR) return { ok: true };
+    const game = ctx.realtime.games.forUser(userId);
+    journal.record({ kind: 'client_error', userId, gameId: game?.id ?? null, roomId: game?.roomId ?? null, details: body });
+    return { ok: true };
+  });
 
   /** Problems over the last hours: counts and the latest items. */
   app.get('/owner/journal/summary', auth, async (request) => {
@@ -180,6 +212,7 @@ export async function journalRoutes(app: FastifyInstance, ctx: Context): Promise
         replays: count('replay'),
         cancelled: count('cancelled'),
         settlementFailed: count('settlement_failed'),
+        clientErrors: count('client_error'),
       },
       refusedByCode: [...byCode].map(([code, n]) => ({ code, text: codeText(code), count: n })).sort((a, b) => b.count - a.count),
       recent: items.slice(0, 50),

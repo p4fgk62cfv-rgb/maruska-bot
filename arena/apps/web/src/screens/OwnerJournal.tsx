@@ -9,7 +9,7 @@ interface SummaryDto {
   games: number;
   tournaments: number;
   endings: { reason: string; text: string; count: number }[];
-  problems: Record<'offline' | 'waits' | 'refused' | 'lostMessages' | 'noShows' | 'forfeits' | 'replays' | 'cancelled' | 'settlementFailed', number>;
+  problems: Record<'offline' | 'waits' | 'refused' | 'lostMessages' | 'noShows' | 'forfeits' | 'replays' | 'cancelled' | 'settlementFailed' | 'clientErrors', number>;
   refusedByCode: { code: string; text: string; count: number }[];
   recent: Problem[];
 }
@@ -60,6 +60,7 @@ const PROBLEMS: { key: keyof SummaryDto['problems']; icon: string; text: string;
   { key: 'replays', icon: '♻️', text: 'Переигранные столы турнира', hint: 'партия сорвалась и сыграна заново' },
   { key: 'cancelled', icon: '🛑', text: 'Отменённые партии', hint: 'перезапуск сервера или модератор, ставки вернулись' },
   { key: 'settlementFailed', icon: '💥', text: 'Ошибки расчёта партии', hint: 'база не ответила, расчёт повторялся' },
+  { key: 'clientErrors', icon: '🐞', text: 'Ошибки в приложении у игроков', hint: 'сбой на телефоне: текст ошибки — в последних случаях' },
 ];
 
 /** «Журнал» in «Управление»: what happened in games and tournaments, and why. */

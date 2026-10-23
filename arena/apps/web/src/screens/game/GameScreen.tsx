@@ -3,7 +3,7 @@ import { FEATURE_PRICES, type RoomDto } from '@arena/shared';
 import { Balance, BottomSheet, Button, PlayingCard } from '@arena/ui';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useCountdown } from '../../lib/hooks.js';
-import { confirmClosing, haptic } from '../../lib/telegram.js';
+import { confirmClosing, haptic, holdSwipes } from '../../lib/telegram.js';
 import { play, unlockAudio } from '../../lib/sound.js';
 import { motionAllowed, settings, useSettings } from '../../lib/settings.js';
 import { fly, MotionDirector } from './motion.js';
@@ -22,6 +22,15 @@ import { DockAction, DockExtra, SeatTile, TableDock, TableTop } from './TableChr
 import { EmojiSheet, useSeatEmojis } from './emoji.js';
 import { ConfirmAlert, FlagIcon } from './ConfirmAlert.js';
 import { Table, type PendingMove } from './Table.js';
+
+/** Card moves: their refusals are shown above the hand. */
+const CARD_MOVES = new Set(['PLAY_CARD', 'PLAY_CARDS', 'TRANSFER', 'PASS', 'TAKE_CARDS']);
+/** Refusals that only mean «the table changed a moment ago». */
+const RACE_CODES = new Set(['CANNOT_PASS', 'NOTHING_TO_TAKE', 'NOT_YOUR_TURN', 'BOUT_LIMIT_REACHED', 'INVALID_TARGET', 'THROW_IN_NOT_ALLOWED', 'GAME_FINISHED']);
+const RANK_NAMES: Record<string, string> = { '6': 'шестёрки', '7': 'семёрки', '8': 'восьмёрки', '9': 'девятки', '10': 'десятки', J: 'вальты', Q: 'дамы', K: 'короли', A: 'тузы', '2': 'двойки', '3': 'тройки', '4': 'четвёрки', '5': 'пятёрки' };
+const SUIT_SIGNS: Record<string, string> = { S: '♠', H: '♥', D: '♦', C: '♣' };
+const rankName = (rank: string) => RANK_NAMES[rank] ?? rank;
+const cardName = (card: string) => card.slice(0, -1) + (SUIT_SIGNS[card.slice(-1)] ?? '');
 
 type Sheet = null | 'emoji' | 'surrender' | 'discard' | { report: number };
 
@@ -65,6 +74,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
     confirmClosing(playing);
     return () => confirmClosing(false);
   }, [playing]);
+  useEffect(() => holdSwipes(), []);
   const progress = left !== null ? Math.min(1, left / view.rules.turnMs) : null;
 
   // My private labels about the people at this table.
@@ -131,6 +141,26 @@ export function GameScreen({ game }: { game: LiveGame }) {
     if (view.currentPlayer === me.id) haptic.tap();
   }, [view.currentPlayer, view.version, me.id]);
 
+  // Why a move did not go: a big line right above the hand, where the eyes are — not a toast
+  // at the top that nobody notices (one player tried the same wrong card three times).
+  const [refusal, setRefusal] = useState<{ text: string; n: number } | null>(null);
+  const refuse = useCallback((text: string) => {
+    play('error');
+    haptic.error();
+    setRefusal((r) => ({ text, n: (r?.n ?? 0) + 1 }));
+  }, []);
+  useEffect(() => {
+    if (!refusal) return;
+    const id = window.setTimeout(() => setRefusal(null), 2600);
+    return () => window.clearTimeout(id);
+  }, [refusal]);
+
+  // The newest state version: a refusal that only lost a race with another player's move is not news.
+  const versionRef = useRef(view.version);
+  versionRef.current = view.version;
+  // «Отправляю…» when an answer takes long (bad network): the player sees the move is on its way.
+  const [sending, setSending] = useState(false);
+
   // One action at a time: a double tap (or a tap while the previous move is on its way)
   // is ignored here, and the server would not apply the same request twice anyway.
   const inFlight = useRef(false);
@@ -139,12 +169,21 @@ export function GameScreen({ game }: { game: LiveGame }) {
       if (inFlight.current && msg.type !== 'SEND_EMOJI') return false;
       if (msg.type !== 'SEND_EMOJI') inFlight.current = true;
       setBusy(true);
+      const sentAt = versionRef.current;
+      const slow = window.setTimeout(() => setSending(true), 600);
       const reply = await socket.send(msg);
+      window.clearTimeout(slow);
+      setSending(false);
       if (msg.type !== 'SEND_EMOJI') inFlight.current = false;
       setBusy(false);
       if (!reply.ok) {
-        play('error');
-        toast(reply.message, 'error');
+        // «Бито» pressed at the very moment someone threw a card in: the table already moved on.
+        if (RACE_CODES.has(reply.code) && versionRef.current !== sentAt) return false;
+        if (CARD_MOVES.has(msg.type)) refuse(reply.message);
+        else {
+          play('error');
+          toast(reply.message, 'error');
+        }
       } else {
         if (msg.type === 'SEND_EMOJI') play('emoji');
         else if (msg.type === 'PASS') play('pass');
@@ -152,7 +191,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
       }
       return reply.ok;
     },
-    [socket, toast],
+    [socket, toast, refuse],
   );
 
   // A pending move only counts until the server's next state arrives.
@@ -219,16 +258,32 @@ export function GameScreen({ game }: { game: LiveGame }) {
 
   const leadable = (cards: CardId[]) => view.table.length === 0 || cards.every((c) => view.table.some((p) => rankOf(p.attack) === rankOf(c) || (p.defense && rankOf(p.defense as CardId) === rankOf(c))));
 
-  const attack = (cards: CardId[]) => {
+  // «С шулерами» a wrong card may be played on purpose: only there the server judges every move.
+  const cheats = view.rules.fairness === 'cheaters';
+
+  const attack = async (cards: CardId[]) => {
     const msg = cards.length === 1 ? ({ type: 'PLAY_CARD', gameId, card: cards[0]! } as const) : ({ type: 'PLAY_CARDS', gameId, cards } as const);
-    return leadable(cards) ? playNow(msg, cards, null) : send(msg);
+    if (leadable(cards)) return playNow(msg, cards, null);
+    // Checked here, before the network: the card does not even leave the hand.
+    if (!cheats) {
+      refuse(`Подкинуть можно только ${ranksOnTable()} — такие уже есть на столе`);
+      return false;
+    }
+    return send(msg);
   };
 
-  const defend = (card: CardId, target: number) => {
+  const defend = async (card: CardId, target: number) => {
     const msg = { type: 'PLAY_CARD', gameId, card, target } as const;
     const pair = view.table[target];
-    return pair && !pair.defense && beats(card, pair.attack, view.trump.suit) ? playNow(msg, [card], target) : send(msg);
+    if (pair && !pair.defense && beats(card, pair.attack, view.trump.suit)) return playNow(msg, [card], target);
+    if (pair && !cheats) {
+      refuse(`${cardName(card)} не бьёт ${cardName(pair.attack)}`);
+      return false;
+    }
+    return send(msg);
   };
+
+  const ranksOnTable = () => [...new Set(view.table.flatMap((p) => [rankOf(p.attack), ...(p.defense ? [rankOf(p.defense as CardId)] : [])]))].map(rankName).join(', ');
 
   const transfer = (card: CardId) => playNow({ type: 'TRANSFER', gameId, card }, [card], null, 'transfer');
 
@@ -265,7 +320,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
     if (!zone) return false;
     // A card that flies back must say why, never silently.
     if (busy) {
-      toast('Предыдущий ход ещё отправляется — подождите секунду');
+      refuse('Предыдущий ход ещё отправляется — подождите секунду');
       return false;
     }
     const sameRankAsLead = view.table.length > 0 && rankOf(card) === rankOf(view.table[0]!.attack);
@@ -273,15 +328,23 @@ export function GameScreen({ game }: { game: LiveGame }) {
     if (zone === 'transfer') return a.canTransfer && sameRankAsLead ? transfer(card) : false;
 
     if (isDefender) {
-      const index = zone.startsWith('pair:') ? Number(zone.slice(5)) : undefended.length === 1 ? undefended[0]! : -1;
-      if (index >= 0 && undefended.includes(index)) return defend(card, index);
+      // Dropped on the felt with a card of the led rank: that is a transfer.
+      if (zone === 'table' && a.canTransfer && sameRankAsLead) return transfer(card);
+      // Which open cards this one beats: aiming a little off must not cost the move.
+      const beatable = undefended.filter((i) => beats(card, view.table[i]!.attack, view.trump.suit));
+      let index = zone.startsWith('pair:') ? Number(zone.slice(5)) : -1;
+      if (!undefended.includes(index)) index = -1;
+      if (index >= 0 && !beats(card, view.table[index]!.attack, view.trump.suit) && beatable.length === 1) index = beatable[0]!;
+      if (index < 0) index = beatable.length === 1 ? beatable[0]! : undefended.length === 1 ? undefended[0]! : -1;
+      if (index >= 0) return defend(card, index);
       if (a.canTransfer && sameRankAsLead) return transfer(card);
-      if (undefended.length > 1) toast('Перетащите на карту, которую бьёте');
+      if (!beatable.length && !cheats) refuse(`${cardName(card)} здесь ничего не бьёт`);
+      else refuse('Перетащите на карту, которую бьёте');
       return false;
     }
 
     if (!a.canAttack) {
-      if (view.table.length > 0 && view.phase !== 'finished') toast('Сейчас подкинуть нельзя');
+      if (view.table.length > 0 && view.phase !== 'finished') refuse('Сейчас подкинуть нельзя');
       return false;
     }
     // Leading with several of one rank: the whole selection goes if the dragged card is part of it.
@@ -415,6 +478,17 @@ export function GameScreen({ game }: { game: LiveGame }) {
       />
       {isDefender && selected.length === 1 && undefended.length > 1 && !drag && <p className="game__tip">Перетащите карту на ту, которую бьёте, или нажмите на неё</p>}
 
+      {refusal && (
+        <p className="game__refusal" key={refusal.n} role="alert">
+          {refusal.text}
+        </p>
+      )}
+      {sending && !refusal && (
+        <p className="game__sending" role="status">
+          <span className="game__sending-spin" aria-hidden="true" />
+          Отправляю ход…
+        </p>
+      )}
       <Hand
         cards={hand}
         trump={view.trump.suit}
