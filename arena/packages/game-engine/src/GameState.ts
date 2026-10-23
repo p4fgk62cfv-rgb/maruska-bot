@@ -41,7 +41,7 @@ export interface LastMove {
 export type Phase = 'attack' | 'defense' | 'taking' | 'finished';
 
 export type GameResult =
-  | { kind: 'loser'; loser: PlayerId; reason: 'cards' | 'surrender' | 'timeout' | 'last_attack' }
+  | { kind: 'loser'; loser: PlayerId; reason: 'cards' | 'surrender' | 'timeout' | 'last_attack' | 'last_defense' }
   | { kind: 'draw' };
 
 export interface GameState {
