@@ -4892,6 +4892,14 @@ async def get_mini_signup(chat_id: int):
         return await session.get(MiniSignup, chat_id)
 
 
+async def mini_signups_with(user_id: int, exclude_chat: int) -> list[int]:
+    """Группы, где человек сейчас в записи на мини-турнир (кроме exclude_chat). Записей — единицы."""
+    async with session_scope() as session:
+        rows = (await session.execute(select(MiniSignup))).scalars().all()
+    return [row.chat_id for row in rows
+            if row.chat_id != exclude_chat and any(p.get("id") == user_id for p in row.players or [])]
+
+
 async def save_mini_signup(chat_id: int, **fields) -> None:
     """Создаёт или обновляет запись на мини-турнир группы."""
     async with session_scope() as session:

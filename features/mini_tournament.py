@@ -18,6 +18,10 @@
 
 Запись хранится в базе (mini_signups): перезапуск бота её не теряет.
 
+Один человек — один турнир: кто уже в записи в другой группе или ещё не выбыл из
+идущего там турнира, сюда не записывается. Иначе стол здесь ждал бы, пока он
+доиграет там.
+
 Настройки (места, ожидание у стола, правила, текст объявления и картинка) —
 общие для всех групп, меняются в админке: Арена → Мини-турниры. Запись
 запоминает их на момент открытия, так что правка в админке её не ломает.
@@ -80,6 +84,8 @@ RULE_NAMES = {
 GROUP_CHATS = ("group", "supergroup")
 
 _locks: dict[int, asyncio.Lock] = {}
+# Проверка «не записан ли в другой группе» и сама запись — без гонки между группами
+_join_lock = asyncio.Lock()
 
 NOT_CONNECTED = "🃏 Арена сейчас не подключена — турнир не запустить. Попробуйте позже."
 
@@ -336,6 +342,36 @@ async def stop_tournament(message: Message) -> None:
     # Об отмене идущего турнира Арена сама пишет в группу
 
 
+async def _group_name(bot, chat_id: int) -> str:
+    try:
+        title = (await bot.get_chat(chat_id)).title
+    except Exception:
+        title = None
+    # Окно с ответом на кнопку — до 200 символов
+    return f"в группе «{title[:40]}»" if title else "в другой группе"
+
+
+async def busy_elsewhere(bot, chat_id: int, user_id: int) -> str | None:
+    """Почему человеку нельзя записаться здесь: он в записи или в турнире другой группы. None — можно."""
+    from database.repository import mini_signups_with
+
+    signed = await mini_signups_with(user_id, exclude_chat=chat_id)
+    if signed:
+        where = await _group_name(bot, signed[0])
+        return f"Ты уже записан на турнир {where}. В два турнира сразу нельзя — сначала нажми там «Передумал»."
+    try:
+        status, answer = await asyncio.wait_for(
+            _arena("GET", "mini-tournaments/playing", query={"telegramId": str(user_id)}), timeout=5)
+    except asyncio.TimeoutError:
+        # Арена не ответила вовремя — запись не держим
+        return None
+    playing = answer.get("tournament") if status == 200 else None
+    if playing and str(playing.get("chatId")) != str(chat_id):
+        where = await _group_name(bot, int(playing["chatId"]))
+        return f"Ты сейчас играешь турнир {where}. Записаться сюда можно, когда выбудешь или он закончится."
+    return None
+
+
 # ---------------------------------------------------------
 # Кнопки
 # ---------------------------------------------------------
@@ -374,8 +410,13 @@ async def signup_button(callback: CallbackQuery):
         if len(players) >= seats:
             await callback.answer("Мест нет — стол набран.", show_alert=True)
             return
-        players.append({"id": user.id, "name": display_name_of(user)[:MAX_NAME], "username": user.username})
-        await save_mini_signup(chat_id, players=players)
+        async with _join_lock:
+            reason = await busy_elsewhere(callback.message.bot, chat_id, user.id)
+            if reason:
+                await callback.answer(reason, show_alert=True)
+                return
+            players.append({"id": user.id, "name": display_name_of(user)[:MAX_NAME], "username": user.username})
+            await save_mini_signup(chat_id, players=players)
         await callback.answer(f"Ты в турнире! Место {len(players)} из {seats} 🎉")
 
         if len(players) < seats:

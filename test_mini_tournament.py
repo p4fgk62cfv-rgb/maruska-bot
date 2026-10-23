@@ -73,6 +73,9 @@ class FakeBot:
     async def edit_message_text(self, text, chat_id, message_id):
         self.edits.append(text)
 
+    async def get_chat(self, chat_id):
+        return types.SimpleNamespace(title=f"Группа {chat_id}")
+
 
 def message(chat_id, uid, said, bot, admin=True):
     async def reply(t, **_):
@@ -109,9 +112,12 @@ async def scenario():
     await init_db()
     chat = -100880000000 - random.randint(0, 10**6)
     calls = []
+    playing_now = {}
 
     async def fake_arena(method, path, body=None, query=None):
         calls.append((method, path, body, query))
+        if path == "mini-tournaments/playing":
+            return 200, {"tournament": playing_now.get(query["telegramId"])}
         if path == "mini-tournaments/active":
             return 200, {"tournament": None}
         if path == "mini-tournaments":
@@ -237,6 +243,35 @@ async def scenario():
     said = []
     await mt.stop_tournament(message(chat, 1, said, bot))
     check(said and "нет турнира" in said[-1], "отменять нечего")
+
+    # Один человек — один турнир: записан в другой группе или ещё играет там — сюда нельзя
+    from database.repository import delete_mini_signup
+
+    chat_a, chat_b = chat - 1, chat - 2
+    mids = {}
+    for c in (chat_a, chat_b):
+        await mt.open_signup(message(c, 1, [], bot), 500)
+        mids[c] = (await get_mini_signup(c)).message_id
+
+    async def press_in(c, data, uid, name):
+        await mt.signup_button(button(c, mids[c], data, uid, name, edits, alerts, bot))
+
+    await press_in(chat_a, "mt:join", 70, "Двойной")
+    check(alerts[-1].startswith("Ты в турнире"), f"в первой группе записался: {alerts[-1]}")
+    await press_in(chat_b, "mt:join", 70, "Двойной")
+    check("уже записан на турнир в группе «Группа " + str(chat_a) + "»" in alerts[-1], f"во второй — нельзя: {alerts[-1]}")
+    check(not (await get_mini_signup(chat_b)).players, "во второй группе его нет в списке")
+    await press_in(chat_a, "mt:leave", 70, "Двойной")
+    await press_in(chat_b, "mt:join", 70, "Двойной")
+    check(alerts[-1].startswith("Ты в турнире"), f"вышел из первой — записался во вторую: {alerts[-1]}")
+    playing_now["71"] = {"chatId": str(chat_a)}
+    await press_in(chat_b, "mt:join", 71, "Играет")
+    check("сейчас играешь турнир в группе" in alerts[-1], f"ещё играет турнир в другой группе: {alerts[-1]}")
+    playing_now.clear()
+    await press_in(chat_b, "mt:join", 71, "Играет")
+    check(alerts[-1].startswith("Ты в турнире"), f"выбыл там — записался: {alerts[-1]}")
+    for c in (chat_a, chat_b):
+        await delete_mini_signup(c)
 
     # Арена не ответила — честно говорим и предлагаем запустить снова
     async def broken(method, path, body=None, query=None):

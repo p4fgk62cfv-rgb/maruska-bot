@@ -201,6 +201,25 @@ export class MiniTournamentService {
     return { id: mini.id, round: mini.round, players: mini.players.map((p) => ({ name: p.name, out: p.outRound !== null || p.place !== null })) };
   }
 
+  /**
+   * В каком идущем турнире человек ещё не выбыл (его группа), или null. Турнир на два стола
+   * держит и победителя стола, который ждёт финала; выбывший за своим столом свободен.
+   */
+  async playing(telegramId: bigint): Promise<{ chatId: string } | null> {
+    const rows = await this.db.miniTournamentPlayer.findMany({
+      where: { telegramId, outRound: null, place: null, mini: { status: 'RUNNING' } },
+      include: { mini: true },
+    });
+    for (const row of rows) {
+      if (this.isParent(row.mini)) {
+        const out = await this.db.miniTournamentPlayer.count({ where: { userId: row.userId, outRound: { not: null }, mini: { parentId: row.miniId } } });
+        if (out) continue;
+      }
+      return { chatId: row.mini.chatId.toString() };
+    }
+    return null;
+  }
+
   private async tick(): Promise<void> {
     await this.queue.run(async () => {
       const running = await this.db.miniTournament.findMany({ where: { status: 'RUNNING' } });

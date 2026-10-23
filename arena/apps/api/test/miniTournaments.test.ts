@@ -301,15 +301,22 @@ describe.skipIf(!url)('mini-tournaments (one knockout table)', () => {
     const roomA = handle.ctx.realtime.rooms.get(table('стол А'))!;
     expect(roomA.tournament?.title).toBe('Мини-турнир · стол А');
 
+    // Кто ещё в турнире — в другой группе Мара его не запишет
+    const playing = async (p: Player) => (await internal('GET', `/internal/mini-tournaments/playing?telegramId=${p.tg}`)).json().tournament;
+    expect(await playing(din)).toEqual({ chatId: chatId.toString() });
+
     // Оба стола играют одновременно
     const ra = await lose('стол А, партия 1', din);
+    expect(await playing(din)).toBeNull();
     expect(said(chatId).find((t) => t.includes(`Дураком остался <a href="tg://user?id=${din.tg}`))).toContain('5 место');
     const rb = await lose('стол Б, партия 1', erik);
     await lose('стол А, партия 2', val, ra);
     expect(said(chatId).find((t) => t.includes(`Дураком остался <a href="tg://user?id=${val.tg}`))).toContain('3 место');
     await until(() => said(chatId).some((t) => t.includes('Стол А окончен') && t.includes(`id=${ada.tg}`) && t.includes('выходит в финал')));
-    // Пока стол Б не доигран, финала нет
+    // Пока стол Б не доигран, финала нет; победитель стола А ждёт его — он ещё в турнире
     expect(said(chatId).some((t) => t.includes('финал 1 на 1'))).toBe(false);
+    expect(await playing(ada)).toEqual({ chatId: chatId.toString() });
+    expect(await playing(val)).toBeNull();
     await lose('стол Б, партия 2', gaya, rb);
 
     // Финал: Ада против Бэна
@@ -331,6 +338,7 @@ describe.skipIf(!url)('mini-tournaments (one knockout table)', () => {
     expect(mini.winnerId).toBe(ada.id);
     expect(Object.fromEntries(mini.players.map((p) => [p.name, p.place]))).toEqual({ Ада: 1, Бэн: 2, Вал: 3, Гая: 3, Дин: 5, Ерик: 5 });
     expect((await internal('GET', `/internal/mini-tournaments/active?chatId=${chatId}`)).json().tournament).toBeNull();
+    expect(await playing(ada)).toBeNull();
     const listed = (await internal('GET', '/internal/admin/mini-tournaments')).json().filter((m: { chatId: string }) => m.chatId === chatId.toString());
     expect(listed).toHaveLength(1);
     expect(listed[0]).toMatchObject({ tables: 2, status: 'FINISHED' });
