@@ -11,6 +11,7 @@ import type { Realtime } from '../realtime/realtime.js';
 import type { Room } from '../realtime/types.js';
 import type { TelegramBot } from './notifier.js';
 import type { UserService } from './users.js';
+import { journal } from '../lib/journal.js';
 
 /** Стол мини-турнира: переводной, подкидывают все, быстро, без ничьей. */
 export const MINI_SETTINGS = {
@@ -265,6 +266,7 @@ export class MiniTournamentService {
       if (!mini) return;
       if (!result || result.kind !== 'loser' || !result.loserId) {
         // Партия сорвалась (сервер, отмена): тот же состав садится заново.
+        journal.record({ kind: 'replay', miniId: mini.id, roomId: room.id, details: { round: mini.round, reason: result?.reason ?? null } });
         await this.say(mini, '♻️ Партия не доиграна — переигрываем тем же составом.');
         await this.openTable(mini.id, true);
         return;
@@ -291,6 +293,7 @@ export class MiniTournamentService {
       if (!absent.length) return;
       const place = this.alive(mini.players).length;
       await this.out(mini, absent, 'no_show', place);
+      for (const p of absent) journal.record({ kind: 'no_show', miniId: mini.id, roomId: room.id, userId: p.userId, details: { round: mini.round, name: p.name } });
       const seconds = this.seconds(mini);
       await this.say(
         mini,
@@ -310,6 +313,7 @@ export class MiniTournamentService {
       if (!player) return;
       const place = this.alive(mini.players).length;
       await this.out(mini, [player], 'left', place);
+      journal.record({ kind: 'forfeit', miniId: mini.id, roomId: room.id, userId: player.userId, details: { round: mini.round, name: player.name } });
       await this.say(mini, `🚪 ${mention(player)} ушёл из-за стола — техническое поражение, <b>${place} место</b>.`);
       // Стол закрывается вместе с уходом: остальных сажаем за новый.
       await this.db.miniTournament.update({ where: { id: mini.id }, data: { roomId: null } });
@@ -373,8 +377,14 @@ export class MiniTournamentService {
     }
   }
 
-  private async say(mini: Pick<MiniTournament, 'chatId'>, text: string, button?: { text: string; url: string }): Promise<void> {
+  private async say(mini: Pick<MiniTournament, 'chatId'> & { id?: string }, text: string, button?: { text: string; url: string }): Promise<void> {
     const outcome = await this.deps.bot.send(mini.chatId, button ? { text, button } : { text });
-    if (outcome !== 'ok') this.deps.log.warn({ chatId: mini.chatId.toString(), outcome }, 'mini-tournament message not delivered');
+    if (outcome !== 'ok') {
+      this.deps.log.warn({ chatId: mini.chatId.toString(), outcome }, 'mini-tournament message not delivered');
+      journal.record({
+        kind: 'message_lost', miniId: mini.id ?? null,
+        details: { chatId: mini.chatId.toString(), outcome, text: text.replace(/<[^>]+>/g, '').slice(0, 200) },
+      });
+    }
   }
 }

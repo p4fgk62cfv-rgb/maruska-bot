@@ -868,3 +868,24 @@ model StarOrder {
   @@map("star_orders")
   @@schema("arena")
 }
+
+// ───────────────────────── journal ─────────────────────────
+
+/// Журнал владельца: что происходило вокруг партий — обрывы связи, ожидания, отклонённые ходы,
+/// недоставленные сообщения турниров. Ходы лежат в game_moves; здесь — всё, чего в ходах нет.
+model GameEvent {
+  id        BigInt   @id @default(autoincrement())
+  gameId    String?  @map("game_id") @db.Uuid
+  roomId    String?  @map("room_id") @db.VarChar(16)
+  miniId    String?  @map("mini_id") @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  kind      String   @db.VarChar(32)
+  details   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([gameId])
+  @@index([miniId])
+  @@index([createdAt])
+  @@map("game_events")
+  @@schema("arena")
+}

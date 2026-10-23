@@ -23,6 +23,7 @@ import type { Db } from '../db.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { AppError } from '../lib/errors.js';
 import { cryptoRandom } from '../lib/ids.js';
+import { journal } from '../lib/journal.js';
 import { metrics } from '../lib/metrics.js';
 import { SerialQueue } from '../lib/serial.js';
 import type { Brain } from '../brain/brain.js';
@@ -266,6 +267,7 @@ export class GameRunner {
     if (this.bots.has(userId) || this.deps.hub.isOnline(userId) || left < 1000) return false;
     this.snap.grace = { userId, since: now };
     this.snap.state = { ...this.snap.state, turnDeadline: now + left };
+    journal.record({ kind: 'wait', gameId: this.id, roomId: this.roomId, userId, details: { seconds: Math.round(left / 1000) } });
     metrics.inc('arena_reconnect_waits_total', 'Turns stretched for an offline player');
     await this.persist();
     this.broadcastState();
@@ -307,6 +309,7 @@ export class GameRunner {
       this.result = await this.settle();
     } catch (error) {
       metrics.inc('arena_settlement_failures_total', 'Games whose settlement failed');
+      journal.record({ kind: 'settlement_failed', gameId: this.id, roomId: this.roomId, details: { error: String((error as Error)?.message ?? error).slice(0, 200) } });
       if (error instanceof NotSettleable) {
         this.deps.log.error({ err: error, gameId: this.id }, 'settlement refused');
         return;
@@ -379,6 +382,7 @@ export class GameRunner {
       payouts: this.players.map((p) => ({ userId: p.userId, net: 0, place: null, ratingGain: 0, bonusMultiplier: 1 })),
     };
     metrics.inc('arena_games_aborted_total', 'Abandoned games refunded');
+    journal.record({ kind: 'cancelled', gameId: this.id, roomId: this.roomId, details: { why } });
     this.deps.log.warn({ gameId: this.id, why }, why === 'restart' ? 'game cancelled for a server restart, stakes refunded' : 'game cancelled by a moderator, stakes refunded');
     for (const p of this.players) this.deps.hub.send(p.userId, { type: 'GAME_FINISHED', gameId: this.id, result: this.result });
     await this.deps.store.deleteGame(this.id).catch(() => undefined);
@@ -627,6 +631,13 @@ export class GameManager {
     await this.deps.store.saveGame(snapshot);
     metrics.inc('arena_games_started_total', 'Games dealt', { players: String(players.length), stake: String(room.settings.stake) });
     this.deps.log.info({ gameId, roomId: room.id, players: players.length, stake: room.settings.stake }, 'game started');
+    if (room.tournament) {
+      const t = room.tournament;
+      journal.record({
+        kind: 'tournament_table', gameId, roomId: room.id, miniId: t.kind === 'mini' ? t.id : null,
+        details: { tournamentId: t.id, title: t.title, round: t.round, kind: t.kind ?? 'bracket' },
+      });
+    }
     for (const p of players) this.deps.hub.send(p.userId, { type: 'GAME_STARTED', roomId: room.id, gameId, players: runner.playerInfo() });
     runner.resume();
     this.deps.onPresence?.(players.map((p) => p.userId));
