@@ -82,7 +82,14 @@ _TRANSLIT_ONE = str.maketrans({
     "x": "х",
 })
 # Английские слова, которые в транслите похожи на мат
-_LATIN_SAFE = {"hue", "hues", "huey", "ebay", "huevo", "huevos", "her", "hers", "other", "others", "ebullient"}
+_LATIN_SAFE = {
+    "hue", "hues", "huey", "ebay", "huevo", "huevos", "her", "hers", "other", "others", "ebullient",
+    "job", "jobs", "joba", "yob", "yobs", "jeb", "joe", "heritage", "herald", "heralds",
+}
+# Латинские буквы, у которых есть кириллический двойник: только из них «cyka», «xуй» читаются по-русски
+_LOOKALIKE_LATIN = set("abcehkmoptxyui")
+# Команды бота («/job», «/top@bot»), @упоминания и ссылки — не слова человека, их не проверяем
+_NOT_WORDS = re.compile(r"(?:^|(?<=\s))/[\w@]+|(?<!\w)@\w+|https?://\S+|www\.\S+|\b[\w.-]+\.(?:ru|com|org|net|me|io|рф)\b\S*", re.IGNORECASE)
 # По этим сочетаниям видно английское слово, а не мат транслитом («other», «web», «queen», «look»)
 _ENGLISH = re.compile(r"th|w|q|ee|oo|ou|ea")
 
@@ -141,12 +148,13 @@ _tasks: set[asyncio.Task] = set()
 
 
 def clean_text(text: str) -> str:
-    """Стильные шрифты → обычные буквы; без невидимых символов и ударений (но «й» и «ё» целы)."""
+    """Стильные шрифты → обычные буквы; без невидимых символов и ударений (но «й» и «ё» целы),
+    без команд бота, @упоминаний и ссылок."""
     text = unicodedata.normalize("NFKC", text or "")
     text = _INVISIBLE.sub("", text)
     text = "".join(ch for ch in unicodedata.normalize("NFD", text)
                    if not unicodedata.combining(ch) or ch in "\u0306\u0308")
-    return unicodedata.normalize("NFC", text)
+    return _NOT_WORDS.sub(" ", unicodedata.normalize("NFC", text))
 
 
 def normalize(word: str) -> str:
@@ -240,7 +248,9 @@ def tokens(text: str) -> list[str]:
     plain = []
     for word in raw:
         letters = _MASK.sub("", word)
-        norm = normalize(letters)
+        latin_only = re.fullmatch(r"[a-z]+", letters, re.IGNORECASE)
+        # «oxygen» — не «охуе»: у латинского слова должны найтись русские двойники для всех букв
+        norm = "" if latin_only and not set(letters.lower()) <= _LOOKALIKE_LATIN else normalize(letters)
         if norm:
             found.append(norm)
         # Латиница вперемешку с кириллицей: «hуй», «nизда»

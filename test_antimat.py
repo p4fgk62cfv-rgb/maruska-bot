@@ -65,12 +65,16 @@ SAFE = [
     "гондола", "суккулент", "Ебола", "оскорблять", "употребление", "корабля", "застрахуйся",
     "психуй", "колебаться", "погребение", "хлебать", "небось", "**жирный текст**",
     "her", "other", "hue", "ebay", "webapp", "debate", "hello", "в хлеб", "на небо", "я и ты",
+    # команды бота, упоминания и ссылки — не слова человека
+    "/job", "/job@BotMaruska_bot", "/jobs", "job", "@suka_bot привет", "https://example.com/huy",
+    "/top", "/profile", "/eban", "oxygen", "heritage", "herald",
 ]
 for text in SMART:
     expect(f"умный словарь ловит «{text}»", find_swear(text, [], builtin=True) is not None, True)
 for text in SAFE:
     expect(f"умный словарь не трогает «{text}»", find_swear(text, [], builtin=True), None)
 expect("без умного словаря и списка — ничего", find_swear("хер", []), None)
+expect("мат после команды ловится", find_swear("/job сука", [], builtin=True) is not None, True)
 expect("исключение админа", find_swear("херня", [], builtin=True, allow=parse_words("херн*")), None)
 expect("исключение не мешает другому мату", find_swear("херня, сука", [], builtin=True, allow=parse_words("херн*")) is not None, True)
 expect("корень с приставкой", is_builtin_swear("распиздяй"), True)
