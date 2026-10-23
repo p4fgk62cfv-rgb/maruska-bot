@@ -433,6 +433,11 @@ async def main():
 
     backup_task = asyncio.create_task(backup_loop(bot))
 
+    # Разовая амнистия мутов за мат (ошибочные муты за «/job»)
+    from features.antimat import amnesty_once
+
+    asyncio.create_task(amnesty_once(bot))
+
     logger.info("МАРА ЗАПУЩЕНА!")
 
     try:

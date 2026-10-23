@@ -462,3 +462,126 @@ def _duration(minutes: int) -> str:
     if minutes % 60 == 0:
         return f"{minutes // 60} ч"
     return f"{minutes} мин"
+
+
+# ---------------------------------------------------------
+# Амнистия: снять муты, которые Мара дала за мат
+# ---------------------------------------------------------
+
+AMNESTY_DAYS = 30
+AMNESTY_DONE_KEY = "antimat_amnesty_done"
+# Группы, где амнистия проходит сама один раз после выкладки (просьба владельца)
+AMNESTY_ONCE = (-1001964242089,)
+
+
+async def antimat_muted(chat_id: int, days: int = AMNESTY_DAYS) -> dict[int, str]:
+    """Кому Мара давала мут за мат в этой группе за последние дни: id → имя (из журнала)."""
+    from datetime import timedelta
+
+    from sqlalchemy import select
+
+    from database.database import session_scope
+    from database.models import AuditEvent
+    from database.repository import utcnow
+
+    since = utcnow() - timedelta(days=days)
+    async with session_scope() as session:
+        rows = (await session.execute(
+            select(AuditEvent.target_id, AuditEvent.target_name).where(
+                AuditEvent.chat_id == chat_id,
+                AuditEvent.category == "moderation",
+                AuditEvent.action == "mute",
+                AuditEvent.actor_kind == "bot",
+                AuditEvent.details.ilike("%мат%"),
+                AuditEvent.created_at >= since,
+                AuditEvent.target_id.is_not(None),
+            ).order_by(AuditEvent.created_at)
+        )).all()
+    return {target: name or str(target) for target, name in rows}
+
+
+async def amnesty(bot, chat_id: int, clear_warnings: bool = False) -> tuple[list[str], list[str]]:
+    """Снимает муты за мат с тех, кто сейчас замучен. Возвращает (кого освободили, ошибки)."""
+    from features.moderation import ModerationError, unmute
+
+    freed, problems = [], []
+    for user_id, name in (await antimat_muted(chat_id)).items():
+        try:
+            member = await bot.get_chat_member(chat_id, user_id)
+        except Exception as error:
+            problems.append(f"{name}: {error}")
+            continue
+        # Снимаем только то, что ещё действует: остальных не трогаем
+        if member.status != "restricted" or getattr(member, "can_send_messages", True):
+            continue
+        try:
+            await unmute(bot, chat_id, user_id)
+        except ModerationError as error:
+            problems.append(f"{name}: {error}")
+            continue
+        freed.append(name)
+        audit.log("moderation", "unmute", chat_id=chat_id, actor_kind="bot",
+                  target_id=user_id, target_name=name, details="амнистия: мут за мат снят")
+    if clear_warnings:
+        from sqlalchemy import delete
+
+        from database.database import session_scope
+        from database.models import ChatWarning
+
+        async with session_scope() as session:
+            await session.execute(delete(ChatWarning).where(
+                ChatWarning.chat_id == chat_id, ChatWarning.reason.in_((REASON, MUTE_REASON))))
+            await session.commit()
+    logger.info("AMNESTY %s: freed %s, problems %s", chat_id, len(freed), len(problems))
+    return freed, problems
+
+
+def amnesty_text(freed: list[str], cleared: bool) -> str:
+    names = ", ".join(escape(n) for n in freed)
+    head = (f"🕊 Мара сняла муты за мат: {names}." if freed
+            else "🕊 Сейчас ни у кого нет мута за мат.")
+    return head + (" Предупреждения за мат обнулены — счёт у всех начинается заново." if cleared else "")
+
+
+async def amnesty_once(bot) -> None:
+    """Разовая амнистия для групп из AMNESTY_ONCE — ровно один раз, даже после перезапусков."""
+    from database.repository import get_group_settings, set_group_setting
+
+    try:
+        done = list((await get_group_settings(0)).get(AMNESTY_DONE_KEY) or [])
+        for chat_id in AMNESTY_ONCE:
+            if chat_id in done:
+                continue
+            freed, problems = await amnesty(bot, chat_id)
+            done.append(chat_id)
+            await set_group_setting(chat_id=0, key=AMNESTY_DONE_KEY, value=done)
+            if freed:
+                try:
+                    await bot.send_message(chat_id, amnesty_text(freed, False))
+                except Exception as error:
+                    logger.warning("AMNESTY note %s: %s", chat_id, error)
+            if problems:
+                logger.warning("AMNESTY %s problems: %s", chat_id, "; ".join(problems)[:500])
+    except Exception as error:
+        logger.error("AMNESTY ONCE: %s %s", type(error).__name__, error)
+
+
+from aiogram.filters import Command  # noqa: E402
+
+
+@router.message(Command("amnesty"))
+async def amnesty_command(message: Message):
+    """/amnesty — админ снимает все муты за мат в группе и обнуляет предупреждения за мат."""
+    from features.moderation import _is_chat_admin
+
+    if message.chat.type not in ("group", "supergroup"):
+        await message.reply("🕊 Амнистия работает только в группе.")
+        return
+    if not await _is_chat_admin(message):
+        await message.reply("🕊 Амнистию объявляют только администраторы группы.")
+        return
+    freed, problems = await amnesty(message.bot, message.chat.id, clear_warnings=True)
+    text = amnesty_text(freed, True)
+    if problems:
+        text += f"\n⚠️ Не получилось у {len(problems)}: " + escape("; ".join(problems))[:300]
+    await message.answer(text)

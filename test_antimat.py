@@ -203,8 +203,41 @@ async def scenario():
     await swear("сука")
     expect("админов не трогать — молчит", len(said), 1)
 
+    # Амнистия: Мара снимает муты за мат по журналу — только с тех, кто ещё замучен
+    from database.models import AuditEvent
+    from database.repository import add_audit
+
+    async with session_scope() as session:
+        await session.execute(delete(AuditEvent).where(AuditEvent.chat_id == CHAT))
+        await session.commit()
+    await add_audit("moderation", "mute", chat_id=CHAT, actor_kind="bot", target_id=USER, target_name="Вася", details="30 мин · мат, 3 предупреждения")
+    await add_audit("moderation", "mute", chat_id=CHAT, actor_kind="bot", target_id=7002, target_name="Петя", details="30 мин · мат, 3 предупреждения")
+    await add_audit("moderation", "mute", chat_id=CHAT, actor_kind="admin", target_id=7003, target_name="Коля", details=None)
+    expect("в журнале — только муты Мары за мат", sorted(await antimat.antimat_muted(CHAT)), [USER, 7002])
+
+    restricted = {USER}
+    unmuted = []
+
+    async def member_status(chat_id, user_id):
+        muted = user_id in restricted
+        return types.SimpleNamespace(status="restricted" if muted else "member", can_send_messages=not muted)
+
+    async def get_chat(chat_id):
+        return types.SimpleNamespace(permissions=None)
+
+    async def restrict(chat_id, user_id, permissions, until_date=None):
+        unmuted.append(user_id)
+
+    bot.get_chat_member, bot.get_chat, bot.restrict_chat_member = member_status, get_chat, restrict
+    freed, problems = await antimat.amnesty(bot, CHAT, clear_warnings=True)
+    expect("снят мут только с замученного", (freed, unmuted, problems), (["Вася"], [USER], []))
+    from database.repository import count_warnings_by_reason
+    expect("предупреждения за мат обнулены", await count_warnings_by_reason(CHAT, USER, antimat.REASON), 0)
+    expect("текст амнистии", "Вася" in antimat.amnesty_text(freed, True) and "заново" in antimat.amnesty_text(freed, True), True)
+
     async with session_scope() as session:
         await session.execute(delete(ChatWarning).where(ChatWarning.chat_id == CHAT))
+        await session.execute(delete(AuditEvent).where(AuditEvent.chat_id == CHAT))
         await session.commit()
     await engine.dispose()
 
