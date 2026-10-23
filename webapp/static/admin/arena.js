@@ -559,7 +559,7 @@
       var s = res[0].settings, rows = res[1] || [];
       var html = M.backButton()
         + '<div class="card"><div class="card-title">⚙️ Настройки</div>'
-        + '<div class="dim" style="margin-bottom:8px">Для всех групп. Запускают админы группы командой <code>/старт турнир 5000</code>, где 5000 — приз в кредитах «Дурак Онлайн». Отмена — <code>/стоп турнир</code>.</div>'
+        + '<div class="dim" style="margin-bottom:8px">Для всех групп. Запускают админы группы командой <code>/старт турнир 5000</code>, где 5000 — приз в кредитах «Дурак Онлайн». На два стола — <code>/старт турнир2 5000</code>: мест вдвое больше, победители столов играют финал 1 на 1. Отмена — <code>/стоп турнир</code>.</div>'
         + '<label class="field-label">Мест за столом</label>' + chips("seats", [["2", "2"], ["3", "3"], ["4", "4"], ["5", "5"], ["6", "6"]], String(s.seats))
         + '<label class="field-label">Ждать у стола (не пришёл — техническое поражение)</label>'
         + chips("ready_seconds", [["30", "30 с"], ["45", "45 с"], ["60", "1 мин"], ["90", "1,5 мин"], ["120", "2 мин"], ["180", "3 мин"]], String(s.ready_seconds))
@@ -569,7 +569,7 @@
         + '<div class="dim" style="margin:6px 0">Ничьей нет: если все вышли разом, дурак — тот, кто подкинул последнюю карту.</div>'
         + "</div>"
         + '<div class="card"><div class="card-title">📝 Текст объявления</div>'
-        + '<div class="dim" style="margin-bottom:6px">Подставляется: <code>{prize}</code> — приз, <code>{seats}</code> — мест, <code>{seconds}</code> — секунд у стола, <code>{rules}</code> — правила. <code>**так**</code> — жирным. Под текстом Мара сама выводит список участников и кнопки.</div>'
+        + '<div class="dim" style="margin-bottom:6px">Подставляется: <code>{prize}</code> — приз, <code>{seats}</code> — мест, <code>{seconds}</code> — секунд у стола, <code>{rules}</code> — правила, <code>{format}</code> — как играем (один стол или два стола с финалом). <code>**так**</code> — жирным. Под текстом Мара сама выводит список участников и кнопки.</div>'
         + '<textarea data-mini-text rows="8" maxlength="450" style="width:100%">' + esc(s.text) + "</textarea>"
         + '<div class="row" style="gap:8px;margin-top:8px"><button class="btn primary" data-mini-save>Сохранить</button><button class="btn" data-mini-default>Вернуть стандартный текст</button></div>'
         + '<div class="card-title" style="margin-top:12px">Как увидят в группе (приз 5 000)</div><div class="preview" data-mini-preview style="white-space:pre-wrap">' + s.preview + "</div>"

@@ -2,6 +2,7 @@
 Мини-турнир группы: запись у Мары, игра в Маруська Арене.
 
     /старт турнир 5000   — админ группы открывает запись; 5000 — приз в «Дурак Онлайн»
+    /старт турнир2 5000  — то же на два стола: победители столов играют финал 1 на 1
     /стоп турнир         — отменить запись или идущий турнир
 
 Мара публикует сообщение с кнопками «Записаться» и «Передумал» и сразу
@@ -10,6 +11,10 @@
 всех за один стол, после каждой партии пишет в группу, кто остался дураком и
 выбыл, и даёт ссылку на новый стол — на одного меньше. Победителя поздравляет
 в группе, а организатору пишет в личку, кому выдать приз.
+
+На два стола мест вдвое больше. Когда запись набрана, Арена сажает записавшихся
+по очереди за стол А и стол Б, оба стола играют на вылет одновременно, а их
+победители — финал 1 на 1.
 
 Запись хранится в базе (mini_signups): перезапуск бота её не теряет.
 
@@ -46,9 +51,13 @@ DEFAULT_TEXT = (
     "🏆 **Мини-турнир по дураку!**\n"
     "{rules}\n\n"
     "🎁 Призовой фонд: **{prize} кредитов в игре «Дурак Онлайн»** — всё забирает победитель.\n"
-    "🃏 Играем в Маруська Арене: один стол, после каждой партии дурак выбывает, пока не останется один. "
+    "🃏 Играем в Маруська Арене: {format}. "
     "Не зашёл за стол за {seconds} с — техническое поражение."
 )
+# Прежний текст по умолчанию: он мог сохраниться в настройках, а «один стол» в нём — неправда для двух столов
+OLD_DEFAULT_TEXT = DEFAULT_TEXT.replace("{format}", "один стол, после каждой партии дурак выбывает, пока не останется один")
+# Имя в списке записи на два стола — короче: 12 строк должны влезть в подпись к картинке
+MAX_NAME_TWO_TABLES = 16
 
 DEFAULTS = {
     "seats": SEATS,
@@ -58,8 +67,10 @@ DEFAULTS = {
     "speed": "fast",
     "text": DEFAULT_TEXT,
     "photo": None,
+    # Сколько столов — не из админки, а из команды: /старт турнир2
+    "tables": 1,
 }
-LIMITS = {"seats": (2, 6), "ready_seconds": (15, 300)}
+LIMITS = {"seats": (2, 6), "ready_seconds": (15, 300), "tables": (1, 2)}
 CHOICES = {"variant": ("perevodnoy", "podkidnoy"), "throw_in": ("all", "neighbors"), "speed": ("fast", "normal")}
 RULE_NAMES = {
     "perevodnoy": "Переводной", "podkidnoy": "Подкидной",
@@ -83,14 +94,18 @@ def credits(n: int) -> str:
     return f"{n:,}".replace(",", " ")
 
 
-def parse_start(args: str | None) -> tuple[str, int | None] | None:
-    """Аргументы «/старт турнир 5000» → ('start', 5000); без суммы — ('start', None). Не «турнир» — None."""
+def parse_start(args: str | None) -> tuple[str, int | None, int] | None:
+    """
+    Аргументы «/старт турнир 5000» → ('start', 5000, 1); «турнир2 5000» — на два стола → ('start', 5000, 2);
+    без суммы — ('start', None, столы). Не «турнир» — None.
+    """
     words = (args or "").lower().replace("ё", "е").split()
-    if not words or words[0] not in ("турнир", "турнира"):
+    match = re.fullmatch(r"турнира?(2?)", words[0]) if words else None
+    if match is None:
         return None
     rest = "".join(words[1:])
     digits = re.sub(r"[^\d]", "", rest)
-    return "start", int(digits) if digits else None
+    return "start", int(digits) if digits else None, 2 if match.group(1) else 1
 
 
 def mention(player: dict) -> str:
@@ -137,12 +152,32 @@ def rules_line(settings: dict) -> str:
     return " · ".join(RULE_NAMES[settings[k]] for k in ("variant", "throw_in", "speed")) + " · без ничьей"
 
 
+def total_seats(settings: dict) -> int:
+    """Мест в записи: «места» из админки — за одним столом."""
+    return settings["seats"] * settings.get("tables", 1)
+
+
+def format_line(settings: dict) -> str:
+    if settings.get("tables", 1) == 2:
+        return (f"два стола по {settings['seats']}, за каждым после партии дурак выбывает, пока не останется один, "
+                "а победители столов играют финал 1 на 1")
+    return "один стол, после каждой партии дурак выбывает, пока не останется один"
+
+
 def render_intro(settings: dict, prize: int) -> str:
-    """Текст из админки: HTML экранируется, **жирный** — жирным, {prize} {seats} {seconds} {rules} подставляются (по разу)."""
-    text = escape(settings["text"])
+    """
+    Текст из админки: HTML экранируется, **жирный** — жирным, {prize} {seats} {seconds} {rules} {format}
+    подставляются (по разу). В своём тексте без {format} про два стола дописывается строка в конце.
+    """
+    raw = DEFAULT_TEXT if settings["text"] == OLD_DEFAULT_TEXT else settings["text"]
+    text = escape(raw)
     text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text, flags=re.DOTALL)
-    for name, value in (("prize", credits(prize)), ("seats", str(settings["seats"])),
-                        ("seconds", str(settings["ready_seconds"])), ("rules", rules_line(settings))):
+    two = settings.get("tables", 1) == 2
+    if two and "{format}" not in text:
+        text += "\n🃏🃏 " + format_line(settings)[0].upper() + format_line(settings)[1:] + "."
+    for name, value in (("prize", credits(prize)), ("seats", str(total_seats(settings))),
+                        ("seconds", str(settings["ready_seconds"])), ("rules", rules_line(settings)),
+                        ("format", format_line(settings))):
         # Каждая подстановка — один раз: иначе длинный текст разрастётся и не влезет в подпись к картинке
         text = text.replace("{" + name + "}", value, 1)
     return text
@@ -150,12 +185,16 @@ def render_intro(settings: dict, prize: int) -> str:
 
 def signup_text(prize: int, players: list[dict], closed: bool = False, settings: dict | None = None) -> str:
     settings = settings or DEFAULTS
-    seats = settings["seats"]
+    seats = total_seats(settings)
+    if settings.get("tables", 1) > 1:
+        players = [{**p, "name": p["name"][:MAX_NAME_TWO_TABLES]} for p in players]
     lines = [f"{i}. {mention(p)}" for i, p in enumerate(players, start=1)]
     lines += [f"{i}. —" for i in range(len(players) + 1, seats + 1)]
     body = render_intro(settings, prize) + f"\n\nУчастники ({len(players)}/{seats}):\n" + "\n".join(lines)
     if closed:
-        body += "\n\n✅ <b>Стол набран — запись закрыта.</b> Сейчас пришлю ссылку на стол."
+        body += ("\n\n✅ <b>Столы набраны — запись закрыта.</b> Сейчас пришлю ссылки на оба стола."
+                 if settings.get("tables", 1) > 1 else
+                 "\n\n✅ <b>Стол набран — запись закрыта.</b> Сейчас пришлю ссылку на стол.")
     return body
 
 
@@ -200,7 +239,7 @@ async def start_command(message: Message, command: CommandObject):
     parsed = parse_start(command.args)
     if parsed is None:
         return
-    await open_signup(message, parsed[1])
+    await open_signup(message, parsed[1], parsed[2])
 
 
 @router.message(Command("турнир", ignore_case=True), F.chat.type.in_(GROUP_CHATS))
@@ -219,7 +258,7 @@ async def stop_command(message: Message, command: CommandObject):
     await stop_tournament(message)
 
 
-async def open_signup(message: Message, prize: int | None) -> None:
+async def open_signup(message: Message, prize: int | None, tables: int = 1) -> None:
     from database.repository import get_mini_signup, save_mini_signup
 
     organizer = await _organizer(message)
@@ -227,7 +266,10 @@ async def open_signup(message: Message, prize: int | None) -> None:
         await message.reply("🏆 Запускать турнир могут только админы группы.")
         return
     if prize is None:
-        await message.reply("🏆 Укажи призовой фонд: <code>/старт турнир 5000</code> — кредиты в «Дурак Онлайн» победителю.")
+        await message.reply(
+            "🏆 Укажи призовой фонд: <code>/старт турнир 5000</code> — кредиты в «Дурак Онлайн» победителю.\n"
+            "На два стола: <code>/старт турнир2 5000</code>"
+        )
         return
     if prize > MAX_PRIZE:
         await message.reply("🏆 Слишком большой приз — проверь число.")
@@ -246,7 +288,7 @@ async def open_signup(message: Message, prize: int | None) -> None:
             await message.reply("🏆 В группе уже идёт мини-турнир. Отменить: /стоп турнир")
             return
 
-        settings = await load_settings()
+        settings = {**await load_settings(), "tables": tables}
         text = signup_text(prize, [], settings=settings)
         sent = None
         if settings["photo"]:
@@ -262,7 +304,7 @@ async def open_signup(message: Message, prize: int | None) -> None:
             chat_id, message_id=sent.message_id, prize=prize,
             organizer_id=organizer[0], organizer_name=organizer[1][:128], players=[], settings=settings,
         )
-    logger.info("MINI TOURNAMENT: запись открыта в %s, приз %s", chat_id, prize)
+    logger.info("MINI TOURNAMENT: запись открыта в %s, приз %s, столов %s", chat_id, prize, tables)
 
 
 async def stop_tournament(message: Message) -> None:
@@ -313,7 +355,7 @@ async def signup_button(callback: CallbackQuery):
             return
         players = list(signup.players or [])
         settings = clean_settings(signup.settings)
-        seats = settings["seats"]
+        seats = total_seats(settings)
         inside = any(p["id"] == user.id for p in players)
 
         if callback.data == "mt:leave":
@@ -368,6 +410,7 @@ async def launch(message: Message, signup, players: list[dict], settings: dict) 
         "prize": int(signup.prize),
         "organizer": {"telegramId": str(signup.organizer_id), "name": signup.organizer_name},
         "players": [{"telegramId": str(p["id"]), "name": p["name"], "username": p.get("username")} for p in players],
+        "tables": settings.get("tables", 1),
         "rules": {
             "variant": settings["variant"], "throwIn": settings["throw_in"],
             "speed": settings["speed"], "readySeconds": settings["ready_seconds"],
@@ -381,5 +424,6 @@ async def launch(message: Message, signup, players: list[dict], settings: dict) 
     logger.warning("MINI TOURNAMENT: Арена не приняла турнир в %s: %s %s", chat_id, status, answer)
     await message.answer(
         "😔 Не получилось открыть стол в Арене — она не отвечает. "
-        "Админ, запусти турнир ещё раз: <code>/старт турнир " + str(signup.prize) + "</code>"
+        "Админ, запусти турнир ещё раз: <code>/старт турнир" + ("2" if settings.get("tables", 1) == 2 else "")
+        + " " + str(signup.prize) + "</code>"
     )

@@ -571,11 +571,18 @@ model MiniTournament {
   winnerId            String?              @map("winner_id") @db.Uuid
   createdAt           DateTime             @default(now()) @map("created_at")
   finishedAt          DateTime?            @map("finished_at")
+  /// Сколько столов в первом этапе: 1 — один стол на вылет; 2 — два стола, их победители играют финал.
+  tables              Int                  @default(1)
+  /// Стол турнира на два стола: ссылка на сам турнир. У самого турнира — null, своего стола у него нет.
+  parentId            String?              @map("parent_id") @db.Uuid
+  /// «А», «Б» или «финал» — для стола турнира на два стола.
+  label               String?              @db.VarChar(16)
 
   players MiniTournamentPlayer[]
 
   @@index([status])
   @@index([chatId, status])
+  @@index([parentId])
   @@map("mini_tournaments")
   @@schema("arena")
 }

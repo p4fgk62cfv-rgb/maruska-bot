@@ -26,9 +26,12 @@ def check(ok, what):
         errors.append(what)
 
 
-check(mt.parse_start("турнир 5000") == ("start", 5000), "сумма")
-check(mt.parse_start("Турнир 5 000") == ("start", 5000), "сумма с пробелом")
-check(mt.parse_start("турнир") == ("start", None), "без суммы")
+check(mt.parse_start("турнир 5000") == ("start", 5000, 1), "сумма")
+check(mt.parse_start("Турнир 5 000") == ("start", 5000, 1), "сумма с пробелом")
+check(mt.parse_start("турнир") == ("start", None, 1), "без суммы")
+check(mt.parse_start("турнир2 5000") == ("start", 5000, 2), "два стола")
+check(mt.parse_start("Турнир2") == ("start", None, 2), "два стола без суммы")
+check(mt.parse_start("турнир3 5000") is None, "трёх столов нет")
 check(mt.parse_start("игра 5000") is None, "не турнир")
 check(mt.parse_start(None) is None, "пусто")
 text = mt.signup_text(5000, [{"id": 1, "name": "<Стас>"}])
@@ -51,6 +54,16 @@ longest = mt.signup_text(10**9, [{"id": 10**12, "name": "Я" * mt.MAX_NAME}] * 6
                          settings=mt.clean_settings({"text": "x{rules}" * 400}))
 visible = _html.unescape(_re.sub(r"<[^>]+>", "", longest))
 check(len(visible) <= 1024, f"подпись к картинке влезает в 1024 видимых символа: {len(visible)}")
+# Два стола: 12 мест, длинные имена укорачиваются, подпись всё равно влезает
+two = mt.signup_text(10**9, [{"id": 10**12, "name": "Я" * mt.MAX_NAME}] * 12, closed=True,
+                     settings=mt.clean_settings({"text": "x{rules}" * 400, "tables": 2}))
+visible = _html.unescape(_re.sub(r"<[^>]+>", "", two))
+check(len(visible) <= 1024, f"два стола: подпись влезает в 1024 видимых символа: {len(visible)}")
+check("(12/12)" in two and "Два стола по 6" in two and "ссылки на оба стола" in two, f"два стола: текст записи: {two}")
+# Старый текст по умолчанию, сохранённый в настройках, не врёт про «один стол»
+old = mt.render_intro(mt.clean_settings({"text": mt.OLD_DEFAULT_TEXT, "tables": 2}), 100)
+check("один стол" not in old and "финал 1 на 1" in old, f"старый текст на два стола: {old}")
+check("один стол" in mt.render_intro(mt.clean_settings({"text": mt.OLD_DEFAULT_TEXT}), 100), "старый текст на один стол")
 
 
 class FakeBot:
@@ -161,6 +174,7 @@ async def scenario():
     check([p["name"] for p in body["players"]] == ["Боря", "Вика", "Гоша", "Даня", "Ева", "Женя"], "состав по порядку записи")
     check(body["rules"] == {"variant": "perevodnoy", "throwIn": "all", "speed": "fast", "readySeconds": 60}, f"правила: {body['rules']}")
     check(await get_mini_signup(chat) is None, "запись закрыта в базе")
+    check(body["tables"] == 1, f"один стол: {body.get('tables')}")
 
     await press("mt:join", 17, "Опоздавший")
     check(alerts[-1] == "Запись уже закрыта.", "после закрытия кнопки не работают")
@@ -196,6 +210,22 @@ async def scenario():
     check(start3 and len(start3[0][2]["players"]) == 3 and start3[0][2]["rules"]["variant"] == "podkidnoy"
           and start3[0][2]["rules"]["readySeconds"] == 120, f"3 места и правила: {start3}")
     await mt.save_settings({"seats": 6, "variant": "perevodnoy", "ready_seconds": 60, "photo": None})
+
+    # Два стола: /старт турнир2 — 12 мест, Арене уходят все 12 и tables=2
+    said = []
+    await mt.open_signup(message(chat, 1, said, bot), 8000, 2)
+    check(said and "Участники (0/12)" in said[0] and "Два стола" not in said[0] and "два стола по 6" in said[0], f"запись на два стола: {said}")
+    signup = await get_mini_signup(chat)
+    mid = signup.message_id
+    calls.clear()
+    for uid in range(40, 52):
+        await press("mt:join", uid, f"Игрок{uid}")
+        if uid == 50:
+            check(not any(c[1] == "mini-tournaments" for c in calls), "11 из 12 — Арену не зовём")
+    two_start = [c for c in calls if c[1] == "mini-tournaments"]
+    check(len(two_start) == 1 and two_start[0][2]["tables"] == 2 and len(two_start[0][2]["players"]) == 12,
+          f"два стола: Арене переданы 12 человек и tables=2: {two_start}")
+    check("(12/12)" in edits[-1][0] and "запись закрыта" in edits[-1][0], "два стола: запись закрыта на 12-м")
 
     # Отмена записи
     said = []
