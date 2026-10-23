@@ -259,6 +259,107 @@ describe.skipIf(!url)('mini-tournaments (one knockout table)', () => {
     expect((await internal('POST', `/internal/admin/mini-tournaments/${mine.id}/cancel`)).statusCode).toBe(404);
   });
 
+  it('two tables: odd sign-ups at table А, even at table Б, the winners play the final 1 on 1', async () => {
+    const people = await Promise.all(['Ада', 'Бэн', 'Вал', 'Гая', 'Дин', 'Ерик'].map(player));
+    const [ada, ben, val, gaya, din, erik] = people as [Player, Player, Player, Player, Player, Player];
+    const chatId = BigInt(chatBase - chatSeq++);
+    const organizer = nextTg++;
+    const res = await internal('POST', '/internal/mini-tournaments', {
+      chatId: chatId.toString(), prize: 7000, tables: 2, organizer: { telegramId: organizer, name: 'Админ' },
+      players: people.map((p) => ({ telegramId: p.tg, name: p.name })),
+    });
+    expect(res.statusCode).toBe(200);
+    // Меньше двух человек на стол — нельзя
+    expect((await internal('POST', '/internal/mini-tournaments', {
+      chatId: String(chatId - 1n), prize: 1, tables: 2, organizer: { telegramId: organizer, name: 'Админ' },
+      players: people.slice(0, 3).map((p) => ({ telegramId: p.tg, name: p.name })),
+    })).statusCode).toBe(400);
+
+    /** Ссылка последнего стола, в сообщении о котором есть `marker`. */
+    const table = (marker: string) => {
+      const msg = [...sent].reverse().find((m) => m.chatId === chatId && m.message.button && m.message.text.includes(marker));
+      const link = msg && 'url' in msg.message.button! ? msg.message.button.url : '';
+      return /game_([A-Z0-9]{8})/.exec(link)?.[1] ?? '';
+    };
+    /** Все в Арене — стол начинается сам; `loser` сдаётся. */
+    const lose = async (marker: string, loser: Player, previous = '') => {
+      await until(() => table(marker) !== '' && table(marker) !== previous);
+      const roomId = table(marker);
+      const started = await loser.ws.waitFor((m) => m.type === 'GAME_STARTED' && m.roomId === roomId, 10_000);
+      if (started.type !== 'GAME_STARTED') throw new Error('unreachable');
+      expect((await loser.ws.send({ type: 'LEAVE_GAME', gameId: started.gameId })).type).toBe('ACK');
+      await until(() => said(chatId).some((t) => t.includes(`Дураком остался <a href="tg://user?id=${loser.tg}"`)));
+      return roomId;
+    };
+
+    await until(() => table('стол А, партия 1') !== '' && table('стол Б, партия 1') !== '');
+    const a1 = said(chatId).find((t) => t.includes('стол А, партия 1'))!;
+    expect(a1).toContain('на 3 игрока');
+    expect(a1).toContain('Победитель стола выходит в финал');
+    for (const p of [ada, val, din]) expect(a1).toContain(`id=${p.tg}`);
+    for (const p of [ben, gaya, erik]) expect(a1).not.toContain(`id=${p.tg}`);
+    const roomA = handle.ctx.realtime.rooms.get(table('стол А'))!;
+    expect(roomA.tournament?.title).toBe('Мини-турнир · стол А');
+
+    // Кто ещё в турнире — в другой группе Мара его не запишет
+    const playing = async (p: Player) => (await internal('GET', `/internal/mini-tournaments/playing?telegramId=${p.tg}`)).json().tournament;
+    expect(await playing(din)).toEqual({ chatId: chatId.toString() });
+
+    // Оба стола играют одновременно
+    const ra = await lose('стол А, партия 1', din);
+    expect(await playing(din)).toBeNull();
+    expect(said(chatId).find((t) => t.includes(`Дураком остался <a href="tg://user?id=${din.tg}`))).toContain('5 место');
+    const rb = await lose('стол Б, партия 1', erik);
+    await lose('стол А, партия 2', val, ra);
+    expect(said(chatId).find((t) => t.includes(`Дураком остался <a href="tg://user?id=${val.tg}`))).toContain('3 место');
+    await until(() => said(chatId).some((t) => t.includes('Стол А окончен') && t.includes(`id=${ada.tg}`) && t.includes('выходит в финал')));
+    // Пока стол Б не доигран, финала нет; победитель стола А ждёт его — он ещё в турнире
+    expect(said(chatId).some((t) => t.includes('финал 1 на 1'))).toBe(false);
+    expect(await playing(ada)).toEqual({ chatId: chatId.toString() });
+    expect(await playing(val)).toBeNull();
+    await lose('стол Б, партия 2', gaya, rb);
+
+    // Финал: Ада против Бэна
+    await until(() => table('финал 1 на 1') !== '');
+    const final = said(chatId).find((t) => t.includes('финал 1 на 1'))!;
+    expect(final).toContain(`id=${ada.tg}`);
+    expect(final).toContain(`id=${ben.tg}`);
+    await lose('финал 1 на 1', ben);
+    expect(said(chatId).find((t) => t.includes('Финал окончен'))).toContain('2 место');
+
+    await until(() => said(chatId).some((t) => t.includes('окончен!')));
+    const end = said(chatId).find((t) => t.includes('окончен!'))!;
+    expect(end).toContain(`Победитель — <a href="tg://user?id=${ada.tg}">`);
+    expect(end).toContain('7 000 кредитов');
+    expect(sent.find((m) => m.chatId === BigInt(organizer))!.message.text).toContain(`id=${ada.tg}`);
+
+    const mini = await db.miniTournament.findFirstOrThrow({ where: { chatId, parentId: null }, include: { players: true } });
+    expect(mini.status).toBe('FINISHED');
+    expect(mini.winnerId).toBe(ada.id);
+    expect(Object.fromEntries(mini.players.map((p) => [p.name, p.place]))).toEqual({ Ада: 1, Бэн: 2, Вал: 3, Гая: 3, Дин: 5, Ерик: 5 });
+    expect((await internal('GET', `/internal/mini-tournaments/active?chatId=${chatId}`)).json().tournament).toBeNull();
+    expect(await playing(ada)).toBeNull();
+    const listed = (await internal('GET', '/internal/admin/mini-tournaments')).json().filter((m: { chatId: string }) => m.chatId === chatId.toString());
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toMatchObject({ tables: 2, status: 'FINISHED' });
+  }, 90_000);
+
+  it('two tables: the organizer calls it off — both tables close', async () => {
+    const people = await Promise.all(['Ия', 'Ян', 'Юля', 'Эд'].map(player));
+    for (const p of people) await offline(p);
+    const chatId = BigInt(chatBase - chatSeq++);
+    expect((await internal('POST', '/internal/mini-tournaments', {
+      chatId: chatId.toString(), prize: 0, tables: 2, organizer: { telegramId: nextTg++, name: 'Админ' },
+      players: people.map((p) => ({ telegramId: p.tg, name: p.name })),
+    })).statusCode).toBe(200);
+    await until(() => said(chatId).filter((t) => t.includes('партия 1 на 2')).length === 2);
+    expect((await internal('GET', `/internal/mini-tournaments/active?chatId=${chatId}`)).json().tournament.players).toHaveLength(4);
+    expect((await internal('POST', '/internal/mini-tournaments/cancel', { chatId: chatId.toString() })).json()).toEqual({ cancelled: true });
+    const rows = await db.miniTournament.findMany({ where: { chatId } });
+    expect(rows).toHaveLength(3);
+    expect(rows.every((r) => r.status === 'CANCELLED')).toBe(true);
+  }, 30_000);
+
   it('somebody who never opened the Arena gets an account and can sit down', async () => {
     const known = await player('Миша');
     const stranger = { tg: nextTg++, name: 'Новичок' };

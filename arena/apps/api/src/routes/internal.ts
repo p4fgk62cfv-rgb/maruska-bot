@@ -61,6 +61,12 @@ export async function internalRoutes(app: FastifyInstance, ctx: Context): Promis
     return { tournament: await ctx.minis.active(chatId) };
   });
 
+  /** Человек ещё играет мини-турнир в какой-то группе: Мара не даст ему записаться в другой. */
+  app.get('/internal/mini-tournaments/playing', { preHandler: check }, async (request) => {
+    const { telegramId } = z.object({ telegramId: z.coerce.bigint() }).parse(request.query);
+    return { tournament: await ctx.minis.playing(telegramId) };
+  });
+
   // ── moderation ──
   const byTelegram = z.object({ telegramId: z.coerce.bigint() });
 

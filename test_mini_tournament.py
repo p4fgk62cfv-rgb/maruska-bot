@@ -26,9 +26,12 @@ def check(ok, what):
         errors.append(what)
 
 
-check(mt.parse_start("турнир 5000") == ("start", 5000), "сумма")
-check(mt.parse_start("Турнир 5 000") == ("start", 5000), "сумма с пробелом")
-check(mt.parse_start("турнир") == ("start", None), "без суммы")
+check(mt.parse_start("турнир 5000") == ("start", 5000, 1), "сумма")
+check(mt.parse_start("Турнир 5 000") == ("start", 5000, 1), "сумма с пробелом")
+check(mt.parse_start("турнир") == ("start", None, 1), "без суммы")
+check(mt.parse_start("турнир2 5000") == ("start", 5000, 2), "два стола")
+check(mt.parse_start("Турнир2") == ("start", None, 2), "два стола без суммы")
+check(mt.parse_start("турнир3 5000") is None, "трёх столов нет")
 check(mt.parse_start("игра 5000") is None, "не турнир")
 check(mt.parse_start(None) is None, "пусто")
 text = mt.signup_text(5000, [{"id": 1, "name": "<Стас>"}])
@@ -51,6 +54,16 @@ longest = mt.signup_text(10**9, [{"id": 10**12, "name": "Я" * mt.MAX_NAME}] * 6
                          settings=mt.clean_settings({"text": "x{rules}" * 400}))
 visible = _html.unescape(_re.sub(r"<[^>]+>", "", longest))
 check(len(visible) <= 1024, f"подпись к картинке влезает в 1024 видимых символа: {len(visible)}")
+# Два стола: 12 мест, длинные имена укорачиваются, подпись всё равно влезает
+two = mt.signup_text(10**9, [{"id": 10**12, "name": "Я" * mt.MAX_NAME}] * 12, closed=True,
+                     settings=mt.clean_settings({"text": "x{rules}" * 400, "tables": 2}))
+visible = _html.unescape(_re.sub(r"<[^>]+>", "", two))
+check(len(visible) <= 1024, f"два стола: подпись влезает в 1024 видимых символа: {len(visible)}")
+check("(12/12)" in two and "Два стола по 6" in two and "ссылки на оба стола" in two, f"два стола: текст записи: {two}")
+# Старый текст по умолчанию, сохранённый в настройках, не врёт про «один стол»
+old = mt.render_intro(mt.clean_settings({"text": mt.OLD_DEFAULT_TEXT, "tables": 2}), 100)
+check("один стол" not in old and "финал 1 на 1" in old, f"старый текст на два стола: {old}")
+check("один стол" in mt.render_intro(mt.clean_settings({"text": mt.OLD_DEFAULT_TEXT}), 100), "старый текст на один стол")
 
 
 class FakeBot:
@@ -59,6 +72,9 @@ class FakeBot:
 
     async def edit_message_text(self, text, chat_id, message_id):
         self.edits.append(text)
+
+    async def get_chat(self, chat_id):
+        return types.SimpleNamespace(title=f"Группа {chat_id}")
 
 
 def message(chat_id, uid, said, bot, admin=True):
@@ -96,9 +112,12 @@ async def scenario():
     await init_db()
     chat = -100880000000 - random.randint(0, 10**6)
     calls = []
+    playing_now = {}
 
     async def fake_arena(method, path, body=None, query=None):
         calls.append((method, path, body, query))
+        if path == "mini-tournaments/playing":
+            return 200, {"tournament": playing_now.get(query["telegramId"])}
         if path == "mini-tournaments/active":
             return 200, {"tournament": None}
         if path == "mini-tournaments":
@@ -161,6 +180,7 @@ async def scenario():
     check([p["name"] for p in body["players"]] == ["Боря", "Вика", "Гоша", "Даня", "Ева", "Женя"], "состав по порядку записи")
     check(body["rules"] == {"variant": "perevodnoy", "throwIn": "all", "speed": "fast", "readySeconds": 60}, f"правила: {body['rules']}")
     check(await get_mini_signup(chat) is None, "запись закрыта в базе")
+    check(body["tables"] == 1, f"один стол: {body.get('tables')}")
 
     await press("mt:join", 17, "Опоздавший")
     check(alerts[-1] == "Запись уже закрыта.", "после закрытия кнопки не работают")
@@ -197,6 +217,22 @@ async def scenario():
           and start3[0][2]["rules"]["readySeconds"] == 120, f"3 места и правила: {start3}")
     await mt.save_settings({"seats": 6, "variant": "perevodnoy", "ready_seconds": 60, "photo": None})
 
+    # Два стола: /старт турнир2 — 12 мест, Арене уходят все 12 и tables=2
+    said = []
+    await mt.open_signup(message(chat, 1, said, bot), 8000, 2)
+    check(said and "Участники (0/12)" in said[0] and "Два стола" not in said[0] and "два стола по 6" in said[0], f"запись на два стола: {said}")
+    signup = await get_mini_signup(chat)
+    mid = signup.message_id
+    calls.clear()
+    for uid in range(40, 52):
+        await press("mt:join", uid, f"Игрок{uid}")
+        if uid == 50:
+            check(not any(c[1] == "mini-tournaments" for c in calls), "11 из 12 — Арену не зовём")
+    two_start = [c for c in calls if c[1] == "mini-tournaments"]
+    check(len(two_start) == 1 and two_start[0][2]["tables"] == 2 and len(two_start[0][2]["players"]) == 12,
+          f"два стола: Арене переданы 12 человек и tables=2: {two_start}")
+    check("(12/12)" in edits[-1][0] and "запись закрыта" in edits[-1][0], "два стола: запись закрыта на 12-м")
+
     # Отмена записи
     said = []
     await mt.open_signup(message(chat, 1, said, bot), 300)
@@ -207,6 +243,35 @@ async def scenario():
     said = []
     await mt.stop_tournament(message(chat, 1, said, bot))
     check(said and "нет турнира" in said[-1], "отменять нечего")
+
+    # Один человек — один турнир: записан в другой группе или ещё играет там — сюда нельзя
+    from database.repository import delete_mini_signup
+
+    chat_a, chat_b = chat - 1, chat - 2
+    mids = {}
+    for c in (chat_a, chat_b):
+        await mt.open_signup(message(c, 1, [], bot), 500)
+        mids[c] = (await get_mini_signup(c)).message_id
+
+    async def press_in(c, data, uid, name):
+        await mt.signup_button(button(c, mids[c], data, uid, name, edits, alerts, bot))
+
+    await press_in(chat_a, "mt:join", 70, "Двойной")
+    check(alerts[-1].startswith("Ты в турнире"), f"в первой группе записался: {alerts[-1]}")
+    await press_in(chat_b, "mt:join", 70, "Двойной")
+    check("уже записан на турнир в группе «Группа " + str(chat_a) + "»" in alerts[-1], f"во второй — нельзя: {alerts[-1]}")
+    check(not (await get_mini_signup(chat_b)).players, "во второй группе его нет в списке")
+    await press_in(chat_a, "mt:leave", 70, "Двойной")
+    await press_in(chat_b, "mt:join", 70, "Двойной")
+    check(alerts[-1].startswith("Ты в турнире"), f"вышел из первой — записался во вторую: {alerts[-1]}")
+    playing_now["71"] = {"chatId": str(chat_a)}
+    await press_in(chat_b, "mt:join", 71, "Играет")
+    check("сейчас играешь турнир в группе" in alerts[-1], f"ещё играет турнир в другой группе: {alerts[-1]}")
+    playing_now.clear()
+    await press_in(chat_b, "mt:join", 71, "Играет")
+    check(alerts[-1].startswith("Ты в турнире"), f"выбыл там — записался: {alerts[-1]}")
+    for c in (chat_a, chat_b):
+        await delete_mini_signup(c)
 
     # Арена не ответила — честно говорим и предлагаем запустить снова
     async def broken(method, path, body=None, query=None):
