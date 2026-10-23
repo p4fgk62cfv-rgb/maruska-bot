@@ -65,12 +65,16 @@ SAFE = [
     "гондола", "суккулент", "Ебола", "оскорблять", "употребление", "корабля", "застрахуйся",
     "психуй", "колебаться", "погребение", "хлебать", "небось", "**жирный текст**",
     "her", "other", "hue", "ebay", "webapp", "debate", "hello", "в хлеб", "на небо", "я и ты",
+    # команды бота, упоминания и ссылки — не слова человека
+    "/job", "/job@BotMaruska_bot", "/jobs", "job", "@suka_bot привет", "https://example.com/huy",
+    "/top", "/profile", "/eban", "oxygen", "heritage", "herald",
 ]
 for text in SMART:
     expect(f"умный словарь ловит «{text}»", find_swear(text, [], builtin=True) is not None, True)
 for text in SAFE:
     expect(f"умный словарь не трогает «{text}»", find_swear(text, [], builtin=True), None)
 expect("без умного словаря и списка — ничего", find_swear("хер", []), None)
+expect("мат после команды ловится", find_swear("/job сука", [], builtin=True) is not None, True)
 expect("исключение админа", find_swear("херня", [], builtin=True, allow=parse_words("херн*")), None)
 expect("исключение не мешает другому мату", find_swear("херня, сука", [], builtin=True, allow=parse_words("херн*")) is not None, True)
 expect("корень с приставкой", is_builtin_swear("распиздяй"), True)
@@ -199,8 +203,100 @@ async def scenario():
     await swear("сука")
     expect("админов не трогать — молчит", len(said), 1)
 
+    # Амнистия: Мара снимает муты за мат по журналу — только с тех, кто ещё замучен
+    from database.models import AuditEvent
+    from database.repository import add_audit
+
+    async with session_scope() as session:
+        await session.execute(delete(AuditEvent).where(AuditEvent.chat_id == CHAT))
+        await session.commit()
+    await add_audit("moderation", "mute", chat_id=CHAT, actor_kind="bot", target_id=USER, target_name="Вася", details="30 мин · мат, 3 предупреждения")
+    await add_audit("moderation", "mute", chat_id=CHAT, actor_kind="bot", target_id=7002, target_name="Петя", details="30 мин · мат, 3 предупреждения")
+    await add_audit("moderation", "mute", chat_id=CHAT, actor_kind="admin", target_id=7003, target_name="Коля", details=None)
+    expect("в журнале — только муты Мары за мат", sorted(await antimat.antimat_muted(CHAT)), [USER, 7002])
+
+    restricted = {USER}
+    unmuted = []
+
+    async def member_status(chat_id, user_id):
+        muted = user_id in restricted
+        return types.SimpleNamespace(status="restricted" if muted else "member", can_send_messages=not muted)
+
+    async def get_chat(chat_id):
+        return types.SimpleNamespace(permissions=None)
+
+    async def restrict(chat_id, user_id, permissions, until_date=None):
+        unmuted.append(user_id)
+
+    bot.get_chat_member, bot.get_chat, bot.restrict_chat_member = member_status, get_chat, restrict
+    freed, problems = await antimat.amnesty(bot, CHAT, clear_warnings=True)
+    expect("снят мут только с замученного", (freed, unmuted, problems), (["Вася"], [USER], []))
+    from database.repository import count_warnings_by_reason
+    expect("предупреждения за мат обнулены", await count_warnings_by_reason(CHAT, USER, antimat.REASON), 0)
+    expect("текст амнистии", "Вася" in antimat.amnesty_text(freed, True) and "заново" in antimat.amnesty_text(freed, True), True)
+
+    # Слово, за которое мут, теперь в журнале
+    antimat._cooldown.clear()
+    await swear("/job ты сука")
+    from sqlalchemy import select
+    async with session_scope() as session:
+        details = (await session.execute(select(AuditEvent.details).where(
+            AuditEvent.chat_id == CHAT, AuditEvent.action == "warn").order_by(AuditEvent.id.desc()))).scalars().first()
+    expect("в журнале слово, за которое предупреждение", details is not None and "мат: сука" in details, True)
+
+    # Владельцу — список действующих мутов после обновления, с кнопкой на каждого
+    from datetime import datetime
+    from database.repository import get_group_settings, set_group_setting
+    from settings import handler as owners
+
+    restricted.clear()
+    restricted.update({USER, 7002})
+    sent = []
+
+    async def send_message(chat_id, text, reply_markup=None, **kw):
+        sent.append((chat_id, text, reply_markup))
+
+    bot.send_message = send_message
+    old_once, old_since, old_owners = antimat.AMNESTY_ONCE, antimat.AMNESTY_SINCE, owners.OWNER_IDS
+    antimat.AMNESTY_ONCE, antimat.AMNESTY_SINCE = (CHAT,), "2000-01-01T00:00:00"
+    owners.OWNER_IDS = frozenset({424242})
+    saved = (await get_group_settings(0)).get(antimat.AMNESTY_DONE_KEY)
+    await set_group_setting(chat_id=0, key=antimat.AMNESTY_DONE_KEY, value=[])
+    try:
+        await antimat.amnesty_once(bot)
+        buttons = [b.callback_data for row in sent[0][2].inline_keyboard for b in row] if sent and sent[0][2] else []
+        expect("список владельцу с кнопками", (sent[0][0], sorted(buttons)),
+               (424242, sorted([f"amn:{CHAT}:{USER}", f"amn:{CHAT}:7002", f"amn:{CHAT}:all"])))
+        await antimat.amnesty_once(bot)
+        expect("список приходит один раз", len(sent), 1)
+
+        # Кнопка «Снять мут» у одного: мут снят, его кнопка исчезает
+        unmuted.clear()
+        answers, edited = [], []
+
+        async def cb_answer(text=None, show_alert=False):
+            answers.append(text)
+
+        async def edit_markup(reply_markup=None):
+            edited.append(reply_markup)
+
+        callback = types.SimpleNamespace(
+            data=f"amn:{CHAT}:7002", from_user=types.SimpleNamespace(id=424242), bot=bot, answer=cb_answer,
+            message=types.SimpleNamespace(reply_markup=sent[0][2], edit_reply_markup=edit_markup))
+        await antimat.amnesty_button(callback)
+        left = [b.callback_data for row in edited[-1].inline_keyboard for b in row]
+        expect("снят мут одному", (unmuted, f"amn:{CHAT}:7002" in left), ([7002], False))
+        callback.from_user = types.SimpleNamespace(id=1)
+        await antimat.amnesty_button(callback)
+        expect("чужому кнопка не работает", answers[-1], "Это только для владельца бота")
+    finally:
+        antimat.AMNESTY_ONCE, antimat.AMNESTY_SINCE = old_once, old_since
+        owners.OWNER_IDS = old_owners
+        await set_group_setting(chat_id=0, key=antimat.AMNESTY_DONE_KEY, value=saved)
+
     async with session_scope() as session:
         await session.execute(delete(ChatWarning).where(ChatWarning.chat_id == CHAT))
+        await session.execute(delete(AuditEvent).where(AuditEvent.chat_id == CHAT))
         await session.commit()
     await engine.dispose()
 

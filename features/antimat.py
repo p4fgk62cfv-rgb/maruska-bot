@@ -82,7 +82,14 @@ _TRANSLIT_ONE = str.maketrans({
     "x": "х",
 })
 # Английские слова, которые в транслите похожи на мат
-_LATIN_SAFE = {"hue", "hues", "huey", "ebay", "huevo", "huevos", "her", "hers", "other", "others", "ebullient"}
+_LATIN_SAFE = {
+    "hue", "hues", "huey", "ebay", "huevo", "huevos", "her", "hers", "other", "others", "ebullient",
+    "job", "jobs", "joba", "yob", "yobs", "jeb", "joe", "heritage", "herald", "heralds",
+}
+# Латинские буквы, у которых есть кириллический двойник: только из них «cyka», «xуй» читаются по-русски
+_LOOKALIKE_LATIN = set("abcehkmoptxyui")
+# Команды бота («/job», «/top@bot»), @упоминания и ссылки — не слова человека, их не проверяем
+_NOT_WORDS = re.compile(r"(?:^|(?<=\s))/[\w@]+|(?<!\w)@\w+|https?://\S+|www\.\S+|\b[\w.-]+\.(?:ru|com|org|net|me|io|рф)\b\S*", re.IGNORECASE)
 # По этим сочетаниям видно английское слово, а не мат транслитом («other», «web», «queen», «look»)
 _ENGLISH = re.compile(r"th|w|q|ee|oo|ou|ea")
 
@@ -141,12 +148,13 @@ _tasks: set[asyncio.Task] = set()
 
 
 def clean_text(text: str) -> str:
-    """Стильные шрифты → обычные буквы; без невидимых символов и ударений (но «й» и «ё» целы)."""
+    """Стильные шрифты → обычные буквы; без невидимых символов и ударений (но «й» и «ё» целы),
+    без команд бота, @упоминаний и ссылок."""
     text = unicodedata.normalize("NFKC", text or "")
     text = _INVISIBLE.sub("", text)
     text = "".join(ch for ch in unicodedata.normalize("NFD", text)
                    if not unicodedata.combining(ch) or ch in "\u0306\u0308")
-    return unicodedata.normalize("NFC", text)
+    return _NOT_WORDS.sub(" ", unicodedata.normalize("NFC", text))
 
 
 def normalize(word: str) -> str:
@@ -240,7 +248,9 @@ def tokens(text: str) -> list[str]:
     plain = []
     for word in raw:
         letters = _MASK.sub("", word)
-        norm = normalize(letters)
+        latin_only = re.fullmatch(r"[a-z]+", letters, re.IGNORECASE)
+        # «oxygen» — не «охуе»: у латинского слова должны найтись русские двойники для всех букв
+        norm = "" if latin_only and not set(letters.lower()) <= _LOOKALIKE_LATIN else normalize(letters)
         if norm:
             found.append(norm)
         # Латиница вперемешку с кириллицей: «hуй», «nизда»
@@ -376,6 +386,8 @@ async def on_swear(message: Message):
     chat_id = message.chat.id
     user = message.from_user
     name = display_name_of(user)
+    # Слово — в журнал: по нему видно, за что предупреждение или мут, и ошибку можно исправить
+    word = chat_swear(chat_id, message_text(message)) or "?"
 
     admin = await _is_admin(message.bot, chat_id, user.id)
     if admin and not is_enabled(chat_id, "antimat_admins"):
@@ -405,7 +417,7 @@ async def on_swear(message: Message):
     audit.count(chat_id, "warnings")
     audit.log(
         "moderation", "warn", chat_id=chat_id, actor_kind="bot",
-        target_id=user.id, target_name=name, details=f"{min(total, limit)}/{limit} · мат",
+        target_id=user.id, target_name=name, details=f"{min(total, limit)}/{limit} · мат: {word}",
     )
 
     who = f'<a href="tg://user?id={user.id}">{escape(name)}</a>'
@@ -439,7 +451,7 @@ async def on_swear(message: Message):
     audit.count(chat_id, "mutes")
     audit.log(
         "moderation", "mute", chat_id=chat_id, actor_kind="bot",
-        target_id=user.id, target_name=name, details=f"{minutes} мин · мат, {limit} предупреждения",
+        target_id=user.id, target_name=name, details=f"{minutes} мин · мат: {word}, {limit} предупреждения",
     )
     again = f" Это уже {earlier + 1}-й мут за месяц — срок вдвое длиннее прошлого." if minutes > base else ""
     await message.answer(f"🔇 {who} получает мут на {_duration(minutes)} — {limit} предупреждения за мат.{again}")
@@ -452,3 +464,199 @@ def _duration(minutes: int) -> str:
     if minutes % 60 == 0:
         return f"{minutes // 60} ч"
     return f"{minutes} мин"
+
+
+# ---------------------------------------------------------
+# Амнистия: снять муты, которые Мара дала за мат
+# ---------------------------------------------------------
+
+AMNESTY_DAYS = 30
+AMNESTY_DONE_KEY = "antimat_amnesty_done"
+# Группы, где после выкладки владелец получает список мутов за мат с кнопками «Снять мут»
+# (ошибочные муты за «/job» после обновления антимата 22.10 в 00:25 МСК)
+AMNESTY_ONCE = (-1001964242089,)
+AMNESTY_SINCE = "2026-10-22T21:25:00"
+
+
+async def antimat_muted(chat_id: int, days: int = AMNESTY_DAYS, since=None) -> dict[int, str]:
+    """Кому Мара давала мут за мат в этой группе (за последние дни или с момента since): id → имя."""
+    from datetime import timedelta
+
+    from sqlalchemy import select
+
+    from database.database import session_scope
+    from database.models import AuditEvent
+    from database.repository import utcnow
+
+    since = since or utcnow() - timedelta(days=days)
+    async with session_scope() as session:
+        rows = (await session.execute(
+            select(AuditEvent.target_id, AuditEvent.target_name).where(
+                AuditEvent.chat_id == chat_id,
+                AuditEvent.category == "moderation",
+                AuditEvent.action == "mute",
+                AuditEvent.actor_kind == "bot",
+                AuditEvent.details.ilike("%мат%"),
+                AuditEvent.created_at >= since,
+                AuditEvent.target_id.is_not(None),
+            ).order_by(AuditEvent.created_at)
+        )).all()
+    return {target: name or str(target) for target, name in rows}
+
+
+async def amnesty(bot, chat_id: int, clear_warnings: bool = False, since=None) -> tuple[list[str], list[str]]:
+    """Снимает муты за мат с тех, кто сейчас замучен. Возвращает (кого освободили, ошибки)."""
+    from features.moderation import ModerationError, unmute
+
+    freed, problems = [], []
+    for user_id, name in (await antimat_muted(chat_id, since=since)).items():
+        try:
+            member = await bot.get_chat_member(chat_id, user_id)
+        except Exception as error:
+            problems.append(f"{name}: {error}")
+            continue
+        # Снимаем только то, что ещё действует: остальных не трогаем
+        if member.status != "restricted" or getattr(member, "can_send_messages", True):
+            continue
+        try:
+            await unmute(bot, chat_id, user_id)
+        except ModerationError as error:
+            problems.append(f"{name}: {error}")
+            continue
+        freed.append(name)
+        audit.log("moderation", "unmute", chat_id=chat_id, actor_kind="bot",
+                  target_id=user_id, target_name=name, details="амнистия: мут за мат снят")
+    if clear_warnings:
+        from sqlalchemy import delete
+
+        from database.database import session_scope
+        from database.models import ChatWarning
+
+        async with session_scope() as session:
+            await session.execute(delete(ChatWarning).where(
+                ChatWarning.chat_id == chat_id, ChatWarning.reason.in_((REASON, MUTE_REASON))))
+            await session.commit()
+    logger.info("AMNESTY %s: freed %s, problems %s", chat_id, len(freed), len(problems))
+    return freed, problems
+
+
+def amnesty_text(freed: list[str], cleared: bool) -> str:
+    names = ", ".join(escape(n) for n in freed)
+    head = (f"🕊 Мара сняла муты за мат: {names}." if freed
+            else "🕊 Сейчас ни у кого нет мута за мат.")
+    return head + (" Предупреждения за мат обнулены — счёт у всех начинается заново." if cleared else "")
+
+
+async def still_muted(bot, chat_id: int, user_id: int) -> bool:
+    try:
+        member = await bot.get_chat_member(chat_id, user_id)
+    except Exception:
+        return False
+    return member.status == "restricted" and not getattr(member, "can_send_messages", True)
+
+
+async def amnesty_once(bot) -> None:
+    """Один раз (даже после перезапусков) присылает владельцам список тех, кто сейчас замучен
+    за мат в группах из AMNESTY_ONCE после AMNESTY_SINCE, — с кнопкой «Снять мут» на каждого."""
+    from datetime import datetime
+
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    from database.repository import get_group_settings, set_group_setting
+    from settings.handler import OWNER_IDS
+
+    try:
+        done = list((await get_group_settings(0)).get(AMNESTY_DONE_KEY) or [])
+        for chat_id in AMNESTY_ONCE:
+            if chat_id in done:
+                continue
+            muted = await antimat_muted(chat_id, since=datetime.fromisoformat(AMNESTY_SINCE))
+            now_muted = {uid: name for uid, name in muted.items() if await still_muted(bot, chat_id, uid)}
+            if now_muted:
+                rows = [[InlineKeyboardButton(text=f"🕊 Снять мут: {name}"[:60], callback_data=f"amn:{chat_id}:{uid}")]
+                        for uid, name in now_muted.items()]
+                rows.append([InlineKeyboardButton(text="🕊 Снять всем", callback_data=f"amn:{chat_id}:all")])
+                text = (f"🤬 Муты за мат в группе {chat_id} после обновления антимата (22.10, 00:25 МСК), "
+                        f"которые ещё действуют — {len(now_muted)}.\n\nЗа какое слово дан мут, Мара тогда не "
+                        "записывала. Снимите мут тем, кого замутило за «/job» (или всем сразу):")
+                markup = InlineKeyboardMarkup(inline_keyboard=rows[:40])
+            else:
+                text, markup = f"🕊 В группе {chat_id} сейчас никто не замучен за мат — снимать нечего.", None
+            for owner in sorted(OWNER_IDS):
+                try:
+                    await bot.send_message(owner, text, reply_markup=markup, parse_mode=None)
+                except Exception as error:
+                    logger.warning("AMNESTY list to %s: %s", owner, error)
+            done.append(chat_id)
+            await set_group_setting(chat_id=0, key=AMNESTY_DONE_KEY, value=done)
+    except Exception as error:
+        logger.error("AMNESTY ONCE: %s %s", type(error).__name__, error)
+
+
+@router.callback_query(lambda c: (c.data or "").startswith("amn:"))
+async def amnesty_button(callback):
+    """Кнопка «Снять мут» из списка у владельца: один человек или все."""
+    from features.moderation import ModerationError, unmute
+    from settings.handler import is_owner
+
+    if not is_owner(callback.from_user.id):
+        await callback.answer("Это только для владельца бота", show_alert=True)
+        return
+    _, chat, who = (callback.data or "").split(":", 2)
+    chat_id = int(chat)
+    if who == "all":
+        from datetime import datetime
+
+        freed, problems = await amnesty(callback.bot, chat_id, since=datetime.fromisoformat(AMNESTY_SINCE))
+        await callback.answer(f"Снято: {len(freed)}" + (f", не вышло: {len(problems)}" if problems else ""), show_alert=True)
+        if freed:
+            try:
+                await callback.bot.send_message(chat_id, amnesty_text(freed, False))
+            except Exception:
+                pass
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        return
+    user_id = int(who)
+    name = next((b.text.replace("🕊 Снять мут: ", "") for row in callback.message.reply_markup.inline_keyboard
+                 for b in row if b.callback_data == callback.data), str(user_id))
+    try:
+        await unmute(callback.bot, chat_id, user_id)
+    except ModerationError as error:
+        await callback.answer(f"Не вышло: {error}", show_alert=True)
+        return
+    audit.log("moderation", "unmute", chat_id=chat_id, actor_kind="admin", actor_id=callback.from_user.id,
+              target_id=user_id, target_name=name, details="амнистия: мут за мат снят")
+    await callback.answer(f"Мут снят: {name}")
+    # Кнопка этого человека исчезает из списка
+    rows = [[b for b in row if b.callback_data != callback.data] for row in callback.message.reply_markup.inline_keyboard]
+    rows = [row for row in rows if row]
+    try:
+        from aiogram.types import InlineKeyboardMarkup
+
+        await callback.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=rows) if len(rows) > 1 else None)
+    except Exception:
+        pass
+
+
+from aiogram.filters import Command  # noqa: E402
+
+
+@router.message(Command("amnesty"))
+async def amnesty_command(message: Message):
+    """/amnesty — админ снимает все муты за мат в группе и обнуляет предупреждения за мат."""
+    from features.moderation import _is_chat_admin
+
+    if message.chat.type not in ("group", "supergroup"):
+        await message.reply("🕊 Амнистия работает только в группе.")
+        return
+    if not await _is_chat_admin(message):
+        await message.reply("🕊 Амнистию объявляют только администраторы группы.")
+        return
+    freed, problems = await amnesty(message.bot, message.chat.id, clear_warnings=True)
+    text = amnesty_text(freed, True)
+    if problems:
+        text += f"\n⚠️ Не получилось у {len(problems)}: " + escape("; ".join(problems))[:300]
+    await message.answer(text)
