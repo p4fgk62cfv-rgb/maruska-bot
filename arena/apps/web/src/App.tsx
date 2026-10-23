@@ -127,10 +127,12 @@ function Shell() {
 
   // During a game (and on its result screen) the table owns the whole screen.
   if (game && (game.state.status === 'playing' || result)) {
-    if (LoadedGameScreen) return <LoadedGameScreen game={game} />;
+    // A new deal is a new screen: nothing from the previous table (a card shown as just played,
+    // a selection, a drag) may carry over into the next one of a tournament.
+    if (LoadedGameScreen) return <LoadedGameScreen key={game.state.gameId} game={game} />;
     return (
       <Suspense fallback={<ScreenFallback fullscreen />}>
-        <GameScreen game={game} />
+        <GameScreen key={game.state.gameId} game={game} />
       </Suspense>
     );
   }

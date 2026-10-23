@@ -104,4 +104,21 @@ describe.skipIf(!url)('«Журнал» for the owner: games, problems and their
 
     expect((await get(owner.token, '/owner/journal/tournaments')).statusCode).toBe(200);
   }, 30_000);
+
+  it('an error in a player\'s app reaches the journal (and a flood of them does not)', async () => {
+    const owner = await login('Владелец', OWNER_TG);
+    const vera = await login('Вера');
+    const post = (payload: object) => handle.app.inject({ method: 'POST', url: '/api/client-error', payload, headers: { authorization: `Bearer ${vera.token}` } });
+    expect((await handle.app.inject({ method: 'POST', url: '/api/client-error', payload: { kind: 'error', message: 'x' } })).statusCode).toBe(401);
+    const report = { kind: 'render', message: 'Cannot read properties of undefined (reading \'hand\')', stack: 'at GameScreen', where: '#/game', version: 'test', agent: 'vitest' };
+    expect((await post(report)).statusCode).toBe(200);
+    for (let i = 0; i < 25; i++) await post({ ...report, message: `шум ${i}` });
+    await journal.flush();
+
+    const summary = (await get(owner.token, '/owner/journal/summary?hours=1')).json() as { problems: { clientErrors: number }; recent: { text: string }[] };
+    expect(summary.recent.some((r) => r.text.startsWith('Вера: 🐞 ошибка в приложении: Cannot read properties'))).toBe(true);
+    const mine = summary.recent.filter((r) => r.text.startsWith('Вера: 🐞'));
+    expect(mine.length).toBeLessThanOrEqual(20);
+    expect(summary.problems.clientErrors).toBeGreaterThanOrEqual(1);
+  }, 30_000);
 });

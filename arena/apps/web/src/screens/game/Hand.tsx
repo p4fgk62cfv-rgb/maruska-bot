@@ -11,9 +11,9 @@ export interface HandProps {
   onTap: (card: CardId) => void;
   onDoubleTap: (card: CardId) => void;
   onSwipeRight: () => void;
-  /** Finger drag: where the card is now (for hover highlights); null when the drag ends. */
+  /** Finger drag: where the card is now — its centre, not the finger under it; null when the drag ends. */
   onDragMove: (card: CardId | null, x: number, y: number) => void;
-  /** Resolves true when the drop became a move; otherwise the card flies back into the hand. */
+  /** Resolves true when the drop became a move; otherwise the card flies back into the hand. x, y — the card's centre. */
   onDrop: (card: CardId, x: number, y: number) => Promise<boolean> | boolean;
 }
 
@@ -27,6 +27,12 @@ function arc(i: number, n: number): number {
 }
 
 const DRAG_START = 10;
+
+/** The middle of the card being dragged (it follows the finger, offset by where it was picked up). */
+function centre(el: HTMLElement): { x: number; y: number } {
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
 
 interface Drag {
   card: CardId;
@@ -94,7 +100,7 @@ export function Hand({ cards, trump, selected, playable, cardWidth, onTap, onDou
     detach.current?.();
     const onUp = (e: PointerEvent) => {
       if (e.pointerId !== pointer || !drag.current) return;
-      void finish(e.type === 'pointerup', e.clientX, e.clientY, pointer);
+      void finish(e.type === 'pointerup', pointer);
     };
     const onLost = () => document.visibilityState === 'hidden' && cancel();
     window.addEventListener('pointerup', onUp, true);
@@ -151,11 +157,12 @@ export function Hand({ cards, trump, selected, playable, cardWidth, onTap, onDou
     }
     // The card follows the finger upright and a little bigger, above everything else.
     d.el.style.transform = `${d.base.replace(/rotate\([^)]*\)/, '')} translate(${dx}px, ${dy}px) scale(1.1)`;
-    onDragMove(d.card, e.clientX, e.clientY);
+    const c = centre(d.el);
+    onDragMove(d.card, c.x, c.y);
   };
 
   /** The finger let go (released = a real drop) or the drag was interrupted. Runs once per drag. */
-  const finish = async (released: boolean, x: number, y: number, pointer: number) => {
+  const finish = async (released: boolean, pointer: number) => {
     const d = drag.current;
     if (!d || d.pointer !== pointer) return;
     drag.current = null;
@@ -164,11 +171,14 @@ export function Hand({ cards, trump, selected, playable, cardWidth, onTap, onDou
     onDragMove(null, 0, 0);
     // The click that follows a drag must not select the card.
     window.setTimeout(() => (dragged.current = false), 300);
-    const ok = released && (await onDrop(d.card, x, y));
+    // Where the card is, not the finger: the finger holds the card by its lower part, so aiming
+    // the picture at a card on the table put the finger on the neighbouring one.
+    const c = centre(d.el);
+    const ok = released && (await onDrop(d.card, c.x, c.y));
     if (!ok) settle(d.el, d.base);
   };
 
-  const up = (e: React.PointerEvent<HTMLElement>) => void finish(e.type === 'pointerup', e.clientX, e.clientY, e.pointerId);
+  const up = (e: React.PointerEvent<HTMLElement>) => void finish(e.type === 'pointerup', e.pointerId);
 
   return (
     <div

@@ -8,7 +8,10 @@ import { App } from './App.js';
 import { initTelegram } from './lib/telegram.js';
 import { applyTheme } from './lib/settings.js';
 import { unlockAudio } from './lib/sound.js';
+import { installErrorReporting } from './lib/errorReport.js';
+import { ErrorBoundary } from './ErrorBoundary.js';
 
+installErrorReporting();
 initTelegram();
 applyTheme();
 // iOS lets sound start only from a touch: the first tap anywhere unlocks it and loads the effects.
@@ -16,6 +19,8 @@ window.addEventListener('pointerdown', unlockAudio, { once: true, capture: true 
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 );
