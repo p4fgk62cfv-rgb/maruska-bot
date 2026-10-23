@@ -433,7 +433,7 @@ async def main():
 
     backup_task = asyncio.create_task(backup_loop(bot))
 
-    # Разовая амнистия мутов за мат (ошибочные муты за «/job»)
+    # Владельцу — список мутов за мат после обновления антимата, с кнопками «Снять мут» (ошибка с «/job»)
     from features.antimat import amnesty_once
 
     asyncio.create_task(amnesty_once(bot))

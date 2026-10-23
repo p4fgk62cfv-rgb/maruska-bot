@@ -235,6 +235,65 @@ async def scenario():
     expect("предупреждения за мат обнулены", await count_warnings_by_reason(CHAT, USER, antimat.REASON), 0)
     expect("текст амнистии", "Вася" in antimat.amnesty_text(freed, True) and "заново" in antimat.amnesty_text(freed, True), True)
 
+    # Слово, за которое мут, теперь в журнале
+    antimat._cooldown.clear()
+    await swear("/job ты сука")
+    from sqlalchemy import select
+    async with session_scope() as session:
+        details = (await session.execute(select(AuditEvent.details).where(
+            AuditEvent.chat_id == CHAT, AuditEvent.action == "warn").order_by(AuditEvent.id.desc()))).scalars().first()
+    expect("в журнале слово, за которое предупреждение", details is not None and "мат: сука" in details, True)
+
+    # Владельцу — список действующих мутов после обновления, с кнопкой на каждого
+    from datetime import datetime
+    from database.repository import get_group_settings, set_group_setting
+    from settings import handler as owners
+
+    restricted.clear()
+    restricted.update({USER, 7002})
+    sent = []
+
+    async def send_message(chat_id, text, reply_markup=None, **kw):
+        sent.append((chat_id, text, reply_markup))
+
+    bot.send_message = send_message
+    old_once, old_since, old_owners = antimat.AMNESTY_ONCE, antimat.AMNESTY_SINCE, owners.OWNER_IDS
+    antimat.AMNESTY_ONCE, antimat.AMNESTY_SINCE = (CHAT,), "2000-01-01T00:00:00"
+    owners.OWNER_IDS = frozenset({424242})
+    saved = (await get_group_settings(0)).get(antimat.AMNESTY_DONE_KEY)
+    await set_group_setting(chat_id=0, key=antimat.AMNESTY_DONE_KEY, value=[])
+    try:
+        await antimat.amnesty_once(bot)
+        buttons = [b.callback_data for row in sent[0][2].inline_keyboard for b in row] if sent and sent[0][2] else []
+        expect("список владельцу с кнопками", (sent[0][0], sorted(buttons)),
+               (424242, sorted([f"amn:{CHAT}:{USER}", f"amn:{CHAT}:7002", f"amn:{CHAT}:all"])))
+        await antimat.amnesty_once(bot)
+        expect("список приходит один раз", len(sent), 1)
+
+        # Кнопка «Снять мут» у одного: мут снят, его кнопка исчезает
+        unmuted.clear()
+        answers, edited = [], []
+
+        async def cb_answer(text=None, show_alert=False):
+            answers.append(text)
+
+        async def edit_markup(reply_markup=None):
+            edited.append(reply_markup)
+
+        callback = types.SimpleNamespace(
+            data=f"amn:{CHAT}:7002", from_user=types.SimpleNamespace(id=424242), bot=bot, answer=cb_answer,
+            message=types.SimpleNamespace(reply_markup=sent[0][2], edit_reply_markup=edit_markup))
+        await antimat.amnesty_button(callback)
+        left = [b.callback_data for row in edited[-1].inline_keyboard for b in row]
+        expect("снят мут одному", (unmuted, f"amn:{CHAT}:7002" in left), ([7002], False))
+        callback.from_user = types.SimpleNamespace(id=1)
+        await antimat.amnesty_button(callback)
+        expect("чужому кнопка не работает", answers[-1], "Это только для владельца бота")
+    finally:
+        antimat.AMNESTY_ONCE, antimat.AMNESTY_SINCE = old_once, old_since
+        owners.OWNER_IDS = old_owners
+        await set_group_setting(chat_id=0, key=antimat.AMNESTY_DONE_KEY, value=saved)
+
     async with session_scope() as session:
         await session.execute(delete(ChatWarning).where(ChatWarning.chat_id == CHAT))
         await session.execute(delete(AuditEvent).where(AuditEvent.chat_id == CHAT))

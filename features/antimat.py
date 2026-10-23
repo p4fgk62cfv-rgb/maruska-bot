@@ -386,6 +386,8 @@ async def on_swear(message: Message):
     chat_id = message.chat.id
     user = message.from_user
     name = display_name_of(user)
+    # Слово — в журнал: по нему видно, за что предупреждение или мут, и ошибку можно исправить
+    word = chat_swear(chat_id, message_text(message)) or "?"
 
     admin = await _is_admin(message.bot, chat_id, user.id)
     if admin and not is_enabled(chat_id, "antimat_admins"):
@@ -415,7 +417,7 @@ async def on_swear(message: Message):
     audit.count(chat_id, "warnings")
     audit.log(
         "moderation", "warn", chat_id=chat_id, actor_kind="bot",
-        target_id=user.id, target_name=name, details=f"{min(total, limit)}/{limit} · мат",
+        target_id=user.id, target_name=name, details=f"{min(total, limit)}/{limit} · мат: {word}",
     )
 
     who = f'<a href="tg://user?id={user.id}">{escape(name)}</a>'
@@ -449,7 +451,7 @@ async def on_swear(message: Message):
     audit.count(chat_id, "mutes")
     audit.log(
         "moderation", "mute", chat_id=chat_id, actor_kind="bot",
-        target_id=user.id, target_name=name, details=f"{minutes} мин · мат, {limit} предупреждения",
+        target_id=user.id, target_name=name, details=f"{minutes} мин · мат: {word}, {limit} предупреждения",
     )
     again = f" Это уже {earlier + 1}-й мут за месяц — срок вдвое длиннее прошлого." if minutes > base else ""
     await message.answer(f"🔇 {who} получает мут на {_duration(minutes)} — {limit} предупреждения за мат.{again}")
@@ -470,12 +472,14 @@ def _duration(minutes: int) -> str:
 
 AMNESTY_DAYS = 30
 AMNESTY_DONE_KEY = "antimat_amnesty_done"
-# Группы, где амнистия проходит сама один раз после выкладки (просьба владельца)
+# Группы, где после выкладки владелец получает список мутов за мат с кнопками «Снять мут»
+# (ошибочные муты за «/job» после обновления антимата 22.10 в 00:25 МСК)
 AMNESTY_ONCE = (-1001964242089,)
+AMNESTY_SINCE = "2026-10-22T21:25:00"
 
 
-async def antimat_muted(chat_id: int, days: int = AMNESTY_DAYS) -> dict[int, str]:
-    """Кому Мара давала мут за мат в этой группе за последние дни: id → имя (из журнала)."""
+async def antimat_muted(chat_id: int, days: int = AMNESTY_DAYS, since=None) -> dict[int, str]:
+    """Кому Мара давала мут за мат в этой группе (за последние дни или с момента since): id → имя."""
     from datetime import timedelta
 
     from sqlalchemy import select
@@ -484,7 +488,7 @@ async def antimat_muted(chat_id: int, days: int = AMNESTY_DAYS) -> dict[int, str
     from database.models import AuditEvent
     from database.repository import utcnow
 
-    since = utcnow() - timedelta(days=days)
+    since = since or utcnow() - timedelta(days=days)
     async with session_scope() as session:
         rows = (await session.execute(
             select(AuditEvent.target_id, AuditEvent.target_name).where(
@@ -500,12 +504,12 @@ async def antimat_muted(chat_id: int, days: int = AMNESTY_DAYS) -> dict[int, str
     return {target: name or str(target) for target, name in rows}
 
 
-async def amnesty(bot, chat_id: int, clear_warnings: bool = False) -> tuple[list[str], list[str]]:
+async def amnesty(bot, chat_id: int, clear_warnings: bool = False, since=None) -> tuple[list[str], list[str]]:
     """Снимает муты за мат с тех, кто сейчас замучен. Возвращает (кого освободили, ошибки)."""
     from features.moderation import ModerationError, unmute
 
     freed, problems = [], []
-    for user_id, name in (await antimat_muted(chat_id)).items():
+    for user_id, name in (await antimat_muted(chat_id, since=since)).items():
         try:
             member = await bot.get_chat_member(chat_id, user_id)
         except Exception as error:
@@ -543,27 +547,98 @@ def amnesty_text(freed: list[str], cleared: bool) -> str:
     return head + (" Предупреждения за мат обнулены — счёт у всех начинается заново." if cleared else "")
 
 
+async def still_muted(bot, chat_id: int, user_id: int) -> bool:
+    try:
+        member = await bot.get_chat_member(chat_id, user_id)
+    except Exception:
+        return False
+    return member.status == "restricted" and not getattr(member, "can_send_messages", True)
+
+
 async def amnesty_once(bot) -> None:
-    """Разовая амнистия для групп из AMNESTY_ONCE — ровно один раз, даже после перезапусков."""
+    """Один раз (даже после перезапусков) присылает владельцам список тех, кто сейчас замучен
+    за мат в группах из AMNESTY_ONCE после AMNESTY_SINCE, — с кнопкой «Снять мут» на каждого."""
+    from datetime import datetime
+
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
     from database.repository import get_group_settings, set_group_setting
+    from settings.handler import OWNER_IDS
 
     try:
         done = list((await get_group_settings(0)).get(AMNESTY_DONE_KEY) or [])
         for chat_id in AMNESTY_ONCE:
             if chat_id in done:
                 continue
-            freed, problems = await amnesty(bot, chat_id)
+            muted = await antimat_muted(chat_id, since=datetime.fromisoformat(AMNESTY_SINCE))
+            now_muted = {uid: name for uid, name in muted.items() if await still_muted(bot, chat_id, uid)}
+            if now_muted:
+                rows = [[InlineKeyboardButton(text=f"🕊 Снять мут: {name}"[:60], callback_data=f"amn:{chat_id}:{uid}")]
+                        for uid, name in now_muted.items()]
+                rows.append([InlineKeyboardButton(text="🕊 Снять всем", callback_data=f"amn:{chat_id}:all")])
+                text = (f"🤬 Муты за мат в группе {chat_id} после обновления антимата (22.10, 00:25 МСК), "
+                        f"которые ещё действуют — {len(now_muted)}.\n\nЗа какое слово дан мут, Мара тогда не "
+                        "записывала. Снимите мут тем, кого замутило за «/job» (или всем сразу):")
+                markup = InlineKeyboardMarkup(inline_keyboard=rows[:40])
+            else:
+                text, markup = f"🕊 В группе {chat_id} сейчас никто не замучен за мат — снимать нечего.", None
+            for owner in sorted(OWNER_IDS):
+                try:
+                    await bot.send_message(owner, text, reply_markup=markup, parse_mode=None)
+                except Exception as error:
+                    logger.warning("AMNESTY list to %s: %s", owner, error)
             done.append(chat_id)
             await set_group_setting(chat_id=0, key=AMNESTY_DONE_KEY, value=done)
-            if freed:
-                try:
-                    await bot.send_message(chat_id, amnesty_text(freed, False))
-                except Exception as error:
-                    logger.warning("AMNESTY note %s: %s", chat_id, error)
-            if problems:
-                logger.warning("AMNESTY %s problems: %s", chat_id, "; ".join(problems)[:500])
     except Exception as error:
         logger.error("AMNESTY ONCE: %s %s", type(error).__name__, error)
+
+
+@router.callback_query(lambda c: (c.data or "").startswith("amn:"))
+async def amnesty_button(callback):
+    """Кнопка «Снять мут» из списка у владельца: один человек или все."""
+    from features.moderation import ModerationError, unmute
+    from settings.handler import is_owner
+
+    if not is_owner(callback.from_user.id):
+        await callback.answer("Это только для владельца бота", show_alert=True)
+        return
+    _, chat, who = (callback.data or "").split(":", 2)
+    chat_id = int(chat)
+    if who == "all":
+        from datetime import datetime
+
+        freed, problems = await amnesty(callback.bot, chat_id, since=datetime.fromisoformat(AMNESTY_SINCE))
+        await callback.answer(f"Снято: {len(freed)}" + (f", не вышло: {len(problems)}" if problems else ""), show_alert=True)
+        if freed:
+            try:
+                await callback.bot.send_message(chat_id, amnesty_text(freed, False))
+            except Exception:
+                pass
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        return
+    user_id = int(who)
+    name = next((b.text.replace("🕊 Снять мут: ", "") for row in callback.message.reply_markup.inline_keyboard
+                 for b in row if b.callback_data == callback.data), str(user_id))
+    try:
+        await unmute(callback.bot, chat_id, user_id)
+    except ModerationError as error:
+        await callback.answer(f"Не вышло: {error}", show_alert=True)
+        return
+    audit.log("moderation", "unmute", chat_id=chat_id, actor_kind="admin", actor_id=callback.from_user.id,
+              target_id=user_id, target_name=name, details="амнистия: мут за мат снят")
+    await callback.answer(f"Мут снят: {name}")
+    # Кнопка этого человека исчезает из списка
+    rows = [[b for b in row if b.callback_data != callback.data] for row in callback.message.reply_markup.inline_keyboard]
+    rows = [row for row in rows if row]
+    try:
+        from aiogram.types import InlineKeyboardMarkup
+
+        await callback.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=rows) if len(rows) > 1 else None)
+    except Exception:
+        pass
 
 
 from aiogram.filters import Command  # noqa: E402
