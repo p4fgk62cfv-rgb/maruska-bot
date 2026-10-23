@@ -10,12 +10,19 @@ export interface BotMessage {
 
 export type SendOutcome = 'ok' | 'blocked' | 'retry';
 
+/** One message: up to this many tries, and no longer than this in waits between them. */
+const SEND_ATTEMPTS = 3;
+const SEND_MAX_WAIT_MS = 25_000;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 /** Minimal Telegram Bot API client. Uses the same token as the Python bot: sendMessage does not clash with its polling. */
 export class TelegramBot {
   constructor(
     private readonly token: string,
     private readonly apiUrl = 'https://api.telegram.org',
     private readonly http: typeof fetch = fetch,
+    private readonly pause: (ms: number) => Promise<void> = sleep,
   ) {}
 
   async send(chatId: bigint, message: BotMessage): Promise<SendOutcome> {
@@ -38,17 +45,28 @@ export class TelegramBot {
           }
         : {}),
     };
-    try {
-      const res = await this.http(`${this.apiUrl}/bot${this.token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) return 'ok';
-      // 400 chat not found / 403 blocked: the user has no private chat with the bot.
-      return res.status === 400 || res.status === 403 ? 'blocked' : 'retry';
-    } catch {
-      return 'retry';
+    // A busy group («Too Many Requests: retry after N») or a network blip must not lose a
+    // message: wait as Telegram asks (or a moment) and send it again.
+    let waited = 0;
+    for (let attempt = 1; ; attempt++) {
+      let wait: number;
+      try {
+        const res = await this.http(`${this.apiUrl}/bot${this.token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) return 'ok';
+        // 400 chat not found / 403 blocked: the user has no private chat with the bot.
+        if (res.status === 400 || res.status === 403) return 'blocked';
+        const data = (await res.json().catch(() => null)) as { parameters?: { retry_after?: number } } | null;
+        wait = res.status === 429 ? Math.max(1, data?.parameters?.retry_after ?? 3) * 1000 : 1500 * attempt;
+      } catch {
+        wait = 1500 * attempt;
+      }
+      if (attempt >= SEND_ATTEMPTS || waited + wait > SEND_MAX_WAIT_MS) return 'retry';
+      waited += wait;
+      await this.pause(wait);
     }
   }
 
