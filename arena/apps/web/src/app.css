@@ -1304,6 +1304,28 @@ html[data-home-design="premium"] .friends-play__arrow { color: #d7b6ff; font-siz
 
 /* «Управление» (owner only) */
 .owner-card { display: grid; gap: 12px; }
+/* Six sections in «Управление»: the tabs scroll sideways instead of squeezing the words. */
+.owner .ui-tabs { overflow-x: auto; scrollbar-width: none; }
+.owner .ui-tabs::-webkit-scrollbar { display: none; }
+.owner .ui-tabs__tab { flex: 0 0 auto; padding: 0 12px; }
+/* «Журнал»: games, problems and their causes */
+.journal-stats { display: flex; gap: 16px; font-size: 14px; }
+.journal-stats b { font-size: 20px; }
+.journal-bad { color: #ff8a80; }
+.journal-line { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: baseline; padding: 6px 2px; border-bottom: 1px solid var(--stroke); font-size: 13px; text-align: left; color: inherit; }
+.journal-line:disabled { opacity: 1; }
+.journal-line__time { font-size: 11px; opacity: 0.6; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.journal-line--event { background: rgba(255, 255, 255, 0.04); }
+.journal-game { display: grid; gap: 3px; padding: 10px 12px; border-radius: 14px; text-align: left; color: inherit; background: rgba(255, 255, 255, 0.07); box-shadow: inset 0 0 0 1px var(--stroke); }
+.journal-game__top { display: flex; gap: 8px; align-items: center; font-size: 12px; opacity: 0.8; }
+.journal-game__len { margin-left: auto; }
+.journal-game__players { font-size: 13px; font-weight: 700; }
+.journal-game__result { font-size: 13px; }
+.journal-game__flags { display: flex; gap: 10px; font-size: 12px; }
+.journal-tag { padding: 1px 6px; border-radius: 8px; background: rgba(245, 196, 81, 0.18); color: var(--gold); }
+.journal-sheet { display: grid; gap: 8px; max-height: 70vh; overflow-y: auto; }
+.journal-sheet p { margin: 0; }
+.journal-timeline { display: grid; }
 .owner-field { display: grid; gap: 6px; font-size: 13px; font-weight: 700; }
 .owner-field input, .owner-field textarea, .owner-search {
   width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--stroke); font: inherit; font-weight: 500;

@@ -32,6 +32,8 @@ import { Showcase } from './brain/showcase.js';
 import { Outbox, TelegramBot } from './services/notifier.js';
 import { playerRoutes } from './routes/players.js';
 import { ownerRoutes } from './routes/owner.js';
+import { journalRoutes } from './routes/journal.js';
+import { journal } from './lib/journal.js';
 import { friendRoutes } from './routes/friends.js';
 import { internalRoutes } from './routes/internal.js';
 import { tournamentRoutes } from './routes/tournaments.js';
@@ -153,6 +155,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
   app.addHook('onRequest', async (request) => {
     if (request.url.startsWith('/api/rooms') || request.url.startsWith('/api/friends') || request.url.startsWith('/api/tournaments')) await realtime.ready;
   });
+  journal.attach(ctx.db, app.log);
   app.addHook('onClose', async () => {
     outbox.stop();
     chat.stop();
@@ -163,6 +166,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
     await trainer.stop();
     await realtime.shutdown();
     await brain.stop();
+    await journal.stop();
   });
 
   const origins = config.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean);
@@ -223,6 +227,7 @@ export async function buildApp(base: BaseContext, options: AppOptions = {}): Pro
       await dailyRoutes(api, ctx);
       await chatRoutes(api, ctx);
       await ownerRoutes(api, ctx);
+      await journalRoutes(api, ctx);
       await tournamentRoutes(api, ctx);
       await starsRoutes(api, ctx);
       await internalRoutes(api, ctx);

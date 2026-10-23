@@ -18,6 +18,7 @@ import { RoomManager } from './rooms.js';
 import type { SnapshotStore } from './store.js';
 import type { DailyService } from '../services/daily.js';
 import type { Brain } from '../brain/brain.js';
+import { journal } from '../lib/journal.js';
 
 export interface RealtimeDeps {
   config: Config;
@@ -226,7 +227,10 @@ export class Realtime {
       const game = room.gameId ? this.games.get(room.gameId) : undefined;
       this.hub.sendTo(client, { type: 'ROOM_UPDATED', room: this.rooms.dto(room) });
       // Back at the table: the state goes to everybody (so they see the player online again).
-      if (game) await game.queue.run(() => game.presence(userId));
+      if (game) {
+        if (!wasOnline && !game.result) journal.record({ kind: 'online', gameId: game.id, roomId: game.roomId, userId });
+        await game.queue.run(() => game.presence(userId));
+      }
     }
     return client;
   }
@@ -237,6 +241,7 @@ export class Realtime {
       this.emitPresence([client.userId]);
       await this.rooms.disconnected(client.userId);
       const game = this.games.forUser(client.userId);
+      if (game && !game.result) journal.record({ kind: 'offline', gameId: game.id, roomId: game.roomId, userId: client.userId });
       if (game) await game.queue.run(() => game.presence(client.userId));
     }
   }
@@ -281,6 +286,10 @@ export class Realtime {
         else if (CARD_MOVES.has(msg.type)) {
           const m = msg as { gameId?: string; card?: string; cards?: string[]; target?: number };
           this.deps.log.info({ userId: client.userId, type: msg.type, code, gameId: m.gameId, card: m.card ?? m.cards, target: m.target }, 'move refused');
+          journal.record({
+            kind: 'move_refused', gameId: m.gameId ?? null, userId: client.userId,
+            details: { type: msg.type, code, ...(m.card ?? m.cards ? { card: m.card ?? m.cards } : {}), ...(m.target !== undefined ? { target: m.target } : {}) },
+          });
         }
         return code;
       },

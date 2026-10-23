@@ -6,9 +6,10 @@ import { useQuery } from '../lib/useQuery.js';
 import { useSession } from '../session.js';
 import { useToast } from '../toast.js';
 import { ScreenHeader } from './common.js';
+import { OwnerJournal } from './OwnerJournal.js';
 import { useNav } from '../navigation.js';
 
-type Section = 'announcement' | 'gifts' | 'bonus' | 'bots' | 'stars';
+type Section = 'journal' | 'announcement' | 'gifts' | 'bonus' | 'bots' | 'stars';
 interface GiftItem { key: string; name: string; kind: string; owned: boolean }
 
 const KIND_RU: Record<string, string> = { CARD_BACK: 'Рубашка', FRAME: 'Рамка', CROWN: 'Корона', EFFECT: 'Эффект', EMOJI: 'Смайлы', TABLE: 'Стол', AVATAR: 'Аватар' };
@@ -16,12 +17,12 @@ const errText = (e: unknown) => (e instanceof ApiError ? e.message : 'Ошибк
 
 /** «Управление» — only for the game's owners: the start-screen pop-up and gifts to players. */
 export default function OwnerScreen() {
-  const [section, setSection] = useState<Section>('announcement');
+  const [section, setSection] = useState<Section>('journal');
   return (
     <div className="app-stack owner">
       <ScreenHeader title="Управление" subtitle="Видно только владельцу" />
-      <Tabs<Section> value={section} onChange={setSection} items={[{ value: 'announcement', label: 'Объявление' }, { value: 'gifts', label: 'Подарки' }, { value: 'bonus', label: 'Бонусы' }, { value: 'bots', label: 'Боты' }, { value: 'stars', label: 'Звёзды' }]} />
-      {section === 'announcement' ? <AnnouncementEditor /> : section === 'gifts' ? <Gifts /> : section === 'bots' ? <Bots /> : section === 'stars' ? <StarSales /> : <Bonuses />}
+      <Tabs<Section> value={section} onChange={setSection} items={[{ value: 'journal', label: 'Журнал' }, { value: 'announcement', label: 'Объявление' }, { value: 'gifts', label: 'Подарки' }, { value: 'bonus', label: 'Бонусы' }, { value: 'bots', label: 'Боты' }, { value: 'stars', label: 'Звёзды' }]} />
+      {section === 'journal' ? <OwnerJournal /> : section === 'announcement' ? <AnnouncementEditor /> : section === 'gifts' ? <Gifts /> : section === 'bots' ? <Bots /> : section === 'stars' ? <StarSales /> : <Bonuses />}
     </div>
   );
 }
