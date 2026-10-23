@@ -133,7 +133,7 @@ function endBout(state: GameState, outcome: 'beaten' | 'taken', now: number, eve
   refillHands(state, events);
   const retired = retireEmptyPlayers(state, events);
 
-  if (finishIfOver(state, retired, lastAttacker, now, events)) return;
+  if (finishIfOver(state, retired, defender.id, now, events)) return;
 
   // Beaten: the defender leads next. Taken: the player after the defender leads.
   const leader =
@@ -202,7 +202,7 @@ function retireEmptyPlayers(state: GameState, events: GameEvent[]): PlayerId[] {
 function finishIfOver(
   state: GameState,
   retiredNow: PlayerId[],
-  lastAttacker: PlayerId,
+  defender: PlayerId,
   now: number,
   events: GameEvent[],
 ): boolean {
@@ -213,15 +213,15 @@ function finishIfOver(
   if (last) {
     finishGame(state, { kind: 'loser', loser: last.id, reason: 'cards' }, now, events);
   } else if (state.rules.ending === 'nodraw') {
-    // Турнирный стол: ничьей нет. Все вышли разом — как в «Дураке Онлайн»: последнюю карту
-    // отбили, значит, подкинувший её не смог завалить — он и дурак.
-    finishGame(state, { kind: 'loser', loser: lastAttacker, reason: 'last_attack' }, now, events);
-  } else if (state.rules.ending === 'draw' || !retiredNow.includes(lastAttacker)) {
+    // Турнирный стол: ничьей нет. Все вышли разом (колода пуста, последние карты отбиты):
+    // кто ходил последними картами — избавился от них первым и выиграл; дурак — отбивавшийся.
+    finishGame(state, { kind: 'loser', loser: defender, reason: 'last_defense' }, now, events);
+  } else if (state.rules.ending === 'draw' || !retiredNow.includes(defender)) {
     // Everyone emptied their hand in the same bout.
     finishGame(state, { kind: 'draw' }, now, events);
   } else {
-    // "Классика": the defender beat the very last card, so whoever threw it is the fool.
-    finishGame(state, { kind: 'loser', loser: lastAttacker, reason: 'last_attack' }, now, events);
+    // «Классика»: так же — отбивавшийся последним остаётся дураком.
+    finishGame(state, { kind: 'loser', loser: defender, reason: 'last_defense' }, now, events);
   }
   return true;
 }

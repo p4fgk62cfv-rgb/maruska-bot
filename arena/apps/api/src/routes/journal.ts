@@ -10,7 +10,8 @@ import { displayName } from '../services/users.js';
 /** How a game ended, in words. */
 export const REASON_TEXT: Record<string, string> = {
   cards: 'остался с картами',
-  last_attack: 'вышли одновременно — проиграл последний ходивший',
+  last_attack: 'вышли одновременно — проиграл последний ходивший (старое правило)',
+  last_defense: 'вышли одновременно — проиграл отбивавшийся',
   timeout: 'время хода вышло',
   surrender: 'сдался',
   cancelled: 'партия отменена, ставки возвращены',

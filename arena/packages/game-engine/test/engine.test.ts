@@ -274,20 +274,22 @@ describe('end of game', () => {
     expect(state.loser).toBeNull();
   });
 
-  it('"классика": in the same situation the last attacker is the fool', () => {
+  it('"классика": in the same situation the defender is the fool — the attacker emptied first', () => {
     let state = arranged({ trump: '6H', settings: { ending: 'classic' }, hands: [['7S'], ['8S']] });
     state = act(state, 'p1', { type: 'PLAY_CARD', card: '7S' });
     state = act(state, 'p2', { type: 'PLAY_CARD', card: '8S', target: 0 });
-    expect(state.result).toEqual({ kind: 'loser', loser: 'p1', reason: 'last_attack' });
-    expect(state.winner).toBe('p2');
+    expect(state.result).toEqual({ kind: 'loser', loser: 'p2', reason: 'last_defense' });
+    expect(state.winner).toBe('p1');
   });
 
-  it('"без ничьей" (турнир): when everyone empties in the same bout, whoever threw the last card is the fool', () => {
-    let state = arranged({ trump: '6H', settings: { ending: 'nodraw' }, hands: [['7S'], ['8S']] });
-    state = act(state, 'p1', { type: 'PLAY_CARD', card: '7S' });
-    state = act(state, 'p2', { type: 'PLAY_CARD', card: '8S', target: 0 });
-    expect(state.result).toEqual({ kind: 'loser', loser: 'p1', reason: 'last_attack' });
-    expect(state.winner).toBe('p2');
+  it('"без ничьей" (турнир): two tens on the last two cards, both beaten — the one who led them wins', () => {
+    let state = arranged({ trump: '6H', settings: { ending: 'nodraw' }, hands: [['10S', '10D'], ['JS', 'QD']] });
+    state = act(state, 'p1', { type: 'PLAY_CARDS', cards: ['10S', '10D'] });
+    state = act(state, 'p2', { type: 'PLAY_CARD', card: 'JS', target: 0 });
+    state = act(state, 'p2', { type: 'PLAY_CARD', card: 'QD', target: 1 });
+    expect(state.status).toBe('finished');
+    expect(state.result).toEqual({ kind: 'loser', loser: 'p2', reason: 'last_defense' });
+    expect(state.winner).toBe('p1');
   });
 
   it('"без ничьей": a normal game still ends with whoever holds cards', () => {
