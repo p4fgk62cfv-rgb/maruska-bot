@@ -297,14 +297,21 @@ export function GameScreen({ game }: { game: LiveGame }) {
     if (card && isDefender && selected.length === 1 && undefended.includes(index)) void defend(card, index);
   };
 
-  /** The drop zone under the finger; the dragged card itself (inside the hand) is ignored. */
+  /**
+   * The drop zone under the card; the dragged card itself (inside the hand) is ignored. A card
+   * thrown anywhere above the hand — onto an opponent's portrait, the row of players, the top
+   * bar — means «on the table»: people throw a card «to Инна», at her picture, and it used to
+   * fly back without a word.
+   */
   const dropAt = (x: number, y: number): string | null => {
     for (const el of document.elementsFromPoint(x, y)) {
       if (el.closest('.hand')) continue;
       const zone = el.closest<HTMLElement>('[data-drop]');
       if (zone) return zone.dataset.drop ?? null;
+      if (el.closest('.table-dock')) return null;
     }
-    return null;
+    const hand = rootRef.current?.querySelector('.hand');
+    return hand && y < hand.getBoundingClientRect().top ? 'table' : null;
   };
 
   const dragMove = (card: CardId | null, x: number, y: number) => {
@@ -325,7 +332,11 @@ export function GameScreen({ game }: { game: LiveGame }) {
     }
     const sameRankAsLead = view.table.length > 0 && rankOf(card) === rankOf(view.table[0]!.attack);
 
-    if (zone === 'transfer') return a.canTransfer && sameRankAsLead ? transfer(card) : false;
+    if (zone === 'transfer') {
+      if (a.canTransfer && sameRankAsLead) return transfer(card);
+      refuse(a.canTransfer ? `Перевести можно только ${rankName(rankOf(view.table[0]!.attack))}` : 'Сейчас перевести нельзя');
+      return false;
+    }
 
     if (isDefender) {
       // Dropped on the felt with a card of the led rank: that is a transfer.
