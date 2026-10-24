@@ -17,7 +17,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from html import escape
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import ChatPermissions, Message
 
@@ -220,6 +220,13 @@ async def _is_chat_admin(message: Message) -> bool:
     return member.status in ADMIN_STATUSES
 
 
+async def _quiet_check(message: Message) -> bool:
+    """Для команд словами («мют», «закрыть чат»): не админу и где модерация выключена — молчим,
+    это могли просто сказать в разговоре."""
+    return (message.chat.type in ("group", "supergroup") and is_enabled(message.chat.id, "moderation")
+            and await _is_chat_admin(message))
+
+
 async def _check(message: Message) -> bool:
     """
     Общие проверки для всех команд модерации.
@@ -371,7 +378,10 @@ def _plural_minutes(value: int) -> str:
 async def mute_command(message: Message):
     if not await _check(message):
         return
+    await _mute(message)
 
+
+async def _mute(message: Message):
     target = await _target_of(message)
 
     if target is None:
@@ -380,7 +390,8 @@ async def mute_command(message: Message):
             "<code>/mute 30</code> — 30 минут\n"
             "<code>/mute 2ч</code> — 2 часа\n"
             "<code>/mute 1д</code> — сутки\n"
-            "Без времени — сколько задано в настройках."
+            "Без времени — сколько задано в настройках.\n"
+            "Можно и словом: <code>мют 30</code>, снять — <code>унмют</code>."
         )
         return
 
@@ -403,7 +414,10 @@ async def mute_command(message: Message):
 async def unmute_command(message: Message):
     if not await _check(message):
         return
+    await _unmute(message)
 
+
+async def _unmute(message: Message):
     target = await _target_of(message)
 
     if target is None:
@@ -500,7 +514,10 @@ async def kick_command(message: Message):
 async def lock_command(message: Message):
     if not await _check(message):
         return
+    await _lock(message)
 
+
+async def _lock(message: Message):
     try:
         await set_chat_locked(message.bot, message.chat.id, True)
     except ModerationError as error:
@@ -516,7 +533,10 @@ async def lock_command(message: Message):
 async def unlock_command(message: Message):
     if not await _check(message):
         return
+    await _unlock(message)
 
+
+async def _unlock(message: Message):
     try:
         await set_chat_locked(message.bot, message.chat.id, False)
     except ModerationError as error:
@@ -526,6 +546,51 @@ async def unlock_command(message: Message):
     _record(message, "unlock")
 
     await message.answer(t(message.chat.id, "cmd.unlock"))
+
+
+# ---------------------------------------------------------
+# Те же команды словами, без слэша: «мют 30» ответом на сообщение,
+# «унмют @vasya», «закрыть чат», «открыть чат». Только для админов.
+# ---------------------------------------------------------
+
+MUTE_WORDS = {"мют", "мут"}
+UNMUTE_WORDS = {"унмют", "унмут", "анмют", "анмут", "размют", "размут"}
+LOCK_RE = re.compile(r"^(?:мара[\s,]+)?(?:закрыть|закрой)\s+чат[\s.!]*$", re.IGNORECASE)
+UNLOCK_RE = re.compile(r"^(?:мара[\s,]+)?(?:открыть|открой)\s+чат[\s.!]*$", re.IGNORECASE)
+
+
+def word_command(text: str | None) -> str | None:
+    """«мют 2ч» → "mute", «унмют @vasya» → "unmute", «закрыть чат» → "lock".
+
+    После слова — только человек и срок («мют @vasya 30», «мют 2 ч»): «мют — это когда…»
+    в разговоре командой не считается."""
+    text = (text or "").strip()
+    if LOCK_RE.match(text):
+        return "lock"
+    if UNLOCK_RE.match(text):
+        return "unlock"
+
+    parts = text.lower().replace("ё", "е").split()
+    if not parts or len(parts) > 4:
+        return None
+    word, rest = parts[0].rstrip("!."), parts[1:]
+    if word not in MUTE_WORDS | UNMUTE_WORDS:
+        return None
+    if rest and (rest[0].startswith("@") or (rest[0].isdigit() and len(rest[0]) >= 5)):
+        rest = rest[1:]
+    if word in UNMUTE_WORDS:
+        return None if rest else "unmute"
+    if rest and not parse_duration(" ".join(rest)):
+        return None
+    return "mute"
+
+
+@router.message(F.text.func(word_command))
+async def word_command_handler(message: Message):
+    if not await _quiet_check(message):
+        return
+    action = word_command(message.text)
+    await {"mute": _mute, "unmute": _unmute, "lock": _lock, "unlock": _unlock}[action](message)
 
 
 async def _drop(message: Message) -> None:

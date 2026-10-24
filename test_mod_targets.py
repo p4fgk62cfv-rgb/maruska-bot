@@ -11,7 +11,8 @@ sys.path.insert(0, str(ROOT))
 DB_URL = os.getenv("TEST_DATABASE_URL", "")
 os.environ.setdefault("DATABASE_URL", DB_URL or "postgresql://unused@localhost/unused")
 
-from features.moderation import _minutes, _target_of  # noqa: E402
+from features import moderation  # noqa: E402
+from features.moderation import _minutes, _target_of, word_command  # noqa: E402
 
 failures, checks = [], 0
 
@@ -46,6 +47,48 @@ async def main():
 
     expect("срок после @username", _minutes(msg("/mute @vasya 30")), 30)
     expect("срок без человека", _minutes(msg("/mute 2ч")), 120)
+
+    # Те же команды словами
+    for text, want in [("мют", "mute"), ("Мют 30", "mute"), ("мют 2 ч", "mute"), ("мют @vasya 30", "mute"),
+                       ("мут", "mute"), ("унмют", "unmute"), ("Унмют @vasya", "unmute"), ("размут", "unmute"),
+                       ("Закрыть чат", "lock"), ("Мара, закрой чат!", "lock"), ("открыть чат", "unlock"),
+                       ("мют это когда молчат", None), ("унмют 30", None), ("мюта", None),
+                       ("открыть чат пожалуйста", None), ("закрыть", None)]:
+        expect(f"словом «{text}»", word_command(text), want)
+    expect("«мют @vasya 2ч» — срок", _minutes(msg("мют @vasya 2ч")), 120)
+    expect("«мют 30» ответом — кого", (await _target_of(msg("мют 30", reply=user(9)))).id, 9)
+    expect("«мют 30» — не человек", await _target_of(msg("мют 30")), None)
+
+    # Не админ сказал «мют» — Марушка молчит; админ — мут
+    calls, replies = [], []
+
+    class Bot:
+        async def restrict_chat_member(self, **kw):
+            calls.append(kw)
+
+    async def answer(text, **kw):
+        replies.append(text)
+
+    def group_msg(text, admin):
+        m = msg(text, reply=user(11))
+        m.chat = types.SimpleNamespace(id=-100777, type="supergroup")
+        m.from_user = user(10)
+        m.bot = Bot()
+        m.reply = m.answer = answer
+        m.is_admin = admin
+        return m
+
+    real_admin, real_enabled = moderation._is_chat_admin, moderation.is_enabled
+    moderation.is_enabled = lambda chat_id, key: True
+    try:
+        moderation._is_chat_admin = lambda m: asyncio.sleep(0, m.is_admin)
+        await moderation.word_command_handler(group_msg("мют 30", admin=False))
+        expect("не админ — ни мута, ни ответа", (calls, replies), ([], []))
+        await moderation.word_command_handler(group_msg("мют 30", admin=True))
+        expect("админ — мут того, кому ответили", [c["user_id"] for c in calls], [11])
+        expect("админ — Марушка сообщает о муте", len(replies), 1)
+    finally:
+        moderation._is_chat_admin, moderation.is_enabled = real_admin, real_enabled
 
     if DB_URL:
         from database.database import engine, init_db, session_scope
