@@ -178,7 +178,8 @@ export class GameRunner {
 
   private async useFeature(userId: string, feature: keyof Features): Promise<void> {
     if (!this.hasPlayer(userId)) throw new AppError('FORBIDDEN');
-    if (feature === 'hints' && this.snap.fair) throw new AppError('FORBIDDEN');
+    // Турнир — честная игра: ни подсветки карт, ни отбоя за монеты (только «вернуть карту»).
+    if (this.snap.fair) throw new AppError('FORBIDDEN');
     const current = this.features(userId);
     if (current[feature]) return;
     const premium = this.players.find((p) => p.userId === userId)?.premium ?? false;
@@ -410,7 +411,8 @@ export class GameRunner {
     const info = this.playerInfo();
     const premium = info.find((p) => p.userId === userId)?.premium ?? false;
     const hints = !this.snap.fair && (features.hints || premium);
-    const state = toPlayerView(this.snap.state, userId, { hints, discard: features.discardReminder });
+    const discard = !this.snap.fair && features.discardReminder;
+    const state = toPlayerView(this.snap.state, userId, { hints, discard });
     const move = this.snap.state.lastMove;
     this.deps.hub.send(userId, {
       type: 'GAME_STATE',
@@ -419,7 +421,7 @@ export class GameRunner {
       features: {
         hints,
         hintsAllowed: !this.snap.fair,
-        discardReminder: features.discardReminder,
+        discardReminder: discard,
         canUndo: Boolean(this.snap.previous && move?.playerId === userId && move.version === this.snap.state.version),
       },
       waiting: this.snap.grace && this.snap.state.turnDeadline !== null ? { userId: this.snap.grace.userId, until: this.snap.state.turnDeadline } : null,

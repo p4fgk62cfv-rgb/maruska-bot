@@ -44,7 +44,7 @@ export type ServerMessage =
       type: 'GAME_STATE';
       state: PlayerView;
       players: PlayerInfo[];
-      features: { hints: boolean; /** False at tournament tables: hints cannot be bought there. */ hintsAllowed?: boolean; discardReminder: boolean; canUndo: boolean };
+      features: { hints: boolean; /** False at tournament tables: neither hints nor the discard can be bought there (only «вернуть карту»). */ hintsAllowed?: boolean; discardReminder: boolean; canUndo: boolean };
       /** A player lost the connection on their turn: the table waits for them until `until`. */
       waiting?: { userId: string; until: number } | null;
     }

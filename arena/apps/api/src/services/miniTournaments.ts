@@ -31,7 +31,13 @@ export const MINI_MAX_TABLES = 2;
 const LABELS = ['А', 'Б'] as const;
 const FINAL = 'финал';
 
-const person = z.object({ telegramId: z.coerce.bigint(), name: z.string().min(1).max(128), username: z.string().max(64).nullish() });
+const person = z.object({
+  telegramId: z.coerce.bigint(),
+  name: z.string().min(1).max(128),
+  username: z.string().max(64).nullish(),
+  /** Турнир групп: за какой стол (0 — первая группа, 1 — вторая). */
+  table: z.number().int().min(0).max(1).optional(),
+});
 
 /** Правила стола и сколько ждать у стола — их задают в админке Мары. */
 export const miniRulesSchema = z.object({
@@ -51,15 +57,40 @@ export const startMiniSchema = z
     players: z.array(person).min(MINI_MIN_PLAYERS).max(MINI_MAX_PLAYERS * MINI_MAX_TABLES),
     /** 2 — два стола: игроки по очереди записи садятся за стол А и стол Б. */
     tables: z.number().int().min(1).max(MINI_MAX_TABLES).default(1),
+    /**
+     * Турнир групп: у каждой группы свой стол, ссылка на него — в своей группе; финал и итоги —
+     * в обеих. Первая — группа организатора (та же, что chatId); стол игрока — его `table`.
+     */
+    groups: z.array(z.object({ chatId: z.coerce.bigint(), name: z.string().min(1).max(128) })).length(2).optional(),
     rules: miniRulesSchema.default({ variant: MINI_SETTINGS.variant, throwIn: MINI_SETTINGS.throwIn, speed: MINI_SETTINGS.speed }),
   })
   .refine((v) => v.players.length >= MINI_MIN_PLAYERS * v.tables && v.players.length <= MINI_MAX_PLAYERS * v.tables, {
     message: 'players do not fit the tables',
     path: ['players'],
-  });
+  })
+  .refine(
+    (v) =>
+      !v.groups ||
+      (v.tables === 2 &&
+        v.groups[0]!.chatId === v.chatId &&
+        v.groups[0]!.chatId !== v.groups[1]!.chatId &&
+        [0, 1].every((t) => {
+          const n = v.players.filter((p) => p.table === t).length;
+          return n >= MINI_MIN_PLAYERS && n <= MINI_MAX_PLAYERS;
+        }) &&
+        v.players.every((p) => p.table !== undefined)),
+    { message: 'groups do not fit the tables', path: ['groups'] },
+  );
 export type StartMini = z.infer<typeof startMiniSchema>;
 
 type Player = MiniTournamentPlayer;
+
+/** Столы турнира групп называются группами: «Вегас», «Диамант» (в базе — до 16 знаков). */
+function groupLabels(names: string[]): string[] {
+  const labels = names.map((n) => `«${n.trim().slice(0, 14)}»`);
+  const clash = labels[0] === labels[1] || labels.some((l) => l.toLowerCase() === `«${FINAL}»`);
+  return clash ? [...LABELS] : labels;
+}
 type Mini = MiniTournament & { players: Player[] };
 
 export function escapeHtml(text: string): string {
@@ -128,8 +159,9 @@ export class MiniTournamentService {
   async create(input: StartMini): Promise<{ id: string }> {
     const ids = new Set(input.players.map((p) => p.telegramId));
     if (ids.size !== input.players.length) throw new AppError('VALIDATION_FAILED');
-    const busy = await this.db.miniTournament.count({ where: { chatId: input.chatId, status: 'RUNNING', parentId: null } });
-    // В группе уже идёт мини-турнир: второй не начинаем.
+    const chats = input.groups ? input.groups.map((g) => g.chatId) : [input.chatId];
+    // В группе (любой из двух) уже идёт мини-турнир — или её стол в турнире групп: второй не начинаем.
+    const busy = await this.db.miniTournament.count({ where: { chatId: { in: chats }, status: 'RUNNING' } });
     if (busy) throw new AppError('DUPLICATE_REQUEST');
 
     const users: string[] = [];
@@ -152,14 +184,22 @@ export class MiniTournamentService {
       return { id: mini.id };
     }
     // Два стола: 1-й, 3-й, 5-й… записавшийся — за стол А, 2-й, 4-й, 6-й… — за стол Б.
+    // Турнир групп: каждая группа — за свой стол, и стол назван группой.
+    const groups = input.groups;
+    const labels = groups ? groupLabels(groups.map((g) => g.name)) : LABELS;
     const tables: string[] = [];
     for (let t = 0; t < input.tables; t++) {
       const table = await this.db.miniTournament.create({
         data: {
           ...base,
+          chatId: groups ? groups[t]!.chatId : input.chatId,
           parentId: mini.id,
-          label: LABELS[t]!,
-          players: { create: input.players.map(seat).filter((p) => p.seat % input.tables === t) },
+          label: labels[t]!,
+          players: {
+            create: input.players
+              .map(seat)
+              .filter((p) => (groups ? input.players[p.seat]!.table === t : p.seat % input.tables === t)),
+          },
         },
       });
       tables.push(table.id);
@@ -181,7 +221,7 @@ export class MiniTournamentService {
   /** Админ группы отменил турнир, пока он идёт. */
   async cancel(chatId: bigint): Promise<boolean> {
     return this.queue.run(async () => {
-      const mini = await this.db.miniTournament.findFirst({ where: { chatId, status: 'RUNNING', parentId: null } });
+      const mini = await this.runningIn(chatId);
       if (!mini) return false;
       await this.db.miniTournament.update({ where: { id: mini.id }, data: { status: 'CANCELLED', finishedAt: new Date() } });
       await this.closeRoom(mini.roomId);
@@ -195,8 +235,17 @@ export class MiniTournamentService {
     });
   }
 
+  /** Идущий турнир, в котором играет группа: свой или турнир групп, где её стол. */
+  private async runningIn(chatId: bigint): Promise<MiniTournament | null> {
+    const row = await this.db.miniTournament.findFirst({ where: { chatId, status: 'RUNNING' }, orderBy: { createdAt: 'asc' } });
+    if (!row?.parentId) return row;
+    const top = await this.db.miniTournament.findUnique({ where: { id: row.parentId } });
+    return top?.status === 'RUNNING' ? top : null;
+  }
+
   async active(chatId: bigint): Promise<{ id: string; round: number; players: { name: string; out: boolean }[] } | null> {
-    const mini = await this.db.miniTournament.findFirst({ where: { chatId, status: 'RUNNING', parentId: null }, include: { players: { orderBy: { seat: 'asc' } } } });
+    const top = await this.runningIn(chatId);
+    const mini = top && (await this.db.miniTournament.findUnique({ where: { id: top.id }, include: { players: { orderBy: { seat: 'asc' } } } }));
     if (!mini) return null;
     return { id: mini.id, round: mini.round, players: mini.players.map((p) => ({ name: p.name, out: p.outRound !== null || p.place !== null })) };
   }
@@ -496,7 +545,11 @@ export class MiniTournamentService {
     });
     if (!claimed.count) return;
     await this.db.miniTournamentPlayer.update({ where: { miniId_userId: { miniId: table.id, userId: winner.userId } }, data: { place: 1 } });
-    if (table.label !== FINAL) await this.say(table, `🏅 Стол ${table.label} окончен: побеждает ${mention(winner)} и выходит в финал!`);
+    if (table.label !== FINAL) {
+      // Новость всего турнира: в турнире групп её видят обе группы.
+      const parent = await this.db.miniTournament.findUnique({ where: { id: table.parentId! } });
+      if (parent) await this.say(parent, `🏅 Стол ${table.label} окончен: побеждает ${mention(winner)} и выходит в финал!`);
+    }
     await this.stageDone(table.parentId!);
   }
 
@@ -566,14 +619,27 @@ export class MiniTournamentService {
     await this.say(parent, `🛑 <b>${escapeHtml(parent.title)}</b>: ${why} — турнир закрыт без победителя.`);
   }
 
-  private async say(mini: Pick<MiniTournament, 'chatId'> & { id?: string }, text: string, button?: { text: string; url: string }): Promise<void> {
-    const outcome = await this.deps.bot.send(mini.chatId, button ? { text, button } : { text });
-    if (outcome !== 'ok') {
-      this.deps.log.warn({ chatId: mini.chatId.toString(), outcome }, 'mini-tournament message not delivered');
-      journal.record({
-        kind: 'message_lost', miniId: mini.id ?? null,
-        details: { chatId: mini.chatId.toString(), outcome, text: text.replace(/<[^>]+>/g, '').slice(0, 200) },
-      });
+  /**
+   * Куда писать: стол — в свою группу; сам турнир на два стола и его финал — во все группы его
+   * столов (в турнире групп это обе группы, в обычном — одна).
+   */
+  private async chatsOf(mini: Pick<MiniTournament, 'id' | 'chatId' | 'parentId' | 'label' | 'tables'>): Promise<bigint[]> {
+    const top = mini.parentId && mini.label === FINAL ? mini.parentId : this.isParent(mini) ? mini.id : null;
+    if (!top) return [mini.chatId];
+    const rows = await this.db.miniTournament.findMany({ where: { OR: [{ id: top }, { parentId: top }] }, select: { chatId: true } });
+    return [...new Map(rows.map((r) => [r.chatId.toString(), r.chatId])).values()];
+  }
+
+  private async say(mini: Pick<MiniTournament, 'id' | 'chatId' | 'parentId' | 'label' | 'tables'>, text: string, button?: { text: string; url: string }): Promise<void> {
+    for (const chatId of await this.chatsOf(mini)) {
+      const outcome = await this.deps.bot.send(chatId, button ? { text, button } : { text });
+      if (outcome !== 'ok') {
+        this.deps.log.warn({ chatId: chatId.toString(), outcome }, 'mini-tournament message not delivered');
+        journal.record({
+          kind: 'message_lost', miniId: mini.id,
+          details: { chatId: chatId.toString(), outcome, text: text.replace(/<[^>]+>/g, '').slice(0, 200) },
+        });
+      }
     }
   }
 }

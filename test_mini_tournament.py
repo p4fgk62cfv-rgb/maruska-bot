@@ -26,11 +26,13 @@ def check(ok, what):
         errors.append(what)
 
 
-check(mt.parse_start("турнир 5000") == ("start", 5000, 1), "сумма")
-check(mt.parse_start("Турнир 5 000") == ("start", 5000, 1), "сумма с пробелом")
-check(mt.parse_start("турнир") == ("start", None, 1), "без суммы")
-check(mt.parse_start("турнир2 5000") == ("start", 5000, 2), "два стола")
-check(mt.parse_start("Турнир2") == ("start", None, 2), "два стола без суммы")
+check(mt.parse_start("турнир 5000") == ("start", 5000, 1, False), "сумма")
+check(mt.parse_start("Турнир 5 000") == ("start", 5000, 1, False), "сумма с пробелом")
+check(mt.parse_start("турнир") == ("start", None, 1, False), "без суммы")
+check(mt.parse_start("турнир2 5000") == ("start", 5000, 2, False), "два стола")
+check(mt.parse_start("Турнир2") == ("start", None, 2, False), "два стола без суммы")
+check(mt.parse_start("турнир групп 5000") == ("start", 5000, 2, True), "турнир групп")
+check(mt.parse_start("Турнир группы 5 000") == ("start", 5000, 2, True), "турнир группы")
 check(mt.parse_start("турнир3 5000") is None, "трёх столов нет")
 check(mt.parse_start("игра 5000") is None, "не турнир")
 check(mt.parse_start(None) is None, "пусто")
@@ -67,14 +69,29 @@ check("один стол" in mt.render_intro(mt.clean_settings({"text": mt.OLD_D
 
 
 class FakeBot:
+    """Сообщения записи Мара правит через бота: edits — (текст, клавиатура), captions — то же для картинки."""
+
     def __init__(self):
         self.edits = []
+        self.captions = []
+        self.sent = []
+        self.admins = {}
 
-    async def edit_message_text(self, text, chat_id, message_id):
-        self.edits.append(text)
+    async def edit_message_text(self, text, chat_id, message_id, reply_markup=None):
+        self.edits.append((text, reply_markup))
+
+    async def edit_message_caption(self, caption, chat_id, message_id, reply_markup=None):
+        self.captions.append((caption, reply_markup))
+
+    async def send_message(self, chat_id, text, reply_markup=None):
+        self.sent.append((chat_id, text))
+        return types.SimpleNamespace(message_id=700 + len(self.sent))
 
     async def get_chat(self, chat_id):
         return types.SimpleNamespace(title=f"Группа {chat_id}")
+
+    async def get_chat_member(self, chat_id, user_id):
+        return types.SimpleNamespace(status="administrator" if user_id in self.admins.get(chat_id, ()) else "member")
 
 
 def message(chat_id, uid, said, bot, admin=True):
@@ -110,6 +127,9 @@ async def scenario():
     from database.repository import get_mini_signup
 
     await init_db()
+    # Настройки общие для всех групп: прошлый упавший прогон мог их оставить своими
+    await mt.save_settings({"seats": 6, "variant": "perevodnoy", "throw_in": "all", "speed": "fast",
+                            "ready_seconds": 60, "photo": None, "text": mt.DEFAULT_TEXT})
     chat = -100880000000 - random.randint(0, 10**6)
     calls = []
     playing_now = {}
@@ -151,7 +171,7 @@ async def scenario():
     await mt.open_signup(message(chat, 1, said2, bot), 100)
     check(said2 and "уже идёт" in said2[0], "вторая запись не открывается")
 
-    edits, alerts = [], []
+    edits, alerts = bot.edits, []
     mid = signup.message_id
 
     async def press(data, uid, name):
@@ -187,7 +207,7 @@ async def scenario():
 
     # Настройки из админки: 3 места, подкидной, 2 минуты, своя картинка
     await mt.save_settings({"seats": 3, "variant": "podkidnoy", "ready_seconds": 120, "photo": {"file_id": "PHOTO1", "name": "кубок"}})
-    photos, captions = [], []
+    photos, captions = [], bot.captions
     m = message(chat, 1, [], bot)
 
     async def answer_photo(file_id, caption=None, reply_markup=None):
@@ -238,7 +258,7 @@ async def scenario():
     await mt.open_signup(message(chat, 1, said, bot), 300)
     said = []
     await mt.stop_tournament(message(chat, 1, said, bot))
-    check(said and "отменена" in said[-1] and bot.edits and "отменён" in bot.edits[-1], f"отмена записи: {said}")
+    check(said and "отменена" in said[-1] and bot.edits and "отменён" in bot.edits[-1][0], f"отмена записи: {said}")
     check(await get_mini_signup(chat) is None, "запись удалена")
     said = []
     await mt.stop_tournament(message(chat, 1, said, bot))
@@ -272,6 +292,79 @@ async def scenario():
     check(alerts[-1].startswith("Ты в турнире"), f"выбыл там — записался: {alerts[-1]}")
     for c in (chat_a, chat_b):
         await delete_mini_signup(c)
+
+    # Турнир групп: «/старт турнир групп» — кнопки с группами, где запускающий тоже админ
+    import database.repository as repo
+
+    g1, g2, g3 = chat - 11, chat - 12, chat - 13
+    bot.admins = {g1: {1}, g2: {1}, g3: {99}}
+    known = repo.list_known_chats
+
+    async def fake_known():
+        return [{"chat_id": c} for c in (g3, g2, g1)]
+
+    repo.list_known_chats = fake_known
+    await mt.save_settings({"seats": 2})
+    replies = []
+
+    async def reply_kb(t, reply_markup=None, **_):
+        replies.append((t, reply_markup))
+
+    m = message(g1, 1, [], bot)
+    m.reply = reply_kb
+    await mt.choose_partner(m, 4000)
+    kb = replies[-1][1]
+    choices = [b.callback_data for row in kb.inline_keyboard for b in row] if kb else []
+    check(choices == [f"mtg:1:{g2}:4000"], f"турнир групп: на выбор только группа, где он админ: {choices}")
+
+    def pick(uid):
+        async def edit_text(t, reply_markup=None):
+            replies.append((t, reply_markup))
+
+        async def ans(t="", show_alert=False):
+            alerts.append(t)
+
+        msg = types.SimpleNamespace(chat=types.SimpleNamespace(id=g1, title="Вегас"), message_id=1, bot=bot, edit_text=edit_text)
+        return types.SimpleNamespace(message=msg, data=f"mtg:1:{g2}:4000", answer=ans,
+                                     from_user=types.SimpleNamespace(id=uid, first_name="Админ", username=None, is_bot=False))
+
+    await mt.partner_button(pick(5))
+    check("тот, кто запускал" in alerts[-1], "группу выбирает только запускающий")
+    bot.sent.clear()
+    await mt.partner_button(pick(1))
+    s1, s2 = await get_mini_signup(g1), await get_mini_signup(g2)
+    check(s1 is not None and s2 is not None and [c for c, _ in bot.sent] == [g1, g2], f"запись открыта в обеих группах: {bot.sent}")
+    check("турнир групп «Вегас» × «Группа " + str(g2) + "»" in bot.sent[0][1] and "(0/2)" in bot.sent[0][1],
+          f"текст записи турнира групп: {bot.sent[0][1]}")
+    mids = {g1: s1.message_id, g2: s2.message_id}
+    calls.clear()
+    for uid, name in [(81, "В1"), (82, "В2")]:
+        await press_in(g1, "mt:join", uid, name)
+    check("Ждём, пока наберётся стол" in edits[-1][0] and edits[-1][1] is not None, f"свой стол набран — ждём второй: {edits[-1][0][-120:]}")
+    check(not any(c[1] == "mini-tournaments" for c in calls), "пока второй стол не набран — Арену не зовём")
+    await press_in(g2, "mt:join", 81, "В1")
+    check("уже записан на турнир" in alerts[-1], "записанный в одной группе — не во второй")
+    for uid, name in [(91, "Д1"), (92, "Д2")]:
+        await press_in(g2, "mt:join", uid, name)
+    started = [c for c in calls if c[1] == "mini-tournaments"]
+    check(len(started) == 1, f"оба стола набраны — Арене один раз: {started}")
+    if started:
+        body = started[0][2]
+        check(body["chatId"] == str(g1) and body["tables"] == 2 and body["prize"] == 4000
+              and body["groups"] == [{"chatId": str(g1), "name": "Вегас"}, {"chatId": str(g2), "name": f"Группа {g2}"}]
+              and [(p["name"], p["table"]) for p in body["players"]] == [("В1", 0), ("В2", 0), ("Д1", 1), ("Д2", 1)],
+              f"тело турнира групп: {body}")
+    check(await get_mini_signup(g1) is None and await get_mini_signup(g2) is None, "обе записи закрыты")
+    check(sum("Оба стола набраны" in t for t, _ in edits[-2:]) == 2, "в обеих группах — «оба стола набраны»")
+
+    # Отмена во второй группе отменяет обе записи
+    await mt.partner_button(pick(1))
+    said = []
+    await mt.stop_tournament(message(g2, 1, said, bot))
+    check(await get_mini_signup(g1) is None and await get_mini_signup(g2) is None and "тоже" in said[-1],
+          f"отмена турнира групп: {said}")
+    repo.list_known_chats = known
+    await mt.save_settings({"seats": 6})
 
     # Арена не ответила — честно говорим и предлагаем запустить снова
     async def broken(method, path, body=None, query=None):

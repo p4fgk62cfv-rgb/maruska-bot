@@ -1,4 +1,4 @@
-import { beats, rankOf, type CardId } from '@arena/game-engine';
+import { beats, rankOf, type CardId, type GameEvent, type PlayerView } from '@arena/game-engine';
 import { FEATURE_PRICES, type RoomDto } from '@arena/shared';
 import { Balance, BottomSheet, Button, PlayingCard } from '@arena/ui';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -23,6 +23,8 @@ import { EmojiSheet, useSeatEmojis } from './emoji.js';
 import { ConfirmAlert, FlagIcon } from './ConfirmAlert.js';
 import { Table, type PendingMove } from './Table.js';
 
+/** How long the last beaten bout stays on the felt before it goes to the discard. */
+const HOLD_BEATEN_MS = 1500;
 /** Card moves: their refusals are shown above the hand. */
 const CARD_MOVES = new Set(['PLAY_CARD', 'PLAY_CARDS', 'TRANSFER', 'PASS', 'TAKE_CARDS']);
 /** Refusals that only mean «the table changed a moment ago». */
@@ -89,12 +91,54 @@ export function GameScreen({ game }: { game: LiveGame }) {
     setSelected((s) => s.filter((c) => view.you?.hand.includes(c)));
   }, [view.version, view.you?.hand]);
 
+  /**
+   * A bout beaten with the very last card: the server clears the table in the same step, so
+   * nobody saw what beat what — and players who count cards need it. The final table stays on
+   * the felt for a moment, then the cards go to the discard. Any next move ends the pause.
+   */
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const [held, setHeld] = useState<{ table: PlayerView['table']; discardCount: number; bout: number } | null>(null);
+  const heldRef = useRef(held);
+  heldRef.current = held;
+  // The cards fly to the discard when the pause ends (events and state come as two messages,
+  // so the motion of the beating card itself still plays when the new state arrives).
+  const [discarded, setDiscarded] = useState(0);
+  const endHold = useCallback(() => {
+    const h = heldRef.current;
+    if (!h) return;
+    director.prepare([{ type: 'ROUND_FINISHED', outcome: 'beaten', boutNumber: h.bout }], me.id);
+    heldRef.current = null;
+    setHeld(null);
+    setDiscarded((n) => n + 1);
+  }, [director, me.id]);
+  useEffect(() => {
+    if (!held) return;
+    const id = window.setTimeout(endHold, HOLD_BEATEN_MS);
+    return () => window.clearTimeout(id);
+  }, [held, endHold]);
+
   // Motion + sound: snapshot the table when events arrive, animate after the new state renders.
   useLayoutEffect(() => director.attach(rootRef.current, layerRef.current), [director]);
   useEffect(
     () =>
       onEvents((events) => {
-        director.prepare(events, me.id);
+        if (heldRef.current) {
+          heldRef.current = null;
+          setHeld(null);
+        }
+        const beaten = events.find((e): e is Extract<GameEvent, { type: 'ROUND_FINISHED' }> => e.type === 'ROUND_FINISHED' && e.outcome === 'beaten');
+        const last = [...events].reverse().find((e): e is Extract<GameEvent, { type: 'CARD_PLAYED' }> => e.type === 'CARD_PLAYED' && e.role === 'defense');
+        const before = viewRef.current;
+        if (beaten && last && before.table[last.target] && !before.table[last.target]!.defense) {
+          const table = before.table.map((p, i) => (i === last.target ? { ...p, defense: last.card, defenseBy: last.playerId } : p));
+          director.prepare(events.filter((e) => e !== beaten), me.id);
+          const hold = { table, discardCount: before.discardCount, bout: beaten.boutNumber };
+          heldRef.current = hold;
+          setHeld(hold);
+        } else {
+          director.prepare(events, me.id);
+        }
         let sfx: Parameters<typeof play>[0] | null = null;
         for (const e of events) {
           // Mine already clicked when it was dropped (optimistic move).
@@ -110,7 +154,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
       }),
     [onEvents, director, me.id],
   );
-  useLayoutEffect(() => director.play(), [view.version, director]);
+  useLayoutEffect(() => director.play(), [view.version, discarded, director]);
   // Opening deal, once, when the table is fresh.
   useLayoutEffect(() => {
     if (view.version <= 1 && view.table.length === 0 && view.discardCount === 0) {
@@ -465,7 +509,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
       </div>
 
       <Table
-        view={view}
+        view={held ? { ...view, table: held.table, discardCount: held.discardCount } : view}
         cardWidth={Math.min(74, (Math.min(window.innerWidth, 560) - 70) / 3.7)}
         targets={targets}
         onPair={tapPair}
@@ -545,18 +589,20 @@ export function GameScreen({ game }: { game: LiveGame }) {
           <>
             <span className="dock-extras">
             <DockExtra icon="undo" label="Вернуть карту" price={FEATURE_PRICES.undo} disabled={!game.features.canUndo || busy} onClick={() => void send({ type: 'UNDO_MOVE', gameId })} />
-            {/* Tournament tables: no hints for anyone — a fair game. */}
+            {/* Tournament tables: no hints and no discard for anyone — a fair game; only «вернуть карту». */}
             {game.features.hintsAllowed !== false && (
-              <DockExtra icon="eye" label="Подсветка карт" price={game.features.hints ? null : FEATURE_PRICES.hints} on={game.features.hints} disabled={game.features.hints || busy} onClick={() => void buy('hints')} />
+              <>
+                <DockExtra icon="eye" label="Подсветка карт" price={game.features.hints ? null : FEATURE_PRICES.hints} on={game.features.hints} disabled={game.features.hints || busy} onClick={() => void buy('hints')} />
+                <DockExtra
+                  icon="cards"
+                  label={game.features.discardReminder ? 'Показать отбой' : 'Напомнить отбой'}
+                  price={game.features.discardReminder ? null : FEATURE_PRICES.discardReminder}
+                  on={game.features.discardReminder}
+                  disabled={busy}
+                  onClick={() => (game.features.discardReminder ? setSheet('discard') : void buy('discardReminder'))}
+                />
+              </>
             )}
-            <DockExtra
-              icon="cards"
-              label={game.features.discardReminder ? 'Показать отбой' : 'Напомнить отбой'}
-              price={game.features.discardReminder ? null : FEATURE_PRICES.discardReminder}
-              on={game.features.discardReminder}
-              disabled={busy}
-              onClick={() => (game.features.discardReminder ? setSheet('discard') : void buy('discardReminder'))}
-            />
             </span>
             <span className={`dock-balance${paid === gameId ? ' dock-balance--bump' : ''}`} data-balance key={paid === gameId ? 'after' : 'before'}>
               <Balance kind="credits" value={me.wallet.credits} compact />

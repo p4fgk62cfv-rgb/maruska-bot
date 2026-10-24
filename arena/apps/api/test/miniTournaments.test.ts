@@ -207,7 +207,9 @@ describe.skipIf(!url)('mini-tournaments (one knockout table)', () => {
     // Турнир — честная игра: подсветку карт не купить, и в состоянии её нет
     expect(await zhora.ws.send({ type: 'USE_FEATURE', gameId: started.gameId, feature: 'hints' })).toMatchObject({ type: 'ERROR', code: 'FORBIDDEN' });
     await zhora.ws.waitFor((m) => m.type === 'GAME_STATE');
-    expect(zhora.ws.latest('GAME_STATE')!.features).toMatchObject({ hints: false, hintsAllowed: false });
+    expect(zhora.ws.latest('GAME_STATE')!.features).toMatchObject({ hints: false, hintsAllowed: false, discardReminder: false });
+    // …и отбой за монеты тоже нельзя
+    expect(await zhora.ws.send({ type: 'USE_FEATURE', gameId: started.gameId, feature: 'discardReminder' })).toMatchObject({ type: 'ERROR', code: 'FORBIDDEN' });
     await igor.ws.send({ type: 'LEAVE_GAME', gameId: started.gameId });
     await until(() => said(chatId).at(-1)!.includes('стол 2 на 2'));
 
@@ -343,6 +345,79 @@ describe.skipIf(!url)('mini-tournaments (one knockout table)', () => {
     expect(listed).toHaveLength(1);
     expect(listed[0]).toMatchObject({ tables: 2, status: 'FINISHED' });
   }, 90_000);
+
+  it('two groups: each group plays its own table, the final and the result go to both groups', async () => {
+    const people = await Promise.all(['Вега1', 'Вега2', 'Диа1', 'Диа2'].map(player));
+    const [v1, v2, d1, d2] = people as [Player, Player, Player, Player];
+    const vegas = BigInt(chatBase - chatSeq++);
+    const diamant = BigInt(chatBase - chatSeq++);
+    const organizer = nextTg++;
+    const res = await internal('POST', '/internal/mini-tournaments', {
+      chatId: vegas.toString(), prize: 3000, tables: 2, organizer: { telegramId: organizer, name: 'Админ' },
+      groups: [{ chatId: vegas.toString(), name: 'Вегас' }, { chatId: diamant.toString(), name: 'Диамант' }],
+      players: [...[v1, v2].map((p) => ({ telegramId: p.tg, name: p.name, table: 0 })), ...[d1, d2].map((p) => ({ telegramId: p.tg, name: p.name, table: 1 }))],
+    });
+    expect(res.statusCode).toBe(200);
+    // Ни в одной из двух групп второй турнир не начать
+    expect((await internal('GET', `/internal/mini-tournaments/active?chatId=${diamant}`)).json().tournament.players).toHaveLength(4);
+    expect((await internal('POST', '/internal/mini-tournaments', {
+      chatId: diamant.toString(), prize: 1, organizer: { telegramId: organizer, name: 'Админ' },
+      players: [d1, d2].map((p) => ({ telegramId: nextTg++, name: p.name })),
+    })).statusCode).toBe(409);
+
+    /** Ссылка последнего стола в группе `chat`, в сообщении о котором есть `marker`. */
+    const table = (chat: bigint, marker: string) => {
+      const msg = [...sent].reverse().find((m) => m.chatId === chat && m.message.button && m.message.text.includes(marker));
+      const link = msg && 'url' in msg.message.button! ? msg.message.button.url : '';
+      return /game_([A-Z0-9]{8})/.exec(link)?.[1] ?? '';
+    };
+    const lose = async (chat: bigint, marker: string, loser: Player) => {
+      await until(() => table(chat, marker) !== '');
+      const roomId = table(chat, marker);
+      const started = await loser.ws.waitFor((m) => m.type === 'GAME_STARTED' && m.roomId === roomId, 10_000);
+      if (started.type !== 'GAME_STARTED') throw new Error('unreachable');
+      expect((await loser.ws.send({ type: 'LEAVE_GAME', gameId: started.gameId })).type).toBe('ACK');
+      await until(() => said(chat).some((t) => t.includes(`Дураком остался <a href="tg://user?id=${loser.tg}"`)));
+    };
+
+    // Стол «Вегаса» — только в «Вегасе», стол «Диаманта» — только в «Диаманте»
+    await until(() => table(vegas, 'стол «Вегас», партия 1') !== '' && table(diamant, 'стол «Диамант», партия 1') !== '');
+    expect(said(vegas).some((t) => t.includes('«Диамант»'))).toBe(false);
+    expect(said(diamant).find((t) => t.includes('партия 1'))).toContain(`id=${d1.tg}`);
+    expect(handle.ctx.realtime.rooms.get(table(vegas, 'стол «Вегас»'))!.tournament?.title).toBe('Мини-турнир · стол «Вегас»');
+
+    await lose(vegas, 'стол «Вегас», партия 1', v2);
+    // Победа стола — новость для обеих групп
+    for (const chat of [vegas, diamant]) await until(() => said(chat).some((t) => t.includes('Стол «Вегас» окончен') && t.includes(`id=${v1.tg}`)));
+    await lose(diamant, 'стол «Диамант», партия 1', d2);
+
+    // Финал — ссылка в обе группы
+    for (const chat of [vegas, diamant]) await until(() => table(chat, 'финал 1 на 1') !== '');
+    expect(table(vegas, 'финал 1 на 1')).toBe(table(diamant, 'финал 1 на 1'));
+    await lose(vegas, 'финал 1 на 1', d1);
+    for (const chat of [vegas, diamant]) {
+      await until(() => said(chat).some((t) => t.includes('окончен!')));
+      expect(said(chat).find((t) => t.includes('окончен!'))).toContain(`Победитель — <a href="tg://user?id=${v1.tg}">`);
+    }
+    const mini = await db.miniTournament.findFirstOrThrow({ where: { chatId: vegas, parentId: null }, include: { players: true } });
+    expect(Object.fromEntries(mini.players.map((p) => [p.name, p.place]))).toEqual({ Вега1: 1, Диа1: 2, Вега2: 3, Диа2: 3 });
+    expect((await internal('GET', `/internal/mini-tournaments/active?chatId=${diamant}`)).json().tournament).toBeNull();
+  }, 90_000);
+
+  it('two groups: either group can call it off', async () => {
+    const people = await Promise.all(['Ки1', 'Ки2', 'Ло1', 'Ло2'].map(player));
+    for (const p of people) await offline(p);
+    const a = BigInt(chatBase - chatSeq++);
+    const b = BigInt(chatBase - chatSeq++);
+    expect((await internal('POST', '/internal/mini-tournaments', {
+      chatId: a.toString(), prize: 0, tables: 2, organizer: { telegramId: nextTg++, name: 'Админ' },
+      groups: [{ chatId: a.toString(), name: 'А-группа' }, { chatId: b.toString(), name: 'Б-группа' }],
+      players: people.map((p, i) => ({ telegramId: p.tg, name: p.name, table: i < 2 ? 0 : 1 })),
+    })).statusCode).toBe(200);
+    expect((await internal('POST', '/internal/mini-tournaments/cancel', { chatId: b.toString() })).json()).toEqual({ cancelled: true });
+    for (const chat of [a, b]) expect(said(chat).at(-1)).toContain('отменён организатором');
+    expect((await db.miniTournament.findMany({ where: { chatId: { in: [a, b] } } })).every((r) => r.status === 'CANCELLED')).toBe(true);
+  }, 30_000);
 
   it('two tables: the organizer calls it off — both tables close', async () => {
     const people = await Promise.all(['Ия', 'Ян', 'Юля', 'Эд'].map(player));
