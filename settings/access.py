@@ -22,6 +22,8 @@ import logging
 logger = logging.getLogger("maruska.access")
 
 KEY = "owner_access"
+# Кому писать, чтобы группе открыли функции: Мара отвечает так в закрытой группе
+CONTACT = "@uastas"
 FLAG = "access_initialized"
 
 # Модуль → (название, что в него входит). Порядок — как в панели.

@@ -2,9 +2,10 @@
 Группа без доступа к функции: Мара не молчит, а один раз объясняет.
 
 Стоит последним: сюда доходит только то, что никто не обработал. Если в группе
-открыто не всё (доступ решает владелец — settings/access.py), то на команду или
-обращение к Маре («Мара, …») она отвечает, что эту функцию здесь включает её
-владелец. Не чаще раза в 10 минут на группу — чтобы не засорять чат.
+открыто не всё (доступ решает владелец — settings/access.py), то на команду,
+обращение к Маре («Мара, покажи меня»), слово действия («чай», «кофе») или
+«/старт турнир» она отвечает, к кому написать за полным набором функций.
+Не чаще раза в 10 минут на группу — чтобы не засорять чат.
 """
 
 import time
@@ -12,19 +13,23 @@ import time
 from aiogram import F, Router
 from aiogram.types import Message
 
+from actions.catalog import find_action
 from botcontext import TRIGGER_RE
 from settings import access
 
 router = Router(name="locked")
 
-NOTICE = "🔒 В этой группе это пока недоступно. Функции Марушки здесь включает её владелец."
+NOTICE = f"🔒 Чтобы пользоваться всеми возможностями Марушки в этой группе, напишите в Telegram {access.CONTACT}"
 COOLDOWN = 600
 _said: dict[int, float] = {}
 
 
 def _ours(message: Message) -> bool:
-    """Команда без @ или с @ этого бота; «Мара, …» в начале сообщения."""
+    """Команда без @ или с @ этого бота; «Мара, …» в начале сообщения; слово действия; «покажи меня»."""
     text = (message.text or "").strip()
+    lowered = text.lower()
+    if find_action(text) is not None or lowered.startswith("покажи ") or lowered.startswith("мяу"):
+        return True
     if text.startswith("/"):
         command = text.split()[0]
         if "@" not in command:

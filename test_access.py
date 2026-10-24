@@ -32,13 +32,15 @@ def msg(chat_id, text=""):
 # Без загрузки (ошибка базы при старте) ничего не запирается
 check(access.allowed(-100500, "arena"), "до загрузки — всё можно")
 
-# «Заглушка» отвечает только на команды этого бота и обращения к Маре
+# «Заглушка» отвечает только на команды этого бота, обращения к Маре и слова действий
 import botcontext  # noqa: E402
 from features import locked  # noqa: E402
 
 botcontext.BOT_USERNAME = "BotMaruska_bot"
+check("@uastas" in locked.NOTICE and "всеми возможностями" in locked.NOTICE, f"текст заглушки: {locked.NOTICE}")
 for text, want in [("/game", True), ("/game@BotMaruska_bot", True), ("/game@other_bot", False),
-                   ("Мара, привет", True), ("привет, Мара", False), ("просто текст", False)]:
+                   ("Мара, привет", True), ("Мара, покажи меня", True), ("кофе", True), ("чай", True),
+                   ("/старт турнир 5000", True), ("привет, Мара", False), ("просто текст", False)]:
     check(locked._ours(msg(-1, text)) is want, f"заглушка: «{text}» → ждали {want}")
 
 
