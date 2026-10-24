@@ -291,12 +291,30 @@ def glued(text: str) -> list[str]:
     дают «мат» на стыке («тип изделия» → «…пизд…», «суп издалека»). И склеивается только обрывок,
     с которого начинается матный корень (_GLUE_STARTS): обычное короткое слово — «при себе», «обе
     бабы», «в зал упал» — не склеивается вовсе; мат после предлога («под хуем») и так ловится во
-    втором слове."""
-    plain = [normalize(word) if re.fullmatch(r"[а-яё]+", word, re.IGNORECASE) else ""
-             for word in _WORD.findall(clean_text(text))]
-    return [first + second for first, second in zip(plain, plain[1:])
-            if first and second and 2 <= len(first) <= 3 and first not in _STANDALONE
-            and first in _GLUE_STARTS]
+    втором слове.
+
+    Если между частями только пробел, ловятся ещё две уловки — но лишь когда склейка начинается
+    с самого матного корня: одна буква, отбитая от слова («п издить», «х уйня»), и пробел вместо
+    буквы корня после обрывка из 2–3 букв («пи аров» → «пидаров», «бл ть» → «блять»).
+    Через точку или дефис не склеивается: «п. издательство», «пи-ар»."""
+    words = [(match, normalize(match.group(0)) if re.fullmatch(r"[а-яё]+", match.group(0), re.IGNORECASE) else "")
+             for match in _WORD.finditer(clean_text(text))]
+    found = []
+    for (left, first), (right, second) in zip(words, words[1:]):
+        if not first or not second or first in _STANDALONE:
+            continue
+        if 2 <= len(first) <= 3 and first in _GLUE_STARTS:
+            found.append(first + second)
+        if not left.string[left.end():right.start()].isspace() or len(first) > 3:
+            continue
+        for root in _GLUE_ROOTS:
+            if not root.startswith(first):
+                continue
+            if len(first) == 1 and (first + second).startswith(root):
+                found.append(first + second)
+            if len(first) >= 2 and len(root) > len(first) + 1 and (first + root[len(first)] + second).startswith(root):
+                found.append(first + root[len(first)] + second)
+    return list(dict.fromkeys(found))
 
 
 def _masked(text: str) -> list[list[str]]:
