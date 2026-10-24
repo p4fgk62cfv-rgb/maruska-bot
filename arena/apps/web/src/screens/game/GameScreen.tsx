@@ -221,8 +221,19 @@ export function GameScreen({ game }: { game: LiveGame }) {
       if (msg.type !== 'SEND_EMOJI') inFlight.current = false;
       setBusy(false);
       if (!reply.ok) {
-        // «Бито» pressed at the very moment someone threw a card in: the table already moved on.
-        if (RACE_CODES.has(reply.code) && versionRef.current !== sentAt) return false;
+        if (RACE_CODES.has(reply.code) && versionRef.current !== sentAt) {
+          // «Бито» pressed at the very moment someone threw a card in: the table already moved on.
+          if (msg.type !== 'PLAY_CARD' && msg.type !== 'PLAY_CARDS' && msg.type !== 'TRANSFER') return false;
+          // A card that flies back must say why: with a slow network the throw-in reached the server
+          // after another player's move — most often a transfer, and now this player defends.
+          const now = viewRef.current;
+          refuse(
+            now.defender === me.id && now.phase === 'defense'
+              ? 'Не успели: ход перевели на вас раньше — теперь отбиваетесь вы'
+              : 'Не успели: на столе уже другой ход',
+          );
+          return false;
+        }
         if (CARD_MOVES.has(msg.type)) refuse(reply.message);
         else {
           play('error');
@@ -235,7 +246,7 @@ export function GameScreen({ game }: { game: LiveGame }) {
       }
       return reply.ok;
     },
-    [socket, toast, refuse],
+    [socket, toast, refuse, me.id],
   );
 
   // A pending move only counts until the server's next state arrives.
