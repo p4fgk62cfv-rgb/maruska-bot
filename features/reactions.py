@@ -196,6 +196,13 @@ async def _react(message: Message, emoji: str) -> None:
         logger.info("REACTION %s: %s", emoji, error)
 
 
+def _chat_allowed(chat_id: int) -> bool:
+    """Реакции — часть модуля «Разговор с Марой» (доступ решает владелец)."""
+    from settings import access
+
+    return access.allowed(chat_id, "chat")
+
+
 class ReactionsMiddleware(BaseMiddleware):
     async def __call__(
         self,
@@ -212,6 +219,7 @@ class ReactionsMiddleware(BaseMiddleware):
                 and event.from_user is not None
                 and not event.from_user.is_bot
                 and is_enabled(event.chat.id, "reactions")
+                and _chat_allowed(event.chat.id)
             ):
                 now = time.monotonic()
                 if _ready(event.chat.id, now):

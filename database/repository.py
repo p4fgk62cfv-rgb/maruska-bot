@@ -1063,6 +1063,15 @@ async def get_group_settings(chat_id: int) -> dict:
         return dict(item.values or {}) if item else {}
 
 
+async def all_group_values() -> dict[int, dict]:
+    """Настройки всех групп (не общие) — для доступа к модулям при старте."""
+    async with session_scope() as session:
+        rows = (await session.execute(
+            select(GroupSettings.chat_id, GroupSettings.values).where(GroupSettings.chat_id < 0)
+        )).all()
+    return {chat_id: dict(values or {}) for chat_id, values in rows}
+
+
 async def set_group_setting(
     chat_id: int,
     key: str,

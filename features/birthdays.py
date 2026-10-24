@@ -240,6 +240,12 @@ async def _maybe_ask(message: Message) -> None:
     )
 
 
+def _access_allowed(chat_id: int, module: str) -> bool:
+    from settings import access
+
+    return access.allowed(chat_id, module)
+
+
 class BirthdayAskMiddleware(BaseMiddleware):
     """После обычной обработки сообщения иногда спрашивает дату рождения."""
 
@@ -259,6 +265,7 @@ class BirthdayAskMiddleware(BaseMiddleware):
             and event.text
             and not event.text.startswith("/")
             and is_enabled(event.chat.id, "birthdays")
+            and _access_allowed(event.chat.id, "social")
         ):
             try:
                 await _maybe_ask(event)
@@ -475,7 +482,11 @@ async def birthday_loop(bot):
     while True:
         try:
             await asyncio.sleep(CHECK_INTERVAL)
+            from settings import access
+
             for chat_id in await get_active_chats(days=60):
+                if not access.allowed(chat_id, "social"):
+                    continue
                 if not is_loaded(chat_id):
                     try:
                         prime(chat_id, await get_group_settings(chat_id))

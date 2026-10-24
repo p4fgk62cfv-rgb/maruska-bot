@@ -170,7 +170,12 @@ async def arena_promo_loop(bot):
     while True:
         try:
             await asyncio.sleep(CHECK_INTERVAL)
+            from settings import access
+
             for chat_id in await get_active_chats(days=30):
+                # Реклама Арены — модуль «Арена»: группе без доступа не шлём
+                if not access.allowed(chat_id, "arena"):
+                    continue
                 if not is_loaded(chat_id):
                     try:
                         prime(chat_id, await get_group_settings(chat_id))

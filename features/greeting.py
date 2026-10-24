@@ -382,6 +382,26 @@ async def bot_added(event: ChatMemberUpdated):
             drop_access_cache(user.id)
     except Exception as error:
         logger.warning("BOT ADDED: %s", error)
+    await _tell_owners_new_group(event)
+
+
+async def _tell_owners_new_group(event: ChatMemberUpdated) -> None:
+    """Новая группа без доступа к функциям — владельцу в личку, где их включить."""
+    from settings import access
+    from settings.handler import OWNER_IDS
+
+    if access.entry(event.chat.id)["all"] or access.entry(event.chat.id)["modules"]:
+        return
+    who = ""
+    if event.from_user and not event.from_user.is_bot:
+        who = f" (пригласивший: {escape(event.from_user.full_name)})"
+    text = (f"🆕 Марушку добавили в группу «{escape(event.chat.title or str(event.chat.id))}»{who}.\n\n"
+            "Её функции там пока выключены. Включить: панель → Управление → «Доступ групп».")
+    for owner in OWNER_IDS:
+        try:
+            await event.bot.send_message(owner, text)
+        except Exception as error:
+            logger.info("NEW GROUP notice to %s: %s", owner, error)
 
 
 @router.message(F.migrate_to_chat_id)
@@ -398,6 +418,9 @@ async def group_upgraded(message: Message):
         await move_chat(old_id, new_id)
         store.forget(old_id)
         store.forget(new_id)
+        from settings import access
+
+        access.move(old_id, new_id)
         logger.info("Группа %s стала супергруппой %s — настройки перенесены", old_id, new_id)
     except Exception as error:
         logger.warning("MIGRATE %s → %s: %s", old_id, new_id, error)
