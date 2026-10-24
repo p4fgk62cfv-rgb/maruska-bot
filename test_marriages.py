@@ -56,8 +56,13 @@ check(mc.date_ru(datetime(2026, 3, 8)) == "8 марта 2026 года", "дат�
 
 # Стилизованные ники Telegram — в обычные буквы, эмодзи прочь
 for raw, want in [("🦋𝐋𝐞𝐬𝐲𝐚🦋", "Lesya"), ("STANISLAV", "Stanislav"), ("Юля 💕", "Юля"),
-                  ("✨✨", "Супруг"), ("Ａｎｎａ", "Anna"), ("Анна-Мария", "Анна-Мария")]:
+                  ("✨✨", "Супруг"), ("Ａｎｎａ", "Anna"), ("Анна-Мария", "Анна-Мария"),
+                  ("ᴍᴀᴋsɪᴍ 👑", "Maksim"), ("Ꭼленка 💕", "Еленка"), ("Ꮇᴀᴋсим", "Максим"), ("Ⓜⓐⓚⓢⓘⓜ", "Maksim")]:
     check(mc.clean_name(raw) == want, f"имя «{raw}» → {mc.clean_name(raw)!r}, ждали {want!r}")
+# Только буквы, которые есть в шрифте: без квадратиков вместо знаков
+for raw, font, want in [("Ѐлена", "MarckScript-Regular.ttf", "Елена"), ("꧁ 𝑫𝑰𝑨𝑴𝑶𝑵𝑫 ꧂", "CormorantGaramond.ttf", "DIAMOND"),
+                        ("Вегас 🎰 ✨", "CormorantGaramond.ttf", "Вегас")]:
+    check(mc.fit_font(raw, font) == want, f"шрифт: «{raw}» → {mc.fit_font(raw, font)!r}, ждали {want!r}")
 
 
 async def scenario():

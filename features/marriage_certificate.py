@@ -31,7 +31,7 @@ VIOLET = (124, 72, 214)
 VIOLET_DIM = (186, 160, 230)
 
 # Меняется при каждой смене оформления: сохранённые в Telegram картинки больше не годятся
-VERSION = 2
+VERSION = 3
 
 MONTHS = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля",
           "августа", "сентября", "октября", "ноября", "декабря")
@@ -64,12 +64,36 @@ def number_text(number: int) -> str:
     return f"№ МР-{number:06d}"
 
 
+# Буквы-«двойники» из ников: малые капители (ᴍᴀᴋsɪᴍ), греческие и чероки — NFKC их не трогает
+_LOOKALIKE = str.maketrans({
+    "ᴀ": "a", "ʙ": "b", "ᴄ": "c", "ᴅ": "d", "ᴇ": "e", "ꜰ": "f", "ɢ": "g", "ʜ": "h", "ɪ": "i", "ᴊ": "j",
+    "ᴋ": "k", "ʟ": "l", "ᴍ": "m", "ɴ": "n", "ᴏ": "o", "ᴘ": "p", "ʀ": "r", "ꜱ": "s", "ᴛ": "t", "ᴜ": "u",
+    "ᴠ": "v", "ᴡ": "w", "ʏ": "y", "ᴢ": "z",
+    "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H", "Ι": "I", "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O",
+    "Ρ": "P", "Τ": "T", "Υ": "Y", "Χ": "X", "α": "a", "ε": "e", "ι": "i", "κ": "k", "ν": "v", "ο": "o",
+    "ρ": "p", "τ": "t", "υ": "u", "χ": "x",
+    "Ꭺ": "A", "Ᏼ": "B", "Ꮯ": "C", "Ꭰ": "D", "Ꭼ": "E", "Ꮐ": "G", "Ꮋ": "H", "Ꭻ": "J", "Ꮶ": "K", "Ꮮ": "L",
+    "Ꮇ": "M", "Ꮲ": "P", "Ꮪ": "S", "Ꭲ": "T", "Ꮩ": "V", "Ꮃ": "W", "Ꮓ": "Z",
+})
+# В русском имени латинские двойники — русские буквы: «Ꭼленка» → «Еленка», а не «Eленка»
+_TO_CYRILLIC = str.maketrans("ABEKMHOPCTXaeopcxyk", "АВЕКМНОРСТХаеорсхук")
+
+
+def _cyrillic_words(text: str) -> str:
+    def word(w: str) -> str:
+        cyr = sum("\u0400" <= ch <= "\u04ff" for ch in w)
+        lat = sum(ch.isascii() and ch.isalpha() for ch in w)
+        return w.translate(_TO_CYRILLIC) if cyr and cyr >= lat else w
+    return " ".join(word(w) for w in text.split(" "))
+
+
 def clean_name(text: str | None, fallback: str = "Супруг") -> str:
     """
-    Имя для шрифта: «жирные» и прочие стилизованные буквы Telegram (𝐋𝐞𝐬𝐲𝐚)
+    Имя для шрифта: «жирные» и прочие стилизованные буквы Telegram (𝐋𝐞𝐬𝐲𝐚, ᴍᴀᴋsɪᴍ, Ꭼленка)
     превращаются в обычные, эмодзи и знаки, которых нет в шрифте, убираются.
     """
-    text = unicodedata.normalize("NFKC", text or "")
+    source = unicodedata.normalize("NFKC", text or "")
+    text = _cyrillic_words(source.translate(_LOOKALIKE))
     kept = []
     for ch in text:
         code = ord(ch)
@@ -78,10 +102,39 @@ def clean_name(text: str | None, fallback: str = "Супруг") -> str:
         elif (ch.isalnum() and (code < 0x0250 or 0x0400 <= code <= 0x04FF)) or ch in "-'.&_":
             kept.append(ch)
     cleaned = " ".join("".join(kept).split()).strip(" -'._")
-    # «STANISLAV» каллиграфией не читается — пишем как обычное имя
-    if len(cleaned) > 3 and cleaned.isupper():
+    # «STANISLAV» каллиграфией не читается — пишем как обычное имя; «ᴍᴀᴋsɪᴍ» (капители) — тоже с большой
+    if len(cleaned) > 3 and cleaned.isupper() or cleaned.islower() and source.translate(_LOOKALIKE) != source:
         cleaned = cleaned.title()
     return cleaned or fallback
+
+
+_NOTDEF = "\U0010fffd"
+
+
+@lru_cache(maxsize=4096)
+def _has_glyph(font_name: str, ch: str) -> bool:
+    """Есть ли буква в шрифте: без неё Pillow рисует квадратик — тот же, что для заведомо пустого знака."""
+    font = _font(font_name, 48)
+
+    def mask(c: str) -> bytes:
+        image = Image.new("L", (120, 120))
+        ImageDraw.Draw(image).text((20, 20), c, font=font, fill=255)
+        return image.tobytes()
+
+    return mask(ch) != mask(_NOTDEF)
+
+
+def fit_font(text: str, font_name: str) -> str:
+    """Только то, что шрифт умеет нарисовать: «Ѐ» → «Е» (буква без значка), «꧁» — убирается."""
+    out = []
+    for ch in unicodedata.normalize("NFKC", text or ""):
+        if ch.isspace() or _has_glyph(font_name, ch):
+            out.append(ch)
+            continue
+        base = unicodedata.normalize("NFKD", ch)[:1]
+        if base and not unicodedata.combining(base) and _has_glyph(font_name, base):
+            out.append(base)
+    return " ".join("".join(out).split())
 
 
 def _short(text: str, limit: int) -> str:
@@ -219,18 +272,21 @@ def render(number: int, name1: str, name2: str, tag1: str | None, tag2: str | No
     y = _centered(draw, y + 66, "Настоящим удостоверяется, что", _font("CormorantGaramond.ttf", 46, 500), SILVER_DIM)
 
     # Имена супругов каллиграфией
-    name1 = _short(clean_name(name1, (tag1 or "").lstrip("@") or "Супруг"), MAX_NAME)
-    name2 = _short(clean_name(name2, (tag2 or "").lstrip("@") or "Супруг"), MAX_NAME)
+    script = "MarckScript-Regular.ttf"
+    name1 = _short(fit_font(clean_name(name1, (tag1 or "").lstrip("@") or "Супруг"), script) or "Супруг", MAX_NAME)
+    name2 = _short(fit_font(clean_name(name2, (tag2 or "").lstrip("@") or "Супруг"), script) or "Супруг", MAX_NAME)
     names = f"{name1}  &  {name2}"
     font = _fit(draw, names, "MarckScript-Regular.ttf", 136, WIDTH - 560)
     y = _centered(draw, y + 10, names, font, SILVER)
 
-    tags = "   ·   ".join(t for t in (tag1, tag2) if t)
+    tags = "   ·   ".join(fit_font(t, "CormorantGaramond.ttf") for t in (tag1, tag2) if t)
     if tags:
         y = _centered(draw, y + 12, tags, _font("CormorantGaramond.ttf", 42, 500), VIOLET)
 
     body = _font("CormorantGaramond.ttf", 48, 500)
     y = _centered(draw, y + 28, f"вступили в законный брак {date_ru(since)}", body, SILVER)
+    # Названия групп бывают в узорах («꧁ 𝑫𝑰𝑨𝑴𝑶𝑵𝑫 ꧂»): остаются только буквы, которые есть в шрифте
+    group = fit_font(group or "", "CormorantGaramond.ttf").strip(" -_.·")
     if group:
         y = _centered(draw, y + 8, f"в чате «{_short(group, MAX_GROUP)}»", body, SILVER_DIM)
     y = _centered(draw, y + 8, "и отныне считаются супругами во всех чатах Марушки.", body, SILVER_DIM)
