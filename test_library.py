@@ -99,6 +99,17 @@ def main() -> int:
         found_phrases = lib.special_phrases(tag)
         expect(f"подписи для #{tag}", bool(found_phrases) and found_phrases is next(
             v for k, v in lib.SPECIAL_PHRASES.items() if base in k), True)
+    # Коллекции админов, которые шли с общими подписями (#cуп — с латинской «c»)
+    for tag, base in (("cуп", "=cуп"), ("завтрак", "завтрак"), ("камень", "камень"), ("покажименя", "покажименя"),
+                      ("привет", "привет"), ("сало", "=сало"), ("салют", "салют"), ("собаки", "собак"),
+                      ("спокойнойночи", "спокойнойноч"), ("спрайт", "спрайт"), ("фанта", "=фанта"),
+                      ("фрукты", "фрукт"), ("чача", "чача")):
+        found_phrases = lib.special_phrases(tag)
+        expect(f"подписи для #{tag}", bool(found_phrases) and found_phrases is next(
+            v for k, v in lib.SPECIAL_PHRASES.items() if base in k), True)
+    # «=» — только слово целиком
+    for tag in ("салон", "салат", "фантазия", "суперприз"):
+        expect(f"#{tag} — не готовые подписи", lib.special_phrases(tag), None)
     # Баня — встроенное действие: картинки коллекции идут с его подписями
     from actions import phrases as builtin
     from actions.catalog import find_action as find_builtin
@@ -143,6 +154,9 @@ def main() -> int:
 
     expect("«булочка» уже есть в каталоге — привяжется к нему", (find_action("булочка") or SimpleNamespace(key=None)).key, "bun")
     expect("«булочка» → встроенное действие", lib.guess_target("булочка"), "bun")
+
+    expect("«сливки» — не слива", lib.guess_target("сливки"), None)
+    expect("«слива» — слива", (find_action("сливу") or SimpleNamespace(key=None)).key, "plum")
 
     expect("«ватрушечка» в каталоге нет", find_action("ватрушечка"), None)
     lib.prime_collections([SimpleNamespace(tag="ватрушечка", emoji="🧁", as_action=True, triggers=[], phrase=None)])
