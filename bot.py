@@ -201,6 +201,34 @@ dp.include_router(autoreplies_router)
 # Самый общий обработчик — всегда последним
 dp.include_router(chat_router)
 
+# Группа без доступа к функции: один раз объяснить, что её включает владелец
+from features.locked import router as locked_router  # noqa: E402
+
+dp.include_router(locked_router)
+
+# Доступ групп к функциям решает владелец (settings/access.py): у каждого модуля свои роутеры.
+# Базовое — /help, /settings, приветствие, вход в Арену и оплата в личке — доступно всегда.
+from settings import access  # noqa: E402
+
+MODULE_ROUTERS = {
+    "arena": (arena_router, mini_tournament_router, arena_promo_router),
+    "fishing": (fishing_router,),
+    "games": (dice_router, table_router, crocodile_router),
+    "chat": (autoreplies_router, chat_router),
+    "actions": (actions_router,),
+    "draw": (draw_router,),
+    "social": (harmony_router, info_chance_router, who_am_i_router, who_today_router, birthdays_router, social_router),
+    "economy": (economy_router, shop_router, progress_router, digest_router, rating_router, chatters_router, member_since_router),
+    "moderation": (antimat_router, automod_router, captcha_router, moderation_router),
+    "media": (weather_router, radio_router, cats_router, fortune_router),
+}
+for _module, _routers in MODULE_ROUTERS.items():
+    for _router in _routers:
+        _check = access.router_filter(_module)
+        _router.message.filter(_check)
+        _router.edited_message.filter(_check)
+        _router.callback_query.filter(_check)
+
 
 # =========================================================
 # СРОК ХРАНЕНИЯ ПАМЯТИ
@@ -299,6 +327,13 @@ async def main():
             logger.info("БРАКИ: расторгнуты повторные браки %s", ended)
     except Exception as error:
         logger.warning("БРАКИ: %s %s", type(error).__name__, error)
+
+    # Доступ групп к функциям (решает владелец): в память до начала работы
+    try:
+        count = await access.load()
+        logger.info("Доступ групп: %s групп с открытыми функциями", count)
+    except Exception as error:
+        logger.warning("ACCESS: %s %s", type(error).__name__, error)
 
     # Главные админы, назначенные в панели, — с теми же правами, что OWNER_IDS
     try:

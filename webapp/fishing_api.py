@@ -87,7 +87,9 @@ async def _group_for(uid: int, chat_id: int | None) -> int | None:
     from database.database import session_scope
     from database.models import GroupMember
 
-    if not is_enabled(chat_id, "fishing"):
+    from settings import access
+
+    if not is_enabled(chat_id, "fishing") or not access.allowed(chat_id, "fishing"):
         return None
 
     async with session_scope() as session:

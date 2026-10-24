@@ -186,8 +186,13 @@ async def digest_loop(bot):
             week = _week_key(now)
             chats = await get_active_chats()
 
+            from settings import access
+
             for chat_id in chats:
                 if _sent_weeks.get(chat_id) == week:
+                    continue
+                # Итоги недели — модуль «Алмазы и статистика»: группе без доступа не шлём
+                if not access.allowed(chat_id, "economy"):
                     continue
 
                 # Настройки чата могли ещё не попасть в кэш

@@ -458,7 +458,10 @@ async def choose_partner(message: Message, prize: int | None) -> None:
         chat_id = int(chat.get("chat_id") or chat.get("id") or 0)
         if not chat_id or chat_id == message.chat.id or chat_id > 0:
             continue
-        if not await _is_admin_in(message.bot, chat_id, message.from_user.id):
+        from settings import access
+
+        # Вторая группа должна тоже иметь доступ к Арене (его включает владелец бота)
+        if not access.allowed(chat_id, "arena") or not await _is_admin_in(message.bot, chat_id, message.from_user.id):
             continue
         title = await _chat_title(message.bot, chat_id)
         if title:
@@ -498,6 +501,11 @@ async def partner_button(callback: CallbackQuery):
         return
     own_title = callback.message.chat.title or await _chat_title(bot, chat_id) or "Группа"
     partner_title = await _chat_title(bot, partner_id)
+    from settings import access
+
+    if not access.allowed(partner_id, "arena"):
+        await callback.answer("Во второй группе Арена не включена.", show_alert=True)
+        return
     if not partner_title:
         await callback.answer("Мары нет во второй группе.", show_alert=True)
         return
