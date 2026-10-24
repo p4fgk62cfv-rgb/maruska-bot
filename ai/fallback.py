@@ -73,7 +73,10 @@ PROVIDERS = (
         url="https://openrouter.ai/api/v1/chat/completions",
         key_env="OPENROUTER_API_KEY",
         model_env="OPENROUTER_MODEL",
-        default_models=("google/gemma-4-31b-it:free", "google/gemma-4-26b-a4b-it:free", "nvidia/nemotron-3-super-120b-a12b:free"),
+        # Бесплатные модели часто заняты (429) — их несколько, а последним запасом openrouter/free:
+        # роутер OpenRouter сам берёт любую свободную бесплатную модель (октябрь 2026)
+        default_models=("google/gemma-4-31b-it:free", "nvidia/nemotron-3-ultra-550b-a55b:free",
+                        "google/gemma-4-26b-a4b-it:free", "nvidia/nemotron-3-super-120b-a12b:free", "openrouter/free"),
     ),
 )
 
