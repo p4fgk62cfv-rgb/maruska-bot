@@ -203,9 +203,18 @@ def _matches(word: str, entry: str) -> bool:
     return word == entry
 
 
-def is_builtin_swear(word: str) -> bool:
+def _from_start(entry: str) -> str:
+    """«*пизд*» (где угодно в слове) → «пизд*» (с начала слова, с приставками)."""
+    return entry[1:] if entry.startswith("*") and entry.endswith("*") else entry
+
+
+def is_builtin_swear(word: str, from_start: bool = False) -> bool:
+    """from_start — мат должен начинаться с начала слова (с приставками): для склеек «ху йня»."""
     if not word or _BUILTIN_SAFE.search(word):
         return False
+    if from_start:
+        # «пизд», «шлюх» — с самого начала, без приставок: «суп издалека» не «с-у-пизд…»
+        return any(p.match(word) for p in _BUILTIN)
     return any(p.search(word) for p in _BUILTIN)
 
 
@@ -243,11 +252,10 @@ def _unmask(word: str) -> list[str]:
 
 
 def tokens(text: str) -> list[str]:
-    """Все слова текста во всех прочтениях: как есть, латиница/цифры как кириллица, транслит, склейки."""
+    """Все слова текста во всех прочтениях: как есть, латиница/цифры как кириллица, транслит, буквы через точку."""
     text = clean_text(text)
     raw = _WORD.findall(text)
     found = []
-    plain = []
     for word in raw:
         letters = _MASK.sub("", word)
         latin_only = re.fullmatch(r"[a-z]+", letters, re.IGNORECASE)
@@ -260,18 +268,23 @@ def tokens(text: str) -> list[str]:
             alt = normalize(letters.lower().translate(LOOKALIKE_ALT))
             if alt and alt != norm:
                 found.append(alt)
-        # Для склейки «ху йня» — только настоящие русские обрывки, не служебные слова латиницей
-        plain.append(norm if re.fullmatch(r"[а-яё]+", word, re.IGNORECASE) else "")
         latin = word.lower()
         if re.fullmatch(r"[a-z]{3,}", latin) and latin not in _LATIN_SAFE and not _ENGLISH.search(latin):
             found.append(translit(latin))
     # «х.у.й», «х у й», «х🙂у🙂й» — склеиваем буквы
     found += [normalize(m.group(0)) for m in _SPACED.finditer(text)]
-    # «ху йня», «бл ять» — короткий обрывок, который сам по себе не слово, склеиваем со следующим
-    for first, second in zip(plain, plain[1:]):
-        if first and second and 2 <= len(first) <= 3 and first not in _STANDALONE:
-            found.append(first + second)
     return [w for w in found if w]
+
+
+def glued(text: str) -> list[str]:
+    """«ху йня», «бл ять» — короткий обрывок, который сам по себе не слово, склеенный со следующим.
+
+    Такая склейка — мат, только если мат начинается с самого обрывка: иначе два обычных слова
+    дают «мат» на стыке («тип изделия» → «…пизд…», «суп издалека»)."""
+    plain = [normalize(word) if re.fullmatch(r"[а-яё]+", word, re.IGNORECASE) else ""
+             for word in _WORD.findall(clean_text(text))]
+    return [first + second for first, second in zip(plain, plain[1:])
+            if first and second and 2 <= len(first) <= 3 and first not in _STANDALONE]
 
 
 def _masked(text: str) -> list[list[str]]:
@@ -294,6 +307,12 @@ def find_swear(text: str, words: list[str], builtin: bool = False, allow: list[s
 
     for token in tokens(text):
         if bad(token):
+            return token
+    # Склейка: мат — только с начала обрывка («*пизд*» из списка админа — тоже с начала)
+    for token in glued(text):
+        if any(_matches(token, entry) for entry in allow):
+            continue
+        if (builtin and is_builtin_swear(token, from_start=True)) or any(_matches(token, _from_start(entry)) for entry in words):
             return token
     for variants in _masked(text):
         for token in variants:
