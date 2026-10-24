@@ -187,6 +187,8 @@ def main() -> int:
     ns3 = {"re": re, "escape": escape}
     exec(game[game.index("OPEN_WORDS = "):game.index("async def open_fishing(")], ns3)
     ns3["Message"] = object
+    from botcontext import TRIGGER_RE
+    ns3["TRIGGER_RE"] = TRIGGER_RE
     exec(game[game.index("def is_open_request("):game.index("@router.message(is_open_request)")], ns3)
     expect("ссылка на группу", ns3["start_param"](-1001234567890), "g1001234567890")
     expect("круговая проверка ссылки", parse(ns3["start_param"](-1001234567890)), -1001234567890)
@@ -200,6 +202,10 @@ def main() -> int:
 
     expect("«рыбалка» — открыть игру", ns3["is_open_request"](Msg("Рыбалка")), True)
     expect("«рыбалка» в ответ — это действие, не игра", ns3["is_open_request"](Msg("рыбалка", reply=object())), False)
+    for ask in ("Мара рыбалка", "Мара, рыбалка!", "Маруся, открой рыбалку", "мара пошли на рыбалку"):
+        expect(f"«{ask}» — открыть игру", ns3["is_open_request"](Msg(ask)), True)
+    for other in ("Мара, как дела на рыбалке?", "я с Марой на рыбалку", "Мара, расскажи про рыбалку"):
+        expect(f"«{other}» — не открывать игру", ns3["is_open_request"](Msg(other)), False)
 
     # --- объявление крупного улова ---
     from settings import store

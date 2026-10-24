@@ -72,6 +72,15 @@ export function undefendedCount(state: GameState): number {
   return state.table.filter((pair) => pair.defense === null).length;
 }
 
+/**
+ * Переводной: пока отбивающийся не побил ни одной карты, он ещё решает — бить или перевести, и
+ * подкидывать ему нельзя. Перевёл — подкидывают новому отбивающемуся (после того как и он побьёт);
+ * побил хоть одну — подкидывают ему; сказал «беру» — подкидывают вдогонку.
+ */
+export function transferWindow(state: GameState): boolean {
+  return state.rules.variant === 'perevodnoy' && state.phase === 'defense' && state.table.length > 0 && state.table.every((pair) => pair.defense === null);
+}
+
 /** How many more attack cards the table can take right now. */
 export function attackCapacity(state: GameState): number {
   const defender = getPlayer(state, state.defender);

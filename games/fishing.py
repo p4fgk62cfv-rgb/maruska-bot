@@ -1,7 +1,7 @@
 """
 Рыбалка в чате: открыть игру и посмотреть топ рыбаков.
 
-  /fishing, /fish, «рыбалка» — кнопка игры. В группе ссылка несёт
+  /fishing, /fish, «рыбалка», «Мара, рыбалка» — кнопка игры. В группе ссылка несёт
       id группы (startapp=g<id>): тогда крупный улов объявляется в чате,
       а топ считается среди участников группы.
   /fishtop, «топ рыбаков» — лучшие рыбаки группы.
@@ -20,12 +20,16 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
 
+from botcontext import TRIGGER_RE
 from settings.store import is_enabled
 
 
 router = Router(name="fishing")
 
 OPEN_WORDS = {"рыбалка", "рыбачим", "на рыбалку", "🎣 рыбалка", "го на рыбалку"}
+# После обращения к Маре: «Мара, рыбалка», «Мара, открой рыбалку», «Мара, пошли на рыбалку»
+ASK_WORDS = OPEN_WORDS | {"рыбалку", "открой рыбалку", "игра рыбалка", "пошли на рыбалку", "пойдём на рыбалку",
+                          "пойдем на рыбалку", "давай на рыбалку", "хочу на рыбалку", "порыбачим"}
 TOP_RE = re.compile(r"^\s*/?\s*топ\s+рыбак(ов|и)?\s*[!?.]*\s*$", re.IGNORECASE)
 
 
@@ -101,7 +105,17 @@ def is_open_request(message: Message) -> bool:
     сообщение это встроенное действие «позвал(а) на рыбалку» с картинкой,
     его не перехватываем.
     """
-    return message.reply_to_message is None and (message.text or "").strip().lower() in OPEN_WORDS
+    if message.reply_to_message is not None:
+        return False
+    text = (message.text or "").strip().lower()
+    if text in OPEN_WORDS:
+        return True
+    # «Мара, рыбалка» — обращение в начале сообщения, дальше только просьба про рыбалку
+    found = TRIGGER_RE.search(text)
+    if found is None or text[:found.start()].strip(" ,.!:—-"):
+        return False
+    rest = " ".join(text[found.end():].strip(" ,.!?:—-").split())
+    return rest in ASK_WORDS
 
 
 @router.message(is_open_request)

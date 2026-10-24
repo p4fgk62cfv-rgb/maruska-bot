@@ -65,7 +65,8 @@ for raw, font, want in [("Ѐлена", "MarckScript-Regular.ttf", "Елена"),
                         # «O» значком: ни одна буква названия не теряется («DIAMND» — было)
                         ("꧁ᬊ 𝑫𝑰𝑨𝑴🅾𝑵𝑫ᬊ꧂", "CormorantGaramond.ttf", "DIAMOND"), ("DIAM🇴ND", "CormorantGaramond.ttf", "DIAMOND"),
                         ("DIAMᴏND", "CormorantGaramond.ttf", "DIAMOND"), ("DIAM◯ND", "CormorantGaramond.ttf", "DIAMOND"),
-                        ("ᗪIᗩᗰOᑎᗪ", "CormorantGaramond.ttf", "DIAMOND")]:
+                        ("ᗪIᗩᗰOᑎᗪ", "CormorantGaramond.ttf", "DIAMOND"),
+                        ("꧁ᬊ 𝑫𝑰𝑨𝑴💎𝑵𝑫ᬊ꧂", "CormorantGaramond.ttf", "DIAMOND"), ("DIAM💎️ND", "CormorantGaramond.ttf", "DIAMOND")]:
     check(mc.fit_font(raw, font) == want, f"шрифт: «{raw}» → {mc.fit_font(raw, font)!r}, ждали {want!r}")
 
 

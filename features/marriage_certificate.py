@@ -80,8 +80,8 @@ _LOOKALIKE = str.maketrans({
     "ᒪ": "L", "ᗰ": "M", "ᑎ": "N", "ᑭ": "P", "ᑫ": "Q", "ᖇ": "R", "ᔕ": "S", "ᑌ": "U", "ᐯ": "V", "ᗯ": "W",
     "᙭": "X", "ᖻ": "Y", "ᘔ": "Z",
 })
-# Кружки вместо «O» в узорных названиях: «DIAM◯ND», «DIAM⭕ND»
-_ROUND = set("◯○⭕〇●◉◎⊙❍⚪⚫🔘")
+# Кружки и 💎 вместо «O» в узорных названиях: «DIAM◯ND», «DIAM💎ND» (так и написан «Диамант»)
+_ROUND = set("◯○⭕〇●◉◎⊙❍⚪⚫🔘💎")
 
 
 def plain_letter(ch: str) -> str:
@@ -161,7 +161,7 @@ def _has_glyph(font_name: str, ch: str) -> bool:
 def fit_font(text: str, font_name: str) -> str:
     """Только то, что шрифт умеет нарисовать: «Ѐ» → «Е» (буква без значка), «🅾»/«🇴»/«ᴏ» → «O»,
     кружок между буквами («DIAM◯ND») → «O», узоры («꧁», «ᬊ») — убираются."""
-    chars = list(unicodedata.normalize("NFKC", text or ""))
+    chars = [ch for ch in unicodedata.normalize("NFKC", text or "") if ch not in "\ufe0f\u200d"]
     out = []
     for i, ch in enumerate(chars):
         if ch in _ROUND:

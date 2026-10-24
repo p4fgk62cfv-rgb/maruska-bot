@@ -85,11 +85,37 @@ export type StartMini = z.infer<typeof startMiniSchema>;
 
 type Player = MiniTournamentPlayer;
 
-/** Столы турнира групп называются группами: «Вегас», «Диамант» (в базе — до 16 знаков). */
+/** Значки вместо «O» в узорных названиях: «DIAM💎ND», «DIAM◯ND». */
+const ROUND = new Set([...'◯○⭕〇●◉◎⊙❍⚪⚫🔘💎']);
+const PLAIN = /[\p{Script=Latin}\p{Script=Cyrillic}\p{N}]/u;
+
+/**
+ * Название группы обычными буквами: «꧁ᬊ 𝑫𝑰𝑨𝑴💎𝑵𝑫ᬊ꧂» → «DIAMOND». Узоры, эмодзи и буквы чужих
+ * письменностей уходят, значок между буквами на месте «O» становится «O».
+ */
+export function plainGroupName(name: string): string {
+  const chars = [...name.normalize('NFKC')].filter((ch) => ch !== '\uFE0F' && ch !== '\u200D');
+  const out: string[] = [];
+  chars.forEach((ch, i) => {
+    if (PLAIN.test(ch) || ch === ' ' || ch === '-') out.push(ch);
+    else if (ROUND.has(ch) && PLAIN.test(chars[i - 1] ?? '') && PLAIN.test(chars[i + 1] ?? '')) out.push(/\p{Lu}/u.test(chars[i - 1]!) ? 'O' : 'o');
+    else out.push(' ');
+  });
+  return out.join('').replace(/\s+/g, ' ').replace(/^[\s-]+|[\s-]+$/g, '');
+}
+
+/** Столы турнира групп называются группами: «Вегас», «DIAMOND» (в базе — до 16 знаков). */
 function groupLabels(names: string[]): string[] {
-  const labels = names.map((n) => `«${n.trim().slice(0, 14)}»`);
+  const labels = names.map((n, t) => `«${[...(plainGroupName(n) || `Группа ${t + 1}`)].slice(0, 14).join('')}»`);
   const clash = labels[0] === labels[1] || labels.some((l) => l.toLowerCase() === `«${FINAL}»`);
   return clash ? [...LABELS] : labels;
+}
+
+/** Как стол назван в сообщениях и в Арене; старые названия столов (с узорами) — тоже чистые. */
+function labelText(label: string): string {
+  if (!label.startsWith('«')) return label;
+  const plain = plainGroupName(label.slice(1, -1));
+  return plain ? `«${[...plain].slice(0, 14).join('')}»` : label;
 }
 type Mini = MiniTournament & { players: Player[] };
 
@@ -304,7 +330,7 @@ export class MiniTournamentService {
     if (left.length === 0) {
       await this.db.miniTournament.update({ where: { id: mini.id }, data: { status: 'CANCELLED', finishedAt: new Date() } });
       if (mini.parentId) {
-        await this.say(mini, `🛑 ${mini.label === FINAL ? 'На финал' : `За стол ${mini.label}`} никто не пришёл.`);
+        await this.say(mini, `🛑 ${mini.label === FINAL ? 'На финал' : `За стол ${labelText(mini.label!)}`} никто не пришёл.`);
         await this.stageDone(mini.parentId);
         return;
       }
@@ -352,18 +378,18 @@ export class MiniTournamentService {
   /** Как стол называется в Арене: «Мини-турнир · стол А». */
   private name(mini: Pick<MiniTournament, 'title' | 'label'>): string {
     if (!mini.label) return mini.title;
-    return `${mini.title} · ${mini.label === FINAL ? 'финал' : `стол ${mini.label}`}`;
+    return `${mini.title} · ${mini.label === FINAL ? 'финал' : `стол ${labelText(mini.label)}`}`;
   }
 
   /** «стол 2» — один стол; «стол А, партия 2» — турнир на два стола. */
   private tableName(mini: Pick<MiniTournament, 'label'>, round: number): string {
     if (!mini.label) return `стол ${round}`;
-    return mini.label === FINAL ? 'финал' : `стол ${mini.label}, партия ${round}`;
+    return mini.label === FINAL ? 'финал' : `стол ${labelText(mini.label)}, партия ${round}`;
   }
 
   private ended(mini: Pick<MiniTournament, 'label' | 'round'>): string {
     if (!mini.label) return `Стол ${mini.round} окончен`;
-    return mini.label === FINAL ? 'Финал окончен' : `Стол ${mini.label}: партия ${mini.round} окончена`;
+    return mini.label === FINAL ? 'Финал окончен' : `Стол ${labelText(mini.label)}: партия ${mini.round} окончена`;
   }
 
   /** Место в турнире по месту за столом: за столами первого этапа места делят — 3, 3, 5, 5… */
@@ -420,7 +446,7 @@ export class MiniTournamentService {
       if (!result || result.kind !== 'loser' || !result.loserId) {
         // Партия сорвалась (сервер, отмена): тот же состав садится заново.
         journal.record({ kind: 'replay', miniId: mini.id, roomId: room.id, details: { round: mini.round, reason: result?.reason ?? null } });
-        const where = !mini.label ? '' : mini.label === FINAL ? 'Финал: п' : `Стол ${mini.label}: п`;
+        const where = !mini.label ? '' : mini.label === FINAL ? 'Финал: п' : `Стол ${labelText(mini.label)}: п`;
         await this.say(mini, `♻️ ${where || 'П'}артия не доиграна — переигрываем тем же составом.`);
         await this.openTable(mini.id, true);
         return;
@@ -548,7 +574,7 @@ export class MiniTournamentService {
     if (table.label !== FINAL) {
       // Новость всего турнира: в турнире групп её видят обе группы.
       const parent = await this.db.miniTournament.findUnique({ where: { id: table.parentId! } });
-      if (parent) await this.say(parent, `🏅 Стол ${table.label} окончен: побеждает ${mention(winner)} и выходит в финал!`);
+      if (parent) await this.say(parent, `🏅 Стол ${labelText(table.label!)} окончен: побеждает ${mention(winner)} и выходит в финал!`);
     }
     await this.stageDone(table.parentId!);
   }

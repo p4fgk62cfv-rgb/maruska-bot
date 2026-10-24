@@ -7,7 +7,7 @@ import { attackOptions, canAttackNow, playAttackCards, playPass } from './Attack
 import { reportCheat } from './CheatManager.js';
 import { declareTake, defenseOptions, playDefense } from './DefenseManager.js';
 import { playTransfer, transferOptions } from './TransferManager.js';
-import { activePlayers, finishGame, findPlayer, getPlayer, pendingThrowers, setTurn, startBout, undefendedCount } from './TurnManager.js';
+import { activePlayers, finishGame, findPlayer, getPlayer, pendingThrowers, setTurn, startBout, transferWindow, undefendedCount } from './TurnManager.js';
 
 export interface CreateGameInput {
   gameId: string;
@@ -319,7 +319,7 @@ export function legalActions(state: GameState, playerId: PlayerId): AvailableAct
     canDefend: Object.keys(defend).length > 0,
     canTransfer: transfer.length > 0,
     take: isDefender && state.phase === 'defense' && undefendedCount(state) > 0,
-    pass: !isDefender && bout && pendingThrowers(state).includes(playerId),
+    pass: !isDefender && bout && pendingThrowers(state).includes(playerId) && !transferWindow(state),
     canReport: state.rules.fairness === 'cheaters' && bout && state.table.length > 0,
   };
 }
