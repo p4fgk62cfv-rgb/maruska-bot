@@ -447,6 +447,26 @@ async def reload_collections() -> None:
     prime_collections(await list_library_collections())
 
 
+async def log_overview() -> None:
+    """При старте: какие коллекции есть и откуда у них подписи — чтобы видеть в логах, где нужны свои."""
+    from database.repository import library_summary
+
+    rows = await library_summary()
+    parts = []
+    for row in rows:
+        tag = row["tag"]
+        if row["targets"]:
+            source = "к действию " + ", ".join(row["targets"])
+        elif (_collections.get(tag) or {}).get("phrase"):
+            source = "своя подпись"
+        elif special_phrases(tag):
+            source = "готовые подписи"
+        else:
+            source = "общие подписи"
+        parts.append(f"#{tag} ({row['count']} фото, {source})")
+    logger.info("LIBRARY: коллекций %s — %s", len(rows), "; ".join(parts) or "нет")
+
+
 def action_for(tag: str):
     """Коллекция в виде действия — тем же объектом, что и встроенные."""
     from actions.catalog_data import Action

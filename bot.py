@@ -392,9 +392,11 @@ async def main():
     # Привязки своей коллекции картинок к действиям
     try:
         import images_library
+        import library_core
 
         await images_library.reload_links()
         await images_library.reload_collections()
+        await library_core.log_overview()
     except Exception as error:
         logger.warning("LIBRARY LINKS: %s", error)
 
