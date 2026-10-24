@@ -99,6 +99,23 @@ async def scenario():
         check(not [x for x in await repo.list_marriages(chat_b) if x["id"] == marriage_id], "в группе B пары из A нет")
         check(await repo.member_name(chat_b, b) == "Юля", "имя из другой группы")
 
+        # Юля пришла в группу B, где уже есть Вася: пара видна и там — без новой свадьбы
+        async with session_scope() as session:
+            session.add(GroupMember(chat_id=chat_b, telegram_id=b, display_name="Юлия"))
+            await session.commit()
+        in_b = [x for x in await repo.list_marriages(chat_b) if x["id"] == marriage_id]
+        check(len(in_b) == 1 and in_b[0]["name2"] == "Юлия", f"оба супруга в группе B — пара видна там: {in_b}")
+        # Ушла из группы — пара там снова не показывается
+        async with session_scope() as session:
+            from sqlalchemy import update as sa_update
+            await session.execute(sa_update(GroupMember).where(GroupMember.chat_id == chat_b, GroupMember.telegram_id == b)
+                                  .values(left_at=datetime.utcnow()))
+            await session.commit()
+        check(not [x for x in await repo.list_marriages(chat_b) if x["id"] == marriage_id], "супруг ушёл из группы — пары там нет")
+        async with session_scope() as session:
+            await session.execute(delete(GroupMember).where(GroupMember.chat_id == chat_b, GroupMember.telegram_id == b))
+            await session.commit()
+
         # Снимок для свидетельства делается один раз и не меняется
         snap = await social.certificate_of(marriage_id, "Группа A")
         check(snap["name1"] == "Вася" and snap["tag1"] == "@vasya_test" and snap["group"] == "Группа A"

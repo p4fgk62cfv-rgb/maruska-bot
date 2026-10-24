@@ -4691,12 +4691,23 @@ async def people(chat_id: int | None, ids) -> dict[int, dict]:
 
 
 async def list_marriages(chat_id: int) -> list[dict]:
-    """Пары группы — те, кто поженился (или зарегистрировал брак) именно здесь.
-    Брак один на все группы, но список пар у каждой группы свой."""
+    """Пары группы: кто поженился (или зарегистрировал брак) здесь — и любая пара, оба супруга
+    которой состоят в этой группе. Брак один на все группы: поженились в одной группе — пара
+    видна и в другой, где есть оба."""
     async with session_scope() as session:
-        rows = [r for r in (await session.execute(
+        active = (await session.execute(
             select(Marriage).where(Marriage.active.is_(True)).order_by(Marriage.since)
-        )).scalars().all() if r.chat_id == chat_id or chat_id in (r.chats or [])]
+        )).scalars().all()
+        spouses = {r.user1 for r in active} | {r.user2 for r in active}
+        here = set((await session.execute(
+            select(GroupMember.telegram_id).where(
+                GroupMember.chat_id == chat_id,
+                GroupMember.telegram_id.in_(spouses),
+                GroupMember.left_at.is_(None),
+            )
+        )).scalars().all()) if spouses else set()
+        rows = [r for r in active
+                if r.chat_id == chat_id or chat_id in (r.chats or []) or {r.user1, r.user2} <= here]
 
     info = await people(chat_id, {r.user1 for r in rows} | {r.user2 for r in rows})
 
