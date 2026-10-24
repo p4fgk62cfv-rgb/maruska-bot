@@ -10,6 +10,7 @@
 
 import io
 import random
+import re
 import unicodedata
 from datetime import datetime
 from functools import lru_cache
@@ -31,7 +32,7 @@ VIOLET = (124, 72, 214)
 VIOLET_DIM = (186, 160, 230)
 
 # Меняется при каждой смене оформления: сохранённые в Telegram картинки больше не годятся
-VERSION = 3
+VERSION = 4
 
 MONTHS = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля",
           "августа", "сентября", "октября", "ноября", "декабря")
@@ -74,7 +75,40 @@ _LOOKALIKE = str.maketrans({
     "ρ": "p", "τ": "t", "υ": "u", "χ": "x",
     "Ꭺ": "A", "Ᏼ": "B", "Ꮯ": "C", "Ꭰ": "D", "Ꭼ": "E", "Ꮐ": "G", "Ꮋ": "H", "Ꭻ": "J", "Ꮶ": "K", "Ꮮ": "L",
     "Ꮇ": "M", "Ꮲ": "P", "Ꮪ": "S", "Ꭲ": "T", "Ꮩ": "V", "Ꮃ": "W", "Ꮓ": "Z",
+    # «ᗪIᗩᗰOᑎᗪ» — значки канадского письма вместо латиницы
+    "ᗩ": "A", "ᗷ": "B", "ᑕ": "C", "ᗪ": "D", "ᕮ": "E", "ᖴ": "F", "ᘜ": "G", "ᕼ": "H", "ᒍ": "J", "ᛕ": "K",
+    "ᒪ": "L", "ᗰ": "M", "ᑎ": "N", "ᑭ": "P", "ᑫ": "Q", "ᖇ": "R", "ᔕ": "S", "ᑌ": "U", "ᐯ": "V", "ᗯ": "W",
+    "᙭": "X", "ᖻ": "Y", "ᘔ": "Z",
 })
+# Кружки вместо «O» в узорных названиях: «DIAM◯ND», «DIAM⭕ND»
+_ROUND = set("◯○⭕〇●◉◎⊙❍⚪⚫🔘")
+
+
+def plain_letter(ch: str) -> str:
+    """Буква за значком, которого нет в шрифтах: «🅾», «🇴» → «O», «ᴏ» → «o»; иначе — пусто."""
+    mapped = ch.translate(_LOOKALIKE)
+    if mapped != ch:
+        return mapped
+    try:
+        name = unicodedata.name(ch)
+    except ValueError:
+        return ""
+    found = re.search(r"\b(LATIN|CYRILLIC) (CAPITAL|SMALL) LETTER ([A-Z]+)\b", name)
+    if found:
+        script, case, letter = found.groups()
+    elif found := re.search(r"SYMBOL LETTER ([A-Z])$", name):
+        # «🇴» — REGIONAL INDICATOR SYMBOL LETTER O
+        script, case, letter = "LATIN", "CAPITAL", found.group(1)
+    elif found := re.search(r"LETTER SMALL CAPITAL ([A-Z])$", name):
+        script, case, letter = "LATIN", "SMALL", found.group(1)
+    else:
+        return ""
+    try:
+        return unicodedata.lookup(f"{script} {case} LETTER {letter}")
+    except KeyError:
+        return ""
+
+
 # В русском имени латинские двойники — русские буквы: «Ꭼленка» → «Еленка», а не «Eленка»
 _TO_CYRILLIC = str.maketrans("ABEKMHOPCTXaeopcxyk", "АВЕКМНОРСТХаеорсхук")
 
@@ -125,15 +159,27 @@ def _has_glyph(font_name: str, ch: str) -> bool:
 
 
 def fit_font(text: str, font_name: str) -> str:
-    """Только то, что шрифт умеет нарисовать: «Ѐ» → «Е» (буква без значка), «꧁» — убирается."""
+    """Только то, что шрифт умеет нарисовать: «Ѐ» → «Е» (буква без значка), «🅾»/«🇴»/«ᴏ» → «O»,
+    кружок между буквами («DIAM◯ND») → «O», узоры («꧁», «ᬊ») — убираются."""
+    chars = list(unicodedata.normalize("NFKC", text or ""))
     out = []
-    for ch in unicodedata.normalize("NFKC", text or ""):
+    for i, ch in enumerate(chars):
+        if ch in _ROUND:
+            near = [c for c in chars[max(0, i - 1):i] + chars[i + 1:i + 2] if c.isalpha()]
+            if near:
+                out.append("O" if any(c.isupper() for c in near) else "o")
+            continue
         if ch.isspace() or _has_glyph(font_name, ch):
             out.append(ch)
             continue
-        base = unicodedata.normalize("NFKD", ch)[:1]
-        if base and not unicodedata.combining(base) and _has_glyph(font_name, base):
-            out.append(base)
+        for candidate in (unicodedata.normalize("NFKD", ch)[:1], plain_letter(ch)):
+            if candidate and not unicodedata.combining(candidate) and _has_glyph(font_name, candidate):
+                # Капитель среди заглавных — заглавная: «DIAMᴏND» → «DIAMOND»
+                near = [c for c in chars[max(0, i - 1):i] + chars[i + 1:i + 2] if c.isalpha()]
+                if candidate.islower() and near and all(c.isupper() for c in near):
+                    candidate = candidate.upper()
+                out.append(candidate)
+                break
     return " ".join("".join(out).split())
 
 
