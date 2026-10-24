@@ -4638,6 +4638,14 @@ async def register_marriage_here(chat_id: int, user1: int, user2: int) -> int | 
         return row.id
 
 
+async def chat_title(chat_id: int) -> str | None:
+    """Название группы, как Мара его запомнила."""
+    async with session_scope() as session:
+        return (await session.execute(
+            select(GroupSettings.title).where(GroupSettings.chat_id == chat_id)
+        )).scalar_one_or_none()
+
+
 async def get_marriage(marriage_id: int):
     async with session_scope() as session:
         return await session.get(Marriage, marriage_id)

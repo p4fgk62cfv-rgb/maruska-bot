@@ -56,8 +56,13 @@ check(mc.date_ru(datetime(2026, 3, 8)) == "8 марта 2026 года", "дат�
 
 # Стилизованные ники Telegram — в обычные буквы, эмодзи прочь
 for raw, want in [("🦋𝐋𝐞𝐬𝐲𝐚🦋", "Lesya"), ("STANISLAV", "Stanislav"), ("Юля 💕", "Юля"),
-                  ("✨✨", "Супруг"), ("Ａｎｎａ", "Anna"), ("Анна-Мария", "Анна-Мария")]:
+                  ("✨✨", "Супруг"), ("Ａｎｎａ", "Anna"), ("Анна-Мария", "Анна-Мария"),
+                  ("ᴍᴀᴋsɪᴍ 👑", "Maksim"), ("Ꭼленка 💕", "Еленка"), ("Ꮇᴀᴋсим", "Максим"), ("Ⓜⓐⓚⓢⓘⓜ", "Maksim")]:
     check(mc.clean_name(raw) == want, f"имя «{raw}» → {mc.clean_name(raw)!r}, ждали {want!r}")
+# Только буквы, которые есть в шрифте: без квадратиков вместо знаков
+for raw, font, want in [("Ѐлена", "MarckScript-Regular.ttf", "Елена"), ("꧁ 𝑫𝑰𝑨𝑴𝑶𝑵𝑫 ꧂", "CormorantGaramond.ttf", "DIAMOND"),
+                        ("Вегас 🎰 ✨", "CormorantGaramond.ttf", "Вегас")]:
+    check(mc.fit_font(raw, font) == want, f"шрифт: «{raw}» → {mc.fit_font(raw, font)!r}, ждали {want!r}")
 
 
 async def scenario():
@@ -122,6 +127,18 @@ async def scenario():
               and snap["number"] == marriage_id, f"снимок: {snap}")
         again = await social.certificate_of(marriage_id, "Другая группа")
         check(again == snap, "снимок не меняется")
+
+        # Старый снимок без группы (свидетельство впервые открыли кнопкой из списка пар):
+        # группа берётся из той, где заключён брак, и сохраняется
+        from database.models import GroupSettings as GS
+        await repo.save_marriage_certificate(marriage_id, certificate={**snap, "group": None})
+        async with session_scope() as session:
+            session.add(GS(chat_id=chat_a, title="Диамант", values={}))
+            await session.commit()
+        fixed = await social.certificate_of(marriage_id)
+        check(fixed["group"] == "Диамант" and (await repo.get_marriage(marriage_id)).certificate["group"] == "Диамант",
+              f"группа дописана в старый снимок: {fixed}")
+        await repo.save_marriage_certificate(marriage_id, certificate=snap)
 
         # Кнопка «Свидетельство»: первый раз картинка рисуется, дальше — по file_id
         sent = []
