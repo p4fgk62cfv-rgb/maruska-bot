@@ -249,10 +249,70 @@ describe('transfer (переводной)', () => {
         ['9C', '9D', 'AS'],
       ],
     });
-    state = act(state, 'p1', { type: 'PLAY_CARD', card: '7S' });
-    state = act(state, 'p1', { type: 'PLAY_CARD', card: '7C' });
+    state = act(state, 'p1', { type: 'PLAY_CARDS', cards: ['7S', '7C'] });
     state = act(state, 'p2', { type: 'PLAY_CARD', card: 'KS', target: 0 });
     expect(reject(state, 'p2', { type: 'TRANSFER', card: '7D' })).toBe('TRANSFER_NOT_ALLOWED');
+  });
+
+  describe('throw-ins wait until the defender beats or transfers', () => {
+    const four = () =>
+      arranged({
+        trump: '6H',
+        settings: { variant: 'perevodnoy', throwIn: 'all' },
+        hands: [
+          ['7S', '7C', 'AD'],
+          ['7D', 'KS', 'QC', 'JC'],
+          ['7H', 'KD', 'AS', '8C'],
+          ['9C', '9D', 'AC', '8D'],
+        ],
+      });
+
+    it('nobody throws in while the defender still decides; «пас» is not offered either', () => {
+      const state = act(four(), 'p1', { type: 'PLAY_CARD', card: '7S' });
+      expect(legalActions(state, 'p3').canAttack).toBe(false);
+      expect(legalActions(state, 'p1').canAttack).toBe(false);
+      expect(reject(state, 'p3', { type: 'PLAY_CARD', card: '7H' })).toBe('THROW_IN_NOT_ALLOWED');
+      expect(reject(state, 'p1', { type: 'PLAY_CARD', card: '7C' })).toBe('THROW_IN_NOT_ALLOWED');
+      expect(legalActions(state, 'p3').pass).toBe(false);
+      expect(reject(state, 'p3', { type: 'PASS' })).toBe('CANNOT_PASS');
+    });
+
+    it('the lead itself may be several cards of one rank', () => {
+      const state = act(four(), 'p1', { type: 'PLAY_CARDS', cards: ['7S', '7C'] });
+      expect(state.table.map((p) => p.attack)).toEqual(['7S', '7C']);
+    });
+
+    it('after a card is beaten everyone may throw in', () => {
+      let state = act(four(), 'p1', { type: 'PLAY_CARD', card: '7S' });
+      state = act(state, 'p2', { type: 'PLAY_CARD', card: 'KS', target: 0 });
+      expect(legalActions(state, 'p3').canAttack).toBe(true);
+      state = act(state, 'p3', { type: 'PLAY_CARD', card: '7H' });
+      expect(state.table).toHaveLength(2);
+    });
+
+    it('after a transfer the new defender decides first, then the throw-ins go to them', () => {
+      let state = act(four(), 'p1', { type: 'PLAY_CARD', card: '7S' });
+      state = act(state, 'p2', { type: 'TRANSFER', card: '7D' });
+      expect(state.defender).toBe('p3');
+      expect(reject(state, 'p1', { type: 'PLAY_CARD', card: '7C' })).toBe('THROW_IN_NOT_ALLOWED');
+      state = act(state, 'p3', { type: 'PLAY_CARD', card: 'AS', target: 0 });
+      state = act(state, 'p1', { type: 'PLAY_CARD', card: '7C' });
+      expect(state.table.map((p) => p.attack)).toEqual(['7S', '7D', '7C']);
+    });
+
+    it('«беру» right away: the others may throw in after it', () => {
+      let state = act(four(), 'p1', { type: 'PLAY_CARD', card: '7S' });
+      state = act(state, 'p2', { type: 'TAKE_CARDS' });
+      expect(legalActions(state, 'p3').canAttack).toBe(true);
+      state = act(state, 'p3', { type: 'PLAY_CARD', card: '7H' });
+      expect(state.table).toHaveLength(2);
+    });
+
+    it('podkidnoy is unchanged: everyone throws in at once', () => {
+      const podkidnoy = arranged({ trump: '6H', settings: { variant: 'podkidnoy', throwIn: 'all' }, hands: [['7S', 'AD'], ['KS', 'QC'], ['7H', '8C']] });
+      const state = act(podkidnoy, 'p1', { type: 'PLAY_CARD', card: '7S' });
+      expect(legalActions(state, 'p3').canAttack).toBe(true);
+    });
   });
 });
 

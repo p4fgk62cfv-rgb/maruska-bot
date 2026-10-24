@@ -410,7 +410,10 @@ export function GameScreen({ game }: { game: LiveGame }) {
     }
 
     if (!a.canAttack) {
-      if (view.table.length > 0 && view.phase !== 'finished') refuse('Сейчас подкинуть нельзя');
+      // Переводной: пока отбивающийся не побил и не перевёл, подкидывать нельзя
+      const deciding = view.rules.variant === 'perevodnoy' && view.phase === 'defense' && view.table.length > 0 && view.table.every((p) => !p.defense);
+      if (deciding) refuse('Подкинуть можно, когда отбивающийся побьёт карту или переведёт');
+      else if (view.table.length > 0 && view.phase !== 'finished') refuse('Сейчас подкинуть нельзя');
       return false;
     }
     // Leading with several of one rank: the whole selection goes if the dragged card is part of it.

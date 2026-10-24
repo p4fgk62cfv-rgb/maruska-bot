@@ -4,6 +4,7 @@ import { loadConfig } from '../src/config.js';
 import { createContext } from '../src/context.js';
 import { createDb, type Db } from '../src/db.js';
 import { seedCatalog } from '../src/services/catalog.js';
+import { plainGroupName } from '../src/services/miniTournaments.js';
 import type { BotMessage, TelegramBot } from '../src/services/notifier.js';
 import { signInitData } from '../src/telegram/initData.js';
 import { Bot } from './bots.js';
@@ -345,6 +346,13 @@ describe.skipIf(!url)('mini-tournaments (one knockout table)', () => {
     expect(listed).toHaveLength(1);
     expect(listed[0]).toMatchObject({ tables: 2, status: 'FINISHED' });
   }, 90_000);
+
+  it('a group title in ornaments becomes plain letters: «꧁ᬊ 𝑫𝑰𝑨𝑴💎𝑵𝑫ᬊ꧂» → «DIAMOND»', () => {
+    expect(plainGroupName('꧁ᬊ 𝑫𝑰𝑨𝑴💎𝑵𝑫ᬊ꧂')).toBe('DIAMOND');
+    expect(plainGroupName('Вегас 🎰')).toBe('Вегас');
+    expect(plainGroupName('DIAM◯ND')).toBe('DIAMOND');
+    expect(plainGroupName('🔥🔥')).toBe('');
+  });
 
   it('two groups: each group plays its own table, the final and the result go to both groups', async () => {
     const people = await Promise.all(['Вега1', 'Вега2', 'Диа1', 'Диа2'].map(player));

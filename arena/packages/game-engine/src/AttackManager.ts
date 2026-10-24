@@ -1,7 +1,7 @@
 import { rankOf, type CardId } from './Card.js';
 import { EngineError, type GameEvent } from './Actions.js';
 import type { GameState, PlayerId } from './GameState.js';
-import { attackCapacity, getPlayer, ranksOnTable, setTurn, settleBout, throwers } from './TurnManager.js';
+import { attackCapacity, getPlayer, ranksOnTable, setTurn, settleBout, throwers, transferWindow } from './TurnManager.js';
 
 /** «С шулерами»: a player not yet caught may put down cards that break the rules. */
 export function mayCheat(state: GameState, playerId: PlayerId): boolean {
@@ -25,17 +25,22 @@ export function canAttackNow(state: GameState, playerId: PlayerId): boolean {
   if (state.phase !== 'defense' && state.phase !== 'taking') return false;
   // Сказал «бито» — больше не подкидывает, пока защитник не положит новое достоинство
   if (state.passed.includes(playerId)) return false;
+  // Переводной: отбивающийся ещё не побил и не перевёл
+  if (transferWindow(state)) return false;
   return throwers(state).includes(playerId) && attackCapacity(state) > 0;
 }
 
-export function playAttack(state: GameState, playerId: PlayerId, card: CardId, events: GameEvent[]): void {
+/** leading — карты одного захода (несколько одного достоинства): они не подкидывание. */
+export function playAttack(state: GameState, playerId: PlayerId, card: CardId, events: GameEvent[], leading = false): void {
   const player = getPlayer(state, playerId);
   let illegal = false;
 
   if (state.phase === 'attack') {
     if (playerId !== state.attacker) throw new EngineError('NOT_YOUR_TURN');
   } else {
-    if (!throwers(state).includes(playerId) || state.passed.includes(playerId)) throw new EngineError('THROW_IN_NOT_ALLOWED');
+    if (!throwers(state).includes(playerId) || state.passed.includes(playerId) || (transferWindow(state) && !leading)) {
+      throw new EngineError('THROW_IN_NOT_ALLOWED');
+    }
     if (attackCapacity(state) === 0) throw new EngineError('BOUT_LIMIT_REACHED');
     if (!ranksOnTable(state).has(rankOf(card))) {
       if (!mayCheat(state, playerId)) throw new EngineError('RANK_NOT_ON_TABLE');
@@ -60,7 +65,8 @@ export function playAttackCards(state: GameState, playerId: PlayerId, cards: Car
   // Validate the entire batch before changing the cloned state. In particular, the first
   // bout is capped at five attack cards even when the opening move contains several cards.
   if (cards.length > attackCapacity(state)) throw new EngineError('BOUT_LIMIT_REACHED');
-  for (const card of cards) playAttack(state, playerId, card, events);
+  const leading = state.phase === 'attack';
+  for (const card of cards) playAttack(state, playerId, card, events, leading);
   settleBout(state, now, events);
   if (state.status === 'playing' && state.table.length > 0) setTurn(state, now, events);
 }
@@ -69,6 +75,8 @@ export function playPass(state: GameState, playerId: PlayerId, now: number, even
   if (state.phase !== 'defense' && state.phase !== 'taking') throw new EngineError('CANNOT_PASS');
   if (playerId === state.defender || !throwers(state).includes(playerId)) throw new EngineError('CANNOT_PASS');
   if (state.passed.includes(playerId)) throw new EngineError('CANNOT_PASS');
+  // Пока отбивающийся решает (переводной), «пас» не нужен: подкидывать ещё нельзя
+  if (transferWindow(state)) throw new EngineError('CANNOT_PASS');
 
   state.passed.push(playerId);
   events.push({ type: 'PASSED', playerId });
