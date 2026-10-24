@@ -352,14 +352,24 @@ def _tag(username: str | None) -> str | None:
 
 
 async def certificate_of(marriage_id: int, chat_title: str | None = None) -> dict | None:
-    """Снимок для свидетельства: имена и @ники на день свадьбы. Создаётся один раз."""
-    from database.repository import get_marriage, people, save_marriage_certificate
+    """Снимок для свидетельства: имена и @ники на день свадьбы. Создаётся один раз.
+
+    Группа — та, где заключён брак (а не та, где нажали кнопку). Снимок, сделанный раньше без
+    группы (свидетельство впервые открыли из списка пар), получает её при следующем показе."""
+    from database.repository import chat_title as title_of, get_marriage, people, save_marriage_certificate
 
     marriage = await get_marriage(marriage_id)
     if marriage is None:
         return None
     if marriage.certificate:
-        return marriage.certificate
+        cert = marriage.certificate
+        if not cert.get("group"):
+            group = await title_of(marriage.chat_id) or chat_title
+            if group:
+                cert = {**cert, "group": group}
+                await save_marriage_certificate(marriage_id, certificate=cert)
+        return cert
+    chat_title = await title_of(marriage.chat_id) or chat_title
 
     info = await people(marriage.chat_id, (marriage.user1, marriage.user2))
     cert = {
@@ -394,7 +404,9 @@ async def _send_certificate_photo(message: Message, marriage_id: int, caption: s
     if marriage is None:
         return
     prefix = _photo_prefix()
-    if (marriage.certificate_file_id or "").startswith(prefix):
+    # Картинка без группы (старый снимок) рисуется заново — уже с группой
+    with_group = bool((marriage.certificate or {}).get("group"))
+    if with_group and (marriage.certificate_file_id or "").startswith(prefix):
         try:
             await message.answer_photo(marriage.certificate_file_id[len(prefix):], caption=caption)
             return

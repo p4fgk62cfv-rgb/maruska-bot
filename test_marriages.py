@@ -128,6 +128,18 @@ async def scenario():
         again = await social.certificate_of(marriage_id, "Другая группа")
         check(again == snap, "снимок не меняется")
 
+        # Старый снимок без группы (свидетельство впервые открыли кнопкой из списка пар):
+        # группа берётся из той, где заключён брак, и сохраняется
+        from database.models import GroupSettings as GS
+        await repo.save_marriage_certificate(marriage_id, certificate={**snap, "group": None})
+        async with session_scope() as session:
+            session.add(GS(chat_id=chat_a, title="Диамант", values={}))
+            await session.commit()
+        fixed = await social.certificate_of(marriage_id)
+        check(fixed["group"] == "Диамант" and (await repo.get_marriage(marriage_id)).certificate["group"] == "Диамант",
+              f"группа дописана в старый снимок: {fixed}")
+        await repo.save_marriage_certificate(marriage_id, certificate=snap)
+
         # Кнопка «Свидетельство»: первый раз картинка рисуется, дальше — по file_id
         sent = []
 
